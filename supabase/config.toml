@@ -1,0 +1,4 @@
+project_id = "grlrrmebnthxguluybgb"
+
+[functions.misma-chat]
+verify_jwt = true

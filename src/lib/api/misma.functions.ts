@@ -1,0 +1,165 @@
+import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
+import { ensureWorkspace } from "./workspace-context.server";
+
+const auth = z.string().min(20);
+function check<T>(data: T | null, error: { message: string } | null): T {
+  if (error) throw new Error(error.message);
+  if (data === null) throw new Error("Supabase returned no data.");
+  return data;
+}
+
+async function recordAudit(
+  db: SupabaseClient,
+  workspaceId: string,
+  eventType: string,
+  entityId?: string,
+  payload?: Record<string, unknown>,
+) {
+  const { error } = await db.from("audit_events").insert({
+    workspace_id: workspaceId,
+    event_type: eventType,
+    entity_id: entityId,
+    payload,
+  });
+  if (error) throw new Error(`Could not record workspace activity: ${error.message}`);
+}
+
+export const getMismaData = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult] =
+      await Promise.all([
+        db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
+        db.from("conversations").select("id,channel,latest_text,status,updated_at,contacts(name)").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }),
+        db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("knowledge_entries").select("id,question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
+        db.from("contacts").select("id,name,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("lifetime_value_rwf", { ascending: false }),
+      ]);
+    const workspace = check(workspaceResult.data, workspaceResult.error);
+    const conversations = check(conversationsResult.data, conversationsResult.error).map((c: any) => ({
+      id: c.id, channel: c.channel, text: c.latest_text, status: c.status, updated_at: c.updated_at,
+      name: Array.isArray(c.contacts) ? c.contacts[0]?.name || "Customer" : c.contacts?.name || "Customer",
+    }));
+    const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
+      id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
+      customer: Array.isArray(o.contacts) ? o.contacts[0]?.name || "Customer" : o.contacts?.name || "Customer",
+    }));
+    const knowledge = check(knowledgeResult.data, knowledgeResult.error);
+    const customers = check(customersResult.data, customersResult.error);
+    return { workspace, conversations, orders, knowledge, customers };
+  });
+
+export const addKnowledge = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, question: z.string().trim().min(2).max(500), answer: z.string().trim().min(2).max(4000) }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const result = await db.from("knowledge_entries").insert({ workspace_id: workspaceId, question: data.question, answer: data.answer, approved: true }).select("id,question,answer").single();
+    const saved = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "knowledge.created", String(saved.id), { question: data.question });
+    return { id: saved.id, question: saved.question, answer: saved.answer };
+  });
+
+export const deleteKnowledge = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, id: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { error } = await db.from("knowledge_entries").delete().eq("id", data.id).eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    await recordAudit(db, workspaceId, "knowledge.deleted", String(data.id));
+    return { ok: true };
+  });
+
+export const updateOrderStatus = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, id: z.string().min(1), status: z.enum(["New", "Confirmed", "Preparing", "Delivered"]) }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { error } = await db.from("orders").update({ status: data.status }).eq("id", data.id).eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    await recordAudit(db, workspaceId, "order.status_changed", data.id, { status: data.status });
+    return { ok: true };
+  });
+
+export const takeoverConversation = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, id: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { error } = await db.from("conversations").update({ status: "Needs you", latest_text: "Human takeover is active for this customer.", updated_at: new Date().toISOString() }).eq("id", data.id).eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    await recordAudit(db, workspaceId, "conversation.human_takeover", String(data.id));
+    return { ok: true };
+  });
+
+export const saveWorkspaceProfile = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, name: z.string().trim().min(2).max(120), location: z.string().trim().min(2).max(180), description: z.string().trim().min(2).max(2000), openingHours: z.string().trim().min(2).max(120), primaryLanguage: z.enum(["English", "Kinyarwanda", "French", "Swahili"]) }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const profile = { name: data.name, location: data.location, description: data.description, opening_hours: data.openingHours, primary_language: data.primaryLanguage, updated_at: new Date().toISOString() };
+    const { error } = await db.from("workspaces").update(profile).eq("id", workspaceId);
+    if (error) throw new Error(error.message);
+    await recordAudit(db, workspaceId, "workspace.updated", undefined, profile);
+    return { ok: true, workspace: data };
+  });
+
+export const getConversationMessages = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, conversationId: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: conv, error: convErr } = await db
+      .from("conversations")
+      .select("id,channel,latest_text,status,created_at,updated_at")
+      .eq("id", data.conversationId)
+      .eq("workspace_id", workspaceId)
+      .single();
+    if (convErr || !conv) throw new Error("Conversation not found.");
+
+    const { data: messages, error: msgErr } = await db
+      .from("messages")
+      .select("id,conversation_id,role,text,created_at")
+      .eq("conversation_id", data.conversationId)
+      .order("created_at", { ascending: true });
+    if (msgErr) throw new Error(msgErr.message);
+
+    return {
+      conversation: conv,
+      messages: (messages ?? []).map((m: any) => ({
+        id: String(m.id),
+        role: m.role as "customer" | "ai" | "human" | "system",
+        text: m.text as string,
+        created_at: m.created_at as string,
+      })),
+    };
+  });
+
+export const createConversation = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, title: z.string().optional() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: conv, error } = await db
+      .from("conversations")
+      .insert({
+        workspace_id: workspaceId,
+        channel: "Dashboard",
+        latest_text: data.title || "New chat",
+        status: "AI",
+      })
+      .select("id,channel,latest_text,status,created_at,updated_at")
+      .single();
+    if (error || !conv) throw new Error(error?.message || "Could not start conversation.");
+    return { conversation: conv };
+  });
+
+export const deleteConversation = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, conversationId: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { error } = await db
+      .from("conversations")
+      .delete()
+      .eq("id", data.conversationId)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
