@@ -1063,7 +1063,12 @@ function Dashboard() {
 
       if (mode === "image") {
         if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
-        setMessages((current) => current.map((item) => item.id === pendingMediaId ? result.aiMessage : item));
+        setMessages((current) => {
+          const withoutPending = current.filter((item) => item.id !== pendingMediaId);
+          return reuse
+            ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
+            : [...withoutPending, result.aiMessage];
+        });
         setMediaProgress("Image created.");
         window.setTimeout(() => setMediaProgress(""), 3500);
         loadData();
