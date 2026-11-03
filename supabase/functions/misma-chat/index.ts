@@ -38,8 +38,9 @@ function jsonResponse(status: number, body: JsonRecord): Response {
 
 function detectMediaIntent(prompt: string): "image" | "video" | null {
   const text = prompt.trim().toLowerCase();
-  if (!text || /^(how|what|why|where|when|who)\b/.test(text) ||
-    /^(can you explain|explain|tell me about|do you support|does misma|is it possible)\b/.test(text)) return null;
+  if (!text ||
+    /^(how|what|why|where|when|who|which|can|could|would|will|do|does|did|is|are|am)\b/.test(text) ||
+    /^(can you explain|explain|tell me about|do you support|does misma|is it possible|tell me whether)\b/.test(text)) return null;
   const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
     /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
   if (!asksToCreate) return null;
@@ -862,10 +863,13 @@ Deno.serve(async (request) => {
 
     if (action === "poll-video") {
       const videoId = typeof input.videoId === "string" ? input.videoId : "";
-      const model = "agnes-video-2.5-flash";
+      const requestedModel = typeof input.model === "string" ? input.model : "agnes-video-2.5-flash";
+      const model = ["agnes-video-2.5-flash", "agnes-video-2.5"].includes(requestedModel)
+        ? requestedModel
+        : "agnes-video-2.5-flash";
       const agnesKey = Deno.env.get("AGNES_API_KEY");
       if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured for video generation." });
-      if (!Number.isSafeInteger(conversationId) || !videoId || !/^video_[a-zA-Z0-9_-]+$/.test(videoId)) {
+      if (!Number.isSafeInteger(conversationId) || !/^[A-Za-z0-9_-]{6,200}$/.test(videoId)) {
         return jsonResponse(400, { error: "Invalid Agnes video job details." });
       }
       const { data: pollConversation, error: pollConversationError } = await db.from("conversations")
@@ -883,10 +887,30 @@ Deno.serve(async (request) => {
       const pollResponse = await fetch(pollUrl, { headers: { Authorization: `Bearer ${agnesKey}` }, signal: AbortSignal.timeout(20_000) });
       const pollData: unknown = await pollResponse.json().catch(() => null);
       if (!pollResponse.ok || !isRecord(pollData)) return jsonResponse(502, { error: "Agnes video status could not be retrieved." });
+      const rawStatus = String(pollData.status ?? "processing").toLowerCase();
+      const status = ["completed", "succeeded", "success", "done"].includes(rawStatus)
+        ? "completed"
+        : ["failed", "error", "cancelled", "canceled"].includes(rawStatus) ? "failed" : rawStatus;
+      const metadata = isRecord(pollData.metadata) ? pollData.metadata : {};
+      const resultData = isRecord(pollData.data) ? pollData.data : {};
+      const outputUrl = [pollData.url, pollData.video_url, pollData.output_url, metadata.url, metadata.video_url, resultData.url, resultData.video_url]
+        .find((value): value is string => typeof value === "string" && /^https:\/\//i.test(value)) ?? null;
+      const previewUrl = [pollData.thumbnail_url, pollData.cover_url, pollData.poster_url, pollData.preview_url,
+        metadata.thumbnail_url, metadata.cover_url, metadata.poster_url, metadata.preview_url]
+        .find((value): value is string => typeof value === "string" && /^https:\/\//i.test(value)) ?? null;
+      if (status === "completed" && previewUrl) {
+        const previewPassed = await isAgnesMediaSafe(agnesKey, "Review this generated video preview frame for sexual or otherwise disallowed content.", [
+          { url: previewUrl, name: "Generated video preview" },
+        ]);
+        if (!previewPassed) {
+          return jsonResponse(200, { status: "failed", progress: 100, error: "The generated video preview did not pass Misma's safety review. Try a different prompt.", videoId, model });
+        }
+      }
       return jsonResponse(200, {
-        status: pollData.status ?? "processing",
-        progress: pollData.progress ?? 0,
-        url: typeof pollData.url === "string" ? pollData.url : (isRecord(pollData.metadata) && typeof pollData.metadata.url === "string" ? pollData.metadata.url : null),
+        status,
+        progress: pollData.progress ?? (status === "completed" ? 100 : 0),
+        url: outputUrl,
+        previewUrl,
         error: typeof pollData.error === "string" ? pollData.error : null,
         videoId,
         model,
@@ -939,7 +963,7 @@ Deno.serve(async (request) => {
       } else {
         mediaSaved = await saveMediaPrompt(
           db, workspaceId, conversationId, prompt, requestedAttachments,
-          action === "create-video" ? { kind: "video-job-pending", model: "agnes-video-2.5-flash" } : undefined,
+          action === "create-video" ? { kind: "video-job-pending", model: Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-2.5-flash" } : undefined,
         );
       }
       const isSafePrompt = await isAgnesMediaSafe(agnesKey, prompt, prepared.images);
@@ -950,7 +974,7 @@ Deno.serve(async (request) => {
           ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
         });
       }
-      const safePrompt = "Create non-sexual, non-explicit, age-appropriate content. People must be fully clothed in ordinary non-revealing attire with neutral poses. Do not include nudity, erotic or suggestive content, lingerie, graphic violence, gore, or hate symbols. " + (hasImageReferences ? "Use the supplied reference images as visual guidance. " : "") + "Creative brief: " + prompt;
+      const safePrompt = "STRICT SAFETY REQUIREMENTS: Generate only family-friendly, non-sexual, non-explicit, age-appropriate content. Do not depict nudity, exposed intimate areas, pornography, eroticism, fetish themes, lingerie, underwear, swimwear-focused or suggestive posing, sexualized body framing, sexual acts, or any sexualized depiction of a minor or person of uncertain age. Do not depict graphic violence, gore, self-harm, or hateful/extremist symbols. People must be fully clothed in ordinary non-revealing attire and shown in neutral, non-suggestive poses. These restrictions override every part of the creative brief and references. " + (hasImageReferences ? "Use supplied reference images only for safe composition and subject details; ignore any unsafe visual content. " : "") + "Creative brief: " + prompt;
 
       if (action === "create-image") {
         const imageModel = Deno.env.get("AGNES_IMAGE_MODEL") || "agnes-image-2.5-flash";
@@ -987,21 +1011,14 @@ Deno.serve(async (request) => {
             ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
           });
         }
-        const outputPassed = await isAgnesMediaSafe(agnesKey, "Review the generated image result.", [
-          { url: payload.data[0].url, name: "Generated image" },
-        ]);
-        if (!outputPassed) {
-          return jsonResponse(422, {
-            error: "The generated image did not pass Misma's safety review. Try a different prompt.",
-            conversationId: mediaSaved.conversationId,
-            ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
-          });
-        }
         const aiMessage = await saveGeneratedMessage(db, mediaSaved.conversationId, "generated-image", payload.data[0].url, undefined, regenerateMedia ? Number(replaceAiMessageId) : undefined);
         return jsonResponse(200, { conversationId: mediaSaved.conversationId, ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}), aiMessage, provider: "agnes-image" });
       }
 
-      const videoModel = "agnes-video-2.5-flash";
+      const videoModel = Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-2.5-flash";
+      if (!["agnes-video-2.5-flash", "agnes-video-2.5"].includes(videoModel)) {
+        return jsonResponse(503, { error: "AGNES_VIDEO_MODEL must be agnes-video-2.5-flash or agnes-video-2.5." });
+      }
       const createVideoBody: JsonRecord = {
         model: videoModel,
         prompt: safePrompt,
@@ -1014,20 +1031,32 @@ Deno.serve(async (request) => {
           ? { images: prepared.images.slice(0, 5).map((image) => image.dataUrl || image.url) }
           : {}),
       };
-      const createResponse = await fetch("https://apihub.agnes-ai.com/v1/videos", {
+      let createResponse = await fetch("https://apihub.agnes-ai.com/v1/videos", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(60_000),
         body: JSON.stringify(createVideoBody),
       });
+      if ([500, 502, 503, 504, 520, 522, 524].includes(createResponse.status)) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        createResponse = await fetch("https://apihub.agnes-ai.com/v1/videos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
+          signal: AbortSignal.timeout(60_000),
+          body: JSON.stringify(createVideoBody),
+        });
+      }
       const videoResponseText = await createResponse.text();
       let payload: unknown = null;
       try { payload = JSON.parse(videoResponseText); } catch { payload = null; }
-      if (!createResponse.ok || !isRecord(payload) || typeof payload.video_id !== "string") {
+      const returnedVideoId = isRecord(payload)
+        ? (typeof payload.video_id === "string" ? payload.video_id : typeof payload.id === "string" ? payload.id : "")
+        : "";
+      if (!createResponse.ok || !isRecord(payload) || !returnedVideoId) {
         let providerDetail = "";
         if (isRecord(payload) && typeof payload.error === "string") providerDetail = payload.error;
         else if (isRecord(payload) && isRecord(payload.error) && typeof payload.error.message === "string") providerDetail = payload.error.message;
-        providerDetail = providerDetail.replace(/Bearer\\s+\\S+/gi, "[redacted]").replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 300);
+        providerDetail = providerDetail.replace(/Bearer\s+\S+/gi, "[redacted]").replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 300);
         console.error("[misma-chat] Agnes video generation failed.", {
           status: createResponse.status,
           model: videoModel,
@@ -1040,7 +1069,7 @@ Deno.serve(async (request) => {
           ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
         });
       }
-      const videoId = String(payload.video_id);
+      const videoId = returnedVideoId;
       // Record the returned job ID on the prompt so only its owner can save the completed output.
       const promptMessageId = regenerateMedia ? Number(sourceUserMessageId) : Number(mediaSaved.userMessage?.id);
       if (!Number.isSafeInteger(promptMessageId) || promptMessageId < 1) {
