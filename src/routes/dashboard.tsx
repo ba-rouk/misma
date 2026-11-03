@@ -211,7 +211,7 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
   }
 }
 
-function MessageAttachmentViews({ attachments }: { attachments?: MessageAttachment[] }) {
+function MessageAttachmentViews({ attachments, onDownload }: { attachments?: MessageAttachment[]; onDownload?: (attachment: MessageAttachment) => void }) {
   if (!attachments?.length) return null;
   const visible = attachments.filter((item) => item.kind !== "video-frame" && item.kind !== "video-job" && item.url);
   if (!visible.length) return null;
@@ -220,10 +220,10 @@ function MessageAttachmentViews({ attachments }: { attachments?: MessageAttachme
       {visible.map((item, index) => {
         const key = item.path || item.videoId || item.url || `${item.name}-${index}`;
         if (item.kind === "image" || item.kind === "generated-image" || item.mimeType?.startsWith("image/")) {
-          return <a key={key} href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link"><img className="aichat-attachment-image" src={item.url} alt={item.name} loading="lazy" /></a>;
+          return <div key={key} className="aichat-generated-media-wrap"><a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link"><img className="aichat-attachment-image" src={item.url} alt={item.name} loading="lazy" /></a>{item.kind === "generated-image" && onDownload && <button type="button" className="aichat-media-download" onClick={() => onDownload(item)}><span aria-hidden="true">↓</span> Download image</button>}</div>;
         }
         if (item.kind === "video" || item.kind === "generated-video" || item.mimeType?.startsWith("video/")) {
-          return <video key={key} className="aichat-attachment-video" src={item.url} controls preload="metadata" />;
+          return <div key={key} className="aichat-generated-media-wrap"><video className="aichat-attachment-video" src={item.url} controls preload="metadata" />{item.kind === "generated-video" && onDownload && <button type="button" className="aichat-media-download" onClick={() => onDownload(item)}><span aria-hidden="true">↓</span> Download video</button>}</div>;
         }
         return <a key={key} className="aichat-attachment-file" href={item.url} target="_blank" rel="noreferrer" download={item.name}>📎 {item.name}</a>;
       })}
@@ -1766,7 +1766,7 @@ function Dashboard() {
                       )}
                       <div className="aichat-message-content">
                         <div className="aichat-bubble">
-                          <MessageAttachmentViews attachments={msg.attachments} />
+                          <MessageAttachmentViews attachments={msg.attachments} onDownload={handleDownloadGeneratedMedia} />
                           {msg.pendingMedia ? (
                             <div className={`aichat-media-skeleton is-${msg.pendingMedia}`} role="status" aria-live="polite">
                               <div className="aichat-media-skeleton-preview" aria-hidden="true">
@@ -1847,11 +1847,6 @@ function Dashboard() {
                           )}
                         </div>
                       </div>
-                      {isUserMessage && (
-                        <div className="aichat-msg-avatar user" title="You">
-                          {profileName[0]?.toUpperCase() ?? "U"}
-                        </div>
-                      )}
                     </div>
                   );
                 })
