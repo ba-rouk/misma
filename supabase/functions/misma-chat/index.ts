@@ -600,6 +600,13 @@ Deno.serve(async (request) => {
   if ((regenerate || editMessageId !== null) && conversationId === null) {
     return jsonResponse(400, { error: "An existing conversation is required for this action." });
   }
+  const sourceUserMessageId = input.sourceUserMessageId == null ? null : Number(input.sourceUserMessageId);
+  const replaceAiMessageId = input.replaceAiMessageId == null ? null : Number(input.replaceAiMessageId);
+  if (regenerateMedia && (conversationId === null ||
+    !Number.isSafeInteger(sourceUserMessageId) || Number(sourceUserMessageId) < 1 ||
+    !Number.isSafeInteger(replaceAiMessageId) || Number(replaceAiMessageId) < 1)) {
+    return jsonResponse(400, { error: "A valid original prompt and media response are required to regenerate this asset." });
+  }
   const requestedWorkspaceId = input.workspaceId ?? null;
   if (requestedWorkspaceId !== null && typeof requestedWorkspaceId !== "string") {
     return jsonResponse(400, { error: "Invalid workspace selection." });
