@@ -1628,11 +1628,7 @@ function Dashboard() {
                       aria-hidden="true"
                     />
                     <span className="aichat-chats-widget-item-text">
-                      {c.name
-                        ? `${c.name}: ${c.text ? c.text.slice(0, 22) : "Chat"}`
-                        : c.text
-                          ? c.text.slice(0, 30)
-                          : "Conversation"}
+                      {c.name || c.text || "New chat"}
                     </span>
                   </button>
                 ))
