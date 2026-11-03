@@ -579,6 +579,7 @@ Deno.serve(async (request) => {
   const allowedActions = new Set(["chat", "create-image", "create-video", "poll-video", "save-generated-media", "download-generated-media", "core01-feedback"]);
   if (!allowedActions.has(action)) return jsonResponse(400, { error: "Unsupported Misma AI action." });
   const regenerate = input.regenerate === true;
+  const regenerateMedia = input.regenerateMedia === true;
   const thinkHarder = input.thinkHarder === true;
   const editMessageId = input.editMessageId ?? null;
   if (regenerate && editMessageId !== null) {
