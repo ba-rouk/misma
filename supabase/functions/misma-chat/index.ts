@@ -144,7 +144,7 @@ async function requestProvider(
         const payload: unknown = await response.json();
         const answer = extractAnswer(payload, provider.kind);
         if (answer) return answer;
-        throw new Error(`${provider.name} returned an empty or unsupported response`);
+        throw new Error(`NON_RETRYABLE: ${provider.name} returned an empty or unsupported response`);
       }
 
       const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
@@ -153,10 +153,14 @@ async function requestProvider(
         status: response.status,
         attempt,
       });
-      if (!retryable || attempt === 2) {
+      if (!retryable) {
+        throw new Error(`NON_RETRYABLE: ${provider.name} request failed with status ${response.status}`);
+      }
+      if (attempt === 2) {
         throw new Error(`${provider.name} request failed with status ${response.status}`);
       }
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith("NON_RETRYABLE:")) throw error;
       const isLastAttempt = attempt === 2;
       console.error("[misma-chat] Provider attempt failed.", {
         provider: provider.name,
