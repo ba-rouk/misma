@@ -47,7 +47,7 @@ Set provider keys as Supabase Edge Function secrets (never in frontend environme
 supabase secrets set GEMINI_API_KEY=... GROQ_API_KEY=... OPENAI_API_KEY=... MISTRAL_API_KEY=...
 ```
 
-Only configure the providers you want available. Groq is primary whenever `GROQ_API_KEY` is present; Gemini is the first fallback when `GEMINI_API_KEY` is present. Optional model overrides are `GEMINI_MODEL` (default `gemini-3.8-flash`), `GROQ_MODEL` (default `llama-3.3-70b-versatile`), `OPENAI_MODEL` (default `gpt-4o-mini`), and `MISTRAL_MODEL` (default `mistral-small-latest`). Supabase supplies `SUPABASE_URL` and the publishable/anon key to the function runtime.
+Only configure the providers you want available. Groq is primary whenever `GROQ_API_KEY` is present; Gemini is the first fallback when `GEMINI_API_KEY` is present. Optional model overrides are `GEMINI_MODEL` (default `gemini-3.6-flash`), `GROQ_MODEL` (default `openai/gpt-oss-120b`), `OPENAI_MODEL` (default `gpt-4o-mini`), and `MISTRAL_MODEL` (default `mistral-small-latest`). Supabase supplies `SUPABASE_URL` and the publishable/anon key to the function runtime.
 
 The Edge Function validates the user's Supabase access token and uses that token for all Postgres requests, so workspace RLS applies. It does not use a service-role key. `supabase/config.toml` keeps JWT verification enabled. The successful response retains the existing `conversationId`, `userMessage`, and `aiMessage` fields, and adds `provider` and `usedFallback` metadata.
 
