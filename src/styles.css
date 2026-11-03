@@ -4717,3 +4717,95 @@ footer {
     max-height: 260px;
   }
 }
+
+
+/* Composer refinement: clearer controls, stronger focus state and better touch targets. */
+.aichat-composer-container { padding: 14px 20px 18px; background: linear-gradient(180deg, rgba(9, 10, 12, 0) 0%, rgba(9, 10, 12, 0.97) 38%, #090a0c 100%); }
+.aichat-composer-inner { max-width: 800px; }
+.aichat-composer-card-tools { gap: 10px; padding: 12px 14px; border: 1px solid #343c49; border-radius: 24px; background: rgba(23, 27, 34, 0.98); box-shadow: 0 12px 38px rgba(0,0,0,.42); }
+.aichat-composer-card-tools:focus-within { border-color: #6b778b; box-shadow: 0 12px 38px rgba(0,0,0,.48), 0 0 0 3px rgba(138,164,204,.09); }
+.aichat-composer-tools-row { min-height: 34px; gap: 8px; }
+.aichat-composer-plus { width: 34px; height: 34px; border-color: #485365; background: #252d39; font-size: 23px; transition: transform 160ms ease, background 160ms ease, border-color 160ms ease; }
+.aichat-composer-plus:hover:not(:disabled) { background: #303b4b; border-color: #69778d; }
+.aichat-composer-plus[aria-expanded="true"] { transform: rotate(90deg); }
+.aichat-composer-plus:focus-visible, .aichat-composer-plus-menu button:focus-visible, .aichat-composer-send-btn:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 3px; }
+.aichat-composer-plus-menu { width: min(340px, calc(100vw - 48px)); padding: 8px; border: 1px solid #3a4555; border-radius: 16px; background: #171c25; box-shadow: 0 18px 54px rgba(0,0,0,.58); }
+.aichat-composer-plus-menu button { min-height: 52px; gap: 11px; padding: 9px 10px; border-radius: 10px; }
+.aichat-composer-plus-menu button:hover { background: #252f3d; }
+.aichat-composer-plus-menu button strong { color: #f0f4fa; font-size: 13px; }
+.aichat-composer-plus-menu button small { color: #9aa7b8; font-size: 11px; line-height: 1.4; }
+.aichat-composer-plus-menu .aichat-plus-menu-icon { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #384457; border-radius: 9px; background: #202a38; color: #dce7f6; font-size: 15px; }
+.aichat-composer-plus-menu .aichat-plus-menu-check { color: #9fc0ff; font-size: 15px; }
+.aichat-composer-mode-pill { min-height: 30px; padding: 5px 10px; border: 1px solid #3f536e; border-radius: 999px; background: #1d2b3d; color: #d8e8ff; font-size: 12px; }
+.aichat-composer-mode-pill.is-create { border-color: #66508b; background: #2a2140; color: #eadcff; }
+.aichat-composer-sendrow { align-items: flex-end; gap: 12px; }
+.aichat-composer-textarea { min-height: 30px; max-height: 190px; padding: 6px 4px; color: #f3f6fb; font-size: 15px; line-height: 1.55; }
+.aichat-composer-textarea::placeholder { color: #8792a2; }
+.aichat-composer-send-btn { width: 38px; height: 38px; font-size: 19px; background: #2b3441; color: #aeb9c9; border: 1px solid #414d5e; }
+.aichat-composer-send-btn.can-send { background: #f4f7fb; color: #11151c; border-color: #f4f7fb; }
+.aichat-composer-attachments { gap: 8px; }
+.aichat-composer-attachment-chip { max-width: 100%; border-color: #3b4657; background: #202733; color: #dce5f2; }
+.aichat-disclaimer-text { margin-top: 9px; color: #778292; }
+@media (max-width: 767px) { .aichat-composer-container { padding: 8px 10px 11px; } .aichat-composer-card-tools { border-radius: 22px; padding: 10px 11px; } }
+
+/* In-stream image/video generation skeletons. */
+.aichat-media-skeleton { width: min(100%, 520px); display: grid; grid-template-columns: minmax(120px, 42%) minmax(0, 1fr); gap: 14px; align-items: center; padding: 10px; border: 1px solid #2b3441; border-radius: 15px; background: #11161e; }
+.aichat-media-skeleton-preview { position: relative; min-height: 132px; overflow: hidden; display: grid; place-items: center; border: 1px solid #303c4c; border-radius: 10px; background: linear-gradient(135deg, #202a37, #151b25 55%, #273243); }
+.aichat-media-skeleton.is-video .aichat-media-skeleton-preview { min-height: 100px; aspect-ratio: 16 / 9; }
+.aichat-media-skeleton-shimmer { position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(105deg, transparent 25%, rgba(255,255,255,.12) 48%, transparent 70%); animation: misma-media-shimmer 1.7s ease-in-out infinite; }
+.aichat-media-skeleton-orbit { position: relative; width: 36px; height: 36px; }
+.aichat-media-skeleton-orbit i { position: absolute; inset: 0; border: 1.5px solid rgba(202,219,242,.55); border-radius: 50%; animation: misma-media-pulse 1.5s ease-in-out infinite; }
+.aichat-media-skeleton-orbit i:nth-child(2) { transform: scale(.68); animation-delay: .2s; }
+.aichat-media-skeleton-orbit i:nth-child(3) { transform: scale(.36); animation-delay: .4s; }
+.aichat-media-skeleton-copy { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.aichat-media-skeleton-copy strong { color: #e9eff8; font-size: 13px; }
+.aichat-media-skeleton-copy span { color: #bac7d8; font-size: 12px; line-height: 1.45; }
+.aichat-media-skeleton-copy small { color: #78879a; font-size: 11px; line-height: 1.45; }
+@keyframes misma-media-shimmer { to { transform: translateX(100%); } }
+@keyframes misma-media-pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+@media (max-width: 520px) { .aichat-media-skeleton { grid-template-columns: 1fr; } .aichat-media-skeleton-preview { min-height: 150px; } }
+
+/* Landing page guest chat. Its transcript is React memory only, never persisted. */
+.misma-guest-widget { position: fixed; right: 24px; bottom: 24px; z-index: 80; font-family: var(--font-sans); }
+.misma-guest-launcher { min-height: 54px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; background: #397be6; color: #fff; box-shadow: 0 12px 34px rgba(0,0,0,.35); font: 600 14px var(--font-sans); cursor: pointer; transition: transform .18s ease, filter .18s ease; }
+.misma-guest-launcher:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.misma-guest-launcher.is-open { width: 48px; min-height: 48px; padding: 0; font-size: 24px; background: #1b2533; }
+.misma-guest-launcher-spark { font-size: 18px; }
+.misma-guest-panel { position: absolute; right: 0; bottom: 66px; width: min(390px, calc(100vw - 28px)); height: min(590px, calc(100dvh - 110px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(255,255,255,.13); border-radius: 20px; background: #0e141d; color: #f2f6fc; box-shadow: 0 24px 75px rgba(0,0,0,.55); }
+.misma-guest-header { display: flex; align-items: center; gap: 11px; padding: 15px 16px; border-bottom: 1px solid #263140; background: #131c28; }
+.misma-guest-brand-mark { width: 36px; height: 36px; display:grid; place-items:center; border-radius: 11px; background: #2d66bb; color:white; font-weight:800; }
+.misma-guest-heading { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.misma-guest-heading strong { font-size: 14px; }
+.misma-guest-heading span { display:flex; align-items:center; gap:6px; color:#95a4b6; font-size:11px; }
+.misma-guest-heading i { width:6px; height:6px; border-radius:50%; background:#61ca91; }
+.misma-guest-close { margin-left:auto; width:32px; height:32px; border:0; border-radius:9px; background:transparent; color:#aab7c8; font-size:23px; cursor:pointer; }
+.misma-guest-close:hover { background:#263140; color:#fff; }
+.misma-guest-messages { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:13px; padding:18px 15px; }
+.misma-guest-welcome { margin:auto 0; display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
+.misma-guest-welcome-icon { width:38px; height:38px; display:grid; place-items:center; border:1px solid #3b5b83; border-radius:12px; background:#1c2d44; color:#a9ceff; }
+.misma-guest-welcome h3 { margin:0; font-size:21px; letter-spacing:-.03em; }
+.misma-guest-welcome p { margin:0; color:#9eacbd; font-size:13px; line-height:1.55; }
+.misma-guest-prompts { width:100%; display:flex; flex-direction:column; gap:7px; margin-top:8px; }
+.misma-guest-prompts button { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 11px; text-align:left; border:1px solid #2f3b4c; border-radius:11px; background:#141e2b; color:#dce6f3; font-size:12px; cursor:pointer; }
+.misma-guest-prompts button:hover { background:#202d3e; }
+.misma-guest-prompts span { color:#91baff; }
+.misma-guest-message { max-width:88%; display:flex; }
+.misma-guest-message.is-user { align-self:flex-end; }
+.misma-guest-message.is-ai { align-self:flex-start; }
+.misma-guest-message > div { padding:11px 13px; border-radius:15px; background:#192433; color:#e4ebf4; font-size:13px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+.misma-guest-message.is-user > div { background:#2b5e9f; color:#fff; border-bottom-right-radius:5px; }
+.misma-guest-typing { display:flex; align-items:center; gap:5px; min-width:52px; }
+.misma-guest-typing i { width:6px; height:6px; border-radius:50%; background:#9db4d2; animation: misma-guest-dot 1s ease-in-out infinite; }
+.misma-guest-typing i:nth-child(2) { animation-delay:.15s; }
+.misma-guest-typing i:nth-child(3) { animation-delay:.3s; }
+@keyframes misma-guest-dot { 0%,60%,100% { transform:translateY(0); opacity:.45; } 30% { transform:translateY(-4px); opacity:1; } }
+.misma-guest-error { margin:0 14px 8px; color:#ffaaa5; font-size:12px; }
+.misma-guest-composer { margin:0 12px; padding:8px 9px 8px 13px; display:flex; align-items:flex-end; gap:9px; border:1px solid #354255; border-radius:16px; background:#151e2a; }
+.misma-guest-composer:focus-within { border-color:#789ccc; box-shadow:0 0 0 3px rgba(111,157,214,.1); }
+.misma-guest-composer textarea { flex:1; min-width:0; max-height:110px; resize:none; border:0; outline:0; background:transparent; color:#f5f7fb; font:13px/1.5 var(--font-sans); padding:5px 0; }
+.misma-guest-composer textarea::placeholder { color:#8492a4; }
+.misma-guest-composer button { flex:none; width:34px; height:34px; border:0; border-radius:50%; background:#eaf1fb; color:#141b25; font-size:20px; font-weight:700; cursor:pointer; }
+.misma-guest-composer button:disabled { opacity:.35; cursor:not-allowed; }
+.misma-guest-privacy { margin:8px 12px 12px; color:#78879a; font-size:10px; text-align:center; }
+@media (max-width:600px) { .misma-guest-widget { right:14px; bottom:14px; } .misma-guest-panel { right:-2px; bottom:62px; width:min(390px, calc(100vw - 28px)); height:min(590px, calc(100dvh - 92px)); } }
+@media (prefers-reduced-motion: reduce) { .aichat-media-skeleton-shimmer, .aichat-media-skeleton-orbit i, .misma-guest-typing i { animation:none; } }
