@@ -9,12 +9,24 @@ const corsHeaders = {
 
 type JsonRecord = Record<string, unknown>;
 type ChatMessage = { role: "user" | "model"; text: string };
+type AttachmentInput = {
+  path: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  kind?: string;
+};
+type PreparedImage = { url: string; dataUrl?: string; name: string };
+type PreparedPdf = { fileName: string; dataUrl: string };
 type Provider = {
   name: string;
   apiKey: string;
   model: string;
   url: string;
-  kind: "gemini" | "openai-compatible";
+  kind: "gemini" | "openai-compatible" | "cohere";
+  supportsImages: boolean;
+  supportsPdf: boolean;
+  reasoning?: boolean;
 };
 
 function jsonResponse(status: number, body: JsonRecord): Response {
@@ -28,55 +40,92 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function getProviders(): Provider[] {
+function getProviders(options: { thinkHarder?: boolean; hasImages?: boolean }): Provider[] {
   const providers: Provider[] = [];
+  const add = (
+    name: string,
+    secret: string,
+    modelEnv: string,
+    defaultModel: string,
+    url: string,
+    kind: Provider["kind"],
+    supportsImages = false,
+    supportsPdf = false,
+    reasoning = false,
+  ) => {
+    const apiKey = Deno.env.get(secret);
+    if (apiKey) {
+      providers.push({
+        name,
+        apiKey,
+        model: Deno.env.get(modelEnv) || defaultModel,
+        url,
+        kind,
+        supportsImages,
+        supportsPdf,
+        reasoning,
+      });
+    }
+  };
 
-  // Primary: Groq. First fallback: Gemini. OpenAI and Mistral remain later fallbacks.
-  const groqKey = Deno.env.get("GROQ_API_KEY");
-  if (groqKey) {
-    providers.push({
-      name: "groq",
-      apiKey: groqKey,
-      model: Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b",
-      url: "https://api.groq.com/openai/v1/chat/completions",
-      kind: "openai-compatible",
-    });
+  // Think harder starts with NVIDIA's controllable-reasoning model.
+  if (options.thinkHarder) {
+    add(
+      "nvidia-think",
+      "NVIDIA_API_KEY",
+      "NVIDIA_THINK_MODEL",
+      "deepseek-ai/deepseek-v4.1-flash",
+      "https://integrate.api.nvidia.com/v1/chat/completions",
+      "openai-compatible",
+      true,
+      false,
+      true,
+    );
   }
 
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
-  if (geminiKey) {
-    providers.push({
-      name: "gemini",
-      apiKey: geminiKey,
-      model: Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash",
-      url: "https://generativelanguage.googleapis.com/v1beta/models",
-      kind: "gemini",
-    });
+  // Image/video uploads deliberately invoke Agnes first for image understanding.
+  if (options.hasImages) {
+    add(
+      "agnes-vision",
+      "AGNES_API_KEY",
+      "AGNES_VISION_MODEL",
+      "agnes-2.0-flash",
+      "https://apihub.agnes-ai.com/v1/chat/completions",
+      "openai-compatible",
+      true,
+    );
   }
 
-  const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  if (openaiKey) {
-    providers.push({
-      name: "openai",
-      apiKey: openaiKey,
-      model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
-      url: "https://api.openai.com/v1/chat/completions",
-      kind: "openai-compatible",
-    });
+  add("groq", "GROQ_API_KEY", "GROQ_MODEL", "openai/gpt-oss-120b",
+    "https://api.groq.com/openai/v1/chat/completions", "openai-compatible");
+  add("gemini", "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-3.6-flash",
+    "https://generativelanguage.googleapis.com/v1beta/models", "gemini", true);
+  add("nvidia", "NVIDIA_API_KEY", "NVIDIA_MODEL", "deepseek-ai/deepseek-v4.1-flash",
+    "https://integrate.api.nvidia.com/v1/chat/completions", "openai-compatible", true);
+  add("openrouter", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "openrouter/auto",
+    "https://openrouter.ai/api/v1/chat/completions", "openai-compatible", true, true);
+  if (!options.hasImages) {
+    add("agnes", "AGNES_API_KEY", "AGNES_MODEL", "agnes-2.5-flash",
+      "https://apihub.agnes-ai.com/v1/chat/completions", "openai-compatible", true);
   }
+  add("cohere", "COHERE_API_KEY", "COHERE_MODEL", "command-a-plus-05-2026",
+    "https://api.cohere.com/v2/chat", "cohere", true);
+  add("mistral", "MISTRAL_API_KEY", "MISTRAL_MODEL", "mistral-small-latest",
+    "https://api.mistral.ai/v1/chat/completions", "openai-compatible");
+  add("openai", "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4o-mini",
+    "https://api.openai.com/v1/chat/completions", "openai-compatible");
 
-  const mistralKey = Deno.env.get("MISTRAL_API_KEY");
-  if (mistralKey) {
-    providers.push({
-      name: "mistral",
-      apiKey: mistralKey,
-      model: Deno.env.get("MISTRAL_MODEL") || "mistral-small-latest",
-      url: "https://api.mistral.ai/v1/chat/completions",
-      kind: "openai-compatible",
-    });
-  }
-
+  // If a think-hard request has no NVIDIA key, the remaining configured providers still work.
   return providers;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function extractAnswer(payload: unknown, kind: Provider["kind"]): string {
@@ -87,6 +136,15 @@ function extractAnswer(payload: unknown, kind: Provider["kind"]): string {
     const content = candidates[0].content;
     if (!isRecord(content) || !Array.isArray(content.parts)) return "";
     return content.parts
+      .filter((part): part is JsonRecord => isRecord(part))
+      .map((part) => typeof part.text === "string" ? part.text : "")
+      .join("")
+      .trim();
+  }
+  if (kind === "cohere") {
+    const message = payload.message;
+    if (!isRecord(message) || !Array.isArray(message.content)) return "";
+    return message.content
       .filter((part): part is JsonRecord => isRecord(part))
       .map((part) => typeof part.text === "string" ? part.text : "")
       .join("")
@@ -104,47 +162,109 @@ async function requestProvider(
   systemPrompt: string,
   history: ChatMessage[],
   message: string,
+  images: PreparedImage[],
+  pdfs: PreparedPdf[],
+  thinkHarder: boolean,
 ): Promise<string> {
-  const contents = [
-    ...history.map(({ role, text }) => ({ role: role === "model" ? "assistant" : "user", content: text })),
-    { role: "user", content: message },
-  ];
+  if (images.length && !provider.supportsImages) {
+    throw new Error(`NON_RETRYABLE: ${provider.name} does not accept image input`);
+  }
+  if (pdfs.length && !provider.supportsPdf) {
+    throw new Error(`NON_RETRYABLE: ${provider.name} does not accept PDF input`);
+  }
+
+  const allText = [
+    message,
+    ...pdfs.map((pdf) => `[Attached PDF: ${pdf.fileName}]`),
+  ].join("\n\n");
+  const imageParts = images.map((image) => ({
+    type: "image_url",
+    image_url: { url: image.dataUrl || image.url, detail: "high" },
+  }));
+  const pdfParts = pdfs.map((pdf) => ({
+    type: "file",
+    file: { filename: pdf.fileName, file_data: pdf.dataUrl },
+  }));
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const response = await fetch(
-        provider.kind === "gemini"
-          ? `${provider.url}/${encodeURIComponent(provider.model)}:generateContent`
-          : provider.url,
-        {
-          method: "POST",
-          headers: provider.kind === "gemini"
-            ? { "Content-Type": "application/json", "x-goog-api-key": provider.apiKey }
-            : { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
-          signal: AbortSignal.timeout(12_000),
-          body: JSON.stringify(provider.kind === "gemini"
-            ? {
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: [
-                ...history.map(({ role, text }) => ({
-                  role,
-                  parts: [{ text }],
-                })),
-                { role: "user", parts: [{ text: message }] },
-              ],
-              generationConfig: { maxOutputTokens: 1_024, temperature: 0.65 },
-            }
-            : {
-              model: provider.model,
-              messages: [
-                { role: "system", content: systemPrompt },
-                ...contents,
-              ],
-              max_tokens: 1_024,
-              temperature: 0.65,
-            }),
-        },
-      );
+      let url = provider.url;
+      let headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${provider.apiKey}`,
+      };
+      let body: JsonRecord;
+
+      if (provider.kind === "gemini") {
+        const parts: JsonRecord[] = [{ text: allText }];
+        for (const image of images) {
+          const response = await fetch(image.url, { signal: AbortSignal.timeout(12_000) });
+          if (!response.ok) throw new Error("Could not read an uploaded image.");
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          const mimeType = response.headers.get("content-type") || "image/jpeg";
+          parts.push({ inlineData: { mimeType, data: bytesToBase64(bytes) } });
+        }
+        body = {
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [
+            ...history.map(({ role, text }) => ({ role, parts: [{ text }] })),
+            { role: "user", parts },
+          ],
+          generationConfig: { maxOutputTokens: thinkHarder ? 4096 : 2048, temperature: 0.65 },
+        };
+        url = `${provider.url}/${encodeURIComponent(provider.model)}:generateContent`;
+        headers = { "Content-Type": "application/json", "x-goog-api-key": provider.apiKey };
+      } else if (provider.kind === "cohere") {
+        const messages = [
+          { role: "system", content: systemPrompt },
+          ...history.map(({ role, text }) => ({
+            role: role === "model" ? "assistant" : "user",
+            content: text,
+          })),
+          {
+            role: "user",
+            content: images.length
+              ? [{ type: "text", text: allText }, ...imageParts]
+              : allText,
+          },
+        ];
+        body = {
+          model: provider.model,
+          messages,
+          max_tokens: thinkHarder ? 4096 : 2048,
+          temperature: 0.65,
+          ...(thinkHarder ? { thinking: { type: "enabled", token_budget: 2048 } } : {}),
+        };
+      } else {
+        const userContent = images.length || (pdfs.length && provider.supportsPdf)
+          ? [
+            { type: "text", text: allText },
+            ...imageParts,
+            ...(provider.supportsPdf ? pdfParts : []),
+          ]
+          : allText;
+        body = {
+          model: provider.model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...history.map(({ role, text }) => ({
+              role: role === "model" ? "assistant" : "user",
+              content: text,
+            })),
+            { role: "user", content: userContent },
+          ],
+          max_tokens: thinkHarder ? 4096 : 2048,
+          temperature: 0.65,
+          ...(provider.reasoning && thinkHarder ? { reasoning_effort: "high" } : {}),
+        };
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        signal: AbortSignal.timeout(35_000),
+        body: JSON.stringify(body),
+      });
 
       if (response.ok) {
         const payload: unknown = await response.json();
@@ -162,9 +282,7 @@ async function requestProvider(
       if (!retryable) {
         throw new Error(`NON_RETRYABLE: ${provider.name} request failed with status ${response.status}`);
       }
-      if (attempt === 2) {
-        throw new Error(`${provider.name} request failed with status ${response.status}`);
-      }
+      if (attempt === 2) throw new Error(`${provider.name} request failed with status ${response.status}`);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith("NON_RETRYABLE:")) throw error;
       const isLastAttempt = attempt === 2;
