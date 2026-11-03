@@ -1044,9 +1044,10 @@ Deno.serve(async (request) => {
         signal: AbortSignal.timeout(60_000),
         body: JSON.stringify(createVideoBody),
       });
-      if ([408, 429, 500, 502, 503, 504, 520, 522, 524].includes(createResponse.status)) {
-        // Agnes video queues can be congested; retry transient throttling and gateway errors once.
-        await new Promise((resolve) => setTimeout(resolve, createResponse.status === 429 ? 4_000 : 2_000));
+      for (let retryAttempt = 0; retryAttempt < 3 && !createResponse.ok && [408, 429, 500, 502, 503, 504, 520, 522, 524].includes(createResponse.status); retryAttempt++) {
+        // Agnes' Flash video queue can be congested; retry transient upstream errors with backoff.
+        const retryDelay = retryAttempt === 0 ? 2_000 : retryAttempt === 1 ? 5_000 : 10_000;
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
         createResponse = await fetch("https://apihub.agnes-ai.com/v1/videos", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + agnesKey },
