@@ -486,6 +486,7 @@ function Dashboard() {
   });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
+  const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [voiceInputActive, setVoiceInputActive] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -518,12 +519,14 @@ function Dashboard() {
       const savedAccent = localStorage.getItem("misma_accent_color");
       const savedNotifications = localStorage.getItem("misma_notification_preferences");
       const savedVoice = localStorage.getItem("misma_voice_uri");
+      const savedAutoSpeak = localStorage.getItem("misma_auto_speak_replies");
       if (savedAccent && /^#[0-9a-f]{6}$/i.test(savedAccent)) setAccentColor(savedAccent);
       if (savedNotifications) {
         const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
         setNotificationPreferences((current) => ({ ...current, ...parsed }));
       }
       if (savedVoice) setSelectedVoiceUri(savedVoice);
+      if (savedAutoSpeak === "true") setAutoSpeakReplies(true);
     } catch {
       // Keep accessible defaults if browser preferences cannot be read.
     } finally {
@@ -538,10 +541,11 @@ function Dashboard() {
       localStorage.setItem("misma_accent_color", accentColor);
       localStorage.setItem("misma_notification_preferences", JSON.stringify(notificationPreferences));
       localStorage.setItem("misma_voice_uri", selectedVoiceUri);
+      localStorage.setItem("misma_auto_speak_replies", String(autoSpeakReplies));
     } catch {
       // Preferences remain active for this session when storage is unavailable.
     }
-  }, [accentColor, notificationPreferences, selectedVoiceUri, appearanceLoaded]);
+  }, [accentColor, notificationPreferences, selectedVoiceUri, autoSpeakReplies, appearanceLoaded]);
 
   useEffect(() => {
     if (!("speechSynthesis" in window)) return;
@@ -1309,6 +1313,7 @@ function Dashboard() {
             : prev;
           return [...withPersistedUser, res.aiMessage];
         });
+        if (autoSpeakReplies) handleReadAloud(res.aiMessage);
       }
 
       setSelectedFiles([]);
@@ -3011,6 +3016,7 @@ function Dashboard() {
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
+                <SettingsToggle title="Read new replies aloud" description="Automatically speak each new text answer using the selected device voice." checked={autoSpeakReplies} onToggle={() => setAutoSpeakReplies((current) => !current)} />
                 <p className="aichat-settings-hint">Voice dictation uses your browser's speech recognition and inserts a transcript into the message box. Misma does not upload microphone audio as a recording.</p>
               </section>
 
