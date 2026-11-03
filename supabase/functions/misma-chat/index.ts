@@ -313,7 +313,7 @@ Deno.serve(async (request) => {
     }
 
     let history: ChatMessage[] = [];
-    let pivotMessage: { id: number; created_at: string } | null = null;
+    let pivotMessage: { id: number } | null = null;
     if (conversationId !== null) {
       const { data: conversation, error: conversationError } = await db
         .from("conversations")
@@ -330,24 +330,24 @@ Deno.serve(async (request) => {
           .select("id,text,created_at")
           .eq("conversation_id", conversationId)
           .in("role", ["human", "customer"])
-          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
           .limit(1)
           .maybeSingle();
         if (lastUserError) throw new Error("Could not find the prompt to regenerate.");
         if (!lastUserMessage) return jsonResponse(404, { error: "There is no user prompt to regenerate." });
         message = lastUserMessage.text;
-        pivotMessage = { id: Number(lastUserMessage.id), created_at: lastUserMessage.created_at };
+        pivotMessage = { id: Number(lastUserMessage.id) };
       } else if (editMessageId !== null) {
         const { data: targetMessage, error: targetError } = await db
           .from("messages")
-          .select("id,role,created_at")
+          .select("id,role")
           .eq("id", editMessageId)
           .eq("conversation_id", conversationId)
           .in("role", ["human", "customer"])
           .maybeSingle();
         if (targetError) throw new Error("Could not load the message to edit.");
         if (!targetMessage) return jsonResponse(404, { error: "Message not found or cannot be edited." });
-        pivotMessage = { id: Number(targetMessage.id), created_at: targetMessage.created_at };
+        pivotMessage = { id: Number(targetMessage.id) };
       }
 
       let historyQuery = db
@@ -361,7 +361,7 @@ Deno.serve(async (request) => {
           .from("messages")
           .select("role,text")
           .eq("conversation_id", conversationId)
-          .lt("created_at", pivotMessage.created_at)
+          .lt("id", pivotMessage.id)
           .order("created_at", { ascending: false })
           .limit(10);
       }
@@ -481,21 +481,14 @@ Deno.serve(async (request) => {
     }
 
     if (pivotMessage) {
-      // Replacing or regenerating a turn removes its old AI answer and any later turns.
+      // Message IDs are monotonically increasing, including rows created in the same transaction.
+      // Delete the prior assistant answer and every later turn without duplicating the user prompt.
       const { error: laterDeleteError } = await db
         .from("messages")
         .delete()
         .eq("conversation_id", savedConversationId)
-        .gt("created_at", pivotMessage.created_at);
-      if (laterDeleteError) throw new Error("Could not remove messages after the edited turn.");
-
-      const { error: answerDeleteError } = await db
-        .from("messages")
-        .delete()
-        .eq("conversation_id", savedConversationId)
-        .eq("role", "ai")
-        .gte("created_at", pivotMessage.created_at);
-      if (answerDeleteError) throw new Error("Could not replace the previous AI response.");
+        .gt("id", pivotMessage.id);
+      if (laterDeleteError) throw new Error("Could not remove messages after the selected turn.");
     }
 
     const insertRows = pivotMessage
