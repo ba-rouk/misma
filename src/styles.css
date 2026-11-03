@@ -4927,3 +4927,13 @@ footer {
   cursor: pointer;
 }
 .aichat-media-download:hover { background: #263448; border-color: #52647c; }
+
+
+/* User prompts are text-only bubbles: no circular profile/avatar beside them. */
+.aichat-message-row.is-user > .aichat-msg-avatar,
+.aichat-message-row.is-user .aichat-msg-avatar.user { display: none !important; }
+
+/* Keep the composer anchored as a non-shrinking flex sibling while media skeletons grow in the transcript. */
+.aichat-scroll-area { display: flex; flex: 1 1 auto; min-height: 0; height: 100%; overflow: hidden; flex-direction: column; }
+.aichat-conversation-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: 28px; }
+.aichat-composer-container { position: relative !important; inset: auto !important; flex: 0 0 auto !important; flex-shrink: 0 !important; margin-top: auto; width: 100%; }
