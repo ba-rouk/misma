@@ -48,9 +48,12 @@ type MessageAttachment = {
 
 function detectMediaIntent(prompt: string): "image" | "video" | null {
   const text = prompt.trim().toLowerCase();
-  if (!text ||
+  if (!text) return null;
+  // Keep questions and learning requests in normal Misma chat.
+  const informationRequest =
     /^(how|what|why|where|when|who|which|can|could|would|will|do|does|did|is|are|am)\b/.test(text) ||
-    /^(can you explain|explain|tell me about|do you support|does misma|is it possible|tell me whether)\b/.test(text)) return null;
+    /^(can you explain|explain|tell me about|do you support|does misma|is it possible|tell me whether|i want to know|i am wondering|im wondering|help me understand|describe how|show me how)\b/.test(text);
+  if (informationRequest) return null;
   const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
     /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
   if (!asksToCreate) return null;
