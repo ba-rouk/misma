@@ -128,7 +128,12 @@ export function LandingChatWidget() {
         aria-expanded={open}
         aria-label={open ? "Close Misma chat" : "Chat with Misma"}
       >
-        {open ? "×" : <MismaIcon size={38} className="misma-guest-launcher-logo" />}
+        {open ? "×" : (
+          <>
+            <MismaIcon size={28} className="misma-guest-launcher-logo" />
+            <span className="misma-guest-launcher-label">Ask Misma</span>
+          </>
+        )}
       </button>
     </div>
   );
