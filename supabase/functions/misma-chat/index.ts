@@ -801,8 +801,11 @@ Deno.serve(async (request) => {
       try { parsedUrl = new URL(mediaUrl); } catch {
         return jsonResponse(400, { error: "Invalid media URL." });
       }
-      if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "platform-outputs.agnes-ai.space" ||
-        !/^\/(images|videos)\//.test(parsedUrl.pathname)) {
+      const allowedAgnesImageHost = parsedUrl.hostname === "apihub.agnes-ai.com" && parsedUrl.pathname.startsWith("/storage/images/");
+      const allowedAgnesOutputHost = parsedUrl.hostname === "platform-outputs.agnes-ai.space" &&
+        /^\/(images|videos)\//.test(parsedUrl.pathname);
+      if (parsedUrl.protocol !== "https:" || (parsedUrl.port && parsedUrl.port !== "443") ||
+        (!allowedAgnesImageHost && !allowedAgnesOutputHost)) {
         return jsonResponse(400, { error: "This media host is not supported for secure download." });
       }
       const { data: downloadConversation, error: downloadConversationError } = await db.from("conversations")
