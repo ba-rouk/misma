@@ -944,10 +944,25 @@ Deno.serve(async (request) => {
         signal: AbortSignal.timeout(45_000),
         body: JSON.stringify(createVideoBody),
       });
-      const payload: unknown = await createResponse.json().catch(() => null);
+      const videoResponseText = await createResponse.text();
+      let payload: unknown = null;
+      try { payload = JSON.parse(videoResponseText); } catch { payload = null; }
       if (!createResponse.ok || !isRecord(payload) || typeof payload.video_id !== "string") {
-        console.error("[misma-chat] Agnes video generation failed.", { status: createResponse.status });
-        return jsonResponse(502, { error: "Agnes could not start video generation. Check your Agnes video model access and try again.", conversationId: saved.conversationId, userMessage: saved.userMessage });
+        let providerDetail = "";
+        if (isRecord(payload) && typeof payload.error === "string") providerDetail = payload.error;
+        else if (isRecord(payload) && isRecord(payload.error) && typeof payload.error.message === "string") providerDetail = payload.error.message;
+        providerDetail = providerDetail.replace(/Bearer\\s+\\S+/gi, "[redacted]").replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 300);
+        console.error("[misma-chat] Agnes video generation failed.", {
+          status: createResponse.status,
+          model: videoModel,
+          detail: providerDetail,
+        });
+        const publicDetail = providerDetail ? ` Agnes: ${providerDetail}` : "";
+        return jsonResponse(502, {
+          error: `Agnes could not start video generation (HTTP ${createResponse.status}).${publicDetail}`,
+          conversationId: mediaSaved.conversationId,
+          ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
+        });
       }
       const videoId = String(payload.video_id);
       // Record the returned job ID on the prompt so only its owner can save the completed output.
