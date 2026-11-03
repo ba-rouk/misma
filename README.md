@@ -108,7 +108,7 @@ BRAVE_SEARCH_API_KEY
 
 Tavily is preferred when both are configured; Brave is used if Tavily is missing or does not return usable results. These secrets must remain server-side and must never be added to `.env`, `NEXT_PUBLIC_*`, or `VITE_*` variables. After setting the secret, redeploy `misma-chat` so the updated Edge Function is active. Without either key, Misma will explain that live search is not configured instead of pretending to have searched.
 
-Provider requests now use a single bounded attempt before moving to the next configured provider, with a 22-second per-provider timeout. This reduces time lost waiting on an unhealthy provider before fallback.
+Provider requests now use a single bounded attempt before moving to the next configured provider, with a 15-second timeout for normal text, 22 seconds for image input, and 35 seconds for Think harder. This reduces time lost waiting on an unhealthy provider before fallback.
 ## Core.01 knowledge model
 
 Misma uses Core.01 as a workspace-scoped, room-based experience and knowledge layer. Each successful dashboard AI exchange is automatically recorded as an observed experience and pending training example, grouped into Business Profile, Products, Prices, Customers, Policies, FAQ, Orders, Staff, Procedures, or General. A positive response rating reinforces that experience into an approved Core.01 lesson; approved lessons are retrieved in future prompts when relevant. A negative rating rejects the lesson. This is retrieval-augmented learning from stored experiences, not direct fine-tuning or changing a provider model's weights.
