@@ -191,7 +191,10 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
       throw new Error("This video does not have readable duration metadata.");
     }
     const duration = video.duration;
-    const fractions = duration > 2 ? [0.2, 0.78] : [0.5];
+    // Five evenly spaced samples improve safety coverage across the generated clip.
+    const fractions = duration > 2
+      ? [0.1, 0.3, 0.5, 0.7, 0.9]
+      : [0.2, 0.5, 0.8];
     const frames: File[] = [];
     for (let index = 0; index < fractions.length; index++) {
       const target = Math.min(Math.max(0.05, duration * fractions[index]), Math.max(0.05, duration - 0.05));
