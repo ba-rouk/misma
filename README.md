@@ -93,3 +93,12 @@ Never place AI provider API keys, a Supabase secret key, or a service-role key i
 ### Chat message controls
 
 The dashboard shows message actions on hover (and persistently on touch devices). User prompts can be copied, shared, or edited. Editing a saved prompt replaces that turn and removes later turns after confirmation. Misma responses can be copied, rated with thumbs up/down (the selection is currently local to the open dashboard session and is not persisted), read aloud with browser speech synthesis, shared, or regenerated. Regeneration reuses the last saved user prompt; the Edge Function replaces the assistant answer and does not insert another user message. Retrying a failed send reuses its optimistic message row instead of appending a duplicate. Uploaded files remain attached to their chat messages; history loads fresh one-hour signed URLs instead of storing public file URLs.
+
+
+## Core.01 knowledge model
+
+Misma uses Core.01 as a workspace-scoped, room-based experience and knowledge layer. Each successful dashboard AI exchange is automatically recorded as an observed experience and pending training example, grouped into Business Profile, Products, Prices, Customers, Policies, FAQ, Orders, Staff, Procedures, or General. A positive response rating reinforces that experience into an approved Core.01 lesson; approved lessons are retrieved in future prompts when relevant. A negative rating rejects the lesson. This is retrieval-augmented learning from stored experiences, not direct fine-tuning or changing a provider model's weights.
+
+## Automatic media intent
+
+When a signed-in user types an explicit instruction such as “generate an image of…” or “create a video of…” without first selecting a Create tool, Misma detects the media type and routes the request to Agnes image or video generation automatically.
