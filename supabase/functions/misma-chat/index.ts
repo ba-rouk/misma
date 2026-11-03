@@ -38,7 +38,8 @@ function jsonResponse(status: number, body: JsonRecord): Response {
 
 function detectMediaIntent(prompt: string): "image" | "video" | null {
   const text = prompt.trim().toLowerCase();
-  if (!text || /^(how|what|why|where|when)\b/.test(text)) return null;
+  if (!text || /^(how|what|why|where|when|who)\b/.test(text) ||
+    /^(can you explain|explain|tell me about|do you support|does misma|is it possible)\b/.test(text)) return null;
   const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
     /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
   if (!asksToCreate) return null;
