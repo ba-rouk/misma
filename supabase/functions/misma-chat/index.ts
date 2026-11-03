@@ -919,7 +919,7 @@ Deno.serve(async (request) => {
           console.error("[misma-chat] Agnes image generation failed.", { status: createResponse.status });
           return jsonResponse(502, { error: "Agnes could not generate the image. Check image model access and try again.", conversationId: mediaSaved.conversationId, ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}) });
         }
-        const aiMessage = await saveGeneratedMessage(db, saved.conversationId, "generated-image", payload.data[0].url);
+        const aiMessage = await saveGeneratedMessage(db, mediaSaved.conversationId, "generated-image", payload.data[0].url, undefined, regenerateMedia ? Number(replaceAiMessageId) : undefined);
         return jsonResponse(200, { conversationId: saved.conversationId, userMessage: saved.userMessage, aiMessage, provider: "agnes-image" });
       }
 
