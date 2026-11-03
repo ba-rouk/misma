@@ -119,7 +119,9 @@ function ActionIcon({ name }: { name: ActionIconName }) {
 }
 
 async function compressImageForUpload(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") || file.size <= 4 * 1024 * 1024) return file;
+  const supportedOriginal = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
+  if (!file.type.startsWith("image/")) return file;
+  if (supportedOriginal && file.size <= 4 * 1024 * 1024) return file;
   const bitmap = await createImageBitmap(file);
   try {
     const maxSide = 1800;
@@ -789,7 +791,7 @@ function Dashboard() {
       if (original.type.startsWith("image/")) {
         const preparedImage = await compressImageForUpload(original);
         await uploadOne(preparedImage, "image");
-      } else if (original.type.startsWith("video/")) {
+      } else if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
         videoCount += 1;
         if (videoCount > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
         await uploadOne(original, "video");
@@ -1017,8 +1019,8 @@ function Dashboard() {
       setChatError("Attach up to four files per message.");
       return;
     }
-    if (next.some((file) => file.type.startsWith("video/")) &&
-        next.filter((file) => file.type.startsWith("video/")).length > 1) {
+    const isVideoFile = (file: File) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
+    if (next.some(isVideoFile) && next.filter(isVideoFile).length > 1) {
       setChatError("Upload one video per message so Misma can sample its keyframes.");
       return;
     }
