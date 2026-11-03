@@ -354,7 +354,7 @@ Deno.serve(async (request) => {
         .from("messages")
         .select("role,text")
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(10);
       if (pivotMessage) {
         historyQuery = db
@@ -362,7 +362,7 @@ Deno.serve(async (request) => {
           .select("role,text")
           .eq("conversation_id", conversationId)
           .lt("id", pivotMessage.id)
-          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
           .limit(10);
       }
       const { data: storedMessages, error: historyError } = await historyQuery;
