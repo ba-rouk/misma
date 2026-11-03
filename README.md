@@ -70,8 +70,8 @@ Optional model overrides:
 | `NVIDIA_THINK_MODEL` | `deepseek-ai/deepseek-v4.1-flash` |
 | `OPENROUTER_MODEL` | `openrouter/auto` |
 | `AGNES_MODEL` | `agnes-2.5-flash` |
-| `AGNES_VISION_MODEL` | `agnes-2.0-flash` |
-| `AGNES_IMAGE_MODEL` | `agnes-image-2.1-flash` |
+| `AGNES_VISION_MODEL` | `agnes-3.0-flash` |
+| `AGNES_IMAGE_MODEL` | `agnes-image-2.5-flash` |
 | `AGNES_VIDEO_MODEL` | `agnes-video-2.5-flash` (runtime-pinned; environment override not used) |
 | `COHERE_MODEL` | `command-a-plus-05-2026` |
 | `MISTRAL_MODEL` | `mistral-small-latest` |
@@ -107,3 +107,8 @@ When a signed-in user types an explicit instruction such as “generate an image
 ### Agnes Video 2.5 Flash
 
 Video creation uses the current Agnes Video 2.5 Flash schema: `mode` (`text` or `reference`), `seconds: "5"`, `size: "720P"`, `aspect_ratio: "16:9"`, and `n: 1`. The function polls with `model_name=agnes-video-2.5-flash` and reads the completed URL from either the top-level `url` or `metadata.url` response field. It does not send the legacy v2.0 `width`/`height`/`num_frames` payload or unsupported `negative_prompt` field.
+
+
+### Agnes moderation and downloads
+
+Agnes 3.0 Flash screens media prompts and supplied reference images before generation. Generated images are screened again before they are stored. Image and video outputs are downloadable through a workspace- and conversation-validated endpoint. Video prompts are safety-constrained before generation; the current integration does not decode and classify every generated video frame, so this is a preventive safeguard rather than an absolute guarantee about every output frame.
