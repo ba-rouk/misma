@@ -1535,7 +1535,6 @@ function Dashboard() {
       setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
       setMediaProgress("");
     } finally {
-      setSelectedFiles([]);
       setIsGeneratingMedia(false);
     }
   };
