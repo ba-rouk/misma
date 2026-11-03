@@ -39,31 +39,57 @@ Enable Email/Password in Supabase Auth. Configure the site's allowed redirect UR
 
 ## Dashboard AI
 
-The authenticated dashboard calls `supabase/functions/misma-chat`. Groq is tried first. If it fails, the function tries Gemini, then OpenAI, then Mistral. Each provider gets up to two attempts for network/time-out, HTTP 408, HTTP 429, and server (5xx) failures. Non-retryable client errors move directly to the next provider. Each attempt has a 12-second timeout. At least one provider key is required.
+The authenticated dashboard calls `supabase/functions/misma-chat`. Provider routing is automatic and only includes providers whose Edge Function API keys are configured:
 
-Set provider keys as Supabase Edge Function secrets (never in frontend environment variables):
+- Normal text: Groq → Gemini → NVIDIA → OpenRouter → Agnes → Cohere → Mistral → OpenAI.
+- **Think harder**: NVIDIA DeepSeek V4.1 Flash is tried first with higher reasoning effort, followed by the configured fallbacks.
+- **Image or video upload**: Agnes vision is tried first. Video uploads are sampled into two keyframes in the browser; the original video is retained in the conversation. The current video-analysis path examines visual frames and does not transcribe video audio.
+- **PDF upload**: OpenRouter handles the PDF file input. Text, CSV, and common source-code files are extracted from private Storage and supplied as text context.
+- If a provider rejects a request with a retryable network error, HTTP 408, HTTP 429, or server (5xx) error, it receives one retry before the next provider is tried. Non-retryable errors move to the next compatible provider.
 
-```sh
-supabase secrets set GEMINI_API_KEY=... GROQ_API_KEY=... OPENAI_API_KEY=... MISTRAL_API_KEY=...
+Configure keys in Supabase Edge Function Secrets only:
+
+```text
+GROQ_API_KEY
+GEMINI_API_KEY
+NVIDIA_API_KEY
+OPENROUTER_API_KEY
+AGNES_API_KEY
+COHERE_API_KEY
+MISTRAL_API_KEY
+OPENAI_API_KEY
 ```
 
-Only configure the providers you want available. Groq is primary whenever `GROQ_API_KEY` is present; Gemini is the first fallback when `GEMINI_API_KEY` is present. Optional model overrides are `GEMINI_MODEL` (default `gemini-3.6-flash`), `GROQ_MODEL` (default `openai/gpt-oss-120b`), `OPENAI_MODEL` (default `gpt-4o-mini`), and `MISTRAL_MODEL` (default `mistral-small-latest`). Supabase supplies `SUPABASE_URL` and the publishable/anon key to the function runtime.
+Optional model overrides:
 
-The Edge Function validates the user's Supabase access token and uses that token for all Postgres requests, so workspace RLS applies. It does not use a service-role key. `supabase/config.toml` keeps JWT verification enabled. The assistant prompt distinguishes casual conversation from workspace-specific requests, handles common slang and informal spelling, asks for clarification on genuinely unclear messages, uses recent conversation history to avoid repetitive greetings, and protects workspace data from prompt injection. Sampling temperature is set to 0.65 for more natural variation while keeping business facts grounded. The successful response retains the existing `conversationId`, `userMessage`, and `aiMessage` fields, and adds `provider` and `usedFallback` metadata.
+| Variable | Default |
+|---|---|
+| `GROQ_MODEL` | `openai/gpt-oss-120b` |
+| `GEMINI_MODEL` | `gemini-3.6-flash` |
+| `NVIDIA_MODEL` | `deepseek-ai/deepseek-v4.1-flash` |
+| `NVIDIA_THINK_MODEL` | `deepseek-ai/deepseek-v4.1-flash` |
+| `OPENROUTER_MODEL` | `openrouter/auto` |
+| `AGNES_MODEL` | `agnes-2.5-flash` |
+| `AGNES_VISION_MODEL` | `agnes-2.0-flash` |
+| `AGNES_IMAGE_MODEL` | `agnes-image-2.1-flash` |
+| `AGNES_VIDEO_MODEL` | `agnes-video-v2.0` |
+| `COHERE_MODEL` | `command-a-plus-05-2026` |
+| `MISTRAL_MODEL` | `mistral-small-latest` |
+| `OPENAI_MODEL` | `gpt-4o-mini` |
 
-Workspace resolution is membership-checked. If the user belongs to exactly one workspace, it is selected automatically. If the user belongs to multiple workspaces, the request must include the selected `workspaceId`; the Edge Function verifies that the authenticated user is a member before reading or writing workspace data. Requests without a valid selection receive HTTP 409 or 403 rather than silently using an arbitrary membership.
+The Edge Function validates the user's Supabase access token and uses that token for Postgres and Storage requests, so workspace RLS policies apply. It does not use a service-role key. `supabase/config.toml` keeps JWT verification enabled. Workspace resolution is membership-checked: a user with one workspace is resolved automatically; a user with multiple workspaces must send a selected `workspaceId`, which the function verifies against membership.
 
-After reviewing the migration and confirming the linked ref is `grlrrmebnthxguluybgb`, apply the schema and deploy the function:
+### Private chat uploads and Agnes media creation
 
-```sh
-supabase link --project-ref grlrrmebnthxguluybgb
-supabase db push
-supabase functions deploy misma-chat
-```
+The migration `supabase/migrations/20261103000000_misma_chat_media.sql` adds `messages.attachments` and the private `misma-media` Storage bucket. The bucket is limited to 25 MB per object. Storage object paths must be `<workspace-id>/<auth-user-id>/<file-name>`; RLS checks membership and user ownership. The dashboard creates one-hour signed URLs for previews and model input. Images are compressed in the browser when they exceed 4 MB; videos are stored and sampled into two JPEG keyframes for visual analysis. Supported text/code file extensions include TXT, Markdown, CSV, JSON, HTML, CSS, JS/TS, Python, SQL, YAML, TOML and common source languages. PDF analysis requires the OpenRouter key and PDFs are limited to 12 MB.
 
-Set the API keys for the providers you intend to use in the Misma project's Edge Function secrets before testing chat. Deploy the updated function after reviewing the branch. No Supabase migration or function deployment is required for this provider and workspace-resolution change.
+The composer **+** menu provides:
+- **Think harder** for a higher-reasoning model route on questions, code and text-based files.
+- **File**, **Photo** and **Camera** upload options.
+- **Create image** and **Create video**, both routed to Agnes. Image generation returns an image to the chat. Video generation is asynchronous; the dashboard polls Agnes and saves the finished video as an assistant attachment. Uploaded image references can guide generation; video uploads supply sampled keyframes.
 
+Never place AI provider API keys, a Supabase secret key, or a service-role key in `.env`, `NEXT_PUBLIC_*`, or `VITE_*` variables.
 
 ### Chat message controls
 
-The dashboard shows message actions on hover (and persistently on touch devices). User prompts can be copied, shared, or edited. Editing a saved prompt replaces that turn and removes later turns after confirmation. Misma responses can be copied, rated with thumbs up/down (the selection is currently local to the open dashboard session and is not persisted), read aloud with browser speech synthesis, shared, or regenerated. Regeneration reuses the last saved user prompt; the Edge Function replaces the assistant answer and does not insert another user message. Retrying a failed send reuses its optimistic message row instead of appending a duplicate.
+The dashboard shows message actions on hover (and persistently on touch devices). User prompts can be copied, shared, or edited. Editing a saved prompt replaces that turn and removes later turns after confirmation. Misma responses can be copied, rated with thumbs up/down (the selection is currently local to the open dashboard session and is not persisted), read aloud with browser speech synthesis, shared, or regenerated. Regeneration reuses the last saved user prompt; the Edge Function replaces the assistant answer and does not insert another user message. Retrying a failed send reuses its optimistic message row instead of appending a duplicate. Uploaded files remain attached to their chat messages; history loads fresh one-hour signed URLs instead of storing public file URLs.
