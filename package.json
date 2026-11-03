@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "bun run typecheck && vite build",
+    "start": "node .output/server/index.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsr generate && tsc --noEmit",
     "test": "bun test"
