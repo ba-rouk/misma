@@ -33,7 +33,7 @@ export const getMismaData = createServerFn({ method: "POST" })
     const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-        db.from("conversations").select("id,channel,latest_text,status,updated_at,contacts(name)").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }),
+        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("knowledge_entries").select("id,question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
         db.from("contacts").select("id,name,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("lifetime_value_rwf", { ascending: false }),
@@ -41,7 +41,8 @@ export const getMismaData = createServerFn({ method: "POST" })
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const conversations = check(conversationsResult.data, conversationsResult.error).map((c: any) => ({
       id: c.id, channel: c.channel, text: c.latest_text, status: c.status, updated_at: c.updated_at,
-      name: c.messages?.find((message: any) => message.role === "human" || message.role === "customer")?.text?.trim().replace(/\s+/g, " ").slice(0, 72) || (c.latest_text || "New chat").slice(0, 72),
+      name: (c.latest_text || "New chat").trim().replace(/\s+/g, " ").slice(0, 72),
+      group_name: c.group_name || null,
     }));
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
       id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
