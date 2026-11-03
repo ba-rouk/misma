@@ -62,3 +62,8 @@ supabase functions deploy misma-chat
 ```
 
 Set the API keys for the providers you intend to use in the Misma project's Edge Function secrets before testing chat. Deploy the updated function after reviewing the branch. No Supabase migration or function deployment is required for this provider and workspace-resolution change.
+
+
+### Chat message controls
+
+The dashboard shows message actions on hover (and persistently on touch devices). User prompts can be copied, shared, or edited. Editing a saved prompt replaces that turn and removes later turns after confirmation. Misma responses can be copied, rated with thumbs up/down, read aloud with browser speech synthesis, shared, or regenerated. Regeneration reuses the last saved user prompt; the Edge Function replaces the assistant answer and does not insert another user message. Retrying a failed send reuses its optimistic message row instead of appending a duplicate.
