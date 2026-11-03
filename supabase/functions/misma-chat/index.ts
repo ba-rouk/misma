@@ -115,7 +115,7 @@ async function requestProvider(
           headers: provider.kind === "gemini"
             ? { "Content-Type": "application/json", "x-goog-api-key": provider.apiKey }
             : { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
-          signal: AbortSignal.timeout(18_000),
+          signal: AbortSignal.timeout(12_000),
           body: JSON.stringify(provider.kind === "gemini"
             ? {
               systemInstruction: { parts: [{ text: systemPrompt }] },
