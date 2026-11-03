@@ -206,12 +206,20 @@ Deno.serve(async (request) => {
     return jsonResponse(400, { error: "Request body must be valid JSON." });
   }
 
-  if (!isRecord(input) || typeof input.message !== "string") {
+  if (!isRecord(input)) {
+    return jsonResponse(400, { error: "Enter a valid chat request." });
+  }
+  const regenerate = input.regenerate === true;
+  const editMessageId = input.editMessageId ?? null;
+  if (regenerate && editMessageId !== null) {
+    return jsonResponse(400, { error: "A message cannot be edited and regenerated in the same request." });
+  }
+  let message = typeof input.message === "string" ? input.message.trim() : "";
+  if (!regenerate && (!message || message.length > 4_000)) {
     return jsonResponse(400, { error: "Enter a message up to 4,000 characters." });
   }
-  const message = input.message.trim();
-  if (!message || message.length > 4_000) {
-    return jsonResponse(400, { error: "Enter a message up to 4,000 characters." });
+  if (editMessageId !== null && (!Number.isSafeInteger(editMessageId) || Number(editMessageId) < 1)) {
+    return jsonResponse(400, { error: "Invalid message to edit." });
   }
   const conversationId = input.conversationId ?? null;
   if (
@@ -219,6 +227,9 @@ Deno.serve(async (request) => {
     (!Number.isSafeInteger(conversationId) || Number(conversationId) < 1)
   ) {
     return jsonResponse(400, { error: "Invalid conversation." });
+  }
+  if ((regenerate || editMessageId !== null) && conversationId === null) {
+    return jsonResponse(400, { error: "An existing conversation is required for this action." });
   }
   const requestedWorkspaceId = input.workspaceId ?? null;
   if (requestedWorkspaceId !== null && typeof requestedWorkspaceId !== "string") {
@@ -302,6 +313,7 @@ Deno.serve(async (request) => {
     }
 
     let history: ChatMessage[] = [];
+    let pivotMessage: { id: number; created_at: string } | null = null;
     if (conversationId !== null) {
       const { data: conversation, error: conversationError } = await db
         .from("conversations")
@@ -312,12 +324,48 @@ Deno.serve(async (request) => {
       if (conversationError) throw new Error("Could not load conversation.");
       if (!conversation) return jsonResponse(404, { error: "Conversation not found." });
 
-      const { data: storedMessages, error: historyError } = await db
+      if (regenerate) {
+        const { data: lastUserMessage, error: lastUserError } = await db
+          .from("messages")
+          .select("id,text,created_at")
+          .eq("conversation_id", conversationId)
+          .in("role", ["human", "customer"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (lastUserError) throw new Error("Could not find the prompt to regenerate.");
+        if (!lastUserMessage) return jsonResponse(404, { error: "There is no user prompt to regenerate." });
+        message = lastUserMessage.text;
+        pivotMessage = { id: Number(lastUserMessage.id), created_at: lastUserMessage.created_at };
+      } else if (editMessageId !== null) {
+        const { data: targetMessage, error: targetError } = await db
+          .from("messages")
+          .select("id,role,created_at")
+          .eq("id", editMessageId)
+          .eq("conversation_id", conversationId)
+          .in("role", ["human", "customer"])
+          .maybeSingle();
+        if (targetError) throw new Error("Could not load the message to edit.");
+        if (!targetMessage) return jsonResponse(404, { error: "Message not found or cannot be edited." });
+        pivotMessage = { id: Number(targetMessage.id), created_at: targetMessage.created_at };
+      }
+
+      let historyQuery = db
         .from("messages")
         .select("role,text")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(10);
+      if (pivotMessage) {
+        historyQuery = db
+          .from("messages")
+          .select("role,text")
+          .eq("conversation_id", conversationId)
+          .lt("created_at", pivotMessage.created_at)
+          .order("created_at", { ascending: false })
+          .limit(10);
+      }
+      const { data: storedMessages, error: historyError } = await historyQuery;
       if (historyError) throw new Error("Could not load conversation history.");
       history = (storedMessages ?? []).reverse().flatMap((item) => {
         if (item.role === "ai") return [{ role: "model" as const, text: item.text.slice(0, 4_000) }];
@@ -420,14 +468,48 @@ Deno.serve(async (request) => {
       savedConversationId = Number(conversation.id);
     }
 
-    const { data: savedMessages, error: saveError } = await db
-      .from("messages")
-      .insert([
+    if (editMessageId !== null && pivotMessage) {
+      const { data: editedRow, error: editError } = await db
+        .from("messages")
+        .update({ text: message })
+        .eq("id", editMessageId)
+        .eq("conversation_id", savedConversationId)
+        .in("role", ["human", "customer"])
+        .select("id")
+        .maybeSingle();
+      if (editError || !editedRow) throw new Error("Could not update the selected message.");
+    }
+
+    if (pivotMessage) {
+      // Replacing or regenerating a turn removes its old AI answer and any later turns.
+      const { error: laterDeleteError } = await db
+        .from("messages")
+        .delete()
+        .eq("conversation_id", savedConversationId)
+        .gt("created_at", pivotMessage.created_at);
+      if (laterDeleteError) throw new Error("Could not remove messages after the edited turn.");
+
+      const { error: answerDeleteError } = await db
+        .from("messages")
+        .delete()
+        .eq("conversation_id", savedConversationId)
+        .eq("role", "ai")
+        .gte("created_at", pivotMessage.created_at);
+      if (answerDeleteError) throw new Error("Could not replace the previous AI response.");
+    }
+
+    const insertRows = pivotMessage
+      ? [{ conversation_id: savedConversationId, role: "ai", text: answer }]
+      : [
         { conversation_id: savedConversationId, role: "human", text: message },
         { conversation_id: savedConversationId, role: "ai", text: answer },
-      ])
+      ];
+    const { data: savedMessages, error: saveError } = await db
+      .from("messages")
+      .insert(insertRows)
       .select("id,role,text,created_at");
-    if (saveError || !savedMessages || savedMessages.length !== 2) {
+    const expectedSavedCount = pivotMessage ? 1 : 2;
+    if (saveError || !savedMessages || savedMessages.length !== expectedSavedCount) {
       throw new Error("Could not save chat messages.");
     }
 
@@ -438,17 +520,24 @@ Deno.serve(async (request) => {
       .eq("workspace_id", workspaceId);
     if (updateError) throw new Error("Could not update conversation.");
 
-    const userMessage = savedMessages.find((item) => item.role === "human");
+    const userMessage = pivotMessage
+      ? null
+      : savedMessages.find((item) => item.role === "human");
     const aiMessage = savedMessages.find((item) => item.role === "ai");
-    if (!userMessage || !aiMessage) throw new Error("Supabase returned incomplete chat messages.");
+    if ((!pivotMessage && !userMessage) || !aiMessage) {
+      throw new Error("Supabase returned incomplete chat messages.");
+    }
     return jsonResponse(200, {
       conversationId: savedConversationId,
-      userMessage: {
-        id: String(userMessage.id),
-        role: "human",
-        text: userMessage.text,
-        created_at: userMessage.created_at,
-      },
+      ...(userMessage ? {
+        userMessage: {
+          id: String(userMessage.id),
+          role: "human",
+          text: userMessage.text,
+          created_at: userMessage.created_at,
+        },
+      } : {}),
+      ...(editMessageId !== null ? { editedMessageId: String(editMessageId) } : {}),
       aiMessage: {
         id: String(aiMessage.id),
         role: "ai",
