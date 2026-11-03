@@ -486,6 +486,7 @@ async function saveGeneratedMessage(
   kind: string,
   url: string,
   videoId?: string,
+  replaceMessageId?: number,
 ): Promise<JsonRecord> {
   const { data: conversation, error: conversationError } = await db
     .from("conversations").select("id,workspace_id")
@@ -508,12 +509,26 @@ async function saveGeneratedMessage(
     ...(videoId ? { videoId } : {}),
   };
   const text = kind === "generated-video" ? "Your video is ready." : "Your image is ready.";
-  const { data, error } = await db.from("messages").insert({
-    conversation_id: conversationId,
-    role: "ai",
-    text,
-    attachments: [attachment],
-  }).select("id,role,text,created_at").single();
+  let data: JsonRecord | null = null;
+  let error: { message?: string } | null = null;
+  if (replaceMessageId) {
+    const result = await db.from("messages").update({
+      text,
+      attachments: [attachment],
+    }).eq("id", replaceMessageId).eq("conversation_id", conversationId).eq("role", "ai")
+      .select("id,role,text,created_at").maybeSingle();
+    data = result.data as JsonRecord | null;
+    error = result.error;
+  } else {
+    const result = await db.from("messages").insert({
+      conversation_id: conversationId,
+      role: "ai",
+      text,
+      attachments: [attachment],
+    }).select("id,role,text,created_at").single();
+    data = result.data as JsonRecord | null;
+    error = result.error;
+  }
   if (error || !data) throw new Error("Could not save the generated media.");
   await db.from("conversations").update({
     latest_text: text,
