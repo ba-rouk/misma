@@ -659,7 +659,7 @@ function Dashboard() {
           setProfileName(resolvedName);
           setProfileNameDraft(resolvedName);
           const avatarPath = metadata.avatar_path;
-          if (typeof avatarPath === "string" && avatarPath.startsWith("misma/") || typeof avatarPath === "string" && avatarPath.includes("/")) {
+          if (typeof avatarPath === "string" && avatarPath.length > 0) {
             void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 3600).then(({ data, error }) => {
               if (!error && data?.signedUrl) setProfileImage(data.signedUrl);
               else setProfileImage(image ?? "");
@@ -1008,9 +1008,10 @@ function Dashboard() {
         ? userData.user.user_metadata.avatar_path
         : "";
       if (profileAvatarFile) {
+        if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
         if (profileAvatarFile.size > 5 * 1024 * 1024) throw new Error("Profile photos must be 5 MB or smaller.");
         const extension = profileAvatarFile.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "jpg";
-        avatarPath = (workspace?.id || "profile") + "/" + userData.user.id + "/avatar-" + crypto.randomUUID() + "." + extension;
+        avatarPath = workspace.id + "/" + userData.user.id + "/avatar-" + crypto.randomUUID() + "." + extension;
         const { error: uploadError } = await client.storage.from("misma-media").upload(avatarPath, profileAvatarFile, {
           upsert: true,
           contentType: profileAvatarFile.type || "image/jpeg",
@@ -1514,7 +1515,6 @@ function Dashboard() {
       setMediaProgress("");
     } finally {
       setSelectedFiles([]);
-      setCreateMode(null);
       setIsGeneratingMedia(false);
     }
   };
