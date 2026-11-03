@@ -32,6 +32,80 @@ type Message = {
   created_at?: string;
 };
 
+type ActionIconName =
+  | "copy"
+  | "share"
+  | "edit"
+  | "thumbs-up"
+  | "thumbs-down"
+  | "volume"
+  | "volume-off"
+  | "refresh";
+
+function ActionIcon({ name }: { name: ActionIconName }) {
+  const common = {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true as const,
+  };
+
+  return (
+    <svg {...common}>
+      {name === "copy" && (
+        <>
+          <rect x="8" y="8" width="13" height="13" rx="2" />
+          <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+        </>
+      )}
+      {name === "share" && (
+        <>
+          <circle cx="18" cy="5" r="3" />
+          <circle cx="6" cy="12" r="3" />
+          <circle cx="18" cy="19" r="3" />
+          <path d="m8.7 10.7 6.6-4.2M8.7 13.3l6.6 4.2" />
+        </>
+      )}
+      {name === "edit" && (
+        <>
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+        </>
+      )}
+      {name === "thumbs-up" && (
+        <path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Zm0 0 5-8c2 0 3 1 3 3l-1 5h5a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7" />
+      )}
+      {name === "thumbs-down" && (
+        <path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2Zm0 0 5 8c2 0 3-1 3-3l-1-5h5a2 2 0 0 0 2-2l-2-7a2 2 0 0 0-2-2H7" />
+      )}
+      {name === "volume" && (
+        <>
+          <path d="M11 5 6 9H3v6h3l5 4z" />
+          <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+        </>
+      )}
+      {name === "volume-off" && (
+        <>
+          <path d="M11 5 6 9H3v6h3l5 4z" />
+          <path d="m16 9 5 6m0-6-5 6" />
+        </>
+      )}
+      {name === "refresh" && (
+        <>
+          <path d="M20 7v5h-5" />
+          <path d="M4 17v-5h5" />
+          <path d="M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 const SUGGESTIONS = [
   "How many orders came in today?",
   "Show me recent conversations",
@@ -187,6 +261,13 @@ function Dashboard() {
   const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState("");
   const [failedPrompt, setFailedPrompt] = useState("");
+  const [failedAction, setFailedAction] = useState<"send" | "regenerate" | "edit" | null>(null);
+  const [failedMessageId, setFailedMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingOriginalText, setEditingOriginalText] = useState<string | null>(null);
+  const [messageFeedback, setMessageFeedback] = useState<Record<string, "up" | "down" | undefined>>({});
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
 
   // Forms in other tabs
@@ -389,6 +470,14 @@ function Dashboard() {
     setActiveTab("workspace");
     setMobileMenuOpen(false);
     setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
+    setFailedMessageId(null);
+    setEditingMessageId(null);
+    setEditingOriginalText(null);
+    setMessageFeedback({});
+    setSpeakingMessageId(null);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     shouldAutoScrollRef.current = true;
     try {
       const res = await getConversationMessages({
@@ -409,6 +498,13 @@ function Dashboard() {
     setDraft("");
     setChatError("");
     setFailedPrompt("");
+    setFailedAction(null);
+    setFailedMessageId(null);
+    setEditingMessageId(null);
+    setEditingOriginalText(null);
+    setMessageFeedback({});
+    setSpeakingMessageId(null);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     setActiveTab("workspace");
     setMobileMenuOpen(false);
     shouldAutoScrollRef.current = true;
@@ -441,22 +537,127 @@ function Dashboard() {
     }
   };
 
-  // Sending message
-  const handleSend = async (customPrompt?: string) => {
-    const textToSend = (customPrompt ?? draft).trim();
-    if (!textToSend || isSending || !token) return;
+  const showCopiedState = (messageId: string) => {
+    setCopiedMessageId(messageId);
+    window.setTimeout(() => {
+      setCopiedMessageId((current) => current === messageId ? null : current);
+    }, 1400);
+  };
 
-    // Optimistically show user message
-    const tempUserMsg: Message = {
-      id: `user-${Date.now()}`,
-      role: "human",
-      text: textToSend,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, tempUserMsg]);
+  const handleCopyMessage = async (msg: Message) => {
+    try {
+      await navigator.clipboard.writeText(msg.text);
+      showCopiedState(msg.id);
+    } catch {
+      setChatError("Could not copy this message. Check your browser clipboard permissions.");
+    }
+  };
+
+  const handleShareMessage = async (msg: Message, title: string) => {
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title, text: msg.text });
+      } else {
+        await navigator.clipboard.writeText(msg.text);
+        showCopiedState(msg.id);
+      }
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === "AbortError") return;
+      setChatError("Sharing is not available here. Try copying the message instead.");
+    }
+  };
+
+  const handleReadAloud = (msg: Message) => {
+    if (!("speechSynthesis" in window)) {
+      setChatError("Read aloud is not supported by this browser.");
+      return;
+    }
+    if (speakingMessageId === msg.id) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(msg.text);
+    utterance.onend = () => setSpeakingMessageId(null);
+    utterance.onerror = () => setSpeakingMessageId(null);
+    setSpeakingMessageId(msg.id);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleRateMessage = (messageId: string, rating: "up" | "down") => {
+    setMessageFeedback((current) => ({
+      ...current,
+      [messageId]: current[messageId] === rating ? undefined : rating,
+    }));
+  };
+
+  const handleEditMessage = (msg: Message) => {
+    if (isSending) return;
+    const isPersistedMessage = !msg.id.startsWith("user-") && Number.isSafeInteger(Number(msg.id)) && msg.id.trim() !== "";
+    if (!isPersistedMessage) {
+      setMessages((current) => current.filter((item) => item.id !== msg.id));
+      setFailedMessageId(null);
+      setFailedAction(null);
+      setFailedPrompt("");
+    } else {
+      const messageIndex = messages.findIndex((item) => item.id === msg.id);
+      const hasLaterUserMessages = messages.slice(messageIndex + 1).some(
+        (item) => item.role === "human" || item.role === "customer",
+      );
+      if (
+        hasLaterUserMessages &&
+        !window.confirm(
+          "Editing this message will replace it and remove all later messages in this conversation. Continue?",
+        )
+      ) {
+        return;
+      }
+      setEditingMessageId(msg.id);
+      setEditingOriginalText(msg.text);
+    }
+    setDraft(msg.text);
+    setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
+    textareaRef.current?.focus();
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingOriginalText(null);
     setDraft("");
     setChatError("");
     setFailedPrompt("");
+    setFailedAction(null);
+  };
+
+  // Sending, retrying, or editing a user message.
+  const handleSend = async (
+    customPrompt?: string,
+    options: { retry?: boolean } = {},
+  ) => {
+    const textToSend = (customPrompt ?? draft).trim();
+    if (!textToSend || isSending || !token) return;
+
+    const isRetry = options.retry === true;
+    const editId = editingMessageId;
+    const tempUserId = isRetry ? failedMessageId : `user-${Date.now()}`;
+
+    if (!editId && !isRetry) {
+      const tempUserMsg: Message = {
+        id: tempUserId ?? `user-${Date.now()}`,
+        role: "human",
+        text: textToSend,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, tempUserMsg]);
+    }
+
+    setDraft("");
+    setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
     setIsSending(true);
     shouldAutoScrollRef.current = true;
 
@@ -475,25 +676,47 @@ function Dashboard() {
         body: JSON.stringify({
           message: textToSend,
           conversationId: currentConversationId,
+          ...(editId ? { editMessageId: Number(editId) } : {}),
         }),
       });
       const res = (await response.json()) as {
         error?: string;
         conversationId?: number;
+        userMessage?: Message;
         aiMessage?: Message;
+        editedMessageId?: string;
       };
-      if (!response.ok)
-        throw new Error(res.error || "Failed to connect to Misma AI.");
-      if (!res.aiMessage)
-        throw new Error("Misma AI returned an empty response.");
-      const aiMessage = res.aiMessage;
+      if (!response.ok) throw new Error(res.error || "Failed to connect to Misma AI.");
+      if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!currentConversationId && res.conversationId) {
         setCurrentConversationId(res.conversationId);
       }
 
-      // Add real AI response
-      setMessages((prev) => [...prev, aiMessage]);
+      if (editId) {
+        setMessages((prev) => {
+          const index = prev.findIndex((item) => item.id === editId);
+          if (index < 0) return [...prev, res.aiMessage!];
+          return [
+            ...prev.slice(0, index),
+            { ...prev[index], text: textToSend },
+            res.aiMessage!,
+          ];
+        });
+        setEditingMessageId(null);
+        setEditingOriginalText(null);
+      } else {
+        setMessages((prev) => {
+          const withPersistedUser = tempUserId && res.userMessage
+            ? prev.map((item) => item.id === tempUserId ? res.userMessage! : item)
+            : prev;
+          return [...withPersistedUser, res.aiMessage!];
+        });
+      }
+
+      setFailedMessageId(null);
+      setFailedAction(null);
+      setFailedPrompt("");
       loadData();
     } catch (cause) {
       const errMsg =
@@ -502,8 +725,61 @@ function Dashboard() {
           : "Failed to connect to Misma AI.";
       setChatError(errMsg);
       setFailedPrompt(textToSend);
-      // Restore draft on failure
+      setFailedAction(editId ? "edit" : "send");
+      setFailedMessageId(tempUserId);
       setDraft(textToSend);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Regenerate the latest AI response using the saved user prompt.
+  // The Edge Function reuses that prompt and never inserts a second human message.
+  const handleRegenerate = async () => {
+    if (!currentConversationId || !token || isSending) return;
+    setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
+    setIsSending(true);
+    shouldAutoScrollRef.current = true;
+
+    try {
+      const config = getSupabaseConfig();
+      if (!config) {
+        throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
+      }
+      const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: config.publishableKey,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ conversationId: currentConversationId, regenerate: true }),
+      });
+      const res = (await response.json()) as {
+        error?: string;
+        aiMessage?: Message;
+      };
+      if (!response.ok) throw new Error(res.error || "Could not regenerate this response.");
+      if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
+
+      setMessages((prev) => {
+        let latestUserIndex = -1;
+        prev.forEach((item, index) => {
+          if (item.role === "human" || item.role === "customer") latestUserIndex = index;
+        });
+        if (latestUserIndex < 0) return prev;
+        return [...prev.slice(0, latestUserIndex + 1), res.aiMessage!];
+      });
+      setFailedAction(null);
+      setFailedMessageId(null);
+      setFailedPrompt("");
+      setMessageFeedback({});
+      loadData();
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : "Could not regenerate this response.");
+      setFailedAction("regenerate");
     } finally {
       setIsSending(false);
     }
@@ -620,6 +896,7 @@ function Dashboard() {
   const userName = workspace?.name
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
+  const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
 
   return (
     <div className="aichat">
@@ -1057,41 +1334,101 @@ function Dashboard() {
                 </div>
               ) : (
                 /* Message Stream */
-                messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`aichat-message-row ${msg.role === "human" || msg.role === "customer" ? "is-user" : "is-ai"}`}
-                  >
-                    {msg.role === "ai" && (
-                      <div className="aichat-msg-avatar ai" title="Misma AI">
-                        <svg viewBox="0 0 100 100" width="16" height="16">
-                          <polyline
-                            points="26,52 38,64 60,38"
-                            fill="none"
-                            stroke="#fff"
-                            strokeWidth="10"
-                            strokeLinecap="square"
-                          />
-                          <polyline
-                            points="42,52 54,64 76,38"
-                            fill="none"
-                            stroke="#fff"
-                            strokeWidth="10"
-                            strokeLinecap="square"
-                          />
-                        </svg>
+                messages.map((msg) => {
+                  const isUserMessage = msg.role === "human" || msg.role === "customer";
+                  const isAiMessage = msg.role === "ai";
+                  const isLatestAiMessage = isAiMessage && msg.id === latestAiMessageId;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={"aichat-message-row " + (isUserMessage ? "is-user" : "is-ai")}
+                    >
+                      {isAiMessage && (
+                        <div className="aichat-msg-avatar ai" title="Misma AI">
+                          <svg viewBox="0 0 100 100" width="16" height="16">
+                            <polyline points="26,52 38,64 60,38" fill="none" stroke="#fff" strokeWidth="10" strokeLinecap="square" />
+                            <polyline points="42,52 54,64 76,38" fill="none" stroke="#fff" strokeWidth="10" strokeLinecap="square" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="aichat-message-content">
+                        <div className="aichat-bubble">
+                          <MarkdownContent content={msg.text} />
+                        </div>
+                        <div
+                          className="aichat-message-actions"
+                          role="group"
+                          aria-label={isUserMessage ? "Your message actions" : "Misma response actions"}
+                        >
+                          {isUserMessage ? (
+                            <>
+                              <button type="button" className="aichat-message-action" title="Copy message" aria-label="Copy message" onClick={() => void handleCopyMessage(msg)}>
+                                <ActionIcon name="copy" />
+                              </button>
+                              <button type="button" className="aichat-message-action" title="Share prompt" aria-label="Share prompt" onClick={() => void handleShareMessage(msg, "Misma prompt")}>
+                                <ActionIcon name="share" />
+                              </button>
+                              <button type="button" className="aichat-message-action" title="Edit message" aria-label="Edit message" disabled={isSending} onClick={() => handleEditMessage(msg)}>
+                                <ActionIcon name="edit" />
+                              </button>
+                            </>
+                          ) : isAiMessage ? (
+                            <>
+                              <button type="button" className="aichat-message-action" title="Copy response" aria-label="Copy response" onClick={() => void handleCopyMessage(msg)}>
+                                <ActionIcon name="copy" />
+                              </button>
+                              <button
+                                type="button"
+                                className={"aichat-message-action" + (messageFeedback[msg.id] === "up" ? " is-active" : "")}
+                                title="Good response"
+                                aria-label="Rate response positively"
+                                aria-pressed={messageFeedback[msg.id] === "up"}
+                                onClick={() => handleRateMessage(msg.id, "up")}
+                              >
+                                <ActionIcon name="thumbs-up" />
+                              </button>
+                              <button
+                                type="button"
+                                className={"aichat-message-action" + (messageFeedback[msg.id] === "down" ? " is-active" : "")}
+                                title="Poor response"
+                                aria-label="Rate response negatively"
+                                aria-pressed={messageFeedback[msg.id] === "down"}
+                                onClick={() => handleRateMessage(msg.id, "down")}
+                              >
+                                <ActionIcon name="thumbs-down" />
+                              </button>
+                              <button
+                                type="button"
+                                className="aichat-message-action"
+                                title={speakingMessageId === msg.id ? "Stop reading" : "Read aloud"}
+                                aria-label={speakingMessageId === msg.id ? "Stop reading aloud" : "Read response aloud"}
+                                onClick={() => handleReadAloud(msg)}
+                              >
+                                <ActionIcon name={speakingMessageId === msg.id ? "volume-off" : "volume"} />
+                              </button>
+                              <button type="button" className="aichat-message-action" title="Share response" aria-label="Share response" onClick={() => void handleShareMessage(msg, "Misma response")}>
+                                <ActionIcon name="share" />
+                              </button>
+                              {isLatestAiMessage && (
+                                <button type="button" className="aichat-message-action" title="Try again" aria-label="Regenerate response" disabled={isSending} onClick={() => void handleRegenerate()}>
+                                  <ActionIcon name="refresh" />
+                                </button>
+                              )}
+                            </>
+                          ) : null}
+                          {copiedMessageId === msg.id && (
+                            <span className="aichat-action-status" role="status">Copied</span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="aichat-bubble">
-                      <MarkdownContent content={msg.text} />
+                      {isUserMessage && (
+                        <div className="aichat-msg-avatar user" title="You">
+                          {profileName[0]?.toUpperCase() ?? "U"}
+                        </div>
+                      )}
                     </div>
-                    {(msg.role === "human" || msg.role === "customer") && (
-                      <div className="aichat-msg-avatar user" title="You">
-                        {profileName[0]?.toUpperCase() ?? "U"}
-                      </div>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
 
               {/* AI Thinking State */}
@@ -1128,15 +1465,15 @@ function Dashboard() {
               {chatError && (
                 <div className="aichat-error-box" role="alert">
                   <span>{chatError}</span>
-                  {failedPrompt && (
-                    <button
-                      type="button"
-                      className="aichat-retry-btn"
-                      onClick={() => void handleSend(failedPrompt)}
-                    >
+                  {failedAction === "regenerate" ? (
+                    <button type="button" className="aichat-retry-btn" onClick={() => void handleRegenerate()} disabled={isSending}>
+                      Try again
+                    </button>
+                  ) : failedPrompt ? (
+                    <button type="button" className="aichat-retry-btn" onClick={() => void handleSend(failedPrompt, { retry: true })} disabled={isSending}>
                       Retry
                     </button>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1144,6 +1481,12 @@ function Dashboard() {
             {/* Message Composer */}
             <div className="aichat-composer-container">
               <div className="aichat-composer-inner">
+                {editingMessageId && (
+                  <div className="aichat-editing-banner">
+                    <span>Editing message: {editingOriginalText}</span>
+                    <button type="button" onClick={handleCancelEdit}>Cancel</button>
+                  </div>
+                )}
                 <form
                   className="aichat-composer-card"
                   onSubmit={(e) => {
@@ -1166,8 +1509,8 @@ function Dashboard() {
                     type="submit"
                     className={`aichat-composer-send-btn${draft.trim() && !isSending ? " can-send" : ""}`}
                     disabled={!draft.trim() || isSending}
-                    title="Send message"
-                    aria-label="Send message"
+                    title={editingMessageId ? "Save edited message" : "Send message"}
+                    aria-label={editingMessageId ? "Save edited message" : "Send message"}
                   >
                     ↑
                   </button>

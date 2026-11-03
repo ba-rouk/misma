@@ -1,6 +1,6 @@
 # Misma
 
-Misma is a React application built with TanStack Start and Vite. Supabase provides authentication and Postgres; the dashboard AI uses a Supabase Edge Function and Gemini.
+Misma is a React application built with TanStack Start and Vite. Supabase provides authentication and Postgres; the dashboard AI uses a Supabase Edge Function with Groq as its primary provider, Gemini as its first fallback, and optional OpenAI and Mistral fallbacks.
 
 ## Local development
 
@@ -23,7 +23,7 @@ bun test
 bun run build
 ```
 
-Only the project URL and publishable key belong in frontend environment variables. Never put a Gemini API key, Supabase secret key, or service-role key in `.env`, `NEXT_PUBLIC_*`, or `VITE_*` variables.
+Only the project URL and publishable key belong in frontend environment variables. Never put AI provider API keys, a Supabase secret key, or a service-role key in `.env`, `NEXT_PUBLIC_*`, or `VITE_*` variables.
 
 ## Supabase setup
 
@@ -39,9 +39,19 @@ Enable Email/Password in Supabase Auth. Configure the site's allowed redirect UR
 
 ## Dashboard AI
 
-The authenticated dashboard calls `supabase/functions/misma-chat`. Deploy it to the Misma project and set `GEMINI_API_KEY` in that project's Edge Function secrets. `GEMINI_MODEL` is optional; the function defaults to `gemini-2.5-flash`. Supabase supplies `SUPABASE_URL` and the publishable/anon key to the function runtime.
+The authenticated dashboard calls `supabase/functions/misma-chat`. Groq is tried first. If it fails, the function tries Gemini, then OpenAI, then Mistral. Each provider gets up to two attempts for network/time-out, HTTP 408, HTTP 429, and server (5xx) failures. Non-retryable client errors move directly to the next provider. Each attempt has a 12-second timeout. At least one provider key is required.
 
-The Edge Function validates the user's Supabase access token and uses that token for all Postgres requests, so workspace RLS applies. It reads the Gemini key only through `Deno.env.get("GEMINI_API_KEY")`; it does not use a service-role key. `supabase/config.toml` keeps JWT verification enabled.
+Set provider keys as Supabase Edge Function secrets (never in frontend environment variables):
+
+```sh
+supabase secrets set GEMINI_API_KEY=... GROQ_API_KEY=... OPENAI_API_KEY=... MISTRAL_API_KEY=...
+```
+
+Only configure the providers you want available. Groq is primary whenever `GROQ_API_KEY` is present; Gemini is the first fallback when `GEMINI_API_KEY` is present. Optional model overrides are `GEMINI_MODEL` (default `gemini-3.6-flash`), `GROQ_MODEL` (default `openai/gpt-oss-120b`), `OPENAI_MODEL` (default `gpt-4o-mini`), and `MISTRAL_MODEL` (default `mistral-small-latest`). Supabase supplies `SUPABASE_URL` and the publishable/anon key to the function runtime.
+
+The Edge Function validates the user's Supabase access token and uses that token for all Postgres requests, so workspace RLS applies. It does not use a service-role key. `supabase/config.toml` keeps JWT verification enabled. The assistant prompt distinguishes casual conversation from workspace-specific requests, handles common slang and informal spelling, asks for clarification on genuinely unclear messages, uses recent conversation history to avoid repetitive greetings, and protects workspace data from prompt injection. Sampling temperature is set to 0.65 for more natural variation while keeping business facts grounded. The successful response retains the existing `conversationId`, `userMessage`, and `aiMessage` fields, and adds `provider` and `usedFallback` metadata.
+
+Workspace resolution is membership-checked. If the user belongs to exactly one workspace, it is selected automatically. If the user belongs to multiple workspaces, the request must include the selected `workspaceId`; the Edge Function verifies that the authenticated user is a member before reading or writing workspace data. Requests without a valid selection receive HTTP 409 or 403 rather than silently using an arbitrary membership.
 
 After reviewing the migration and confirming the linked ref is `grlrrmebnthxguluybgb`, apply the schema and deploy the function:
 
@@ -51,4 +61,9 @@ supabase db push
 supabase functions deploy misma-chat
 ```
 
-Set `GEMINI_API_KEY` in the Misma project's Edge Function secrets before testing chat. No Supabase migration or function deployment has been run automatically by this repository change.
+Set the API keys for the providers you intend to use in the Misma project's Edge Function secrets before testing chat. Deploy the updated function after reviewing the branch. No Supabase migration or function deployment is required for this provider and workspace-resolution change.
+
+
+### Chat message controls
+
+The dashboard shows message actions on hover (and persistently on touch devices). User prompts can be copied, shared, or edited. Editing a saved prompt replaces that turn and removes later turns after confirmation. Misma responses can be copied, rated with thumbs up/down (the selection is currently local to the open dashboard session and is not persisted), read aloud with browser speech synthesis, shared, or regenerated. Regeneration reuses the last saved user prompt; the Edge Function replaces the assistant answer and does not insert another user message. Retrying a failed send reuses its optimistic message row instead of appending a duplicate.

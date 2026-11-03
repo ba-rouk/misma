@@ -119,7 +119,7 @@ export const getConversationMessages = createServerFn({ method: "POST" })
       .from("messages")
       .select("id,conversation_id,role,text,created_at")
       .eq("conversation_id", data.conversationId)
-      .order("created_at", { ascending: true });
+      .order("id", { ascending: true });
     if (msgErr) throw new Error(msgErr.message);
 
     return {
