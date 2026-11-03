@@ -708,7 +708,7 @@ Deno.serve(async (request) => {
         .eq("workspace_id", workspaceId);
       if (trainingError) console.warn("[misma-chat] Core.01 training-example feedback could not be updated.", trainingError.code);
       if (rating === "up") {
-        const lesson = \`When asked: \${experience.question}\nValidated response: \${experience.primary_response}\`;
+        const lesson = "When asked: " + experience.question + "\nValidated response: " + experience.primary_response;
         const { error: lessonError } = await db.from("core_01_lessons").upsert({
           workspace_id: workspaceId,
           room_id: experience.room_id,
