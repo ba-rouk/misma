@@ -883,7 +883,7 @@ Deno.serve(async (request) => {
       return jsonResponse(200, {
         status: pollData.status ?? "processing",
         progress: pollData.progress ?? 0,
-        url: typeof pollData.url === "string" ? pollData.url : null,
+        url: typeof pollData.url === "string" ? pollData.url : (isRecord(pollData.metadata) && typeof pollData.metadata.url === "string" ? pollData.metadata.url : null),
         error: typeof pollData.error === "string" ? pollData.error : null,
         videoId,
         model,
