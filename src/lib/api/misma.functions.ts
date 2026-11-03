@@ -41,7 +41,7 @@ export const getMismaData = createServerFn({ method: "POST" })
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const conversations = check(conversationsResult.data, conversationsResult.error).map((c: any) => ({
       id: c.id, channel: c.channel, text: c.latest_text, status: c.status, updated_at: c.updated_at,
-      name: Array.isArray(c.contacts) ? c.contacts[0]?.name || "Customer" : c.contacts?.name || "Customer",
+      name: c.messages?.find((message: any) => message.role === "human" || message.role === "customer")?.text?.trim().replace(/\s+/g, " ").slice(0, 72) || (c.latest_text || "New chat").slice(0, 72),
     }));
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
       id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
