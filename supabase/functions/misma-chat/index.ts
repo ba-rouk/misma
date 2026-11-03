@@ -996,17 +996,15 @@ Deno.serve(async (request) => {
       const createVideoBody: JsonRecord = {
         model: videoModel,
         prompt: safePrompt,
-        negative_prompt: "nudity, sexual content, erotic imagery, lingerie, suggestive posing, sexualized minors, graphic violence, gore, hate symbols",
-        width: 1152,
-        height: 768,
-        num_frames: 121,
-        frame_rate: 24,
+        mode: hasImageReferences ? "reference" : "text",
+        seconds: "5",
+        size: "720P",
+        aspect_ratio: "16:9",
+        n: 1,
+        ...(hasImageReferences
+          ? { images: prepared.images.slice(0, 5).map((image) => image.dataUrl || image.url) }
+          : {}),
       };
-      if (hasImageReferences && prepared.images.length >= 2) {
-        createVideoBody.extra_body = { image: prepared.images.slice(0, 5).map((image) => image.url), mode: "keyframes" };
-      } else if (hasImageReferences) {
-        createVideoBody.image = prepared.images[0].url;
-      }
       const createResponse = await fetch("https://apihub.agnes-ai.com/v1/videos", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
