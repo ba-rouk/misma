@@ -81,7 +81,9 @@ function Login() {
       const { error: signinError } =
         await getSupabaseClient().auth.signInWithOAuth({
           provider: "google",
-          options: { redirectTo: "http://localhost:5173/auth/callback" },
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+          },
         });
       if (signinError) throw signinError;
     } catch (cause) {
