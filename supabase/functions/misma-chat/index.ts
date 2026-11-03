@@ -863,12 +863,42 @@ Deno.serve(async (request) => {
     if (action === "create-image" || action === "create-video") {
       const agnesKey = Deno.env.get("AGNES_API_KEY");
       if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured. Add AGNES_API_KEY to Supabase Edge Function secrets." });
-      const prompt = message || (action === "create-image" ? "Create an image based on the attached references." : "Create a video based on the attached references.");
+      let prompt = message || (action === "create-image" ? "Create an image based on the attached references." : "Create a video based on the attached references.");
       const hasImageReferences = prepared.images.length > 0;
-      const saved = await saveMediaPrompt(
-        db, workspaceId, conversationId, prompt, requestedAttachments,
-        action === "create-video" ? { kind: "video-job-pending", model: Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-v2.0" } : undefined,
-      );
+      let mediaSaved: { conversationId: number; userMessage: JsonRecord | null };
+      if (regenerateMedia) {
+        const { data: sourcePrompt, error: sourcePromptError } = await db.from("messages")
+          .select("id,role,text,attachments")
+          .eq("id", sourceUserMessageId)
+          .eq("conversation_id", conversationId)
+          .in("role", ["human", "customer"])
+          .maybeSingle();
+        const { data: targetMedia, error: targetMediaError } = await db.from("messages")
+          .select("id,role")
+          .eq("id", replaceAiMessageId)
+          .eq("conversation_id", conversationId)
+          .eq("role", "ai")
+          .maybeSingle();
+        if (sourcePromptError || targetMediaError || !sourcePrompt || !targetMedia) {
+          return jsonResponse(404, { error: "The original prompt or generated media message could not be found." });
+        }
+        prompt = String(sourcePrompt.text || "");
+        mediaSaved = { conversationId: Number(conversationId), userMessage: null };
+      } else {
+        mediaSaved = await saveMediaPrompt(
+          db, workspaceId, conversationId, prompt, requestedAttachments,
+          action === "create-video" ? { kind: "video-job-pending", model: "agnes-video-v2.0" } : undefined,
+        );
+      }
+      const isSafePrompt = await isAgnesMediaSafe(agnesKey, prompt, prepared.images);
+      if (!isSafePrompt) {
+        return jsonResponse(422, {
+          error: "This prompt or reference cannot be used for media generation. Choose a neutral, non-explicit, age-appropriate scene with fully clothed people.",
+          conversationId: mediaSaved.conversationId,
+          ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
+        });
+      }
+      const safePrompt = "Create non-sexual, non-explicit, age-appropriate content. People must be fully clothed in ordinary non-revealing attire with neutral poses. Do not include nudity, erotic or suggestive content, lingerie, graphic violence, gore, or hate symbols. Creative brief: " + prompt;
 
       if (action === "create-image") {
         const imageModel = Deno.env.get("AGNES_IMAGE_MODEL") || "agnes-image-2.1-flash";
