@@ -1121,7 +1121,12 @@ function Dashboard() {
         ...(reuse ? { replaceAiMessageId: reuse.replaceAiMessageId } : {}),
       });
       if (!saved.aiMessage) throw new Error("The generated video could not be saved to this chat.");
-      setMessages((current) => current.map((item) => item.id === progressMessageId ? saved.aiMessage : item));
+      setMessages((current) => {
+        const withoutPending = current.filter((item) => item.id !== progressMessageId);
+        return reuse
+          ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? saved.aiMessage : item)
+          : [...withoutPending, saved.aiMessage];
+      });
       setMediaProgress("Video created.");
       window.setTimeout(() => setMediaProgress(""), 3500);
       loadData();
