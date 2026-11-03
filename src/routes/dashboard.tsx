@@ -60,6 +60,22 @@ const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
   protectSensitiveData: true,
 };
 
+function SettingsNavIcon({ kind }: { kind: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {kind === "profile" ? <><circle cx="12" cy="8" r="3.5" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" /></>
+        : kind === "general" ? <><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="#151a22" /><circle cx="15" cy="17" r="2" fill="#151a22" /></>
+        : kind === "accent" ? <><path d="m12 3 7 7-7 11-7-11 7-7Z" /><path d="M5 10h14" /></>
+        : kind === "notifications" ? <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>
+        : kind === "voice" ? <><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></>
+        : kind === "privacy" ? <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" /></>
+        : kind === "history" ? <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>
+        : kind === "about" ? <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7h.01" /></>
+        : <><path d="M10 17l5-5-5-5M15 12H3" /><path d="M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" /></>}
+    </svg>
+  );
+}
+
 function SettingsToggle({
   title,
   description,
@@ -2859,9 +2875,7 @@ function Dashboard() {
               <div className="aichat-settings-nav" aria-label="Settings sections">
                 {settingsNavItems.filter((item) => item.icon !== "logout").map((item) => (
                   <button key={item.id} type="button" className="aichat-settings-nav-button" onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
-                    <span className="aichat-settings-nav-icon" aria-hidden="true">
-                      {item.icon === "profile" ? "◉" : item.icon === "general" ? "⚙" : item.icon === "accent" ? "◐" : item.icon === "notifications" ? "♧" : item.icon === "voice" ? "♫" : item.icon === "privacy" ? "◇" : item.icon === "history" ? "◷" : "ⓘ"}
-                    </span>
+                    <span className="aichat-settings-nav-icon"><SettingsNavIcon kind={item.icon} /></span>
                     <span>{item.label}</span>
                   </button>
                 ))}
@@ -2979,6 +2993,7 @@ function Dashboard() {
                 <SettingsToggle title="Product updates" description="Show relevant information about new Misma features." checked={notificationPreferences.productUpdates} onToggle={() => setNotificationPreferences((current) => ({ ...current, productUpdates: !current.productUpdates }))} />
                 <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
                 <SettingsToggle title="Chat activity" description="Enable notifications for new chat activity when supported by the browser." checked={notificationPreferences.chatActivity} onToggle={() => setNotificationPreferences((current) => ({ ...current, chatActivity: !current.chatActivity }))} />
+                <p className="aichat-settings-hint">These preferences are saved in this browser. Push delivery requires a notification service to be configured by the app.</p>
               </section>
 
               <section id="settings-voice" className="aichat-card aichat-settings-card">
