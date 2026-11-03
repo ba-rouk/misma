@@ -68,8 +68,21 @@ function getProviders(options: { thinkHarder?: boolean; hasImages?: boolean }): 
     }
   };
 
-  // Think harder starts with NVIDIA's controllable-reasoning model.
-  if (options.thinkHarder) {
+  // Image/video uploads deliberately invoke Agnes first for visual understanding.
+  if (options.hasImages) {
+    add(
+      "agnes-vision",
+      "AGNES_API_KEY",
+      "AGNES_VISION_MODEL",
+      "agnes-2.0-flash",
+      "https://apihub.agnes-ai.com/v1/chat/completions",
+      "openai-compatible",
+      true,
+    );
+  }
+
+  // Think harder starts with NVIDIA's controllable-reasoning model when there is no visual upload.
+  if (options.thinkHarder && !options.hasImages) {
     add(
       "nvidia-think",
       "NVIDIA_API_KEY",
@@ -79,19 +92,6 @@ function getProviders(options: { thinkHarder?: boolean; hasImages?: boolean }): 
       "openai-compatible",
       true,
       false,
-      true,
-    );
-  }
-
-  // Image/video uploads deliberately invoke Agnes first for image understanding.
-  if (options.hasImages) {
-    add(
-      "agnes-vision",
-      "AGNES_API_KEY",
-      "AGNES_VISION_MODEL",
-      "agnes-2.0-flash",
-      "https://apihub.agnes-ai.com/v1/chat/completions",
-      "openai-compatible",
       true,
     );
   }
@@ -348,7 +348,18 @@ async function prepareAttachments(
       /\.(txt|md|csv|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i.test(lowerName);
 
     if (attachment.kind === "image" || attachment.kind === "video-frame" || attachment.mimeType.startsWith("image/")) {
-      images.push({ url: signed.signedUrl, name: attachment.name });
+      if (attachment.size > 8 * 1024 * 1024) {
+        throw new Error("Images must be 8 MB or smaller after upload preparation.");
+      }
+      const { data: imageBlob, error: imageError } = await db.storage.from("misma-media").download(attachment.path);
+      if (imageError || !imageBlob) throw new Error("Could not read an uploaded image.");
+      const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
+      const mimeType = attachment.mimeType.startsWith("image/") ? attachment.mimeType : "image/jpeg";
+      images.push({
+        url: signed.signedUrl,
+        dataUrl: `data:${mimeType};base64,${bytesToBase64(imageBytes)}`,
+        name: attachment.name,
+      });
       continue;
     }
     if (isPdf) {
@@ -857,7 +868,7 @@ Deno.serve(async (request) => {
 
     const providerOptions = {
       thinkHarder,
-      hasImages: prepared.images.length > 0,
+      hasImages: prepared.images.length > 0 || requestedAttachments.some((attachment) => attachment.kind === "video"),
     };
     const providers = getProviders(providerOptions);
     if (providers.length === 0) {
