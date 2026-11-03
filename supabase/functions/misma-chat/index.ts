@@ -908,7 +908,7 @@ Deno.serve(async (request) => {
           signal: AbortSignal.timeout(90_000),
           body: JSON.stringify({
             model: imageModel,
-            prompt,
+            prompt: safePrompt,
             n: 1,
             size: typeof input.imageSize === "string" && ["1024x1024", "1024x768", "1536x1024"].includes(input.imageSize) ? input.imageSize : "1024x1024",
             ...(hasImageReferences ? { image: prepared.images[0].url } : {}),
