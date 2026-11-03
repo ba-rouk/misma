@@ -1,6 +1,6 @@
 # Misma
 
-Misma is a React application built with TanStack Start and Vite. Supabase provides authentication and Postgres; the dashboard AI uses a Supabase Edge Function with Gemini as its primary provider and optional Groq, OpenAI, and Mistral fallbacks.
+Misma is a React application built with TanStack Start and Vite. Supabase provides authentication and Postgres; the dashboard AI uses a Supabase Edge Function with Groq as its primary provider, Gemini as its first fallback, and optional OpenAI and Mistral fallbacks.
 
 ## Local development
 
@@ -39,7 +39,7 @@ Enable Email/Password in Supabase Auth. Configure the site's allowed redirect UR
 
 ## Dashboard AI
 
-The authenticated dashboard calls `supabase/functions/misma-chat`. Gemini is tried first. If it fails, the function tries configured providers in this order: Groq, OpenAI, then Mistral. Each provider gets up to two attempts for network/time-out, HTTP 408, HTTP 429, and server (5xx) failures. Non-retryable client errors move directly to the next provider. Each attempt has a 12-second timeout. At least one provider key is required.
+The authenticated dashboard calls `supabase/functions/misma-chat`. Groq is tried first. If it fails, the function tries Gemini, then OpenAI, then Mistral. Each provider gets up to two attempts for network/time-out, HTTP 408, HTTP 429, and server (5xx) failures. Non-retryable client errors move directly to the next provider. Each attempt has a 12-second timeout. At least one provider key is required.
 
 Set provider keys as Supabase Edge Function secrets (never in frontend environment variables):
 
@@ -47,7 +47,7 @@ Set provider keys as Supabase Edge Function secrets (never in frontend environme
 supabase secrets set GEMINI_API_KEY=... GROQ_API_KEY=... OPENAI_API_KEY=... MISTRAL_API_KEY=...
 ```
 
-Only configure the providers you want available. Gemini remains primary whenever `GEMINI_API_KEY` is present. Optional model overrides are `GEMINI_MODEL` (default `gemini-2.5-flash`), `GROQ_MODEL` (default `llama-3.3-70b-versatile`), `OPENAI_MODEL` (default `gpt-4o-mini`), and `MISTRAL_MODEL` (default `mistral-small-latest`). Supabase supplies `SUPABASE_URL` and the publishable/anon key to the function runtime.
+Only configure the providers you want available. Groq is primary whenever `GROQ_API_KEY` is present; Gemini is the first fallback when `GEMINI_API_KEY` is present. Optional model overrides are `GEMINI_MODEL` (default `gemini-3.8-flash`), `GROQ_MODEL` (default `llama-3.3-70b-versatile`), `OPENAI_MODEL` (default `gpt-4o-mini`), and `MISTRAL_MODEL` (default `mistral-small-latest`). Supabase supplies `SUPABASE_URL` and the publishable/anon key to the function runtime.
 
 The Edge Function validates the user's Supabase access token and uses that token for all Postgres requests, so workspace RLS applies. It does not use a service-role key. `supabase/config.toml` keeps JWT verification enabled. The successful response retains the existing `conversationId`, `userMessage`, and `aiMessage` fields, and adds `provider` and `usedFallback` metadata.
 
