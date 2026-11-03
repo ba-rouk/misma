@@ -856,7 +856,7 @@ Deno.serve(async (request) => {
       const ownsJob = (rows ?? []).some((row) => Array.isArray(row.attachments) &&
         row.attachments.some((item: unknown) => isRecord(item) && item.videoId === videoId));
       if (!ownsJob) return jsonResponse(403, { error: "This video job does not belong to the selected conversation." });
-      const aiMessage = await saveGeneratedMessage(db, Number(conversationId), "generated-video", url, videoId);
+      const aiMessage = await saveGeneratedMessage(db, Number(conversationId), "generated-video", url, videoId, replaceAiMessageId ?? undefined);
       return jsonResponse(200, { conversationId, aiMessage });
     }
 
