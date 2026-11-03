@@ -2366,7 +2366,7 @@ function Dashboard() {
                       <thead>
                         <tr>
                           <th>Order ID</th>
-                          <th>Customer</th>
+                          <th>Chat</th>
                           <th>Item</th>
                           <th>Total (RWF)</th>
                           <th>Status</th>
@@ -2452,7 +2452,7 @@ function Dashboard() {
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
-                <h2>Recent Conversations ({conversations.length})</h2>
+                <h2>Recent chats ({conversations.length})</h2>
                 <p>
                   Browse and reopen past customer conversations from all
                   connected channels.
@@ -2500,7 +2500,7 @@ function Dashboard() {
                         <tr>
                           <th>Customer</th>
                           <th>Channel</th>
-                          <th>Latest Message</th>
+                          <th>Latest activity</th>
                           <th>Status</th>
                           <th style={{ textAlign: "right" }}>Actions</th>
                         </tr>
@@ -2523,7 +2523,7 @@ function Dashboard() {
                           .map((c) => (
                             <tr key={c.id}>
                               <td style={{ fontWeight: 600 }}>
-                                {c.name || "Customer"}
+                                {c.name || c.text || "New chat"}
                               </td>
                               <td>
                                 <span className="aichat-header-badge">
