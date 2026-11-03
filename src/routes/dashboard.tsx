@@ -11,6 +11,7 @@ import {
   getConversationMessages,
   createConversation,
   deleteConversation,
+  setConversationGroup,
   addKnowledge,
   deleteKnowledge,
   updateOrderStatus,
@@ -47,7 +48,8 @@ type MessageAttachment = {
 
 function detectMediaIntent(prompt: string): "image" | "video" | null {
   const text = prompt.trim().toLowerCase();
-  if (!text || /^(how|what|why|where|when)\b/.test(text)) return null;
+  if (!text || /^(how|what|why|where|when|who)\b/.test(text) ||
+    /^(can you explain|explain|tell me about|do you support|does misma|is it possible)\b/.test(text)) return null;
   const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
     /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
   if (!asksToCreate) return null;
@@ -360,6 +362,8 @@ function Dashboard() {
 
   // Chats and tasks panel state
   const [chatsExpanded, setChatsExpanded] = useState(true);
+  const [chatMenuOpenId, setChatMenuOpenId] = useState<number | null>(null);
+  const [downloadingMediaUrl, setDownloadingMediaUrl] = useState<string | null>(null);
 
   // Business and user data
   const [workspace, setWorkspace] = useState<any>(null);
@@ -418,6 +422,7 @@ function Dashboard() {
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
   const [recentSearch, setRecentSearch] = useState("");
+  const conversationGroups = Array.from(new Set(conversations.map((item) => item.group_name).filter((value): value is string => Boolean(value))));
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -657,6 +662,25 @@ function Dashboard() {
     }
   };
 
+
+  const handleSetConversationGroup = async (conversationId: number, groupName: string | null) => {
+    if (!token) return;
+    try {
+      await setConversationGroup({ data: { token, conversationId, groupName } });
+      setChatMenuOpenId(null);
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not update this chat group.");
+    }
+  };
+
+  const handleCreateConversationGroup = (conversationId: number) => {
+    const value = window.prompt("Enter a group name for this chat:");
+    const groupName = value?.trim().slice(0, 60);
+    if (groupName) void handleSetConversationGroup(conversationId, groupName);
+    setChatMenuOpenId(null);
+  };
+
   // Delete conversation with confirmation
   const handleDeleteConversation = async (convId: number) => {
     if (!token) return;
@@ -836,6 +860,51 @@ function Dashboard() {
     const result = await response.json() as Record<string, any>;
     if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Misma AI request failed.");
     return result;
+  };
+
+
+  const handleDownloadGeneratedMedia = async (attachment: MessageAttachment) => {
+    if (!token || !workspace?.id || !currentConversationId || !attachment.url || downloadingMediaUrl) return;
+    const config = getSupabaseConfig();
+    if (!config) {
+      setChatError("Supabase is not configured.");
+      return;
+    }
+    setDownloadingMediaUrl(attachment.url);
+    setChatError("");
+    try {
+      const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: config.publishableKey,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "download-generated-media",
+          workspaceId: workspace.id,
+          conversationId: currentConversationId,
+          url: attachment.url,
+        }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(result.error || "Could not download this file.");
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = attachment.name || (attachment.kind === "generated-video" ? "misma-video.mp4" : "misma-image.png");
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : "Could not download this file.");
+    } finally {
+      setDownloadingMediaUrl(null);
+    }
   };
 
   const handleSend = async (
