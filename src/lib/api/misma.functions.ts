@@ -39,9 +39,29 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("contacts").select("id,name,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("lifetime_value_rwf", { ascending: false }),
       ]);
     const workspace = check(workspaceResult.data, workspaceResult.error);
-    const conversations = check(conversationsResult.data, conversationsResult.error).map((c: any) => ({
-      id: c.id, channel: c.channel, text: c.latest_text, status: c.status, updated_at: c.updated_at,
-      name: (c.latest_text || "New chat").trim().replace(/\s+/g, " ").slice(0, 72),
+    const rawConversations = check(conversationsResult.data, conversationsResult.error);
+    const conversationIds = rawConversations.map((conversation: any) => conversation.id);
+    const promptTitles = new Map<number, string>();
+    if (conversationIds.length) {
+      const { data: promptRows, error: promptRowsError } = await db.from("messages")
+        .select("conversation_id,id,text")
+        .in("conversation_id", conversationIds)
+        .in("role", ["human", "customer"])
+        .order("id", { ascending: true })
+        .limit(1000);
+      if (promptRowsError) throw new Error("Could not load recent chat titles.");
+      for (const row of promptRows ?? []) {
+        const id = Number(row.conversation_id);
+        if (!promptTitles.has(id)) promptTitles.set(id, String(row.text || ""));
+      }
+    }
+    const conversations = rawConversations.map((c: any) => ({
+      id: c.id,
+      channel: c.channel,
+      text: c.latest_text,
+      status: c.status,
+      updated_at: c.updated_at,
+      name: (promptTitles.get(Number(c.id)) || c.latest_text || "New chat").trim().replace(/\s+/g, " ").slice(0, 72),
       group_name: c.group_name || null,
     }));
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
