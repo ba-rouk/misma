@@ -5037,9 +5037,11 @@ footer {
 }
 .aichat-settings-nav-button:hover { background:#202733; color:#f1f5fb; }
 .aichat-settings-nav-icon {
+  /* Inline stroke icons are kept on the same baseline as ChatGPT-style settings labels. */
   display:grid; place-items:center; width:17px; height:17px; flex:none;
   color:#a9b6c8; font:500 16px/1 var(--font-sans);
 }
+.aichat-settings-nav-icon svg { width:17px; height:17px; display:block; }
 .aichat-settings-profile-head { display:flex; align-items:center; gap:16px; }
 .aichat-settings-avatar-button {
   position:relative; width:68px; height:68px; flex:none; overflow:hidden;
