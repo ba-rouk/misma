@@ -1738,6 +1738,10 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
+  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-general","label":"General","icon":"general"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
+  const filteredSettingsNavItems = settingsNavItems.filter((item) =>
+    !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
+  );
 
   return (
     <div className="aichat">
@@ -2430,6 +2434,20 @@ function Dashboard() {
                       aria-label="Message Misma"
                     />
                     <button
+                      type="button"
+                      className={`aichat-composer-voice${voiceInputActive ? " is-listening" : ""}`}
+                      onClick={handleVoiceInput}
+                      disabled={isSending || isGeneratingMedia}
+                      aria-label={voiceInputActive ? "Stop voice dictation" : "Start voice dictation"}
+                      title={voiceInputActive ? "Stop voice dictation" : "Use voice"}
+                    >
+                      {voiceInputActive ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+                      )}
+                    </button>
+                    <button
                       type="submit"
                       className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending ? " can-send" : ""}`}
                       disabled={(!draft.trim() && !selectedFiles.length && !createMode) || isSending}
@@ -2838,6 +2856,55 @@ function Dashboard() {
                 <h2>Settings</h2>
                 <p>Configure how Misma represents your business, supports website visitors, and hands conversations to your team.</p>
               </div>
+              <div className="aichat-settings-nav" aria-label="Settings sections">
+                {settingsNavItems.filter((item) => item.icon !== "logout").map((item) => (
+                  <button key={item.id} type="button" className="aichat-settings-nav-button" onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                    <span className="aichat-settings-nav-icon" aria-hidden="true">
+                      {item.icon === "profile" ? "◉" : item.icon === "general" ? "⚙" : item.icon === "accent" ? "◐" : item.icon === "notifications" ? "♧" : item.icon === "voice" ? "♫" : item.icon === "privacy" ? "◇" : item.icon === "history" ? "◷" : "ⓘ"}
+                    </span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+              <section id="settings-profile" className="aichat-card aichat-settings-card aichat-profile-settings">
+                <div className="aichat-settings-profile-head">
+                  <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
+                    {profileImage ? <img src={profileImage} alt="" /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
+                    <span className="aichat-settings-avatar-edit" aria-hidden="true">✎</span>
+                  </button>
+                  <div>
+                    <h3>Profile</h3>
+                    <p>Update the name and picture used for your Misma account.</p>
+                    <small>{profileEmail}</small>
+                  </div>
+                  <input ref={profileAvatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    if (file) {
+                      if (file.size > 5 * 1024 * 1024) {
+                        setProfileError("Profile photos must be 5 MB or smaller.");
+                      } else {
+                        setProfileAvatarFile(file);
+                        setProfileImage(URL.createObjectURL(file));
+                        setProfileError("");
+                      }
+                    }
+                    event.target.value = "";
+                  }} />
+                </div>
+                <div className="aichat-profile-edit-row">
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-profile-name">Profile name</label>
+                    <input id="misma-profile-name" className="aichat-input" value={profileNameDraft} maxLength={80} onChange={(event) => setProfileNameDraft(event.target.value)} placeholder="Your name" />
+                  </div>
+                  <button type="button" className="aichat-action-btn" onClick={() => void saveAccountProfile()} disabled={profileSaving}>
+                    {profileSaving ? "Saving…" : "Save changes"}
+                  </button>
+                </div>
+                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
+                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
+                {profileAvatarFile && <p className="aichat-settings-hint">New profile photo selected. Save changes to upload it.</p>}
+              </section>
+              <div className="aichat-settings-divider-label" id="settings-general">General</div>
               <div className="aichat-settings-intro">
                 <span className="aichat-settings-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg></span>
                 <span><strong>Recommended business assistant profile</strong><small>Recommended defaults for a helpful, accurate, and trustworthy assistant on business websites.</small></span>
@@ -2882,6 +2949,108 @@ function Dashboard() {
                 </div>
                 <SettingsToggle title="Offer human handoff" description="Route complaints, sensitive issues, and requests for a real person to your team." checked={aiSettings.humanHandoff} onToggle={() => updateAiSetting("humanHandoff", !aiSettings.humanHandoff)} />
                 <SettingsToggle title="Protect sensitive information" description="Never ask customers to share passwords, full payment card details, or private account credentials." checked={aiSettings.protectSensitiveData} onToggle={() => updateAiSetting("protectSensitiveData", !aiSettings.protectSensitiveData)} />
+              </section>
+              <section id="settings-accent" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">◐</span>
+                  <span><h3>Accent color</h3><p>Choose the highlight color used for active controls and selection states.</p></span>
+                </div>
+                <div className="aichat-accent-options">
+                  {[
+                    { label: "Blue", value: "#8ab4ff" },
+                    { label: "Violet", value: "#b39bff" },
+                    { label: "Green", value: "#72cba4" },
+                    { label: "Rose", value: "#f18ca8" },
+                    { label: "Orange", value: "#efa66c" },
+                  ].map((color) => (
+                    <button key={color.value} type="button" className={`aichat-accent-option${accentColor === color.value ? " is-selected" : ""}`} onClick={() => setAccentColor(color.value)} aria-pressed={accentColor === color.value}>
+                      <span style={{ backgroundColor: color.value }} />
+                      {color.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section id="settings-notifications" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">♧</span>
+                  <span><h3>Notifications</h3><p>Choose which Misma activity reminders you want enabled in this browser.</p></span>
+                </div>
+                <SettingsToggle title="Product updates" description="Show relevant information about new Misma features." checked={notificationPreferences.productUpdates} onToggle={() => setNotificationPreferences((current) => ({ ...current, productUpdates: !current.productUpdates }))} />
+                <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
+                <SettingsToggle title="Chat activity" description="Enable notifications for new chat activity when supported by the browser." checked={notificationPreferences.chatActivity} onToggle={() => setNotificationPreferences((current) => ({ ...current, chatActivity: !current.chatActivity }))} />
+              </section>
+
+              <section id="settings-voice" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">♫</span>
+                  <span><h3>Voice</h3><p>Choose the browser voice Misma uses when reading answers aloud. Voice availability depends on your device.</p></span>
+                </div>
+                <div className="aichat-settings-voice-row">
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-voice-choice">Reply voice</label>
+                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoiceUri} onChange={(event) => setSelectedVoiceUri(event.target.value)}>
+                      <option value="">Device default voice</option>
+                      {availableVoices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang}){voice.default ? " — default" : ""}</option>)}
+                    </select>
+                  </div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
+                </div>
+                <p className="aichat-settings-hint">Voice dictation uses your browser's speech recognition and inserts a transcript into the message box. Misma does not upload microphone audio as a recording.</p>
+              </section>
+
+              <section id="settings-privacy" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">◇</span>
+                  <span><h3>Privacy &amp; Security</h3><p>Review how Misma handles your account and conversation data.</p></span>
+                </div>
+                <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
+                <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
+                <div className="aichat-settings-info-row"><strong>Voice dictation</strong><span>Audio capture is handled by the browser speech-recognition feature; only the resulting transcript is added to your draft.</span></div>
+              </section>
+
+              <section id="settings-history" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">◷</span>
+                  <span><h3>History &amp; Data</h3><p>Export the open conversation or manage saved chats from Recent chats.</p></span>
+                </div>
+                <div className="aichat-settings-action-row">
+                  <div><strong>Export current conversation</strong><small>Download the visible conversation as a JSON file.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={exportCurrentChat} disabled={!messages.length}>Export chat</button>
+                </div>
+                <div className="aichat-settings-action-row">
+                  <div><strong>Manage saved conversations</strong><small>Open Recent chats to group or permanently delete conversations.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("recent")}>Open history</button>
+                </div>
+              </section>
+
+              <section id="settings-about" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">ⓘ</span>
+                  <span><h3>About Misma</h3><p>Business AI workspace.</p></span>
+                </div>
+                <div className="aichat-settings-info-row"><strong>Application</strong><span>Misma</span></div>
+                <div className="aichat-settings-info-row"><strong>Version</strong><span>1.0.0</span></div>
+              </section>
+
+              <section id="settings-logout" className="aichat-card aichat-settings-card aichat-settings-logout">
+                <div><h3>Log out</h3><p>Sign out of your Misma account on this device.</p></div>
+                <button type="button" className="aichat-settings-logout-button" onClick={() => void signOut()}>Log out</button>
+              </section>
+
+              <section id="settings-search" className="aichat-card aichat-settings-card aichat-settings-search">
+                <label htmlFor="misma-settings-search">Search settings</label>
+                <div className="aichat-settings-search-control">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="misma-settings-search" type="search" value={settingsSearchQuery} onChange={(event) => setSettingsSearchQuery(event.target.value)} placeholder="Search for a setting…" />
+                </div>
+                {settingsSearchQuery.trim() && (
+                  <div className="aichat-settings-search-results">
+                    {filteredSettingsNavItems.length ? filteredSettingsNavItems.map((item) => (
+                      <button key={item.id} type="button" onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{item.label}<span>↗</span></button>
+                    )) : <p>No matching settings found.</p>}
+                  </div>
+                )}
               </section>
             </div>
           </div>
