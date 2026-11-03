@@ -951,12 +951,17 @@ Deno.serve(async (request) => {
       }
       const videoId = String(payload.video_id);
       // Record the returned job ID on the prompt so only its owner can save the completed output.
-      await db.from("messages").update({
+      const promptMessageId = regenerateMedia ? Number(sourceUserMessageId) : Number(mediaSaved.userMessage?.id);
+      if (!Number.isSafeInteger(promptMessageId) || promptMessageId < 1) {
+        throw new Error("Could not resolve the original video prompt message.");
+      }
+      const { error: videoJobSaveError } = await db.from("messages").update({
         attachments: [...requestedAttachments, { kind: "video-job", videoId, model: videoModel }],
-      }).eq("conversation_id", saved.conversationId).eq("id", Number(saved.userMessage.id));
+      }).eq("conversation_id", mediaSaved.conversationId).eq("id", promptMessageId).in("role", ["human", "customer"]);
+      if (videoJobSaveError) throw new Error("Could not save the Agnes video job.");
       return jsonResponse(200, {
-        conversationId: saved.conversationId,
-        userMessage: saved.userMessage,
+        conversationId: mediaSaved.conversationId,
+        ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
         videoJob: { videoId, model: videoModel, status: payload.status ?? "queued", progress: payload.progress ?? 0 },
         provider: "agnes-video",
       });
