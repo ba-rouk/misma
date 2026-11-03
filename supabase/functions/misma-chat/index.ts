@@ -978,6 +978,16 @@ Deno.serve(async (request) => {
             ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
           });
         }
+        const outputPassed = await isAgnesMediaSafe(agnesKey, "Review the generated image result.", [
+          { url: payload.data[0].url, name: "Generated image" },
+        ]);
+        if (!outputPassed) {
+          return jsonResponse(422, {
+            error: "The generated image did not pass Misma's safety review. Try a different prompt.",
+            conversationId: mediaSaved.conversationId,
+            ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
+          });
+        }
         const aiMessage = await saveGeneratedMessage(db, mediaSaved.conversationId, "generated-image", payload.data[0].url, undefined, regenerateMedia ? Number(replaceAiMessageId) : undefined);
         return jsonResponse(200, { conversationId: mediaSaved.conversationId, ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}), aiMessage, provider: "agnes-image" });
       }
