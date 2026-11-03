@@ -48,8 +48,9 @@ type MessageAttachment = {
 
 function detectMediaIntent(prompt: string): "image" | "video" | null {
   const text = prompt.trim().toLowerCase();
-  if (!text || /^(how|what|why|where|when|who)\b/.test(text) ||
-    /^(can you explain|explain|tell me about|do you support|does misma|is it possible)\b/.test(text)) return null;
+  if (!text ||
+    /^(how|what|why|where|when|who|which|can|could|would|will|do|does|did|is|are|am)\b/.test(text) ||
+    /^(can you explain|explain|tell me about|do you support|does misma|is it possible|tell me whether)\b/.test(text)) return null;
   const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
     /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
   if (!asksToCreate) return null;
@@ -422,7 +423,8 @@ function Dashboard() {
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
   const [recentSearch, setRecentSearch] = useState("");
-  const conversationGroups = Array.from(new Set(conversations.map((item) => item.group_name).filter((value): value is string => Boolean(value))));
+  const recentChats = conversations.filter((item) => String(item.channel || "").toLowerCase() === "dashboard");
+  const conversationGroups = Array.from(new Set(recentChats.map((item) => item.group_name).filter((value): value is string => Boolean(value))));
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1612,10 +1614,10 @@ function Dashboard() {
           </div>
           {chatsExpanded && (
             <div className="aichat-chats-widget-list">
-              {conversations.length === 0 ? (
+              {recentChats.length === 0 ? (
                 <div className="aichat-chats-widget-empty">No chats yet.</div>
               ) : (
-                conversations.slice(0, 5).map((c) => (
+                recentChats.slice(0, 5).map((c) => (
                   <div className="aichat-chat-list-item" key={c.id}>
                   <button
                     type="button"
@@ -1643,7 +1645,7 @@ function Dashboard() {
                   </div>
                 ))
               )}
-              {conversations.length > 0 && (
+              {recentChats.length > 0 && (
                 <button
                   type="button"
                   className="aichat-chats-widget-viewall"
@@ -2039,13 +2041,13 @@ function Dashboard() {
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      disabled={isSending || isGeneratingMedia}
+                      disabled={isSending}
                       aria-label="Message Misma"
                     />
                     <button
                       type="submit"
-                      className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}`}
-                      disabled={(!draft.trim() && !selectedFiles.length && !createMode) || isSending || isGeneratingMedia}
+                      className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending ? " can-send" : ""}`}
+                      disabled={(!draft.trim() && !selectedFiles.length && !createMode) || isSending}
                       title={createMode ? `Create ${createMode} with Agnes` : editingMessageId ? "Save edited message" : "Send message"}
                       aria-label={createMode ? `Create ${createMode} with Agnes` : "Send message"}
                     >
@@ -2448,7 +2450,7 @@ function Dashboard() {
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
-                <h2>Recent chats ({conversations.length})</h2>
+                <h2>Recent chats ({recentChats.length})</h2>
                 <p>
                   Find, reopen, group, or permanently delete your recent Misma chats.
                 </p>
@@ -2484,7 +2486,7 @@ function Dashboard() {
                   </button>
                 </div>
 
-                {conversations.length === 0 ? (
+                {recentChats.length === 0 ? (
                   <p style={{ color: "#657180" }}>
                     No recorded conversations yet. Start chatting in Workspace!
                   </p>
@@ -2502,7 +2504,7 @@ function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {conversations
+                        {recentChats
                           .filter(
                             (c) =>
                               !recentSearch.trim() ||
