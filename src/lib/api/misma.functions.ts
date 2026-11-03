@@ -176,3 +176,21 @@ export const deleteConversation = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+
+export const setConversationGroup = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    conversationId: z.number().int().positive(),
+    groupName: z.string().trim().max(60).nullable(),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const normalizedGroup = data.groupName?.trim() || null;
+    const { error } = await db.from("conversations")
+      .update({ group_name: normalizedGroup })
+      .eq("id", data.conversationId)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return { ok: true, groupName: normalizedGroup };
+  });
