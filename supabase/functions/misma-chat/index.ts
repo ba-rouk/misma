@@ -920,7 +920,7 @@ Deno.serve(async (request) => {
           return jsonResponse(502, { error: "Agnes could not generate the image. Check image model access and try again.", conversationId: mediaSaved.conversationId, ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}) });
         }
         const aiMessage = await saveGeneratedMessage(db, mediaSaved.conversationId, "generated-image", payload.data[0].url, undefined, regenerateMedia ? Number(replaceAiMessageId) : undefined);
-        return jsonResponse(200, { conversationId: saved.conversationId, userMessage: saved.userMessage, aiMessage, provider: "agnes-image" });
+        return jsonResponse(200, { conversationId: mediaSaved.conversationId, ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}), aiMessage, provider: "agnes-image" });
       }
 
       const videoModel = "agnes-video-v2.0";
