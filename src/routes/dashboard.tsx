@@ -1616,8 +1616,8 @@ function Dashboard() {
                 <div className="aichat-chats-widget-empty">No chats yet.</div>
               ) : (
                 conversations.slice(0, 5).map((c) => (
+                  <div className="aichat-chat-list-item" key={c.id}>
                   <button
-                    key={c.id}
                     type="button"
                     className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
                     onClick={() => void selectConversation(c.id)}
@@ -1631,6 +1631,16 @@ function Dashboard() {
                       {c.name || c.text || "New chat"}
                     </span>
                   </button>
+                  <button type="button" className="aichat-chat-more" aria-label="Chat options" aria-expanded={chatMenuOpenId === c.id} onClick={() => setChatMenuOpenId((current) => current === c.id ? null : c.id)}>⋯</button>
+                  {chatMenuOpenId === c.id && (
+                    <div className="aichat-chat-menu" role="menu">
+                      <button type="button" role="menuitem" onClick={() => handleCreateConversationGroup(c.id)}>Group in…</button>
+                      {conversationGroups.map((group) => <button key={group} type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, group)}>Move to {group}</button>)}
+                      {c.group_name && <button type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, null)}>Remove group</button>}
+                      <button type="button" role="menuitem" className="is-danger" onClick={() => { setChatMenuOpenId(null); void handleDeleteConversation(c.id); }}>Delete permanently</button>
+                    </div>
+                  )}
+                  </div>
                 ))
               )}
               {conversations.length > 0 && (
