@@ -1,5 +1,6 @@
 import { MismaIcon } from "../components/misma-icon";
 import { createFileRoute } from "@tanstack/react-router";
+import { LandingChatWidget } from "../components/landing-chat-widget";
 
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -69,6 +70,7 @@ function Index() {
       <section className="cta" id="contact"><div><p className="eyebrow">READY WHEN YOU ARE</p><h2>Put your customer conversations to work.</h2></div><a className="primary big" href="mailto:hello@misma.ai">Start with Misma</a></section>
 
       <footer><div className="brand"><MismaIcon size={24} className="brand-mark-svg" /><span>Misma</span></div><span>Business AI, connected.</span></footer>
+      <LandingChatWidget />
     </main>
   );
 }
