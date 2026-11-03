@@ -39,7 +39,7 @@ Enable Email/Password in Supabase Auth. Configure the site's allowed redirect UR
 
 ## Dashboard AI
 
-The authenticated dashboard calls `supabase/functions/misma-chat`. Gemini is tried first. If it fails, the function tries configured providers in this order: Groq, OpenAI, then Mistral. Each provider gets up to two attempts for network/time-out, HTTP 408, HTTP 429, and server (5xx) failures. Non-retryable client errors move directly to the next provider. Each attempt has an 18-second timeout. At least one provider key is required.
+The authenticated dashboard calls `supabase/functions/misma-chat`. Gemini is tried first. If it fails, the function tries configured providers in this order: Groq, OpenAI, then Mistral. Each provider gets up to two attempts for network/time-out, HTTP 408, HTTP 429, and server (5xx) failures. Non-retryable client errors move directly to the next provider. Each attempt has a 12-second timeout. At least one provider key is required.
 
 Set provider keys as Supabase Edge Function secrets (never in frontend environment variables):
 
