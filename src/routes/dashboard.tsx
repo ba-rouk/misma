@@ -31,6 +31,7 @@ type Message = {
   text: string;
   created_at?: string;
   attachments?: MessageAttachment[];
+  pendingMedia?: "image" | "video";
 };
 
 type MessageAttachment = {
@@ -921,10 +922,17 @@ function Dashboard() {
     shouldAutoScrollRef.current = true;
 
     const tempUserId = `media-user-${Date.now()}`;
+    const pendingMediaId = `media-pending-${Date.now()}`;
     setMessages((current) => [...current, {
       id: tempUserId,
       role: "human",
       text: prompt,
+      created_at: new Date().toISOString(),
+    }, {
+      id: pendingMediaId,
+      role: "ai",
+      text: mode === "image" ? "Misma is creating your image…" : "Misma is preparing your video…",
+      pendingMedia: mode,
       created_at: new Date().toISOString(),
     }]);
 
@@ -945,7 +953,7 @@ function Dashboard() {
 
       if (mode === "image") {
         if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
-        setMessages((current) => [...current, result.aiMessage]);
+        setMessages((current) => current.map((item) => item.id === pendingMediaId ? result.aiMessage : item));
         setMediaProgress("Image created.");
         window.setTimeout(() => setMediaProgress(""), 3500);
         loadData();
@@ -957,13 +965,12 @@ function Dashboard() {
       if (typeof videoId !== "string" || typeof model !== "string") {
         throw new Error("Agnes did not return a video generation job.");
       }
-      const progressMessageId = `media-video-${videoId}`;
-      setMessages((current) => [...current, {
-        id: progressMessageId,
-        role: "ai",
+      const progressMessageId = pendingMediaId;
+      setMessages((current) => current.map((item) => item.id === progressMessageId ? {
+        ...item,
         text: "Agnes is generating your video…",
-        created_at: new Date().toISOString(),
-      }]);
+        pendingMedia: "video",
+      } : item));
       let completedUrl: string | null = null;
       for (let attempt = 0; attempt < 36; attempt++) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 5000));
@@ -979,6 +986,7 @@ function Dashboard() {
         setMessages((current) => current.map((item) => item.id === progressMessageId ? {
           ...item,
           text: `Agnes is generating your video… ${progress}%`,
+          pendingMedia: "video",
         } : item));
         if (status.status === "completed" && typeof status.url === "string") {
           completedUrl = status.url;
@@ -1002,6 +1010,7 @@ function Dashboard() {
       window.setTimeout(() => setMediaProgress(""), 3500);
       loadData();
     } catch (cause) {
+      setMessages((current) => current.filter((item) => item.id !== pendingMediaId));
       setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
       setMediaProgress("");
     } finally {
@@ -1094,9 +1103,10 @@ function Dashboard() {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      void handleSend();
+      if (createMode) void handleCreateMedia();
+      else void handleSend();
     }
   };
 
@@ -1662,7 +1672,19 @@ function Dashboard() {
                       <div className="aichat-message-content">
                         <div className="aichat-bubble">
                           <MessageAttachmentViews attachments={msg.attachments} />
-                          <MarkdownContent content={msg.text} />
+                          {msg.pendingMedia ? (
+                            <div className={`aichat-media-skeleton is-${msg.pendingMedia}`} role="status" aria-live="polite">
+                              <div className="aichat-media-skeleton-preview" aria-hidden="true">
+                                <span className="aichat-media-skeleton-shimmer" />
+                                <span className="aichat-media-skeleton-orbit"><i /><i /><i /></span>
+                              </div>
+                              <div className="aichat-media-skeleton-copy">
+                                <strong>{msg.pendingMedia === "image" ? "Creating your image" : "Creating your video"}</strong>
+                                <span>{msg.text}</span>
+                                <small>{msg.pendingMedia === "image" ? "Your visual will appear here as soon as it is ready." : "Video generation can take a little longer. You can keep this chat open."}</small>
+                              </div>
+                            </div>
+                          ) : <MarkdownContent content={msg.text} /> }
                         </div>
                         <div
                           className="aichat-message-actions"
@@ -1813,10 +1835,10 @@ function Dashboard() {
                         aria-expanded={plusMenuOpen}
                         disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)}
                         onClick={() => setPlusMenuOpen((open) => !open)}
-                      >+</button>
+                      >{plusMenuOpen ? "×" : "+"}</button>
                       {plusMenuOpen && (
-                        <div className="aichat-composer-plus-menu" role="menu">
-                          <button type="button" role="menuitem" onClick={() => { setThinkHarder((value) => !value); setPlusMenuOpen(false); }}>
+                        <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
+                          <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon">✧</span>
                             <span><strong>Think harder</strong><small>Use deeper reasoning for code, files and complex tasks</small></span>
                             <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
@@ -1824,7 +1846,7 @@ function Dashboard() {
                           <div className="aichat-plus-menu-divider" />
                           <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon">↥</span>
-                            <span><strong>File</strong><small>PDF, text, CSV and code files</small></span>
+                            <span><strong>Upload files</strong><small>Attach PDFs, documents, data or code</small></span>
                           </button>
                           <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon">▧</span>
