@@ -1056,7 +1056,7 @@ function Dashboard() {
         } : {}),
       });
       if (result.conversationId) setCurrentConversationId(result.conversationId);
-      if (result.userMessage) {
+      if (result.userMessage && tempUserId) {
         setMessages((current) => current.map((item) => item.id === tempUserId ? result.userMessage : item));
       }
       setSelectedFiles([]);
