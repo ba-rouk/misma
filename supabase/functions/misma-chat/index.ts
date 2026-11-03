@@ -185,7 +185,7 @@ Deno.serve(async (request) => {
   }
 
   const authorization = request.headers.get("authorization");
-  if (!authorization?.match(/^Bearer\s+\\S+$/i)) {
+  if (!authorization?.match(/^Bearer\s+\S+$/i)) {
     return jsonResponse(401, { error: "Sign in to use Misma AI." });
   }
 
