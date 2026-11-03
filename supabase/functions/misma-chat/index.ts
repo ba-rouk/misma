@@ -810,7 +810,7 @@ Deno.serve(async (request) => {
 
     if (action === "poll-video") {
       const videoId = typeof input.videoId === "string" ? input.videoId : "";
-      const model = typeof input.model === "string" ? input.model : (Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-v2.0");
+      const model = "agnes-video-v2.0";
       const agnesKey = Deno.env.get("AGNES_API_KEY");
       if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured for video generation." });
       if (!Number.isSafeInteger(conversationId) || !videoId || !/^video_[a-zA-Z0-9_-]+$/.test(videoId)) {
