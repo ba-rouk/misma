@@ -950,7 +950,7 @@ Deno.serve(async (request) => {
           ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
         });
       }
-      const safePrompt = "Create non-sexual, non-explicit, age-appropriate content. People must be fully clothed in ordinary non-revealing attire with neutral poses. Do not include nudity, erotic or suggestive content, lingerie, graphic violence, gore, or hate symbols. Creative brief: " + prompt;
+      const safePrompt = "Create non-sexual, non-explicit, age-appropriate content. People must be fully clothed in ordinary non-revealing attire with neutral poses. Do not include nudity, erotic or suggestive content, lingerie, graphic violence, gore, or hate symbols. " + (hasImageReferences ? "Use the supplied reference images as visual guidance. " : "") + "Creative brief: " + prompt;
 
       if (action === "create-image") {
         const imageModel = Deno.env.get("AGNES_IMAGE_MODEL") || "agnes-image-2.1-flash";
