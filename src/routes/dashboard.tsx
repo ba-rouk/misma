@@ -1087,7 +1087,7 @@ function Dashboard() {
         pendingMedia: "video",
       } : item));
       let completedUrl: string | null = null;
-      for (let attempt = 0; attempt < 36; attempt++) {
+      for (let attempt = 0; attempt < 120; attempt++) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 5000));
         const status = await postChatAction({
           action: "poll-video",
