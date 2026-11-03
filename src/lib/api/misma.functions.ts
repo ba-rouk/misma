@@ -117,20 +117,32 @@ export const getConversationMessages = createServerFn({ method: "POST" })
 
     const { data: messages, error: msgErr } = await db
       .from("messages")
-      .select("id,conversation_id,role,text,created_at")
+      .select("id,conversation_id,role,text,created_at,attachments")
       .eq("conversation_id", data.conversationId)
       .order("id", { ascending: true });
     if (msgErr) throw new Error(msgErr.message);
 
-    return {
-      conversation: conv,
-      messages: (messages ?? []).map((m: any) => ({
+    const mappedMessages = await Promise.all((messages ?? []).map(async (m: any) => {
+      const attachments = Array.isArray(m.attachments)
+        ? await Promise.all(m.attachments.map(async (item: any) => {
+            if (!item || typeof item !== "object" || typeof item.path !== "string" ||
+                !item.path.startsWith(`${workspaceId}/`)) return item;
+            const { data: signed } = await db.storage
+              .from("misma-media")
+              .createSignedUrl(item.path, 3600);
+            return { ...item, ...(signed?.signedUrl ? { url: signed.signedUrl } : {}) };
+          }))
+        : [];
+      return {
         id: String(m.id),
         role: m.role as "customer" | "ai" | "human" | "system",
         text: m.text as string,
         created_at: m.created_at as string,
-      })),
-    };
+        attachments,
+      };
+    }));
+
+    return { conversation: conv, messages: mappedMessages };
   });
 
 export const createConversation = createServerFn({ method: "POST" })
