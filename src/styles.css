@@ -5128,6 +5128,7 @@ footer {
 .aichat-nav-btn.active .aichat-nav-icon { color:var(--misma-accent); }
 @media (min-width:768px) {
   /* The sidebar's own logo-area control handles desktop open/close. */
+  .aichat-topbar { display:none !important; }
   .aichat-header-toggle { display:none !important; }
 }
 @media (max-width:767px) {
