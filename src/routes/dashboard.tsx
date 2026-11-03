@@ -2450,8 +2450,7 @@ function Dashboard() {
               <div className="aichat-tab-header">
                 <h2>Recent chats ({conversations.length})</h2>
                 <p>
-                  Browse and reopen past customer conversations from all
-                  connected channels.
+                  Find, reopen, group, or permanently delete your recent Misma chats.
                 </p>
               </div>
 
