@@ -61,7 +61,7 @@ export const getMismaData = createServerFn({ method: "POST" })
       text: c.latest_text,
       status: c.status,
       updated_at: c.updated_at,
-      name: (promptTitles.get(Number(c.id)) || c.latest_text || "New chat").trim().replace(/\s+/g, " ").slice(0, 72),
+      name: (promptTitles.get(Number(c.id)) || c.latest_text || "New chat").replace(/^(?:customer|visitor|user|human)\s*[:\-]\s*/i, "").replace(/\s+/g, " ").trim().slice(0, 72) || "New chat",
       group_name: c.group_name || null,
     }));
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
