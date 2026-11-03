@@ -45,6 +45,17 @@ type MessageAttachment = {
   model?: string;
 };
 
+function detectMediaIntent(prompt: string): "image" | "video" | null {
+  const text = prompt.trim().toLowerCase();
+  if (!text || /^(how|what|why|where|when)\b/.test(text)) return null;
+  const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
+    /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
+  if (!asksToCreate) return null;
+  if (/\b(video|clip|reel|animation)\b/.test(text)) return "video";
+  if (/\b(image|picture|photo|illustration|artwork|graphic|logo|poster|banner|thumbnail)\b/.test(text)) return "image";
+  return null;
+}
+
 type ActionIconName =
   | "copy"
   | "share"
@@ -415,6 +426,7 @@ function Dashboard() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const regenerateInFlightRef = useRef(false);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -718,10 +730,13 @@ function Dashboard() {
   };
 
   const handleRateMessage = (messageId: string, rating: "up" | "down") => {
-    setMessageFeedback((current) => ({
-      ...current,
-      [messageId]: current[messageId] === rating ? undefined : rating,
-    }));
+    const nextRating = messageFeedback[messageId] === rating ? undefined : rating;
+    setMessageFeedback((current) => ({ ...current, [messageId]: nextRating }));
+    const numericMessageId = Number(messageId);
+    if (nextRating && Number.isSafeInteger(numericMessageId) && numericMessageId > 0 && workspace?.id) {
+      void postChatAction({ action: "core01-feedback", workspaceId: workspace.id, messageId: numericMessageId, rating: nextRating })
+        .catch((cause) => console.warn("Core.01 feedback could not be saved.", cause));
+    }
   };
 
   const handleEditMessage = (msg: Message) => {
@@ -831,6 +846,12 @@ function Dashboard() {
     if ((!textToSend && !selectedFiles.length) || isSending || !token) return;
     if (!textToSend) textToSend = "Please inspect the attached files and explain the important details.";
 
+    const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
+    if (implicitMediaMode) {
+      void handleCreateMedia(implicitMediaMode, textToSend);
+      return;
+    }
+
     const isRetry = options.retry === true;
     const editId = editingMessageId;
     const tempUserId = isRetry ? failedMessageId : `user-${Date.now()}`;
@@ -908,12 +929,15 @@ function Dashboard() {
     }
   };
 
-  const handleCreateMedia = async () => {
-    if (!createMode || !token || isSending || isGeneratingMedia) return;
-    const prompt = draft.trim() || (createMode === "image"
+  const handleCreateMedia = async (
+    requestedMode?: "image" | "video",
+    promptOverride?: string,
+  ) => {
+    const mode = requestedMode ?? createMode;
+    if (!mode || !token || isSending || isGeneratingMedia) return;
+    const prompt = promptOverride?.trim() || draft.trim() || (mode === "image"
       ? "Create a high-quality image using the attached reference."
       : "Create a short cinematic video using the attached reference.");
-    const mode = createMode;
     setChatError("");
     setMediaProgress(mode === "image" ? "Creating your image with Agnes…" : "Preparing your video with Agnes…");
     setIsGeneratingMedia(true);
@@ -1053,7 +1077,8 @@ function Dashboard() {
   // Regenerate the latest AI response using the saved user prompt.
   // The Edge Function reuses that prompt and never inserts a second human message.
   const handleRegenerate = async () => {
-    if (!currentConversationId || !token || isSending) return;
+    if (!currentConversationId || !token || isSending || regenerateInFlightRef.current) return;
+    regenerateInFlightRef.current = true;
     setChatError("");
     setFailedPrompt("");
     setFailedAction(null);
@@ -1098,6 +1123,7 @@ function Dashboard() {
       setChatError(cause instanceof Error ? cause.message : "Could not regenerate this response.");
       setFailedAction("regenerate");
     } finally {
+      regenerateInFlightRef.current = false;
       setIsSending(false);
     }
   };
