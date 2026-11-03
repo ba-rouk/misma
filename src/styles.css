@@ -4929,11 +4929,26 @@ footer {
 .aichat-media-download:hover { background: #263448; border-color: #52647c; }
 
 
-/* User prompts are text-only bubbles: no circular profile/avatar beside them. */
+/* User messages have no circular profile icon. */
 .aichat-message-row.is-user > .aichat-msg-avatar,
 .aichat-message-row.is-user .aichat-msg-avatar.user { display: none !important; }
 
-/* Keep the composer anchored as a non-shrinking flex sibling while media skeletons grow in the transcript. */
-.aichat-scroll-area { display: flex; flex: 1 1 0; min-height: 0; height: auto !important; overflow: hidden; flex-direction: column; }
-.aichat-conversation-wrap { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 28px; }
-.aichat-composer-container { position: sticky !important; bottom: 0 !important; inset: auto !important; flex: 0 0 auto !important; flex-shrink: 0 !important; align-self: stretch; margin-top: auto; width: 100%; z-index: 30; }
+/* The transcript scrolls independently; the composer remains a fixed flex sibling. */
+.aichat-main { min-height: 0; overflow: hidden; }
+.aichat-scroll-area {
+  display: flex; flex: 1 1 0; min-height: 0; height: auto !important;
+  overflow: hidden; flex-direction: column;
+}
+.aichat-conversation-wrap {
+  flex: 1 1 0; min-width: 0; min-height: 0; overflow-y: auto;
+  overscroll-behavior: contain; padding-bottom: 24px;
+}
+.aichat-composer-container {
+  position: relative !important; inset: auto !important; top: auto !important;
+  right: auto !important; bottom: auto !important; left: auto !important;
+  display: block; flex: 0 0 auto !important; flex-shrink: 0 !important;
+  align-self: stretch; margin: 0; width: 100%; z-index: 30;
+}
+.aichat-composer-inner { pointer-events: auto; }
+.aichat-recent-chat-actions { justify-content: flex-end; min-width: 145px; }
+.aichat-recent-chat-actions .aichat-chat-menu { z-index: 60; }

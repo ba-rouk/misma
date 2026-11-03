@@ -48,20 +48,29 @@ export const getMismaData = createServerFn({ method: "POST" })
         .in("conversation_id", conversationIds)
         .in("role", ["human", "customer"])
         .order("id", { ascending: true })
-        .limit(1000);
+        .limit(10000);
       if (promptRowsError) throw new Error("Could not load recent chat titles.");
       for (const row of promptRows ?? []) {
         const id = Number(row.conversation_id);
         if (!promptTitles.has(id)) promptTitles.set(id, String(row.text || ""));
       }
     }
+    const cleanConversationTitle = (value: unknown): string => {
+      const cleaned = String(value ?? "")
+        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\s*(?::|#|-)\s*)+/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\s*[:#-].*)?$/i.test(cleaned)) return "";
+      if (/^(?:customer|visitor|user|human)[-_ ]+[0-9a-f-]{6,}$/i.test(cleaned)) return "";
+      return cleaned.slice(0, 72);
+    };
     const conversations = rawConversations.map((c: any) => ({
       id: c.id,
       channel: c.channel,
       text: c.latest_text,
       status: c.status,
       updated_at: c.updated_at,
-      name: (promptTitles.get(Number(c.id)) || c.latest_text || "New chat").replace(/^(?:customer|visitor|user|human)\s*[:\-]\s*/i, "").replace(/\s+/g, " ").trim().slice(0, 72) || "New chat",
+      name: cleanConversationTitle(promptTitles.get(Number(c.id))) || cleanConversationTitle(c.latest_text) || "New chat",
       group_name: c.group_name || null,
     }));
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({

@@ -46,23 +46,37 @@ type MessageAttachment = {
   model?: string;
 };
 
+function cleanRecentChatTitle(value: unknown): string {
+  const cleaned = String(value ?? "")
+    .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\s*(?::|#|-)\s*)+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\s*[:#-].*)?$/i.test(cleaned)) return "";
+  if (/^(?:customer|visitor|user|human)[-_ ]+[0-9a-f-]{6,}$/i.test(cleaned)) return "";
+  return cleaned.slice(0, 72);
+}
+
 function detectMediaIntent(prompt: string): "image" | "video" | null {
   const text = prompt.trim().toLowerCase().replace(/^(?:hey\s+)?misma[,!: ]+/, "").trim();
   if (!text) return null;
-  // A question addressed to Misma must never be mistaken for a generation command.
-  const questionLike = /\?\s*$/.test(text) && /\b(can|could|would|will|do|does|did|is|are|what|how|why|should)\b/.test(text);
-  const informationRequest = questionLike ||
-    /^(how|what|why|where|when|who|which|can|could|would|will|do|does|did|is|are|am)\b/.test(text) ||
-    /\b(i want to know|i am wondering|im wondering|help me understand|explain|tell me about|show me how|describe how)\b/.test(text);
-  if (informationRequest) return null;
-  const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
-    /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
-  if (!asksToCreate) return null;
+  const mediaTarget = /\b(video|clip|reel|animation|image|picture|photo|illustration|artwork|graphic|logo|poster|banner|thumbnail)\b/.test(text);
+  if (!mediaTarget) return null;
+  const directCreation =
+    /^(?:please\s+)?(?:generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
+    /^(?:can|could|would|will)\s+you(?:\s+please)?\s+(?:generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
+    /^(?:i want|i need|i would like|i'd like)\s+(?:you\s+to\s+|to\s+)?(?:please\s+)?(?:generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
+    /^(?:i want|i need|i'd like|make me|create me|generate me|draw me|design me)\s+(?:an?\s+)?(?:image|picture|photo|illustration|artwork|graphic|logo|poster|banner|thumbnail|video|clip|reel|animation)\b/.test(text) ||
+    /\b(?:turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
+  const informationRequest =
+    /^(?:how|what|why|where|when|who|which|is|are|am|do|does|did|should|explain|describe)\b/.test(text) ||
+    /^(?:can|could|would|will)\s+you\s+(?:explain|tell me|describe|help me understand|show me how|teach me)\b/.test(text) ||
+    /\b(?:i want to know|i am wondering|im wondering|help me understand|tell me about|show me how|describe how|what is the best way to)\b/.test(text) ||
+    (/\?\s*$/.test(text) && !directCreation);
+  if (informationRequest && !directCreation) return null;
+  if (!directCreation) return null;
   if (/\b(video|clip|reel|animation)\b/.test(text)) return "video";
-  if (/\b(image|picture|photo|illustration|artwork|graphic|logo|poster|banner|thumbnail)\b/.test(text)) return "image";
-  return null;
+  return "image";
 }
-
 type ActionIconName =
   | "copy"
   | "share"
@@ -427,7 +441,9 @@ function Dashboard() {
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
   const [recentSearch, setRecentSearch] = useState("");
-  const recentChats = conversations.filter((item) => String(item.channel || "").toLowerCase() === "dashboard");
+  const recentChats = conversations
+    .filter((item) => String(item.channel || "").trim().toLowerCase() === "dashboard")
+    .map((item) => ({ ...item, name: cleanRecentChatTitle(item.name) || "New chat" }));
   const conversationGroups = Array.from(new Set(recentChats.map((item) => item.group_name).filter((value): value is string => Boolean(value))));
 
   // Refs
@@ -810,8 +826,11 @@ function Dashboard() {
   };
 
   // Sending, retrying, or editing a user message.
-  const uploadSelectedAttachments = async (): Promise<MessageAttachment[]> => {
-    if (!selectedFiles.length) return [];
+  const uploadSelectedAttachments = async (
+    filesToUpload: File[] = selectedFiles,
+    videoFrameMode = false,
+  ): Promise<MessageAttachment[]> => {
+    if (!filesToUpload.length) return [];
     if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
     const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
     if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
@@ -833,8 +852,11 @@ function Dashboard() {
     };
 
     let videoCount = 0;
-    for (const original of selectedFiles) {
-      if (original.type.startsWith("image/")) {
+    for (const original of filesToUpload) {
+      if (videoFrameMode) {
+        const preparedFrame = await compressImageForUpload(original);
+        await uploadOne(preparedFrame, "video-frame");
+      } else if (original.type.startsWith("image/")) {
         const preparedImage = await compressImageForUpload(original);
         await uploadOne(preparedImage, "image");
       } else if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
@@ -1096,13 +1118,27 @@ function Dashboard() {
       let completedUrl: string | null = null;
       for (let attempt = 0; attempt < 120; attempt++) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 5000));
-        const status = await postChatAction({
-          action: "poll-video",
-          workspaceId: workspace?.id,
-          conversationId: result.conversationId,
-          videoId,
-          model,
-        });
+        let status: Record<string, any> | null = null;
+        let pollError: unknown = null;
+        for (let retry = 0; retry < 3; retry++) {
+          try {
+            status = await postChatAction({
+              action: "poll-video",
+              workspaceId: workspace?.id,
+              conversationId: result.conversationId,
+              videoId,
+              model,
+            });
+            pollError = null;
+            break;
+          } catch (error) {
+            pollError = error;
+            const detail = error instanceof Error ? error.message : String(error);
+            if (!/agnes video status|temporar|network|failed to fetch|http (408|429|500|502|503|504)/i.test(detail) || retry === 2) break;
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 1200 * (retry + 1)));
+          }
+        }
+        if (pollError || !status) throw pollError instanceof Error ? pollError : new Error("Agnes video status could not be retrieved.");
         const progress = Number(status.progress) || 0;
         setMediaProgress(`Creating video… ${progress}%`);
         setMessages((current) => current.map((item) => item.id === progressMessageId ? {
@@ -1119,6 +1155,46 @@ function Dashboard() {
         }
       }
       if (!completedUrl) throw new Error("Video generation is taking longer than expected. The job may still be running; you can try again later.");
+      setMediaProgress("Checking video frames for safe content…");
+      const reviewConfig = getSupabaseConfig();
+      if (!reviewConfig || !completedUrl) throw new Error("Could not prepare the generated video for its safety review.");
+      const reviewDownload = await fetch(`${reviewConfig.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: reviewConfig.publishableKey,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "download-video-for-review",
+          workspaceId: workspace?.id,
+          conversationId: result.conversationId,
+          videoId,
+          url: completedUrl,
+        }),
+      });
+      if (!reviewDownload.ok) {
+        const detail = await reviewDownload.json().catch(() => ({})) as { error?: string };
+        throw new Error(detail.error || "Could not inspect the generated video safely.");
+      }
+      const reviewBlob = await reviewDownload.blob();
+      if (reviewBlob.size <= 0 || reviewBlob.size > 150 * 1024 * 1024) {
+        throw new Error("The generated video is empty or too large to run a safety review.");
+      }
+      const reviewFile = new File([reviewBlob], "misma-generated-video-review.mp4", {
+        type: reviewBlob.type.startsWith("video/") ? reviewBlob.type : "video/mp4",
+      });
+      const reviewFrames = await extractVideoKeyframes(reviewFile);
+      if (reviewFrames.length < 2) throw new Error("Misma could not sample enough frames to review this video safely.");
+      const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true);
+      await postChatAction({
+        action: "review-video-frames",
+        workspaceId: workspace?.id,
+        conversationId: result.conversationId,
+        videoId,
+        url: completedUrl,
+        attachments: reviewAttachments,
+      });
       const saved = await postChatAction({
         action: "save-generated-media",
         workspaceId: workspace?.id,
@@ -1628,14 +1704,14 @@ function Dashboard() {
                     type="button"
                     className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
                     onClick={() => void selectConversation(c.id)}
-                    title={c.text || c.name || "Conversation"}
+                    title={c.name || "New chat"}
                   >
                     <span
                       className="aichat-chats-widget-dot"
                       aria-hidden="true"
                     />
                     <span className="aichat-chats-widget-item-text">
-                      {c.name || c.text || "New chat"}
+                      {c.name || "New chat"}
                     </span>
                   </button>
                   <button type="button" className="aichat-chat-more" aria-label="Chat options" aria-expanded={chatMenuOpenId === c.id} onClick={() => setChatMenuOpenId((current) => current === c.id ? null : c.id)}>⋯</button>
@@ -2526,7 +2602,7 @@ function Dashboard() {
                           .map((c) => (
                             <tr key={c.id}>
                               <td style={{ fontWeight: 600 }}>
-                                {c.name || c.text || "New chat"}
+                                {c.name || "New chat"}
                               </td>
                               <td>
                                 <span className="aichat-header-badge">
@@ -2538,42 +2614,21 @@ function Dashboard() {
                                 {c.text ? c.text.slice(0, 50) : "No message"}
                               </td>
                               <td>{c.status || "AI"}</td>
-                              <td
-                                style={{
-                                  textAlign: "right",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="aichat-action-btn secondary"
-                                  style={{
-                                    height: 32,
-                                    padding: "0 10px",
-                                    fontSize: 13,
-                                    marginRight: 8,
-                                  }}
-                                  onClick={() => void selectConversation(c.id)}
-                                >
-                                  Open Chat
-                                </button>
-                                <button
-                                  type="button"
-                                  style={{
-                                    color: "#ff7b72",
-                                    background: "transparent",
-                                    border: 0,
-                                    padding: "4px 8px",
-                                    fontSize: 13,
-                                    cursor: "pointer",
-                                  }}
-                                  onClick={() =>
-                                    void handleDeleteConversation(c.id)
-                                  }
-                                  title="Delete conversation"
-                                >
-                                  Delete
-                                </button>
+                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                                <div className="aichat-chat-list-item aichat-recent-chat-actions">
+                                  <button type="button" className="aichat-action-btn secondary" style={{ height: 32, padding: "0 10px", fontSize: 13 }} onClick={() => void selectConversation(c.id)}>
+                                    Open Chat
+                                  </button>
+                                  <button type="button" className="aichat-chat-more" aria-label={`Options for ${c.name || "chat"}`} aria-expanded={chatMenuOpenId === c.id} onClick={() => setChatMenuOpenId((current) => current === c.id ? null : c.id)}>⋯</button>
+                                  {chatMenuOpenId === c.id && (
+                                    <div className="aichat-chat-menu" role="menu">
+                                      <button type="button" role="menuitem" onClick={() => handleCreateConversationGroup(c.id)}>Group in…</button>
+                                      {conversationGroups.map((group) => <button key={group} type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, group)}>Move to {group}</button>)}
+                                      {c.group_name && <button type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, null)}>Remove group</button>}
+                                      <button type="button" role="menuitem" className="is-danger" onClick={() => { setChatMenuOpenId(null); void handleDeleteConversation(c.id); }}>Delete permanently</button>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
