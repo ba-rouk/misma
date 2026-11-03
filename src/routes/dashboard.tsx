@@ -1747,12 +1747,8 @@ function Dashboard() {
 
         {/* ── View 1: Workspace (ChatGPT-Style Interface) ── */}
         {activeTab === "workspace" && (
-          <div
-            className="aichat-scroll-area"
-            ref={scrollRef}
-            onScroll={handleScroll}
-          >
-            <div className="aichat-conversation-wrap">
+          <div className="aichat-scroll-area">
+            <div className="aichat-conversation-wrap" ref={scrollRef} onScroll={handleScroll}>
               {messages.length === 0 ? (
                 /* Empty State */
                 <div className="aichat-greeting-wrap">
