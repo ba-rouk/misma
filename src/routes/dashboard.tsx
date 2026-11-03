@@ -2495,6 +2495,7 @@ function Dashboard() {
                         <tr>
                           <th>Chat</th>
                           <th>Channel</th>
+                          <th>Group</th>
                           <th>Latest activity</th>
                           <th>Status</th>
                           <th style={{ textAlign: "right" }}>Actions</th>
@@ -2525,6 +2526,7 @@ function Dashboard() {
                                   {c.channel || "Dashboard"}
                                 </span>
                               </td>
+                              <td>{c.group_name || "—"}</td>
                               <td>
                                 {c.text ? c.text.slice(0, 50) : "No message"}
                               </td>
