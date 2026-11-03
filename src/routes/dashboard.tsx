@@ -30,6 +30,18 @@ type Message = {
   role: "customer" | "ai" | "human" | "system";
   text: string;
   created_at?: string;
+  attachments?: MessageAttachment[];
+};
+
+type MessageAttachment = {
+  path?: string;
+  name: string;
+  mimeType?: string;
+  size?: number;
+  kind: string;
+  url?: string;
+  videoId?: string;
+  model?: string;
 };
 
 type ActionIconName =
@@ -103,6 +115,103 @@ function ActionIcon({ name }: { name: ActionIconName }) {
         </>
       )}
     </svg>
+  );
+}
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size <= 4 * 1024 * 1024) return file;
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxSide = 1800;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Your browser could not prepare this image.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not compress the image.")), "image/jpeg", 0.82);
+    });
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function extractVideoKeyframes(file: File): Promise<File[]> {
+  const objectUrl = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.preload = "metadata";
+  video.muted = true;
+  video.playsInline = true;
+  video.src = objectUrl;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error(`Could not read the video ${file.name}.`));
+    });
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      throw new Error("This video does not have readable duration metadata.");
+    }
+    const duration = video.duration;
+    const fractions = duration > 2 ? [0.2, 0.78] : [0.5];
+    const frames: File[] = [];
+    for (let index = 0; index < fractions.length; index++) {
+      const target = Math.min(Math.max(0.05, duration * fractions[index]), Math.max(0.05, duration - 0.05));
+      await new Promise<void>((resolve, reject) => {
+        const onSeeked = () => { cleanup(); resolve(); };
+        const onError = () => { cleanup(); reject(new Error("Could not sample a frame from the uploaded video.")); };
+        const cleanup = () => {
+          video.removeEventListener("seeked", onSeeked);
+          video.removeEventListener("error", onError);
+        };
+        video.addEventListener("seeked", onSeeked, { once: true });
+        video.addEventListener("error", onError, { once: true });
+        video.currentTime = target;
+      });
+      const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Your browser could not prepare a video preview.");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not extract a video preview.")), "image/jpeg", 0.78);
+      });
+      frames.push(new File([blob], `${file.name.replace(/\.[^.]+$/, "")}-frame-${index + 1}.jpg`, {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      }));
+    }
+    return frames;
+  } finally {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function MessageAttachmentViews({ attachments }: { attachments?: MessageAttachment[] }) {
+  if (!attachments?.length) return null;
+  const visible = attachments.filter((item) => item.kind !== "video-frame" && item.kind !== "video-job" && item.url);
+  if (!visible.length) return null;
+  return (
+    <div className="aichat-message-attachments">
+      {visible.map((item, index) => {
+        const key = item.path || item.videoId || item.url || `${item.name}-${index}`;
+        if (item.kind === "image" || item.kind === "generated-image" || item.mimeType?.startsWith("image/")) {
+          return <a key={key} href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link"><img className="aichat-attachment-image" src={item.url} alt={item.name} loading="lazy" /></a>;
+        }
+        if (item.kind === "video" || item.kind === "generated-video" || item.mimeType?.startsWith("video/")) {
+          return <video key={key} className="aichat-attachment-video" src={item.url} controls preload="metadata" />;
+        }
+        return <a key={key} className="aichat-attachment-file" href={item.url} target="_blank" rel="noreferrer" download={item.name}>📎 {item.name}</a>;
+      })}
+    </div>
   );
 }
 
@@ -269,6 +378,13 @@ function Dashboard() {
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [thinkHarder, setThinkHarder] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
+  const [mediaProgress, setMediaProgress] = useState("");
+  const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
+
 
   // Forms in other tabs
   const [newQuestion, setNewQuestion] = useState("");
@@ -292,6 +408,9 @@ function Dashboard() {
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(true);
 
   const handleScroll = () => {
@@ -633,12 +752,71 @@ function Dashboard() {
   };
 
   // Sending, retrying, or editing a user message.
+  const uploadSelectedAttachments = async (): Promise<MessageAttachment[]> => {
+    if (!selectedFiles.length) return [];
+    if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
+    const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
+    if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
+
+    const uploaded: MessageAttachment[] = [];
+    const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "file") => {
+      if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
+      if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
+        throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
+      }
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
+      const path = `${workspace.id}/${userData.user.id}/${crypto.randomUUID()}-${safeName}`;
+      const { error } = await getSupabaseClient().storage.from("misma-media").upload(path, file, {
+        upsert: false,
+        contentType: file.type || "application/octet-stream",
+      });
+      if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+      uploaded.push({ path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, kind });
+    };
+
+    let videoCount = 0;
+    for (const original of selectedFiles) {
+      if (original.type.startsWith("image/")) {
+        const preparedImage = await compressImageForUpload(original);
+        await uploadOne(preparedImage, "image");
+      } else if (original.type.startsWith("video/")) {
+        videoCount += 1;
+        if (videoCount > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
+        await uploadOne(original, "video");
+        const frames = await extractVideoKeyframes(original);
+        for (const frame of frames) await uploadOne(frame, "video-frame");
+      } else {
+        await uploadOne(original, "file");
+      }
+    }
+    if (uploaded.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
+    return uploaded;
+  };
+
+  const postChatAction = async (body: Record<string, unknown>) => {
+    const config = getSupabaseConfig();
+    if (!config) throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
+    const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.publishableKey,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json() as Record<string, any>;
+    if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Misma AI request failed.");
+    return result;
+  };
+
   const handleSend = async (
     customPrompt?: string,
     options: { retry?: boolean } = {},
   ) => {
-    const textToSend = (customPrompt ?? draft).trim();
-    if (!textToSend || isSending || !token) return;
+    let textToSend = (customPrompt ?? draft).trim();
+    if ((!textToSend && !selectedFiles.length) || isSending || !token) return;
+    if (!textToSend) textToSend = "Please inspect the attached files and explain the important details.";
 
     const isRetry = options.retry === true;
     const editId = editingMessageId;
@@ -662,31 +840,16 @@ function Dashboard() {
     shouldAutoScrollRef.current = true;
 
     try {
-      const config = getSupabaseConfig();
-      if (!config) {
-        throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
-      }
-      const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: config.publishableKey,
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          message: textToSend,
-          conversationId: currentConversationId,
-          ...(editId ? { editMessageId: Number(editId) } : {}),
-        }),
+      const attachments = editId ? [] : await uploadSelectedAttachments();
+      const res = await postChatAction({
+        action: "chat",
+        message: textToSend,
+        conversationId: currentConversationId,
+        workspaceId: workspace?.id,
+        attachments,
+        thinkHarder,
+        ...(editId ? { editMessageId: Number(editId) } : {}),
       });
-      const res = (await response.json()) as {
-        error?: string;
-        conversationId?: number;
-        userMessage?: Message;
-        aiMessage?: Message;
-        editedMessageId?: string;
-      };
-      if (!response.ok) throw new Error(res.error || "Failed to connect to Misma AI.");
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!currentConversationId && res.conversationId) {
@@ -696,11 +859,11 @@ function Dashboard() {
       if (editId) {
         setMessages((prev) => {
           const index = prev.findIndex((item) => item.id === editId);
-          if (index < 0) return [...prev, res.aiMessage!];
+          if (index < 0) return [...prev, res.aiMessage];
           return [
             ...prev.slice(0, index),
             { ...prev[index], text: textToSend },
-            res.aiMessage!,
+            res.aiMessage,
           ];
         });
         setEditingMessageId(null);
@@ -708,21 +871,20 @@ function Dashboard() {
       } else {
         setMessages((prev) => {
           const withPersistedUser = tempUserId && res.userMessage
-            ? prev.map((item) => item.id === tempUserId ? res.userMessage! : item)
+            ? prev.map((item) => item.id === tempUserId ? res.userMessage : item)
             : prev;
-          return [...withPersistedUser, res.aiMessage!];
+          return [...withPersistedUser, res.aiMessage];
         });
       }
 
+      setSelectedFiles([]);
+      setThinkHarder(false);
       setFailedMessageId(null);
       setFailedAction(null);
       setFailedPrompt("");
       loadData();
     } catch (cause) {
-      const errMsg =
-        cause instanceof Error
-          ? cause.message
-          : "Failed to connect to Misma AI.";
+      const errMsg = cause instanceof Error ? cause.message : "Failed to connect to Misma AI.";
       setChatError(errMsg);
       setFailedPrompt(textToSend);
       setFailedAction(editId ? "edit" : "send");
@@ -731,6 +893,137 @@ function Dashboard() {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleCreateMedia = async () => {
+    if (!createMode || !token || isSending || isGeneratingMedia) return;
+    const prompt = draft.trim() || (createMode === "image"
+      ? "Create a high-quality image using the attached reference."
+      : "Create a short cinematic video using the attached reference.");
+    const mode = createMode;
+    setChatError("");
+    setMediaProgress(mode === "image" ? "Creating your image with Agnes…" : "Preparing your video with Agnes…");
+    setIsGeneratingMedia(true);
+    setPlusMenuOpen(false);
+    setDraft("");
+    shouldAutoScrollRef.current = true;
+
+    const tempUserId = `media-user-${Date.now()}`;
+    setMessages((current) => [...current, {
+      id: tempUserId,
+      role: "human",
+      text: prompt,
+      created_at: new Date().toISOString(),
+    }]);
+
+    try {
+      const attachments = await uploadSelectedAttachments();
+      const result = await postChatAction({
+        action: mode === "image" ? "create-image" : "create-video",
+        message: prompt,
+        conversationId: currentConversationId,
+        workspaceId: workspace?.id,
+        attachments,
+      });
+      if (result.conversationId) setCurrentConversationId(result.conversationId);
+      if (result.userMessage) {
+        setMessages((current) => current.map((item) => item.id === tempUserId ? result.userMessage : item));
+      }
+      setSelectedFiles([]);
+
+      if (mode === "image") {
+        if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
+        setMessages((current) => [...current, result.aiMessage]);
+        setMediaProgress("Image created.");
+        loadData();
+        return;
+      }
+
+      const videoId = result.videoJob?.videoId;
+      const model = result.videoJob?.model;
+      if (typeof videoId !== "string" || typeof model !== "string") {
+        throw new Error("Agnes did not return a video generation job.");
+      }
+      const progressMessageId = `media-video-${videoId}`;
+      setMessages((current) => [...current, {
+        id: progressMessageId,
+        role: "ai",
+        text: "Agnes is generating your video…",
+        created_at: new Date().toISOString(),
+      }]);
+      let completedUrl: string | null = null;
+      for (let attempt = 0; attempt < 36; attempt++) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 5000));
+        const status = await postChatAction({
+          action: "poll-video",
+          workspaceId: workspace?.id,
+          videoId,
+          model,
+        });
+        const progress = Number(status.progress) || 0;
+        setMediaProgress(`Creating video… ${progress}%`);
+        setMessages((current) => current.map((item) => item.id === progressMessageId ? {
+          ...item,
+          text: `Agnes is generating your video… ${progress}%`,
+        } : item));
+        if (status.status === "completed" && typeof status.url === "string") {
+          completedUrl = status.url;
+          break;
+        }
+        if (status.status === "failed") {
+          throw new Error(typeof status.error === "string" ? status.error : "Agnes video generation failed.");
+        }
+      }
+      if (!completedUrl) throw new Error("Video generation is taking longer than expected. The job may still be running; you can try again later.");
+      const saved = await postChatAction({
+        action: "save-generated-media",
+        workspaceId: workspace?.id,
+        conversationId: result.conversationId,
+        videoId,
+        url: completedUrl,
+      });
+      if (!saved.aiMessage) throw new Error("The generated video could not be saved to this chat.");
+      setMessages((current) => current.map((item) => item.id === progressMessageId ? saved.aiMessage : item));
+      setMediaProgress("Video created.");
+      loadData();
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
+      setMediaProgress("");
+    } finally {
+      setSelectedFiles([]);
+      setCreateMode(null);
+      setIsGeneratingMedia(false);
+    }
+  };
+
+  const addSelectedFiles = (files: FileList | null) => {
+    if (!files?.length) return;
+    const additions = Array.from(files);
+    const next = [...selectedFiles, ...additions];
+    if (next.length > 4) {
+      setChatError("Attach up to four files per message.");
+      return;
+    }
+    if (next.some((file) => file.type.startsWith("video/")) &&
+        next.filter((file) => file.type.startsWith("video/")).length > 1) {
+      setChatError("Upload one video per message so Misma can sample its keyframes.");
+      return;
+    }
+    const oversized = additions.find((file) => file.size > 25 * 1024 * 1024);
+    if (oversized) {
+      setChatError(`${oversized.name} is larger than the 25 MB upload limit.`);
+      return;
+    }
+    const oversizedPdf = additions.find((file) =>
+      (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) &&
+      file.size > 12 * 1024 * 1024
+    );
+    if (oversizedPdf) {
+      setChatError("PDF files must be 12 MB or smaller for AI analysis.");
+      return;
+    }
+    setChatError("");
+    setSelectedFiles(next);
   };
 
   // Regenerate the latest AI response using the saved user prompt.
@@ -1353,6 +1646,7 @@ function Dashboard() {
                       )}
                       <div className="aichat-message-content">
                         <div className="aichat-bubble">
+                          <MessageAttachmentViews attachments={msg.attachments} />
                           <MarkdownContent content={msg.text} />
                         </div>
                         <div
@@ -1488,32 +1782,100 @@ function Dashboard() {
                   </div>
                 )}
                 <form
-                  className="aichat-composer-card"
+                  className="aichat-composer-card aichat-composer-card-tools"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void handleSend();
+                    if (createMode) void handleCreateMedia();
+                    else void handleSend();
                   }}
                 >
-                  <textarea
-                    ref={textareaRef}
-                    rows={1}
-                    className="aichat-composer-textarea"
-                    placeholder="Message Misma…"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    disabled={isSending}
-                    aria-label="Message Misma"
-                  />
-                  <button
-                    type="submit"
-                    className={`aichat-composer-send-btn${draft.trim() && !isSending ? " can-send" : ""}`}
-                    disabled={!draft.trim() || isSending}
-                    title={editingMessageId ? "Save edited message" : "Send message"}
-                    aria-label={editingMessageId ? "Save edited message" : "Send message"}
-                  >
-                    ↑
-                  </button>
+                  <div className="aichat-composer-tools-row">
+                    <div className="aichat-composer-plus-wrap">
+                      <button
+                        type="button"
+                        className="aichat-composer-plus"
+                        aria-label="Open attachment and tools menu"
+                        aria-expanded={plusMenuOpen}
+                        disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)}
+                        onClick={() => setPlusMenuOpen((open) => !open)}
+                      >+</button>
+                      {plusMenuOpen && (
+                        <div className="aichat-composer-plus-menu" role="menu">
+                          <button type="button" role="menuitem" onClick={() => { setThinkHarder((value) => !value); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon">✧</span>
+                            <span><strong>Think harder</strong><small>Use deeper reasoning for code, files and complex tasks</small></span>
+                            <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
+                          </button>
+                          <div className="aichat-plus-menu-divider" />
+                          <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon">↥</span>
+                            <span><strong>File</strong><small>PDF, text, spreadsheets exports and code</small></span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon">▧</span>
+                            <span><strong>Photo</strong><small>Upload an image for Agnes to analyse</small></span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { cameraInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon">◎</span>
+                            <span><strong>Camera</strong><small>Take a photo and send it to Misma</small></span>
+                          </button>
+                          <div className="aichat-plus-menu-divider" />
+                          <div className="aichat-plus-menu-label">CREATE WITH AGNES</div>
+                          <button type="button" role="menuitem" onClick={() => { setCreateMode("image"); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon">✦</span>
+                            <span><strong>Create image</strong><small>Generate or transform a visual</small></span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { setCreateMode("video"); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon">▶</span>
+                            <span><strong>Create video</strong><small>Generate a short video from a prompt or image</small></span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {thinkHarder && (
+                      <button type="button" className="aichat-composer-mode-pill" onClick={() => setThinkHarder(false)}>✧ Think harder <span>×</span></button>
+                    )}
+                    {createMode && (
+                      <button type="button" className="aichat-composer-mode-pill is-create" onClick={() => setCreateMode(null)}>✦ Create {createMode} <span>×</span></button>
+                    )}
+                    {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
+                  </div>
+                  {selectedFiles.length > 0 && (
+                    <div className="aichat-composer-attachments">
+                      {selectedFiles.map((file, index) => (
+                        <div className="aichat-composer-attachment-chip" key={`${file.name}-${file.lastModified}-${index}`}>
+                          <span>{file.type.startsWith("image/") ? "▧" : file.type.startsWith("video/") ? "▶" : "📎"}</span>
+                          <span title={file.name}>{file.name}</span>
+                          <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== index))}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="aichat-composer-sendrow">
+                    <textarea
+                      ref={textareaRef}
+                      rows={1}
+                      className="aichat-composer-textarea"
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      disabled={isSending || isGeneratingMedia}
+                      aria-label="Message Misma"
+                    />
+                    <button
+                      type="submit"
+                      className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}`}
+                      disabled={(!draft.trim() && !selectedFiles.length && !createMode) || isSending || isGeneratingMedia}
+                      title={createMode ? `Create ${createMode} with Agnes` : editingMessageId ? "Save edited message" : "Send message"}
+                      aria-label={createMode ? `Create ${createMode} with Agnes` : "Send message"}
+                    >
+                      {isGeneratingMedia ? "…" : createMode ? "✦" : "↑"}
+                    </button>
+                  </div>
+                  <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
+                  <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
+                  <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                 </form>
                 <p className="aichat-disclaimer-text">
                   Misma can make mistakes. Verify important business details.{" "}
