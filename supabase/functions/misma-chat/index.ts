@@ -544,7 +544,7 @@ Deno.serve(async (request) => {
   let message = typeof input.message === "string" ? input.message.trim() : "";
   const actionNeedsPrompt = action === "chat" || action === "create-image" || action === "create-video";
   const rawAttachmentList = Array.isArray(input.attachments) ? input.attachments : [];
-  if (actionNeedsPrompt && ((!message && rawAttachmentList.length === 0) || message.length > 4_000)) {
+  if (actionNeedsPrompt && !regenerate && ((!message && rawAttachmentList.length === 0) || message.length > 4_000)) {
     return jsonResponse(400, { error: "Enter a prompt up to 4,000 characters or attach a file." });
   }
   if (editMessageId !== null && (!Number.isSafeInteger(editMessageId) || Number(editMessageId) < 1)) {
