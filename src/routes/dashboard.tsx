@@ -1197,6 +1197,28 @@ function Dashboard() {
     }
   };
 
+  const handleRegenerateMessage = async (message: Message) => {
+    const generatedMedia = message.attachments?.find((item) => item.kind === "generated-image" || item.kind === "generated-video");
+    if (!generatedMedia) {
+      await handleRegenerate();
+      return;
+    }
+    const at = messages.findIndex((item) => item.id === message.id);
+    const promptMessage = messages.slice(0, at).reverse().find((item) => item.role === "human" || item.role === "customer");
+    const sourceUserMessageId = Number(promptMessage?.id);
+    const replaceAiMessageId = Number(message.id);
+    if (!promptMessage || !Number.isSafeInteger(sourceUserMessageId) || sourceUserMessageId < 1 ||
+      !Number.isSafeInteger(replaceAiMessageId) || replaceAiMessageId < 1) {
+      setChatError("The original media prompt is unavailable, so this item cannot be recreated.");
+      return;
+    }
+    await handleCreateMedia(generatedMedia.kind === "generated-video" ? "video" : "image", promptMessage.text, {
+      sourceUserMessageId,
+      replaceAiMessageId,
+      attachments: promptMessage.attachments || [],
+    });
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
@@ -1836,7 +1858,7 @@ function Dashboard() {
                                 <ActionIcon name="share" />
                               </button>
                               {isLatestAiMessage && (
-                                <button type="button" className="aichat-message-action" title="Try again" aria-label="Regenerate response" disabled={isSending} onClick={() => void handleRegenerate()}>
+                                <button type="button" className="aichat-message-action" title="Try again" aria-label="Regenerate response" disabled={isSending || isGeneratingMedia} onClick={() => void handleRegenerateMessage(msg)}>
                                   <ActionIcon name="refresh" />
                                 </button>
                               )}
