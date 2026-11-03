@@ -185,7 +185,7 @@ Deno.serve(async (request) => {
   }
 
   const authorization = request.headers.get("authorization");
-  if (!authorization?.match(/^Bearer\\s+\\S+$/i)) {
+  if (!authorization?.match(/^Bearer\s+\\S+$/i)) {
     return jsonResponse(401, { error: "Sign in to use Misma AI." });
   }
 
@@ -231,7 +231,7 @@ Deno.serve(async (request) => {
   }
 
   try {
-    const accessToken = authorization.replace(/^Bearer\\s+/i, "");
+    const accessToken = authorization.replace(/^Bearer\s+/i, "");
     const db = createClient(projectUrl, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       global: { headers: { Authorization: authorization } },
