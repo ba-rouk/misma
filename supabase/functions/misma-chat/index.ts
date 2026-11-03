@@ -926,7 +926,8 @@ Deno.serve(async (request) => {
       const videoModel = "agnes-video-v2.0";
       const createVideoBody: JsonRecord = {
         model: videoModel,
-        prompt,
+        prompt: safePrompt,
+        negative_prompt: "nudity, sexual content, erotic imagery, lingerie, suggestive posing, sexualized minors, graphic violence, gore, hate symbols",
         width: 1152,
         height: 768,
         num_frames: 121,
