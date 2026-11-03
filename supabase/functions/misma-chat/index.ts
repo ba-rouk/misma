@@ -311,7 +311,7 @@ function validateAttachmentList(value: unknown): AttachmentInput[] {
     const mimeType = typeof item.mimeType === "string" ? item.mimeType.slice(0, 120) : "application/octet-stream";
     const size = Number(item.size);
     const kind = typeof item.kind === "string" ? item.kind : "file";
-    if (!path || !name || !Number.isFinite(size) || size < 0 || size > 25 * 1024 * 1024) {
+    if (!path || path.includes("..") || !name || !Number.isFinite(size) || size < 0 || size > 25 * 1024 * 1024) {
       throw new Error("Each attachment must be valid and no larger than 25 MB.");
     }
     if (!["image", "video", "video-frame", "file"].includes(kind)) {
@@ -631,7 +631,18 @@ Deno.serve(async (request) => {
       const model = typeof input.model === "string" ? input.model : (Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-v2.0");
       const agnesKey = Deno.env.get("AGNES_API_KEY");
       if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured for video generation." });
-      if (!videoId || !/^video_[a-zA-Z0-9_-]+$/.test(videoId)) return jsonResponse(400, { error: "Invalid Agnes video ID." });
+      if (!Number.isSafeInteger(conversationId) || !videoId || !/^video_[a-zA-Z0-9_-]+$/.test(videoId)) {
+        return jsonResponse(400, { error: "Invalid Agnes video job details." });
+      }
+      const { data: pollConversation, error: pollConversationError } = await db.from("conversations")
+        .select("id").eq("id", conversationId).eq("workspace_id", workspaceId).maybeSingle();
+      if (pollConversationError || !pollConversation) return jsonResponse(404, { error: "Conversation not found." });
+      const { data: pollRows, error: pollRowsError } = await db.from("messages")
+        .select("attachments").eq("conversation_id", conversationId).eq("role", "human");
+      if (pollRowsError) throw new Error("Could not verify the video generation request.");
+      const ownsJob = (pollRows ?? []).some((row) => Array.isArray(row.attachments) &&
+        row.attachments.some((item: unknown) => isRecord(item) && item.videoId === videoId && item.model === model));
+      if (!ownsJob) return jsonResponse(403, { error: "This video job does not belong to the selected conversation." });
       const pollUrl = new URL("https://apihub.agnes-ai.com/agnesapi");
       pollUrl.searchParams.set("video_id", videoId);
       pollUrl.searchParams.set("model_name", model);
@@ -721,11 +732,11 @@ Deno.serve(async (request) => {
         body: JSON.stringify(createVideoBody),
       });
       const payload: unknown = await createResponse.json().catch(() => null);
-      if (!createResponse.ok || !isRecord(payload) || typeof (payload.video_id ?? payload.id) !== "string") {
+      if (!createResponse.ok || !isRecord(payload) || typeof payload.video_id !== "string") {
         console.error("[misma-chat] Agnes video generation failed.", { status: createResponse.status });
         return jsonResponse(502, { error: "Agnes could not start video generation. Check your Agnes video model access and try again.", conversationId: saved.conversationId, userMessage: saved.userMessage });
       }
-      const videoId = String(payload.video_id ?? payload.id);
+      const videoId = String(payload.video_id);
       // Record the returned job ID on the prompt so only its owner can save the completed output.
       await db.from("messages").update({
         attachments: [...requestedAttachments, { kind: "video-job", videoId, model: videoModel }],
