@@ -1014,6 +1014,7 @@ function Dashboard() {
     setMediaProgress(mode === "image" ? "Creating your image with Agnes…" : "Preparing your video with Agnes…");
     setIsGeneratingMedia(true);
     setPlusMenuOpen(false);
+    setCreateMode(null);
     setDraft("");
     shouldAutoScrollRef.current = true;
 
