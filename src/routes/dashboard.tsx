@@ -666,7 +666,7 @@ function Dashboard() {
       if (!config) {
         throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
       }
-      const response = await fetch(`${config.url.replace(/\\/$/, "")}/functions/v1/misma-chat`, {
+      const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -748,7 +748,7 @@ function Dashboard() {
       if (!config) {
         throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
       }
-      const response = await fetch(`${config.url.replace(/\\/$/, "")}/functions/v1/misma-chat`, {
+      const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
