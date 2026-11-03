@@ -456,6 +456,21 @@ function Dashboard() {
   const [profileImage, setProfileImage] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [profileNameDraft, setProfileNameDraft] = useState("");
+  const [profileAvatarFile, setProfileAvatarFile] = useState<File | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [accentColor, setAccentColor] = useState("#8ab4ff");
+  const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
+  const [appearanceLoaded, setAppearanceLoaded] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    productUpdates: true,
+    securityAlerts: true,
+    chatActivity: true,
+  });
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
+  const [voiceInputActive, setVoiceInputActive] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -481,6 +496,44 @@ function Dashboard() {
       // The preferences remain usable for this session if browser storage is unavailable.
     }
   }, [aiSettings, settingsLoaded]);
+
+  useEffect(() => {
+    try {
+      const savedAccent = localStorage.getItem("misma_accent_color");
+      const savedNotifications = localStorage.getItem("misma_notification_preferences");
+      const savedVoice = localStorage.getItem("misma_voice_uri");
+      if (savedAccent && /^#[0-9a-f]{6}$/i.test(savedAccent)) setAccentColor(savedAccent);
+      if (savedNotifications) {
+        const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
+        setNotificationPreferences((current) => ({ ...current, ...parsed }));
+      }
+      if (savedVoice) setSelectedVoiceUri(savedVoice);
+    } catch {
+      // Keep accessible defaults if browser preferences cannot be read.
+    } finally {
+      setAppearanceLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!appearanceLoaded) return;
+    document.documentElement.style.setProperty("--misma-accent", accentColor);
+    try {
+      localStorage.setItem("misma_accent_color", accentColor);
+      localStorage.setItem("misma_notification_preferences", JSON.stringify(notificationPreferences));
+      localStorage.setItem("misma_voice_uri", selectedVoiceUri);
+    } catch {
+      // Preferences remain active for this session when storage is unavailable.
+    }
+  }, [accentColor, notificationPreferences, selectedVoiceUri, appearanceLoaded]);
+
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    const refreshVoices = () => setAvailableVoices(window.speechSynthesis.getVoices());
+    refreshVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", refreshVoices);
+  }, []);
 
   const updateAiSetting = <K extends keyof MismaAiSettings>(key: K, value: MismaAiSettings[K]) => {
     setAiSettings((current) => ({ ...current, [key]: value }));
@@ -540,6 +593,8 @@ function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const profileAvatarInputRef = useRef<HTMLInputElement>(null);
+  const speechRecognitionRef = useRef<any>(null);
   const shouldAutoScrollRef = useRef(true);
   const regenerateInFlightRef = useRef(false);
 
@@ -600,10 +655,18 @@ function Dashboard() {
           const image = [metadata.avatar_url, metadata.picture].find(
             (v): v is string => typeof v === "string" && v.trim().length > 0,
           );
-          setProfileName(
-            displayName ?? s.user.email?.split("@")[0] ?? "Your account",
-          );
-          setProfileImage(image ?? "");
+          const resolvedName = displayName ?? s.user.email?.split("@")[0] ?? "Your account";
+          setProfileName(resolvedName);
+          setProfileNameDraft(resolvedName);
+          const avatarPath = metadata.avatar_path;
+          if (typeof avatarPath === "string" && avatarPath.startsWith("misma/") || typeof avatarPath === "string" && avatarPath.includes("/")) {
+            void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 3600).then(({ data, error }) => {
+              if (!error && data?.signedUrl) setProfileImage(data.signedUrl);
+              else setProfileImage(image ?? "");
+            });
+          } else {
+            setProfileImage(image ?? "");
+          }
           setToken(s.access_token);
           setAuthChecked(true);
         },
@@ -857,11 +920,138 @@ function Dashboard() {
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(msg.text);
+    const selectedVoice = availableVoices.find((voice) => voice.voiceURI === selectedVoiceUri);
+    if (selectedVoice) utterance.voice = selectedVoice;
     utterance.onend = () => setSpeakingMessageId(null);
     utterance.onerror = () => setSpeakingMessageId(null);
     setSpeakingMessageId(msg.id);
     window.speechSynthesis.speak(utterance);
   };
+
+
+
+  const handleVoiceInput = () => {
+    if (voiceInputActive) {
+      speechRecognitionRef.current?.stop?.();
+      setVoiceInputActive(false);
+      return;
+    }
+    const browserWindow = window as typeof window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    };
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setChatError("Voice dictation is not supported in this browser. Try a recent version of Chrome.");
+      return;
+    }
+    const recognition = new Recognition();
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results as ArrayLike<any>)
+        .map((result: any) => result?.[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (transcript) setDraft((current) => [current.trim(), transcript].filter(Boolean).join(current.trim() ? " " : ""));
+    };
+    recognition.onerror = (event: any) => {
+      setChatError(event?.error === "not-allowed"
+        ? "Allow microphone access to use voice dictation."
+        : "Voice dictation stopped. Please try again.");
+    };
+    recognition.onend = () => {
+      setVoiceInputActive(false);
+      speechRecognitionRef.current = null;
+    };
+    speechRecognitionRef.current = recognition;
+    setChatError("");
+    setVoiceInputActive(true);
+    try {
+      recognition.start();
+    } catch {
+      setVoiceInputActive(false);
+      speechRecognitionRef.current = null;
+      setChatError("The microphone could not be started. Please try again.");
+    }
+  };
+
+  const testSelectedVoice = () => {
+    if (!("speechSynthesis" in window)) {
+      setChatError("Voice playback is not supported by this browser.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance("Hello, this is your selected Misma voice.");
+    const voice = availableVoices.find((item) => item.voiceURI === selectedVoiceUri);
+    if (voice) utterance.voice = voice;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const saveAccountProfile = async () => {
+    const name = profileNameDraft.trim();
+    if (!token || profileSaving) return;
+    if (name.length < 2 || name.length > 80) {
+      setProfileError("Enter a profile name between 2 and 80 characters.");
+      return;
+    }
+    setProfileSaving(true);
+    setProfileError("");
+    setProfileSaved(false);
+    try {
+      const client = getSupabaseClient();
+      const { data: userData, error: userError } = await client.auth.getUser();
+      if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
+      let avatarPath = typeof userData.user.user_metadata?.avatar_path === "string"
+        ? userData.user.user_metadata.avatar_path
+        : "";
+      if (profileAvatarFile) {
+        if (profileAvatarFile.size > 5 * 1024 * 1024) throw new Error("Profile photos must be 5 MB or smaller.");
+        const extension = profileAvatarFile.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "jpg";
+        avatarPath = (workspace?.id || "profile") + "/" + userData.user.id + "/avatar-" + crypto.randomUUID() + "." + extension;
+        const { error: uploadError } = await client.storage.from("misma-media").upload(avatarPath, profileAvatarFile, {
+          upsert: true,
+          contentType: profileAvatarFile.type || "image/jpeg",
+        });
+        if (uploadError) throw new Error("Could not save the profile photo: " + uploadError.message);
+      }
+      const { error: updateError } = await client.auth.updateUser({
+        data: { ...userData.user.user_metadata, full_name: name, ...(avatarPath ? { avatar_path: avatarPath } : {}) },
+      });
+      if (updateError) throw new Error(updateError.message);
+      setProfileName(name);
+      if (avatarPath) {
+        const { data: signed, error: signedError } = await client.storage.from("misma-media").createSignedUrl(avatarPath, 3600);
+        if (!signedError && signed?.signedUrl) setProfileImage(signed.signedUrl);
+      }
+      setProfileAvatarFile(null);
+      setProfileSaved(true);
+      window.setTimeout(() => setProfileSaved(false), 3000);
+    } catch (cause) {
+      setProfileError(cause instanceof Error ? cause.message : "Could not save your profile.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const exportCurrentChat = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      conversationId: currentConversationId,
+      messages: messages.map(({ id, role, text, created_at }) => ({ id, role, text, created_at })),
+    };
+    const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = "misma-chat-export.json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  };
+
 
   const handleRateMessage = (messageId: string, rating: "up" | "down") => {
     const nextRating = messageFeedback[messageId] === rating ? undefined : rating;
@@ -974,7 +1164,15 @@ function Dashboard() {
       body: JSON.stringify(body),
     });
     const result = await response.json() as Record<string, any>;
-    if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Misma AI request failed.");
+    if (!response.ok) {
+      const error = new Error(typeof result.error === "string" ? result.error : "Misma AI request failed.") as Error & {
+        responseData?: Record<string, any>;
+        status?: number;
+      };
+      error.responseData = result;
+      error.status = response.status;
+      throw error;
+    }
     return result;
   };
 
@@ -1302,7 +1500,16 @@ function Dashboard() {
       window.setTimeout(() => setMediaProgress(""), 3500);
       loadData();
     } catch (cause) {
+      const responseData = cause instanceof Error
+        ? (cause as Error & { responseData?: Record<string, any> }).responseData
+        : undefined;
+      if (responseData?.conversationId) setCurrentConversationId(Number(responseData.conversationId));
+      if (responseData?.userMessage && tempUserId) {
+        setMessages((current) => current.map((item) => item.id === tempUserId ? responseData.userMessage : item));
+      }
       setMessages((current) => current.filter((item) => item.id !== pendingMediaId));
+      setDraft(prompt);
+      setCreateMode(mode);
       setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
       setMediaProgress("");
     } finally {
