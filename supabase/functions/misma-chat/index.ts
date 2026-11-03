@@ -30,16 +30,8 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function getProviders(): Provider[] {
   const providers: Provider[] = [];
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
-  if (geminiKey) {
-    providers.push({
-      name: "gemini",
-      apiKey: geminiKey,
-      model: Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash",
-      url: "https://generativelanguage.googleapis.com/v1beta/models",
-      kind: "gemini",
-    });
-  }
+
+  // Primary: Groq. First fallback: Gemini. OpenAI and Mistral remain later fallbacks.
   const groqKey = Deno.env.get("GROQ_API_KEY");
   if (groqKey) {
     providers.push({
@@ -50,6 +42,18 @@ function getProviders(): Provider[] {
       kind: "openai-compatible",
     });
   }
+
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  if (geminiKey) {
+    providers.push({
+      name: "gemini",
+      apiKey: geminiKey,
+      model: Deno.env.get("GEMINI_MODEL") || "gemini-3.8-flash",
+      url: "https://generativelanguage.googleapis.com/v1beta/models",
+      kind: "gemini",
+    });
+  }
+
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   if (openaiKey) {
     providers.push({
@@ -60,6 +64,7 @@ function getProviders(): Provider[] {
       kind: "openai-compatible",
     });
   }
+
   const mistralKey = Deno.env.get("MISTRAL_API_KEY");
   if (mistralKey) {
     providers.push({
@@ -70,6 +75,7 @@ function getProviders(): Provider[] {
       kind: "openai-compatible",
     });
   }
+
   return providers;
 }
 
