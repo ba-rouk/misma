@@ -37,7 +37,7 @@ function getProviders(): Provider[] {
     providers.push({
       name: "groq",
       apiKey: groqKey,
-      model: Deno.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile",
+      model: Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b",
       url: "https://api.groq.com/openai/v1/chat/completions",
       kind: "openai-compatible",
     });
@@ -48,7 +48,7 @@ function getProviders(): Provider[] {
     providers.push({
       name: "gemini",
       apiKey: geminiKey,
-      model: Deno.env.get("GEMINI_MODEL") || "gemini-3.8-flash",
+      model: Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash",
       url: "https://generativelanguage.googleapis.com/v1beta/models",
       kind: "gemini",
     });
