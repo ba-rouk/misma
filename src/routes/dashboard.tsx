@@ -596,6 +596,16 @@ function Dashboard() {
     setEditingOriginalText(null);
     setMessageFeedback({});
     setSpeakingMessageId(null);
+    setSelectedFiles([]);
+    setThinkHarder(false);
+    setCreateMode(null);
+    setPlusMenuOpen(false);
+    setMediaProgress("");
+    setSelectedFiles([]);
+    setThinkHarder(false);
+    setCreateMode(null);
+    setPlusMenuOpen(false);
+    setMediaProgress("");
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     shouldAutoScrollRef.current = true;
     try {
@@ -935,6 +945,7 @@ function Dashboard() {
         if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
         setMessages((current) => [...current, result.aiMessage]);
         setMediaProgress("Image created.");
+        window.setTimeout(() => setMediaProgress(""), 3500);
         loadData();
         return;
       }
@@ -957,6 +968,7 @@ function Dashboard() {
         const status = await postChatAction({
           action: "poll-video",
           workspaceId: workspace?.id,
+          conversationId: result.conversationId,
           videoId,
           model,
         });
@@ -985,6 +997,7 @@ function Dashboard() {
       if (!saved.aiMessage) throw new Error("The generated video could not be saved to this chat.");
       setMessages((current) => current.map((item) => item.id === progressMessageId ? saved.aiMessage : item));
       setMediaProgress("Video created.");
+      window.setTimeout(() => setMediaProgress(""), 3500);
       loadData();
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
@@ -1809,7 +1822,7 @@ function Dashboard() {
                           <div className="aichat-plus-menu-divider" />
                           <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon">↥</span>
-                            <span><strong>File</strong><small>PDF, text, spreadsheets exports and code</small></span>
+                            <span><strong>File</strong><small>PDF, text, CSV and code files</small></span>
                           </button>
                           <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon">▧</span>
