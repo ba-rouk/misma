@@ -792,6 +792,55 @@ Deno.serve(async (request) => {
       return jsonResponse(200, { ok: true, experienceId: experience.id, status });
     }
 
+    if (action === "download-generated-media") {
+      const mediaUrl = typeof input.url === "string" ? input.url : "";
+      if (!Number.isSafeInteger(conversationId) || !mediaUrl) {
+        return jsonResponse(400, { error: "A valid generated media URL and conversation are required." });
+      }
+      let parsedUrl: URL;
+      try { parsedUrl = new URL(mediaUrl); } catch {
+        return jsonResponse(400, { error: "Invalid media URL." });
+      }
+      if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "platform-outputs.agnes-ai.space" ||
+        !/^\/(images|videos)\//.test(parsedUrl.pathname)) {
+        return jsonResponse(400, { error: "This media host is not supported for secure download." });
+      }
+      const { data: downloadConversation, error: downloadConversationError } = await db.from("conversations")
+        .select("id").eq("id", conversationId).eq("workspace_id", workspaceId).maybeSingle();
+      if (downloadConversationError || !downloadConversation) {
+        return jsonResponse(404, { error: "Conversation not found." });
+      }
+      const { data: aiRows, error: aiRowsError } = await db.from("messages")
+        .select("attachments").eq("conversation_id", conversationId).eq("role", "ai");
+      if (aiRowsError) throw new Error("Could not verify this generated file.");
+      const isOwnedGeneratedAsset = (aiRows ?? []).some((row) => Array.isArray(row.attachments) &&
+        row.attachments.some((item: unknown) => isRecord(item) &&
+          (item.kind === "generated-image" || item.kind === "generated-video") && item.url === mediaUrl));
+      if (!isOwnedGeneratedAsset) return jsonResponse(403, { error: "This generated file does not belong to the selected conversation." });
+      const upstream = await fetch(mediaUrl, { signal: AbortSignal.timeout(45_000) });
+      if (!upstream.ok) return jsonResponse(502, { error: "The generated file is no longer available from Agnes." });
+      const contentType = (upstream.headers.get("content-type") || "").split(";")[0].toLowerCase();
+      if (!(contentType.startsWith("image/") || contentType === "video/mp4" || contentType === "video/webm")) {
+        return jsonResponse(415, { error: "The generated file has an unsupported media type." });
+      }
+      const contentLength = Number(upstream.headers.get("content-length") || 0);
+      if (contentLength > 150 * 1024 * 1024) return jsonResponse(413, { error: "This media file is too large to download through Misma." });
+      const bytes = new Uint8Array(await upstream.arrayBuffer());
+      if (bytes.byteLength > 150 * 1024 * 1024) return jsonResponse(413, { error: "This media file is too large to download through Misma." });
+      const extension = contentType === "video/mp4" ? "mp4" : contentType === "video/webm" ? "webm" :
+        contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : contentType === "image/png" ? "png" : "img";
+      return new Response(bytes, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-store",
+          "Content-Type": contentType,
+          "Content-Length": String(bytes.byteLength),
+          "Content-Disposition": `attachment; filename="misma-generated.${extension}"`,
+        },
+      });
+    }
+
     let requestedAttachments: AttachmentInput[] = [];
     try {
       requestedAttachments = validateAttachmentList(input.attachments);
