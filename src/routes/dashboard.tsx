@@ -2494,7 +2494,7 @@ function Dashboard() {
                     <table className="aichat-table">
                       <thead>
                         <tr>
-                          <th>Customer</th>
+                          <th>Chat</th>
                           <th>Channel</th>
                           <th>Latest activity</th>
                           <th>Status</th>
