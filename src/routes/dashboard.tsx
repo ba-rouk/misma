@@ -1001,6 +1001,7 @@ function Dashboard() {
   const handleCreateMedia = async (
     requestedMode?: "image" | "video",
     promptOverride?: string,
+    reuse?: { sourceUserMessageId: number; replaceAiMessageId: number; attachments: MessageAttachment[] },
   ) => {
     const mode = requestedMode ?? createMode;
     if (!mode || !token || isSending || isGeneratingMedia) return;
