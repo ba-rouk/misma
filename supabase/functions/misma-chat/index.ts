@@ -36,6 +36,31 @@ function jsonResponse(status: number, body: JsonRecord): Response {
   });
 }
 
+function detectMediaIntent(prompt: string): "image" | "video" | null {
+  const text = prompt.trim().toLowerCase();
+  if (!text || /^(how|what|why|where|when)\b/.test(text)) return null;
+  const asksToCreate = /\b(generate|create|make|draw|render|produce|design|animate)\b/.test(text) ||
+    /\b(turn|convert)\b.{0,45}\b(into|to)\b/.test(text);
+  if (!asksToCreate) return null;
+  if (/\b(video|clip|reel|animation)\b/.test(text)) return "video";
+  if (/\b(image|picture|photo|illustration|artwork|graphic|logo|poster|banner|thumbnail)\b/.test(text)) return "image";
+  return null;
+}
+
+function classifyCore01Room(question: string): string {
+  const text = question.toLowerCase();
+  if (/\b(price|pricing|cost|fee|discount|quote|quotation|rwf|payment|charge)\b/.test(text)) return "prices";
+  if (/\b(product|item|stock|inventory|catalog|sku|variant)\b/.test(text)) return "products";
+  if (/\b(customer|client|buyer|contact|lead)\b/.test(text)) return "customers";
+  if (/\b(order|delivery|shipment|tracking|purchase|refund|return)\b/.test(text)) return "orders";
+  if (/\b(policy|policies|terms|privacy|cancellation|warranty|guarantee)\b/.test(text)) return "policies";
+  if (/\b(faq|frequently asked|question|answer|how do i|how can i)\b/.test(text)) return "faq";
+  if (/\b(staff|employee|team member|permission|role|shift)\b/.test(text)) return "staff";
+  if (/\b(procedure|process|workflow|step by step|sop|instructions)\b/.test(text)) return "procedures";
+  if (/\b(business profile|company|address|opening hours|working hours|location|about my business)\b/.test(text)) return "business_profile";
+  return "general";
+}
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -529,8 +554,13 @@ Deno.serve(async (request) => {
   if (!isRecord(input)) {
     return jsonResponse(400, { error: "Enter a valid chat request." });
   }
-  const action = typeof input.action === "string" ? input.action : "chat";
-  const allowedActions = new Set(["chat", "create-image", "create-video", "poll-video", "save-generated-media"]);
+  let action = typeof input.action === "string" ? input.action : "chat";
+  let message = typeof input.message === "string" ? input.message.trim() : "";
+  if (action === "chat" && input.publicDemo !== true && input.regenerate !== true && input.editMessageId == null) {
+    const implicitMediaMode = detectMediaIntent(message);
+    if (implicitMediaMode) action = implicitMediaMode === "image" ? "create-image" : "create-video";
+  }
+  const allowedActions = new Set(["chat", "create-image", "create-video", "poll-video", "save-generated-media", "core01-feedback"]);
   if (!allowedActions.has(action)) return jsonResponse(400, { error: "Unsupported Misma AI action." });
   const regenerate = input.regenerate === true;
   const thinkHarder = input.thinkHarder === true;
@@ -538,7 +568,6 @@ Deno.serve(async (request) => {
   if (regenerate && editMessageId !== null) {
     return jsonResponse(400, { error: "A message cannot be edited and regenerated in the same request." });
   }
-  let message = typeof input.message === "string" ? input.message.trim() : "";
   const actionNeedsPrompt = action === "chat" || action === "create-image" || action === "create-video";
   const rawAttachmentList = Array.isArray(input.attachments) ? input.attachments : [];
   if (actionNeedsPrompt && !regenerate && ((!message && rawAttachmentList.length === 0) || message.length > 4_000)) {
@@ -650,6 +679,52 @@ Deno.serve(async (request) => {
         error: "You belong to multiple workspaces. Select a workspace and send its workspaceId with the chat request.",
         code: "WORKSPACE_SELECTION_REQUIRED",
       });
+    }
+
+    if (action === "core01-feedback") {
+      const messageId = Number(input.messageId);
+      const rating = input.rating === "up" || input.rating === "down" ? input.rating : null;
+      if (!Number.isSafeInteger(messageId) || messageId < 1 || !rating) {
+        return jsonResponse(400, { error: "A valid response and feedback rating are required." });
+      }
+      const status = rating === "up" ? "reinforced" : "rejected";
+      const { data: experience, error: feedbackError } = await db.from("core_01_experiences")
+        .update({
+          feedback: rating,
+          status,
+          reinforcement_count: rating === "up" ? 1 : 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("workspace_id", workspaceId)
+        .eq("source_message_id", messageId)
+        .select("id,room_id,room_key,question,primary_response")
+        .maybeSingle();
+      if (feedbackError || !experience) {
+        return jsonResponse(404, { error: "This response is not available for Core.01 learning yet." });
+      }
+      const { error: trainingError } = await db.from("core_01_training_examples")
+        .update({ status: rating === "up" ? "approved" : "rejected", updated_at: new Date().toISOString() })
+        .eq("experience_id", experience.id)
+        .eq("workspace_id", workspaceId);
+      if (trainingError) console.warn("[misma-chat] Core.01 training-example feedback could not be updated.", trainingError.code);
+      if (rating === "up") {
+        const lesson = \`When asked: \${experience.question}\nValidated response: \${experience.primary_response}\`;
+        const { error: lessonError } = await db.from("core_01_lessons").upsert({
+          workspace_id: workspaceId,
+          room_id: experience.room_id,
+          room_key: experience.room_key,
+          source_experience_id: experience.id,
+          lesson,
+          confidence: 0.8,
+          status: "approved",
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "source_experience_id" });
+        if (lessonError) console.warn("[misma-chat] Core.01 lesson could not be reinforced.", lessonError.code);
+      } else {
+        await db.from("core_01_lessons").update({ status: "rejected", updated_at: new Date().toISOString() })
+          .eq("source_experience_id", experience.id).eq("workspace_id", workspaceId);
+      }
+      return jsonResponse(200, { ok: true, experienceId: experience.id, status });
     }
 
     let requestedAttachments: AttachmentInput[] = [];
@@ -793,7 +868,7 @@ Deno.serve(async (request) => {
 
     if (action !== "chat") return jsonResponse(400, { error: "Unsupported action." });
 
-    const [workspaceResult, knowledgeResult, orderResult, contactResult] = await Promise.all([
+    const [workspaceResult, knowledgeResult, orderResult, contactResult, core01LessonsResult] = await Promise.all([
       db.from("workspaces")
         .select("name,location,description,opening_hours,primary_language")
         .eq("id", workspaceId)
@@ -812,11 +887,18 @@ Deno.serve(async (request) => {
       db.from("contacts")
         .select("id", { count: "exact", head: true })
         .eq("workspace_id", workspaceId),
+      db.from("core_01_lessons")
+        .select("room_key,lesson,confidence")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "approved")
+        .order("confidence", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(12),
     ]);
     if (workspaceResult.error || !workspaceResult.data) {
       throw new Error("Could not load workspace profile.");
     }
-    if (knowledgeResult.error || orderResult.error || contactResult.error) {
+    if (knowledgeResult.error || orderResult.error || contactResult.error || core01LessonsResult.error) {
       throw new Error("Could not load workspace context.");
     }
 
@@ -904,6 +986,11 @@ Deno.serve(async (request) => {
         createdAt: order.created_at,
       })),
       contactCount: contactResult.count ?? 0,
+      core01ValidatedLessons: (core01LessonsResult.data ?? []).map(({ room_key, lesson, confidence }) => ({
+        room: room_key,
+        lesson: lesson.slice(0, 2_000),
+        confidence: Number(confidence) || 0,
+      })),
       orderContextNote: "Recent orders are limited to the five latest records and are not an all-time total.",
     };
     if (!message && requestedAttachments.length) {
@@ -945,6 +1032,9 @@ Deno.serve(async (request) => {
       "Do not pretend to understand random characters, incomplete fragments, or genuinely ambiguous requests. " +
       "When the meaning is unclear, say so briefly and ask one specific clarifying question instead of replying with an unrelated greeting. " +
 
+      "CORE.01 KNOWLEDGE MODEL: Use core01ValidatedLessons as workspace-confirmed lessons from prior helpful interactions. " +
+      "Apply a lesson only when it matches the user's current topic; newer approved knowledge entries and current workspace records take precedence. " +
+      "Do not treat unreviewed conversation experiences as verified facts. " +
       "USE OF CONTEXT: Use the supplied workspace context and conversation history for business-specific questions about this workspace, " +
       "its profile, approved knowledge, customers/contacts, and recent orders. Never invent business facts, policies, prices, order totals, " +
       "customer details, or records. The recent-orders list contains only the latest five orders, not all-time totals. " +
@@ -1013,45 +1103,85 @@ Deno.serve(async (request) => {
       if (editError || !editedRow) throw new Error("Could not update the selected message.");
     }
 
+    let userMessage: JsonRecord | null = null;
+    let aiMessage: JsonRecord | null = null;
     if (pivotMessage) {
-      // Message IDs are monotonically increasing, including rows created in the same transaction.
-      // Delete the prior assistant answer and every later turn without duplicating the user prompt.
-      const { error: laterDeleteError } = await db
-        .from("messages")
-        .delete()
-        .eq("conversation_id", savedConversationId)
-        .gt("id", pivotMessage.id);
-      if (laterDeleteError) throw new Error("Could not remove messages after the selected turn.");
-    }
-
-    const insertRows = pivotMessage
-      ? [{ conversation_id: savedConversationId, role: "ai", text: answer }]
-      : [
+      // The database function locks the conversation and replaces its latest answer atomically.
+      const { data: replacedMessage, error: replaceError } = await db.rpc("misma_replace_latest_response", {
+        p_conversation_id: savedConversationId,
+        p_user_message_id: pivotMessage.id,
+        p_answer: answer,
+      });
+      if (replaceError || !isRecord(replacedMessage)) {
+        throw new Error("Could not safely replace the previous Misma response.");
+      }
+      aiMessage = replacedMessage;
+    } else {
+      const insertRows = [
         { conversation_id: savedConversationId, role: "human", text: message, attachments: requestedAttachments },
         { conversation_id: savedConversationId, role: "ai", text: answer, attachments: [] },
       ];
-    const { data: savedMessages, error: saveError } = await db
-      .from("messages")
-      .insert(insertRows)
-      .select("id,role,text,created_at,attachments");
-    const expectedSavedCount = pivotMessage ? 1 : 2;
-    if (saveError || !savedMessages || savedMessages.length !== expectedSavedCount) {
-      throw new Error("Could not save chat messages.");
+      const { data: savedMessages, error: saveError } = await db
+        .from("messages")
+        .insert(insertRows)
+        .select("id,role,text,created_at,attachments");
+      if (saveError || !savedMessages || savedMessages.length !== 2) {
+        throw new Error("Could not save chat messages.");
+      }
+      userMessage = savedMessages.find((item) => item.role === "human") ?? null;
+      aiMessage = savedMessages.find((item) => item.role === "ai") ?? null;
+      if (!userMessage || !aiMessage) throw new Error("Supabase returned incomplete chat messages.");
+      const { error: updateError } = await db
+        .from("conversations")
+        .update({ latest_text: answer.slice(0, 200), updated_at: new Date().toISOString() })
+        .eq("id", savedConversationId)
+        .eq("workspace_id", workspaceId);
+      if (updateError) throw new Error("Could not update conversation.");
     }
 
-    const { error: updateError } = await db
-      .from("conversations")
-      .update({ latest_text: answer.slice(0, 200), updated_at: new Date().toISOString() })
-      .eq("id", savedConversationId)
-      .eq("workspace_id", workspaceId);
-    if (updateError) throw new Error("Could not update conversation.");
+    if (!aiMessage || typeof aiMessage.id === "undefined") {
+      throw new Error("Supabase returned an incomplete Misma response.");
+    }
 
-    const userMessage = pivotMessage
-      ? null
-      : savedMessages.find((item) => item.role === "human");
-    const aiMessage = savedMessages.find((item) => item.role === "ai");
-    if ((!pivotMessage && !userMessage) || !aiMessage) {
-      throw new Error("Supabase returned incomplete chat messages.");
+    // Core.01 auto-captures each successful dashboard exchange in its matching topic room.
+    try {
+      const roomKey = classifyCore01Room(message);
+      const { data: room, error: roomError } = await db.from("core_01_rooms")
+        .select("id").eq("workspace_id", workspaceId).eq("room_key", roomKey).maybeSingle();
+      if (!roomError && room) {
+        const { data: experience, error: experienceError } = await db.from("core_01_experiences")
+          .insert({
+            workspace_id: workspaceId,
+            room_id: room.id,
+            room_key: roomKey,
+            question: message.slice(0, 4_000),
+            primary_response: answer.slice(0, 8_000),
+            provider: selectedProvider,
+            model: providers.find((provider) => provider.name === selectedProvider)?.model ?? "unknown",
+            source_conversation_id: savedConversationId,
+            source_message_id: Number(aiMessage.id),
+            status: "observed",
+            feedback: "unrated",
+          })
+          .select("id").maybeSingle();
+        if (!experienceError && experience) {
+          const { error: exampleError } = await db.from("core_01_training_examples").insert({
+            workspace_id: workspaceId,
+            room_id: room.id,
+            experience_id: experience.id,
+            question: message.slice(0, 4_000),
+            expected_response: answer.slice(0, 8_000),
+            status: "pending",
+          });
+          if (exampleError) console.warn("[misma-chat] Core.01 training example was not recorded.", exampleError.code);
+        } else if (experienceError) {
+          console.warn("[misma-chat] Core.01 experience was not recorded.", experienceError.code);
+        }
+      } else if (roomError) {
+        console.warn("[misma-chat] Core.01 room lookup failed.", roomError.code);
+      }
+    } catch (learningError) {
+      console.warn("[misma-chat] Core.01 auto-learning skipped.", learningError instanceof Error ? learningError.name : "unknown");
     }
     return jsonResponse(200, {
       conversationId: savedConversationId,
