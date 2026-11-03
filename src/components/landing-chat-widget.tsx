@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { getSupabaseConfig } from "../lib/supabase";
+import { MismaIcon } from "./misma-icon";
 
 type GuestMessage = { id: string; role: "user" | "ai"; text: string };
 
@@ -127,7 +128,7 @@ export function LandingChatWidget() {
         aria-expanded={open}
         aria-label={open ? "Close Misma chat" : "Chat with Misma"}
       >
-        {open ? "×" : <><span className="misma-guest-launcher-spark">✦</span><span>Chat with Misma</span></>}
+        {open ? "×" : <MismaIcon size={38} className="misma-guest-launcher-logo" />}
       </button>
     </div>
   );
