@@ -569,7 +569,7 @@ async function isAgnesMediaSafe(
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
     signal: AbortSignal.timeout(25_000),
     body: JSON.stringify({
-      model: "agnes-2.0-flash",
+      model: "agnes-2.5-flash",
       messages: [{ role: "system", content: system }, { role: "user", content: userContent }],
       max_tokens: 8,
       temperature: 0,
@@ -859,7 +859,7 @@ Deno.serve(async (request) => {
 
     if (action === "poll-video") {
       const videoId = typeof input.videoId === "string" ? input.videoId : "";
-      const model = "agnes-video-v2.0";
+      const model = "agnes-video-2.5-flash";
       const agnesKey = Deno.env.get("AGNES_API_KEY");
       if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured for video generation." });
       if (!Number.isSafeInteger(conversationId) || !videoId || !/^video_[a-zA-Z0-9_-]+$/.test(videoId)) {
@@ -936,7 +936,7 @@ Deno.serve(async (request) => {
       } else {
         mediaSaved = await saveMediaPrompt(
           db, workspaceId, conversationId, prompt, requestedAttachments,
-          action === "create-video" ? { kind: "video-job-pending", model: "agnes-video-v2.0" } : undefined,
+          action === "create-video" ? { kind: "video-job-pending", model: "agnes-video-2.5-flash" } : undefined,
         );
       }
       const isSafePrompt = await isAgnesMediaSafe(agnesKey, prompt, prepared.images);
@@ -992,7 +992,7 @@ Deno.serve(async (request) => {
         return jsonResponse(200, { conversationId: mediaSaved.conversationId, ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}), aiMessage, provider: "agnes-image" });
       }
 
-      const videoModel = "agnes-video-v2.0";
+      const videoModel = "agnes-video-2.5-flash";
       const createVideoBody: JsonRecord = {
         model: videoModel,
         prompt: safePrompt,
