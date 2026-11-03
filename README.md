@@ -72,7 +72,7 @@ Optional model overrides:
 | `AGNES_MODEL` | `agnes-2.5-flash` |
 | `AGNES_VISION_MODEL` | `agnes-2.0-flash` |
 | `AGNES_IMAGE_MODEL` | `agnes-image-2.1-flash` |
-| `AGNES_VIDEO_MODEL` | `agnes-video-v2.0` |
+| `AGNES_VIDEO_MODEL` | `agnes-video-2.5-flash` (runtime-pinned; environment override not used) |
 | `COHERE_MODEL` | `command-a-plus-05-2026` |
 | `MISTRAL_MODEL` | `mistral-small-latest` |
 | `OPENAI_MODEL` | `gpt-4o-mini` |
@@ -102,3 +102,8 @@ Misma uses Core.01 as a workspace-scoped, room-based experience and knowledge la
 ## Automatic media intent
 
 When a signed-in user types an explicit instruction such as “generate an image of…” or “create a video of…” without first selecting a Create tool, Misma detects the media type and routes the request to Agnes image or video generation automatically.
+
+
+### Agnes Video 2.5 Flash
+
+Video creation uses the current Agnes Video 2.5 Flash schema: `mode` (`text` or `reference`), `seconds: "5"`, `size: "720P"`, `aspect_ratio: "16:9"`, and `n: 1`. The function polls with `model_name=agnes-video-2.5-flash` and reads the completed URL from either the top-level `url` or `metadata.url` response field. It does not send the legacy v2.0 `width`/`height`/`num_frames` payload or unsupported `negative_prompt` field.
