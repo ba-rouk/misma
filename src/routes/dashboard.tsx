@@ -1034,13 +1034,26 @@ function Dashboard() {
         }, pendingMessage]);
 
     try {
-      const attachments = await uploadSelectedAttachments();
+      const attachments = reuse
+        ? reuse.attachments.filter((item) => Boolean(item.path)).map((item) => ({
+            path: item.path!,
+            name: item.name,
+            mimeType: item.mimeType || "application/octet-stream",
+            size: item.size || 0,
+            kind: item.kind,
+          }))
+        : await uploadSelectedAttachments();
       const result = await postChatAction({
         action: mode === "image" ? "create-image" : "create-video",
         message: prompt,
         conversationId: currentConversationId,
         workspaceId: workspace?.id,
         attachments,
+        ...(reuse ? {
+          regenerateMedia: true,
+          sourceUserMessageId: reuse.sourceUserMessageId,
+          replaceAiMessageId: reuse.replaceAiMessageId,
+        } : {}),
       });
       if (result.conversationId) setCurrentConversationId(result.conversationId);
       if (result.userMessage) {
