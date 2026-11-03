@@ -32,6 +32,80 @@ type Message = {
   created_at?: string;
 };
 
+type ActionIconName =
+  | "copy"
+  | "share"
+  | "edit"
+  | "thumbs-up"
+  | "thumbs-down"
+  | "volume"
+  | "volume-off"
+  | "refresh";
+
+function ActionIcon({ name }: { name: ActionIconName }) {
+  const common = {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true as const,
+  };
+
+  return (
+    <svg {...common}>
+      {name === "copy" && (
+        <>
+          <rect x="8" y="8" width="13" height="13" rx="2" />
+          <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+        </>
+      )}
+      {name === "share" && (
+        <>
+          <circle cx="18" cy="5" r="3" />
+          <circle cx="6" cy="12" r="3" />
+          <circle cx="18" cy="19" r="3" />
+          <path d="m8.7 10.7 6.6-4.2M8.7 13.3l6.6 4.2" />
+        </>
+      )}
+      {name === "edit" && (
+        <>
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+        </>
+      )}
+      {name === "thumbs-up" && (
+        <path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Zm0 0 5-8c2 0 3 1 3 3l-1 5h5a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7" />
+      )}
+      {name === "thumbs-down" && (
+        <path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2Zm0 0 5 8c2 0 3-1 3-3l-1-5h5a2 2 0 0 0 2-2l-2-7a2 2 0 0 0-2-2H7" />
+      )}
+      {name === "volume" && (
+        <>
+          <path d="M11 5 6 9H3v6h3l5 4z" />
+          <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+        </>
+      )}
+      {name === "volume-off" && (
+        <>
+          <path d="M11 5 6 9H3v6h3l5 4z" />
+          <path d="m16 9 5 6m0-6-5 6" />
+        </>
+      )}
+      {name === "refresh" && (
+        <>
+          <path d="M20 7v5h-5" />
+          <path d="M4 17v-5h5" />
+          <path d="M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 const SUGGESTIONS = [
   "How many orders came in today?",
   "Show me recent conversations",
@@ -187,6 +261,13 @@ function Dashboard() {
   const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState("");
   const [failedPrompt, setFailedPrompt] = useState("");
+  const [failedAction, setFailedAction] = useState<"send" | "regenerate" | "edit" | null>(null);
+  const [failedMessageId, setFailedMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingOriginalText, setEditingOriginalText] = useState<string | null>(null);
+  const [messageFeedback, setMessageFeedback] = useState<Record<string, "up" | "down">>({});
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
 
   // Forms in other tabs
