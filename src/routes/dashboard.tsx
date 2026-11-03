@@ -1015,20 +1015,23 @@ function Dashboard() {
     setDraft("");
     shouldAutoScrollRef.current = true;
 
-    const tempUserId = `media-user-${Date.now()}`;
+    const tempUserId = reuse ? null : `media-user-${Date.now()}`;
     const pendingMediaId = `media-pending-${Date.now()}`;
-    setMessages((current) => [...current, {
-      id: tempUserId,
-      role: "human",
-      text: prompt,
-      created_at: new Date().toISOString(),
-    }, {
+    const pendingMessage: Message = {
       id: pendingMediaId,
       role: "ai",
       text: mode === "image" ? "Misma is creating your image…" : "Misma is preparing your video…",
       pendingMedia: mode,
       created_at: new Date().toISOString(),
-    }]);
+    };
+    setMessages((current) => reuse
+      ? [...current, pendingMessage]
+      : [...current, {
+          id: tempUserId!,
+          role: "human",
+          text: prompt,
+          created_at: new Date().toISOString(),
+        }, pendingMessage]);
 
     try {
       const attachments = await uploadSelectedAttachments();
