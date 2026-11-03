@@ -470,6 +470,14 @@ function Dashboard() {
     setActiveTab("workspace");
     setMobileMenuOpen(false);
     setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
+    setFailedMessageId(null);
+    setEditingMessageId(null);
+    setEditingOriginalText(null);
+    setMessageFeedback({});
+    setSpeakingMessageId(null);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     shouldAutoScrollRef.current = true;
     try {
       const res = await getConversationMessages({
@@ -490,6 +498,13 @@ function Dashboard() {
     setDraft("");
     setChatError("");
     setFailedPrompt("");
+    setFailedAction(null);
+    setFailedMessageId(null);
+    setEditingMessageId(null);
+    setEditingOriginalText(null);
+    setMessageFeedback({});
+    setSpeakingMessageId(null);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     setActiveTab("workspace");
     setMobileMenuOpen(false);
     shouldAutoScrollRef.current = true;
@@ -522,22 +537,127 @@ function Dashboard() {
     }
   };
 
-  // Sending message
-  const handleSend = async (customPrompt?: string) => {
-    const textToSend = (customPrompt ?? draft).trim();
-    if (!textToSend || isSending || !token) return;
+  const showCopiedState = (messageId: string) => {
+    setCopiedMessageId(messageId);
+    window.setTimeout(() => {
+      setCopiedMessageId((current) => current === messageId ? null : current);
+    }, 1400);
+  };
 
-    // Optimistically show user message
-    const tempUserMsg: Message = {
-      id: `user-${Date.now()}`,
-      role: "human",
-      text: textToSend,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, tempUserMsg]);
+  const handleCopyMessage = async (msg: Message) => {
+    try {
+      await navigator.clipboard.writeText(msg.text);
+      showCopiedState(msg.id);
+    } catch {
+      setChatError("Could not copy this message. Check your browser clipboard permissions.");
+    }
+  };
+
+  const handleShareMessage = async (msg: Message, title: string) => {
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title, text: msg.text });
+      } else {
+        await navigator.clipboard.writeText(msg.text);
+        showCopiedState(msg.id);
+      }
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === "AbortError") return;
+      setChatError("Sharing is not available here. Try copying the message instead.");
+    }
+  };
+
+  const handleReadAloud = (msg: Message) => {
+    if (!("speechSynthesis" in window)) {
+      setChatError("Read aloud is not supported by this browser.");
+      return;
+    }
+    if (speakingMessageId === msg.id) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(msg.text);
+    utterance.onend = () => setSpeakingMessageId(null);
+    utterance.onerror = () => setSpeakingMessageId(null);
+    setSpeakingMessageId(msg.id);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleRateMessage = (messageId: string, rating: "up" | "down") => {
+    setMessageFeedback((current) => ({
+      ...current,
+      [messageId]: current[messageId] === rating ? undefined as never : rating,
+    }));
+  };
+
+  const handleEditMessage = (msg: Message) => {
+    if (isSending) return;
+    const isPersistedMessage = /^\\d+$/.test(msg.id);
+    if (!isPersistedMessage) {
+      setMessages((current) => current.filter((item) => item.id !== msg.id));
+      setFailedMessageId(null);
+      setFailedAction(null);
+      setFailedPrompt("");
+    } else {
+      const messageIndex = messages.findIndex((item) => item.id === msg.id);
+      const hasLaterUserMessages = messages.slice(messageIndex + 1).some(
+        (item) => item.role === "human" || item.role === "customer",
+      );
+      if (
+        hasLaterUserMessages &&
+        !window.confirm(
+          "Editing this message will replace it and remove all later messages in this conversation. Continue?",
+        )
+      ) {
+        return;
+      }
+      setEditingMessageId(msg.id);
+      setEditingOriginalText(msg.text);
+    }
+    setDraft(msg.text);
+    setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
+    textareaRef.current?.focus();
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingOriginalText(null);
     setDraft("");
     setChatError("");
     setFailedPrompt("");
+    setFailedAction(null);
+  };
+
+  // Sending, retrying, or editing a user message.
+  const handleSend = async (
+    customPrompt?: string,
+    options: { retry?: boolean } = {},
+  ) => {
+    const textToSend = (customPrompt ?? draft).trim();
+    if (!textToSend || isSending || !token) return;
+
+    const isRetry = options.retry === true;
+    const editId = editingMessageId;
+    const tempUserId = isRetry ? failedMessageId : `user-${Date.now()}`;
+
+    if (!editId && !isRetry) {
+      const tempUserMsg: Message = {
+        id: tempUserId ?? `user-${Date.now()}`,
+        role: "human",
+        text: textToSend,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, tempUserMsg]);
+    }
+
+    setDraft("");
+    setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
     setIsSending(true);
     shouldAutoScrollRef.current = true;
 
@@ -546,7 +666,7 @@ function Dashboard() {
       if (!config) {
         throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
       }
-      const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
+      const response = await fetch(`${config.url.replace(/\\/$/, "")}/functions/v1/misma-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -556,25 +676,47 @@ function Dashboard() {
         body: JSON.stringify({
           message: textToSend,
           conversationId: currentConversationId,
+          ...(editId ? { editMessageId: Number(editId) } : {}),
         }),
       });
       const res = (await response.json()) as {
         error?: string;
         conversationId?: number;
+        userMessage?: Message;
         aiMessage?: Message;
+        editedMessageId?: string;
       };
-      if (!response.ok)
-        throw new Error(res.error || "Failed to connect to Misma AI.");
-      if (!res.aiMessage)
-        throw new Error("Misma AI returned an empty response.");
-      const aiMessage = res.aiMessage;
+      if (!response.ok) throw new Error(res.error || "Failed to connect to Misma AI.");
+      if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!currentConversationId && res.conversationId) {
         setCurrentConversationId(res.conversationId);
       }
 
-      // Add real AI response
-      setMessages((prev) => [...prev, aiMessage]);
+      if (editId) {
+        setMessages((prev) => {
+          const index = prev.findIndex((item) => item.id === editId);
+          if (index < 0) return [...prev, res.aiMessage!];
+          return [
+            ...prev.slice(0, index),
+            { ...prev[index], text: textToSend },
+            res.aiMessage!,
+          ];
+        });
+        setEditingMessageId(null);
+        setEditingOriginalText(null);
+      } else {
+        setMessages((prev) => {
+          const withPersistedUser = tempUserId && res.userMessage
+            ? prev.map((item) => item.id === tempUserId ? res.userMessage! : item)
+            : prev;
+          return [...withPersistedUser, res.aiMessage!];
+        });
+      }
+
+      setFailedMessageId(null);
+      setFailedAction(null);
+      setFailedPrompt("");
       loadData();
     } catch (cause) {
       const errMsg =
@@ -583,8 +725,61 @@ function Dashboard() {
           : "Failed to connect to Misma AI.";
       setChatError(errMsg);
       setFailedPrompt(textToSend);
-      // Restore draft on failure
+      setFailedAction(editId ? "edit" : "send");
+      setFailedMessageId(tempUserId);
       setDraft(textToSend);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Regenerate the latest AI response using the saved user prompt.
+  // The Edge Function reuses that prompt and never inserts a second human message.
+  const handleRegenerate = async () => {
+    if (!currentConversationId || !token || isSending) return;
+    setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
+    setIsSending(true);
+    shouldAutoScrollRef.current = true;
+
+    try {
+      const config = getSupabaseConfig();
+      if (!config) {
+        throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
+      }
+      const response = await fetch(`${config.url.replace(/\\/$/, "")}/functions/v1/misma-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: config.publishableKey,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ conversationId: currentConversationId, regenerate: true }),
+      });
+      const res = (await response.json()) as {
+        error?: string;
+        aiMessage?: Message;
+      };
+      if (!response.ok) throw new Error(res.error || "Could not regenerate this response.");
+      if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
+
+      setMessages((prev) => {
+        let latestUserIndex = -1;
+        prev.forEach((item, index) => {
+          if (item.role === "human" || item.role === "customer") latestUserIndex = index;
+        });
+        if (latestUserIndex < 0) return prev;
+        return [...prev.slice(0, latestUserIndex + 1), res.aiMessage!];
+      });
+      setFailedAction(null);
+      setFailedMessageId(null);
+      setFailedPrompt("");
+      setMessageFeedback({});
+      loadData();
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : "Could not regenerate this response.");
+      setFailedAction("regenerate");
     } finally {
       setIsSending(false);
     }
