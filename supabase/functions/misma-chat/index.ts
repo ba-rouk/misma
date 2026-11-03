@@ -923,7 +923,7 @@ Deno.serve(async (request) => {
         return jsonResponse(200, { conversationId: saved.conversationId, userMessage: saved.userMessage, aiMessage, provider: "agnes-image" });
       }
 
-      const videoModel = Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-v2.0";
+      const videoModel = "agnes-video-v2.0";
       const createVideoBody: JsonRecord = {
         model: videoModel,
         prompt,
