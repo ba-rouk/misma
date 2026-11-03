@@ -24,7 +24,63 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "build" | "connect" | "manage" | "recent";
+type TabId = "workspace" | "build" | "connect" | "manage" | "recent" | "settings";
+
+type MismaAiSettings = {
+  assistantMode: "Sales & customer support" | "Customer support" | "Sales assistant";
+  responseTone: "Professional and friendly" | "Warm and conversational" | "Formal";
+  responseLength: "Concise" | "Balanced" | "Detailed";
+  languageMode: "Match visitor language" | "Business primary language" | "English";
+  autoReply: boolean;
+  useBusinessKnowledge: boolean;
+  avoidUnverifiedClaims: boolean;
+  askClarifyingQuestions: boolean;
+  qualifyLeads: boolean;
+  captureOrders: boolean;
+  respectBusinessHours: boolean;
+  humanHandoff: boolean;
+  welcomeGreeting: boolean;
+  protectSensitiveData: boolean;
+};
+
+const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
+  assistantMode: "Sales & customer support",
+  responseTone: "Professional and friendly",
+  responseLength: "Balanced",
+  languageMode: "Match visitor language",
+  autoReply: true,
+  useBusinessKnowledge: true,
+  avoidUnverifiedClaims: true,
+  askClarifyingQuestions: true,
+  qualifyLeads: true,
+  captureOrders: true,
+  respectBusinessHours: true,
+  humanHandoff: true,
+  welcomeGreeting: true,
+  protectSensitiveData: true,
+};
+
+function SettingsToggle({
+  title,
+  description,
+  checked,
+  onToggle,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} className="aichat-setting-row" onClick={onToggle}>
+      <span className="aichat-setting-copy">
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+      <span className={`aichat-setting-switch${checked ? " is-on" : ""}`} aria-hidden="true"><span /></span>
+    </button>
+  );
+}
 
 type Message = {
   id: string;
@@ -400,6 +456,35 @@ function Dashboard() {
   const [profileImage, setProfileImage] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("misma_ai_settings");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<MismaAiSettings>;
+        setAiSettings({ ...DEFAULT_MISMA_AI_SETTINGS, ...parsed });
+      }
+    } catch {
+      // Keep the recommended defaults if saved preferences cannot be read.
+    } finally {
+      setSettingsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    try {
+      localStorage.setItem("misma_ai_settings", JSON.stringify(aiSettings));
+    } catch {
+      // The preferences remain usable for this session if browser storage is unavailable.
+    }
+  }, [aiSettings, settingsLoaded]);
+
+  const updateAiSetting = <K extends keyof MismaAiSettings>(key: K, value: MismaAiSettings[K]) => {
+    setAiSettings((current) => ({ ...current, [key]: value }));
+  };
 
   // Chat conversation state
   const [currentConversationId, setCurrentConversationId] = useState<
@@ -1750,6 +1835,13 @@ function Dashboard() {
           {profileMenuOpen && (
             <div className="aichat-profile-menu">
               <span>{profileEmail || "Signed in"}</span>
+              <button type="button" onClick={() => {
+                setActiveTab("settings");
+                setProfileMenuOpen(false);
+                setMobileMenuOpen(false);
+              }}>
+                Settings
+              </button>
               {profileError && (
                 <span className="aichat-profile-error">{profileError}</span>
               )}
@@ -1760,9 +1852,14 @@ function Dashboard() {
           )}
           <button
             type="button"
-            className="aichat-user-profile"
-            onClick={() => setProfileMenuOpen((v) => !v)}
-            aria-label="Account profile"
+            className={`aichat-user-profile${activeTab === "settings" ? " active" : ""}`}
+            onClick={() => {
+              setActiveTab("settings");
+              setProfileMenuOpen(false);
+              setMobileMenuOpen(false);
+            }}
+            aria-label="Open settings"
+            title="Settings"
           >
             {profileImage ? (
               <img className="aichat-user-avatar" src={profileImage} alt="" />
@@ -2055,48 +2152,6 @@ function Dashboard() {
                   }}
                 >
                   <div className="aichat-composer-tools-row">
-                    <div className="aichat-composer-plus-wrap">
-                      <button
-                        type="button"
-                        className="aichat-composer-plus"
-                        aria-label="Open attachment and tools menu"
-                        aria-expanded={plusMenuOpen}
-                        disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)}
-                        onClick={() => setPlusMenuOpen((open) => !open)}
-                      >{plusMenuOpen ? "×" : "+"}</button>
-                      {plusMenuOpen && (
-                        <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
-                          <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon">✧</span>
-                            <span><strong>Think harder</strong><small>Use deeper reasoning for code, files and complex tasks</small></span>
-                            <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
-                          </button>
-                          <div className="aichat-plus-menu-divider" />
-                          <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon">↥</span>
-                            <span><strong>Upload files</strong><small>Attach PDFs, documents, data or code</small></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon">▧</span>
-                            <span><strong>Photo</strong><small>Upload an image for Agnes to analyse</small></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { cameraInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon">◎</span>
-                            <span><strong>Camera</strong><small>Take a photo and send it to Misma</small></span>
-                          </button>
-                          <div className="aichat-plus-menu-divider" />
-                          <div className="aichat-plus-menu-label">CREATE WITH AGNES</div>
-                          <button type="button" role="menuitem" onClick={() => { setCreateMode("image"); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon">✦</span>
-                            <span><strong>Create image</strong><small>Generate or transform a visual</small></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { setCreateMode("video"); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon">▶</span>
-                            <span><strong>Create video</strong><small>Generate a short video from a prompt or image</small></span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
                     {thinkHarder && (
                       <button type="button" className="aichat-composer-mode-pill" onClick={() => setThinkHarder(false)}>✧ Think harder <span>×</span></button>
                     )}
@@ -2117,6 +2172,45 @@ function Dashboard() {
                     </div>
                   )}
                   <div className="aichat-composer-sendrow">
+                    <div className="aichat-composer-plus-wrap">
+                      <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
+                        {plusMenuOpen ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                        )}
+                      </button>
+                      {plusMenuOpen && (
+                        <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
+                          <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/></svg></span>
+                            <span><strong>Think harder</strong></span>
+                            <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H6a3 3 0 0 1 0-6h1"/><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2l-8.2 8.2a5 5 0 0 1-7.1-7.1L12 2.7"/></svg></span>
+                            <span><strong>Upload files</strong></span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                            <span><strong>Photo</strong></span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { cameraInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m14 4 7 5h-7z"/><circle cx="10" cy="12" r="3"/></svg></span>
+                            <span><strong>Camera</strong></span>
+                          </button>
+                          <div className="aichat-plus-menu-divider" />
+                          <button type="button" role="menuitem" onClick={() => { setCreateMode("image"); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/><path d="M19 2v6M16 5h6"/></svg></span>
+                            <span><strong>Create image</strong></span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { setCreateMode("video"); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
+                            <span><strong>Create video</strong></span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <textarea
                       ref={textareaRef}
                       rows={1}
@@ -2529,7 +2623,64 @@ function Dashboard() {
           </div>
         )}
 
-        {/* ── View 5: Recent Conversations ── */}
+        {/* ── View 5: AI Settings for business and website assistants ── */}
+        {activeTab === "settings" && (
+          <div className="aichat-tab-view">
+            <div className="aichat-tab-content aichat-settings-content">
+              <div className="aichat-tab-header">
+                <h2>Settings</h2>
+                <p>Configure how Misma represents your business, supports website visitors, and hands conversations to your team.</p>
+              </div>
+              <div className="aichat-settings-intro">
+                <span className="aichat-settings-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg></span>
+                <span><strong>Recommended business assistant profile</strong><small>Recommended defaults for a helpful, accurate, and trustworthy assistant on business websites.</small></span>
+                <span className="aichat-settings-saved">{settingsLoaded ? "Saved on this device" : "Loading settings…"}</span>
+              </div>
+              <section className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/></svg></span>
+                  <span><h3>Assistant profile</h3><p>Choose the job Misma should do and the way it should communicate.</p></span>
+                </div>
+                <div className="aichat-settings-select-grid">
+                  <div className="aichat-input-group"><label htmlFor="misma-assistant-mode">Primary role</label><select id="misma-assistant-mode" className="aichat-select" value={aiSettings.assistantMode} onChange={(event) => updateAiSetting("assistantMode", event.target.value as MismaAiSettings["assistantMode"])}><option>Sales &amp; customer support</option><option>Customer support</option><option>Sales assistant</option></select></div>
+                  <div className="aichat-input-group"><label htmlFor="misma-response-tone">Response tone</label><select id="misma-response-tone" className="aichat-select" value={aiSettings.responseTone} onChange={(event) => updateAiSetting("responseTone", event.target.value as MismaAiSettings["responseTone"])}><option>Professional and friendly</option><option>Warm and conversational</option><option>Formal</option></select></div>
+                  <div className="aichat-input-group"><label htmlFor="misma-response-length">Response length</label><select id="misma-response-length" className="aichat-select" value={aiSettings.responseLength} onChange={(event) => updateAiSetting("responseLength", event.target.value as MismaAiSettings["responseLength"])}><option>Concise</option><option>Balanced</option><option>Detailed</option></select></div>
+                  <div className="aichat-input-group"><label htmlFor="misma-language-mode">Reply language</label><select id="misma-language-mode" className="aichat-select" value={aiSettings.languageMode} onChange={(event) => updateAiSetting("languageMode", event.target.value as MismaAiSettings["languageMode"])}><option>Match visitor language</option><option>Business primary language</option><option>English</option></select></div>
+                </div>
+              </section>
+              <section className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2" fill="#11141a"/><circle cx="16" cy="12" r="2" fill="#11141a"/><circle cx="10" cy="19" r="2" fill="#11141a"/></svg></span>
+                  <span><h3>Knowledge and answer quality</h3><p>Keep customer answers accurate, consistent, and aligned with approved business information.</p></span>
+                </div>
+                <SettingsToggle title="Use business knowledge first" description="Prioritize approved FAQs, products, services, policies, and business information." checked={aiSettings.useBusinessKnowledge} onToggle={() => updateAiSetting("useBusinessKnowledge", !aiSettings.useBusinessKnowledge)} />
+                <SettingsToggle title="Avoid unverified promises" description="Do not invent prices, stock levels, delivery times, opening hours, or policy details." checked={aiSettings.avoidUnverifiedClaims} onToggle={() => updateAiSetting("avoidUnverifiedClaims", !aiSettings.avoidUnverifiedClaims)} />
+                <SettingsToggle title="Ask when details are missing" description="Ask a short clarifying question instead of guessing when a request is unclear." checked={aiSettings.askClarifyingQuestions} onToggle={() => updateAiSetting("askClarifyingQuestions", !aiSettings.askClarifyingQuestions)} />
+                <SettingsToggle title="Reply automatically" description="Let Misma answer incoming website questions using configured business knowledge." checked={aiSettings.autoReply} onToggle={() => updateAiSetting("autoReply", !aiSettings.autoReply)} />
+              </section>
+              <section className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 4h18v13H3z"/><path d="M8 21h8M12 17v4M7 9h10M7 13h6"/></svg></span>
+                  <span><h3>Website and sales experience</h3><p>Help visitors discover your business, make decisions, and complete the next step.</p></span>
+                </div>
+                <SettingsToggle title="Show a welcome greeting" description="Start new website conversations with a brief, friendly introduction." checked={aiSettings.welcomeGreeting} onToggle={() => updateAiSetting("welcomeGreeting", !aiSettings.welcomeGreeting)} />
+                <SettingsToggle title="Qualify interested leads" description="Ask for relevant contact and requirement details when a visitor shows interest." checked={aiSettings.qualifyLeads} onToggle={() => updateAiSetting("qualifyLeads", !aiSettings.qualifyLeads)} />
+                <SettingsToggle title="Capture order details" description="Collect item, quantity, delivery, and contact details before confirming an order." checked={aiSettings.captureOrders} onToggle={() => updateAiSetting("captureOrders", !aiSettings.captureOrders)} />
+                <SettingsToggle title="Respect business hours" description="Use saved opening hours and never imply that the business is open when it is closed." checked={aiSettings.respectBusinessHours} onToggle={() => updateAiSetting("respectBusinessHours", !aiSettings.respectBusinessHours)} />
+              </section>
+              <section className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+                  <span><h3>Customer care and privacy</h3><p>Protect customers and make it easy for your team to take over when needed.</p></span>
+                </div>
+                <SettingsToggle title="Offer human handoff" description="Route complaints, sensitive issues, and requests for a real person to your team." checked={aiSettings.humanHandoff} onToggle={() => updateAiSetting("humanHandoff", !aiSettings.humanHandoff)} />
+                <SettingsToggle title="Protect sensitive information" description="Never ask customers to share passwords, full payment card details, or private account credentials." checked={aiSettings.protectSensitiveData} onToggle={() => updateAiSetting("protectSensitiveData", !aiSettings.protectSensitiveData)} />
+              </section>
+            </div>
+          </div>
+        )}
+
+        {/* ── View 6: Recent Conversations ── */}
         {activeTab === "recent" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
