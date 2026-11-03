@@ -297,6 +297,200 @@ async function requestProvider(
   throw new Error(`${provider.name} failed`);
 }
 
+type StoredAttachment = AttachmentInput & { url?: string };
+
+function validateAttachmentList(value: unknown): AttachmentInput[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 8) {
+    throw new Error("Attach up to eight files per message.");
+  }
+  return value.map((item) => {
+    if (!isRecord(item)) throw new Error("Invalid attachment metadata.");
+    const path = typeof item.path === "string" ? item.path : "";
+    const name = typeof item.name === "string" ? item.name.slice(0, 180) : "";
+    const mimeType = typeof item.mimeType === "string" ? item.mimeType.slice(0, 120) : "application/octet-stream";
+    const size = Number(item.size);
+    const kind = typeof item.kind === "string" ? item.kind : "file";
+    if (!path || !name || !Number.isFinite(size) || size < 0 || size > 25 * 1024 * 1024) {
+      throw new Error("Each attachment must be valid and no larger than 25 MB.");
+    }
+    if (!["image", "video", "video-frame", "file"].includes(kind)) {
+      throw new Error("Unsupported attachment type.");
+    }
+    return { path, name, mimeType, size, kind };
+  });
+}
+
+async function prepareAttachments(
+  db: ReturnType<typeof createClient>,
+  attachments: AttachmentInput[],
+  expectedPrefix: string,
+): Promise<{ stored: StoredAttachment[]; images: PreparedImage[]; pdfs: PreparedPdf[]; extractedText: string }> {
+  const stored: StoredAttachment[] = [];
+  const images: PreparedImage[] = [];
+  const pdfs: PreparedPdf[] = [];
+  const textFiles: string[] = [];
+
+  for (const attachment of attachments) {
+    if (!attachment.path.startsWith(expectedPrefix)) {
+      throw new Error("Attachment path is outside your workspace.");
+    }
+    const { data: signed, error: signedError } = await db.storage
+      .from("misma-media")
+      .createSignedUrl(attachment.path, 3600);
+    if (signedError || !signed?.signedUrl) throw new Error("Could not prepare an uploaded attachment.");
+    stored.push({ ...attachment, url: signed.signedUrl });
+
+    const lowerName = attachment.name.toLowerCase();
+    const isPdf = attachment.mimeType === "application/pdf" || lowerName.endsWith(".pdf");
+    const isTextLike =
+      attachment.mimeType.startsWith("text/") ||
+      /\.(txt|md|csv|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i.test(lowerName);
+
+    if (attachment.kind === "image" || attachment.kind === "video-frame" || attachment.mimeType.startsWith("image/")) {
+      images.push({ url: signed.signedUrl, name: attachment.name });
+      continue;
+    }
+    if (isPdf) {
+      if (attachment.size > 12 * 1024 * 1024) {
+        throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
+      }
+      const { data: blob, error } = await db.storage.from("misma-media").download(attachment.path);
+      if (error || !blob) throw new Error("Could not read the attached PDF.");
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      pdfs.push({
+        fileName: attachment.name,
+        dataUrl: `data:application/pdf;base64,${bytesToBase64(bytes)}`,
+      });
+      continue;
+    }
+    if (isTextLike) {
+      const { data: blob, error } = await db.storage.from("misma-media").download(attachment.path);
+      if (error || !blob) throw new Error(`Could not read ${attachment.name}.`);
+      const text = (await blob.text()).slice(0, 35_000);
+      textFiles.push(`[Attached file: ${attachment.name}]\n\`\`\`\n${text}\n\`\`\``);
+      continue;
+    }
+    if (attachment.kind === "video") {
+      continue;
+    }
+    throw new Error(`The file type for ${attachment.name} is not supported yet. Use PDF, text, CSV, or a code file.`);
+  }
+
+  const extractedText = textFiles.join("\n\n");
+  return { stored, images, pdfs, extractedText };
+}
+
+async function createConversationIfNeeded(
+  db: ReturnType<typeof createClient>,
+  workspaceId: string,
+  conversationId: number | null,
+  message: string,
+): Promise<number> {
+  if (conversationId !== null) {
+    const { data, error } = await db.from("conversations")
+      .select("id").eq("id", conversationId).eq("workspace_id", workspaceId).maybeSingle();
+    if (error || !data) throw new Error("Conversation not found.");
+    return Number(data.id);
+  }
+  const { data, error } = await db.from("conversations").insert({
+    workspace_id: workspaceId,
+    channel: "Dashboard",
+    latest_text: message.slice(0, 200),
+    status: "AI",
+  }).select("id").single();
+  if (error || !data) throw new Error("Could not create conversation.");
+  return Number(data.id);
+}
+
+async function saveMediaPrompt(
+  db: ReturnType<typeof createClient>,
+  workspaceId: string,
+  conversationId: number | null,
+  message: string,
+  attachments: AttachmentInput[],
+  extraAttachment?: JsonRecord,
+): Promise<{ conversationId: number; userMessage: JsonRecord }> {
+  const savedConversationId = await createConversationIfNeeded(db, workspaceId, conversationId, message);
+  const storedAttachments: JsonRecord[] = [
+    ...attachments,
+    ...(extraAttachment ? [extraAttachment] : []),
+  ];
+  const { data, error } = await db.from("messages").insert({
+    conversation_id: savedConversationId,
+    role: "human",
+    text: message,
+    attachments: storedAttachments,
+  }).select("id,role,text,created_at").single();
+  if (error || !data) throw new Error("Could not save the media prompt.");
+  const clientAttachments = await Promise.all(attachments.map(async (attachment) => {
+    const { data: signed } = await db.storage.from("misma-media").createSignedUrl(attachment.path, 3600);
+    return { ...attachment, ...(signed?.signedUrl ? { url: signed.signedUrl } : {}) };
+  }));
+  await db.from("conversations").update({
+    latest_text: message.slice(0, 200),
+    updated_at: new Date().toISOString(),
+  }).eq("id", savedConversationId).eq("workspace_id", workspaceId);
+  return {
+    conversationId: savedConversationId,
+    userMessage: {
+      id: String(data.id),
+      role: "human",
+      text: data.text,
+      created_at: data.created_at,
+      attachments: clientAttachments,
+    },
+  };
+}
+
+async function saveGeneratedMessage(
+  db: ReturnType<typeof createClient>,
+  conversationId: number,
+  kind: string,
+  url: string,
+  videoId?: string,
+): Promise<JsonRecord> {
+  const { data: conversation, error: conversationError } = await db
+    .from("conversations").select("id,workspace_id")
+    .eq("id", conversationId).maybeSingle();
+  if (conversationError || !conversation) throw new Error("Conversation not found.");
+
+  const { data: existing, error: existingError } = await db
+    .from("messages").select("id,attachments")
+    .eq("conversation_id", conversationId).eq("role", "ai");
+  if (existingError) throw new Error("Could not verify generated media history.");
+  if ((existing ?? []).some((row) => Array.isArray(row.attachments) &&
+      row.attachments.some((item: unknown) => isRecord(item) && item.videoId === videoId && videoId))) {
+    return { alreadySaved: true };
+  }
+
+  const attachment = {
+    kind,
+    name: kind === "generated-video" ? "Generated video" : "Generated image",
+    url,
+    ...(videoId ? { videoId } : {}),
+  };
+  const text = kind === "generated-video" ? "Your video is ready." : "Your image is ready.";
+  const { data, error } = await db.from("messages").insert({
+    conversation_id: conversationId,
+    role: "ai",
+    text,
+    attachments: [attachment],
+  }).select("id,role,text,created_at").single();
+  if (error || !data) throw new Error("Could not save the generated media.");
+  await db.from("conversations").update({
+    latest_text: text,
+    updated_at: new Date().toISOString(),
+  }).eq("id", conversationId).eq("workspace_id", conversation.workspace_id);
+  return {
+    id: String(data.id),
+    role: "ai",
+    text: data.text,
+    created_at: data.created_at,
+    attachments: [attachment],
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -316,7 +510,7 @@ Deno.serve(async (request) => {
   let input: unknown;
   try {
     const raw = await request.text();
-    if (new TextEncoder().encode(raw).byteLength > 16_000) {
+    if (new TextEncoder().encode(raw).byteLength > 32_000) {
       return jsonResponse(413, { error: "Request body is too large." });
     }
     input = JSON.parse(raw);
@@ -327,23 +521,26 @@ Deno.serve(async (request) => {
   if (!isRecord(input)) {
     return jsonResponse(400, { error: "Enter a valid chat request." });
   }
+  const action = typeof input.action === "string" ? input.action : "chat";
+  const allowedActions = new Set(["chat", "create-image", "create-video", "poll-video", "save-generated-media"]);
+  if (!allowedActions.has(action)) return jsonResponse(400, { error: "Unsupported Misma AI action." });
   const regenerate = input.regenerate === true;
+  const thinkHarder = input.thinkHarder === true;
   const editMessageId = input.editMessageId ?? null;
   if (regenerate && editMessageId !== null) {
     return jsonResponse(400, { error: "A message cannot be edited and regenerated in the same request." });
   }
   let message = typeof input.message === "string" ? input.message.trim() : "";
-  if (!regenerate && (!message || message.length > 4_000)) {
-    return jsonResponse(400, { error: "Enter a message up to 4,000 characters." });
+  const actionNeedsPrompt = action === "chat" || action === "create-image" || action === "create-video";
+  const rawAttachmentList = Array.isArray(input.attachments) ? input.attachments : [];
+  if (actionNeedsPrompt && ((!message && rawAttachmentList.length === 0) || message.length > 4_000)) {
+    return jsonResponse(400, { error: "Enter a prompt up to 4,000 characters or attach a file." });
   }
   if (editMessageId !== null && (!Number.isSafeInteger(editMessageId) || Number(editMessageId) < 1)) {
     return jsonResponse(400, { error: "Invalid message to edit." });
   }
   const conversationId = input.conversationId ?? null;
-  if (
-    conversationId !== null &&
-    (!Number.isSafeInteger(conversationId) || Number(conversationId) < 1)
-  ) {
+  if (conversationId !== null && (!Number.isSafeInteger(conversationId) || Number(conversationId) < 1)) {
     return jsonResponse(400, { error: "Invalid conversation." });
   }
   if ((regenerate || editMessageId !== null) && conversationId === null) {
@@ -357,11 +554,10 @@ Deno.serve(async (request) => {
   const projectUrl = Deno.env.get("SUPABASE_URL");
   const publishableKey =
     Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
-  const providers = getProviders();
-  if (!projectUrl || !publishableKey || providers.length === 0) {
-    console.error("[misma-chat] Required Supabase configuration or all AI provider keys are missing.");
+  if (!projectUrl || !publishableKey) {
+    console.error("[misma-chat] Required Supabase configuration is missing.");
     return jsonResponse(500, {
-      error: "Misma AI is not configured. Add at least one provider API key to Supabase Edge Function secrets.",
+      error: "Misma AI is not configured. Check the Supabase project URL and publishable key.",
     });
   }
 
@@ -402,6 +598,136 @@ Deno.serve(async (request) => {
         code: "WORKSPACE_SELECTION_REQUIRED",
       });
     }
+
+    let requestedAttachments: AttachmentInput[] = [];
+    try {
+      requestedAttachments = validateAttachmentList(input.attachments);
+    } catch (error) {
+      return jsonResponse(400, { error: error instanceof Error ? error.message : "Invalid attachments." });
+    }
+    const attachmentPrefix = `${workspaceId}/${userData.user.id}/`;
+    let prepared = { stored: [] as StoredAttachment[], images: [] as PreparedImage[], pdfs: [] as PreparedPdf[], extractedText: "" };
+    if (requestedAttachments.length) {
+      try {
+        prepared = await prepareAttachments(db, requestedAttachments, attachmentPrefix);
+      } catch (error) {
+        return jsonResponse(400, { error: error instanceof Error ? error.message : "Could not prepare attachments." });
+      }
+    }
+
+    if (action === "poll-video") {
+      const videoId = typeof input.videoId === "string" ? input.videoId : "";
+      const model = typeof input.model === "string" ? input.model : (Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-v2.0");
+      const agnesKey = Deno.env.get("AGNES_API_KEY");
+      if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured for video generation." });
+      if (!videoId || !/^video_[a-zA-Z0-9_-]+$/.test(videoId)) return jsonResponse(400, { error: "Invalid Agnes video ID." });
+      const pollUrl = new URL("https://apihub.agnes-ai.com/agnesapi");
+      pollUrl.searchParams.set("video_id", videoId);
+      pollUrl.searchParams.set("model_name", model);
+      const pollResponse = await fetch(pollUrl, { headers: { Authorization: `Bearer ${agnesKey}` }, signal: AbortSignal.timeout(20_000) });
+      const pollData: unknown = await pollResponse.json().catch(() => null);
+      if (!pollResponse.ok || !isRecord(pollData)) return jsonResponse(502, { error: "Agnes video status could not be retrieved." });
+      return jsonResponse(200, {
+        status: pollData.status ?? "processing",
+        progress: pollData.progress ?? 0,
+        url: typeof pollData.url === "string" ? pollData.url : null,
+        error: typeof pollData.error === "string" ? pollData.error : null,
+        videoId,
+        model,
+      });
+    }
+
+    if (action === "save-generated-media") {
+      const videoId = typeof input.videoId === "string" ? input.videoId : "";
+      const url = typeof input.url === "string" ? input.url : "";
+      if (!Number.isSafeInteger(conversationId) || !videoId || !/^https:\/\//i.test(url)) {
+        return jsonResponse(400, { error: "Invalid generated video details." });
+      }
+      const { data: conversation, error: conversationError } = await db.from("conversations")
+        .select("id,workspace_id").eq("id", conversationId).eq("workspace_id", workspaceId).maybeSingle();
+      if (conversationError || !conversation) return jsonResponse(404, { error: "Conversation not found." });
+      const { data: rows, error: rowsError } = await db.from("messages")
+        .select("id,attachments").eq("conversation_id", conversationId).eq("role", "human");
+      if (rowsError) throw new Error("Could not verify the video generation request.");
+      const ownsJob = (rows ?? []).some((row) => Array.isArray(row.attachments) &&
+        row.attachments.some((item: unknown) => isRecord(item) && item.videoId === videoId));
+      if (!ownsJob) return jsonResponse(403, { error: "This video job does not belong to the selected conversation." });
+      const aiMessage = await saveGeneratedMessage(db, Number(conversationId), "generated-video", url, videoId);
+      return jsonResponse(200, { conversationId, aiMessage });
+    }
+
+    if (action === "create-image" || action === "create-video") {
+      const agnesKey = Deno.env.get("AGNES_API_KEY");
+      if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured. Add AGNES_API_KEY to Supabase Edge Function secrets." });
+      const prompt = message || (action === "create-image" ? "Create an image based on the attached references." : "Create a video based on the attached references.");
+      const hasImageReferences = prepared.images.length > 0;
+      const saved = await saveMediaPrompt(
+        db, workspaceId, conversationId, prompt, requestedAttachments,
+        action === "create-video" ? { kind: "video-job-pending", model: Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-v2.0" } : undefined,
+      );
+
+      if (action === "create-image") {
+        const imageModel = Deno.env.get("AGNES_IMAGE_MODEL") || "agnes-image-2.1-flash";
+        const createResponse = await fetch("https://apihub.agnes-ai.com/v1/images/generations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
+          signal: AbortSignal.timeout(90_000),
+          body: JSON.stringify({
+            model: imageModel,
+            prompt,
+            n: 1,
+            size: typeof input.imageSize === "string" && ["1024x1024", "1024x768", "1536x1024"].includes(input.imageSize) ? input.imageSize : "1024x1024",
+            ...(hasImageReferences ? { image: prepared.images[0].url } : {}),
+          }),
+        });
+        const payload: unknown = await createResponse.json().catch(() => null);
+        if (!createResponse.ok || !isRecord(payload) || !Array.isArray(payload.data) || !isRecord(payload.data[0]) || typeof payload.data[0].url !== "string") {
+          console.error("[misma-chat] Agnes image generation failed.", { status: createResponse.status });
+          return jsonResponse(502, { error: "Agnes could not generate the image. Check your Agnes model access and try again.", conversationId: saved.conversationId, userMessage: saved.userMessage });
+        }
+        const aiMessage = await saveGeneratedMessage(db, saved.conversationId, "generated-image", payload.data[0].url);
+        return jsonResponse(200, { conversationId: saved.conversationId, userMessage: saved.userMessage, aiMessage, provider: "agnes-image" });
+      }
+
+      const videoModel = Deno.env.get("AGNES_VIDEO_MODEL") || "agnes-video-v2.0";
+      const createVideoBody: JsonRecord = {
+        model: videoModel,
+        prompt,
+        width: 1152,
+        height: 768,
+        num_frames: 121,
+        frame_rate: 24,
+      };
+      if (hasImageReferences && prepared.images.length >= 2) {
+        createVideoBody.extra_body = { image: prepared.images.slice(0, 5).map((image) => image.url), mode: "keyframes" };
+      } else if (hasImageReferences) {
+        createVideoBody.image = prepared.images[0].url;
+      }
+      const createResponse = await fetch("https://apihub.agnes-ai.com/v1/videos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
+        signal: AbortSignal.timeout(45_000),
+        body: JSON.stringify(createVideoBody),
+      });
+      const payload: unknown = await createResponse.json().catch(() => null);
+      if (!createResponse.ok || !isRecord(payload) || typeof (payload.video_id ?? payload.id) !== "string") {
+        console.error("[misma-chat] Agnes video generation failed.", { status: createResponse.status });
+        return jsonResponse(502, { error: "Agnes could not start video generation. Check your Agnes video model access and try again.", conversationId: saved.conversationId, userMessage: saved.userMessage });
+      }
+      const videoId = String(payload.video_id ?? payload.id);
+      // Record the returned job ID on the prompt so only its owner can save the completed output.
+      await db.from("messages").update({
+        attachments: [...requestedAttachments, { kind: "video-job", videoId, model: videoModel }],
+      }).eq("conversation_id", saved.conversationId).eq("id", Number(saved.userMessage.id));
+      return jsonResponse(200, {
+        conversationId: saved.conversationId,
+        userMessage: saved.userMessage,
+        videoJob: { videoId, model: videoModel, status: payload.status ?? "queued", progress: payload.progress ?? 0 },
+        provider: "agnes-video",
+      });
+    }
+
+    if (action !== "chat") return jsonResponse(400, { error: "Unsupported action." });
 
     const [workspaceResult, knowledgeResult, orderResult, contactResult] = await Promise.all([
       db.from("workspaces")
@@ -516,6 +842,31 @@ Deno.serve(async (request) => {
       contactCount: contactResult.count ?? 0,
       orderContextNote: "Recent orders are limited to the five latest records and are not an all-time total.",
     };
+    if (!message && requestedAttachments.length) {
+      message = "Please inspect the attached files and explain the important details.";
+    }
+    if (prepared.extractedText) {
+      message += `\n\nPlease analyze the following attached file content:\n\n${prepared.extractedText}`;
+    }
+    if (requestedAttachments.some((attachment) => attachment.kind === "video")) {
+      const frameCount = requestedAttachments.filter((attachment) => attachment.kind === "video-frame").length;
+      message += frameCount
+        ? `\n\nThe user also attached a video. The attached still images are ${frameCount} sampled keyframes from that video. Analyze the visible sequence; audio has not been transcribed.`
+        : "\n\nThe user attached a video, but no preview frames were available to analyze.";
+    }
+
+    const providerOptions = {
+      thinkHarder,
+      hasImages: prepared.images.length > 0,
+    };
+    const providers = getProviders(providerOptions);
+    if (providers.length === 0) {
+      return jsonResponse(503, { error: "No AI providers are configured. Add at least one provider API key in Supabase Edge Function secrets." });
+    }
+    if (prepared.pdfs.length && !providers.some((provider) => provider.supportsPdf)) {
+      return jsonResponse(503, { error: "PDF analysis requires OPENROUTER_API_KEY. Other supported text and code files can use the configured chat providers." });
+    }
+
     const systemPrompt =
       "You are Misma, a capable, warm, natural conversational AI assistant for the signed-in business owner and their workspace. " +
       "Your job is to be genuinely useful, not to repeat a generic greeting or customer-service script. " +
@@ -551,7 +902,7 @@ Deno.serve(async (request) => {
     const providerFailures: string[] = [];
     for (const provider of providers) {
       try {
-        answer = await requestProvider(provider, systemPrompt, history, message);
+        answer = await requestProvider(provider, systemPrompt, history, message, prepared.images, prepared.pdfs, thinkHarder);
         selectedProvider = provider.name;
         break;
       } catch {
@@ -612,13 +963,13 @@ Deno.serve(async (request) => {
     const insertRows = pivotMessage
       ? [{ conversation_id: savedConversationId, role: "ai", text: answer }]
       : [
-        { conversation_id: savedConversationId, role: "human", text: message },
-        { conversation_id: savedConversationId, role: "ai", text: answer },
+        { conversation_id: savedConversationId, role: "human", text: message, attachments: requestedAttachments },
+        { conversation_id: savedConversationId, role: "ai", text: answer, attachments: [] },
       ];
     const { data: savedMessages, error: saveError } = await db
       .from("messages")
       .insert(insertRows)
-      .select("id,role,text,created_at");
+      .select("id,role,text,created_at,attachments");
     const expectedSavedCount = pivotMessage ? 1 : 2;
     if (saveError || !savedMessages || savedMessages.length !== expectedSavedCount) {
       throw new Error("Could not save chat messages.");
@@ -646,6 +997,7 @@ Deno.serve(async (request) => {
           role: "human",
           text: userMessage.text,
           created_at: userMessage.created_at,
+          attachments: prepared.stored,
         },
       } : {}),
       ...(editMessageId !== null ? { editedMessageId: String(editMessageId) } : {}),
@@ -654,10 +1006,11 @@ Deno.serve(async (request) => {
         role: "ai",
         text: aiMessage.text,
         created_at: aiMessage.created_at,
+        attachments: [],
       },
-      // Additive metadata; existing dashboard consumers can ignore it.
       provider: selectedProvider,
-      usedFallback: selectedProvider !== "gemini",
+      usedFallback: selectedProvider !== providers[0]?.name,
+      thinkHarder,
     });
   } catch (error) {
     console.error("[misma-chat] Request failed.", error instanceof Error ? error.message : "unknown error");
