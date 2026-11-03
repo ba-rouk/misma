@@ -100,7 +100,7 @@ function getProviders(options: { thinkHarder?: boolean; hasImages?: boolean }): 
       "agnes-vision",
       "AGNES_API_KEY",
       "AGNES_VISION_MODEL",
-      "agnes-2.0-flash",
+      "agnes-3.0-flash",
       "https://apihub.agnes-ai.com/v1/chat/completions",
       "openai-compatible",
       true,
@@ -131,7 +131,7 @@ function getProviders(options: { thinkHarder?: boolean; hasImages?: boolean }): 
   add("openrouter", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "openrouter/auto",
     "https://openrouter.ai/api/v1/chat/completions", "openai-compatible", true, true);
   if (!options.hasImages) {
-    add("agnes", "AGNES_API_KEY", "AGNES_MODEL", "agnes-2.5-flash",
+    add("agnes", "AGNES_API_KEY", "AGNES_MODEL", "agnes-3.0-flash",
       "https://apihub.agnes-ai.com/v1/chat/completions", "openai-compatible", true);
   }
   add("cohere", "COHERE_API_KEY", "COHERE_MODEL", "command-a-plus-05-2026",
@@ -569,7 +569,7 @@ async function isAgnesMediaSafe(
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
     signal: AbortSignal.timeout(25_000),
     body: JSON.stringify({
-      model: "agnes-2.5-flash",
+      model: "agnes-3.0-flash",
       messages: [{ role: "system", content: system }, { role: "user", content: userContent }],
       max_tokens: 8,
       temperature: 0,
@@ -953,7 +953,7 @@ Deno.serve(async (request) => {
       const safePrompt = "Create non-sexual, non-explicit, age-appropriate content. People must be fully clothed in ordinary non-revealing attire with neutral poses. Do not include nudity, erotic or suggestive content, lingerie, graphic violence, gore, or hate symbols. " + (hasImageReferences ? "Use the supplied reference images as visual guidance. " : "") + "Creative brief: " + prompt;
 
       if (action === "create-image") {
-        const imageModel = Deno.env.get("AGNES_IMAGE_MODEL") || "agnes-image-2.1-flash";
+        const imageModel = Deno.env.get("AGNES_IMAGE_MODEL") || "agnes-image-2.5-flash";
         const createResponse = await fetch("https://apihub.agnes-ai.com/v1/images/generations", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
@@ -962,8 +962,14 @@ Deno.serve(async (request) => {
             model: imageModel,
             prompt: safePrompt,
             n: 1,
-            size: typeof input.imageSize === "string" && ["1024x1024", "1024x768", "1536x1024"].includes(input.imageSize) ? input.imageSize : "1024x1024",
-            ...(hasImageReferences ? { image: prepared.images[0].url } : {}),
+            size: "1K",
+            ratio: typeof input.imageRatio === "string" && ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"].includes(input.imageRatio) ? input.imageRatio : "1:1",
+            ...(hasImageReferences ? {
+              extra_body: {
+                image: prepared.images.slice(0, 5).map((image) => image.dataUrl || image.url),
+                response_format: "url",
+              },
+            } : {}),
           }),
         });
         const payload: unknown = await createResponse.json().catch(() => null);
