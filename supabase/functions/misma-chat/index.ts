@@ -379,7 +379,7 @@ async function requestProvider(
       const response = await fetch(url, {
         method: "POST",
         headers,
-        signal: AbortSignal.timeout(22_000),
+        signal: AbortSignal.timeout(thinkHarder ? 35_000 : images.length ? 22_000 : 15_000),
         body: JSON.stringify(body),
       });
 
