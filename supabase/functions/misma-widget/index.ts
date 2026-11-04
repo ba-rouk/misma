@@ -310,7 +310,29 @@ async function crawlWebsite(startUrl: string): Promise<Array<{ url: string; titl
   const queue = [first.href];
   const seen = new Set<string>();
   const pages: Array<{ url: string; title: string; text: string }> = [];
-  while (queue.length && pages.length < 14) {
+  // Seed the bounded crawl from a same-origin XML sitemap when the site publishes one.
+  try {
+    const sitemapUrl = new URL("/sitemap.xml", first.origin);
+    const sitemapResponse = await fetch(sitemapUrl.href, {
+      redirect: "manual",
+      headers: { "User-Agent": "MismaWebsiteScanner/1.0 (+https://misma.onrender.com)" },
+      signal: AbortSignal.timeout(7000),
+    });
+    if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
+      const sitemap = (await sitemapResponse.text()).slice(0, 1000000);
+      const locations = Array.from(sitemap.matchAll(/<loc>\\s*([^<]+)\\s*<\\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim());
+      for (const location of locations) {
+        try {
+          const linked = new URL(location, first.origin);
+          linked.hash = "";
+          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && linked.href !== first.href && queue.length < 100) queue.push(linked.href);
+        } catch { /* Ignore malformed or external sitemap entries. */ }
+      }
+    }
+  } catch {
+    // A missing or inaccessible sitemap does not prevent normal same-domain link discovery.
+  }
+  while (queue.length && pages.length < 25) {
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
     if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href)) continue;
