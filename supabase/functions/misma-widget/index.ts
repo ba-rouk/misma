@@ -409,7 +409,7 @@ async function recommendOfferingsFromDemand(db: Db, workspaceId: string) {
     db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true).limit(40),
   ]);
   if (messages.error) throw new Error("Could not load visitor requests.");
-  const channelById = new Map((conversations.data || []).map((row: AnyRecord) => [Number(row.id), safeString(row.channel, 40)]));
+  const channelById = new Map<number, string>((conversations.data || []).map((row: AnyRecord): [number, string] => [Number(row.id), safeString(row.channel, 40)]));
   const visitorText = (messages.data || [])
     .map((row: AnyRecord) => "[" + (channelById.get(Number(row.conversation_id)) || "Customer") + "] " + safeString(row.text, 1600))
     .filter((row: string) => row.length > 12)
