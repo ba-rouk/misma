@@ -756,6 +756,7 @@ function Dashboard() {
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
+  const [mediaProgressPercent, setMediaProgressPercent] = useState(0);
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
 
 
@@ -1088,14 +1089,24 @@ function Dashboard() {
     };
   }, []);
 
-  // Keep the textarea compact when empty, then grow smoothly as content wraps.
+  // Measure from the natural content height on every edit so CSS constraints cannot
+  // leave the composer stuck at its empty height (especially after mobile keyboard resize).
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.style.height = "34px";
-    const contentHeight = textarea.scrollHeight;
-    textarea.style.height = `${Math.max(34, Math.min(contentHeight, 180))}px`;
-    textarea.style.overflowY = contentHeight > 180 ? "auto" : "hidden";
+    const resize = () => {
+      textarea.style.height = "auto";
+      const maxHeight = Math.min(190, window.innerWidth < 768 ? Math.round(window.innerHeight * 0.34) : 190);
+      const contentHeight = textarea.scrollHeight;
+      textarea.style.height = `${Math.max(38, Math.min(contentHeight, maxHeight))}px`;
+      textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
+    };
+    const frame = window.requestAnimationFrame(resize);
+    window.addEventListener("resize", resize);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", resize);
+    };
   }, [draft]);
 
   // Auto-scroll message list to bottom when appropriate
@@ -1391,77 +1402,68 @@ function Dashboard() {
     };
     const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
     if (!Recognition) {
-      setChatError("Voice dictation is not supported in this browser. Try a recent version of Chrome.");
+      setChatError("Voice dictation is not supported in this browser. Try the latest Chrome browser.");
       return;
     }
+
+    // Start recognition directly from the microphone button's click handler.
+    // Pre-opening and immediately closing getUserMedia can consume mobile browser
+    // user activation and cause the subsequent recognition.start() to be rejected.
+    try { speechRecognitionRef.current?.abort?.(); } catch { /* Previous session already ended. */ }
     const recognition = new Recognition();
     recognition.lang = navigator.language || "en-US";
     recognition.interimResults = true;
     recognition.continuous = false;
     recognition.maxAlternatives = 1;
+    recognition.onstart = () => setVoiceInputActive(true);
     recognition.onresult = (event: any) => {
       const transcript = Array.from(event.results as ArrayLike<any>)
         .map((result: any) => result?.[0]?.transcript || "")
         .join(" ")
         .trim();
-      if (transcript) setDraft((current) => [current.trim(), transcript].filter(Boolean).join(current.trim() ? " " : ""));
+      if (transcript) setDraft([draft.trim(), transcript].filter(Boolean).join(draft.trim() ? " " : ""));
     };
     recognition.onerror = (event: any) => {
       setVoiceInputActive(false);
-      if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
-        setChatError("Microphone access was denied. Use your browser's site controls to allow microphone access for Misma, then try again.");
+      speechRecognitionRef.current = null;
+      const errorName = String(event?.error || "");
+      if (errorName === "not-allowed" || errorName === "service-not-allowed") {
+        setChatError("Microphone permission is blocked. Allow microphone access for Misma in your browser settings, then try again.");
+      } else if (errorName === "audio-capture") {
+        setChatError("No microphone was found. Check that your device microphone is available.");
+      } else if (errorName === "no-speech") {
+        setChatError("No speech was detected. Tap the microphone and speak again.");
+      } else if (errorName === "network") {
+        setChatError("Voice recognition could not reach the browser speech service. Check your connection and try again.");
       } else {
         setChatError("Voice dictation stopped. Please try again.");
       }
     };
     recognition.onend = () => {
       setVoiceInputActive(false);
-      speechRecognitionRef.current = null;
+      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
     };
     speechRecognitionRef.current = recognition;
     setChatError("");
-    setVoiceInputActive(true);
     try {
       recognition.start();
-    } catch {
+    } catch (cause) {
       setVoiceInputActive(false);
       speechRecognitionRef.current = null;
-      setChatError("The microphone could not be started. Check your browser's site permissions and try again.");
+      const name = cause instanceof Error ? cause.name : "";
+      setChatError(name === "InvalidStateError"
+        ? "Voice input is already running. Tap the microphone again when it is ready."
+        : "The microphone could not be started. Check browser microphone permission and try again.");
     }
   };
 
-  // Request access from the browser directly so its native site-permission prompt appears.
-  const handleVoiceInput = async () => {
+  const handleVoiceInput = () => {
     if (voiceInputActive) {
-      speechRecognitionRef.current?.stop?.();
+      try { speechRecognitionRef.current?.stop?.(); } catch { /* Recognition may already be stopped. */ }
       setVoiceInputActive(false);
       return;
     }
-    const browserWindow = window as typeof window & {
-      SpeechRecognition?: new () => any;
-      webkitSpeechRecognition?: new () => any;
-    };
-    if (!(browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition)) {
-      setChatError("Voice input is not supported in this browser. Try a recent version of Chrome.");
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setChatError("This browser cannot request microphone access. Open Misma in a secure, up-to-date browser.");
-      return;
-    }
-    setChatError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
-      startVoiceRecognition();
-    } catch (cause) {
-      const errorName = cause instanceof Error ? cause.name : "";
-      setChatError(
-        errorName === "NotAllowedError" || errorName === "PermissionDeniedError"
-          ? "Microphone access was denied. Use your browser's site controls to allow microphone access for Misma, then try again."
-          : "Misma could not access your microphone. Check your browser's site permissions and try again.",
-      );
-    }
+    startVoiceRecognition();
   };
 
   const testSelectedVoice = () => {
@@ -2004,6 +2006,7 @@ function Dashboard() {
       setIsSending(false);
       setIsGeneratingMedia(false);
       setMediaProgress("");
+      setMediaProgressPercent(0);
       setChatError("Stopped.");
     }
   };
@@ -2044,9 +2047,21 @@ function Dashboard() {
       controller.signal.addEventListener("abort", abort, { once: true });
     });
 
+    let imageProgressTimer: number | null = null;
     setChatError("");
     setMediaProgress(mode === "image" ? "" : "Preparing your video with Agnes…");
+    setMediaProgressPercent(mode === "image" ? 5 : 0);
     setIsGeneratingMedia(true);
+    if (mode === "image") {
+      const startedAt = Date.now();
+      imageProgressTimer = window.setInterval(() => {
+        const elapsedSeconds = (Date.now() - startedAt) / 1000;
+        // Agnes returns a completed image rather than live stage percentages, so
+        // display a clearly labelled estimate that approaches (but never claims) 100%.
+        const estimate = Math.min(94, Math.round(5 + 89 * (1 - Math.exp(-elapsedSeconds / 24))));
+        setMediaProgressPercent((current) => Math.max(current, estimate));
+      }, 700);
+    }
     setPlusMenuOpen(false);
     setCreateMode(null);
     setDraft("");
@@ -2273,6 +2288,8 @@ function Dashboard() {
         setMediaProgress("");
       }
     } finally {
+      if (imageProgressTimer !== null) window.clearInterval(imageProgressTimer);
+      setMediaProgressPercent(0);
       if (mediaAbortControllerRef.current === controller) {
         mediaAbortControllerRef.current = null;
         setIsGeneratingMedia(false);
@@ -3021,8 +3038,20 @@ function Dashboard() {
                             onCopy={(attachment) => void handleCopyImage(attachment)}
                           />
                           {msg.pendingMedia === "image" ? (
-                            <div className="aichat-image-generation-dots" role="status" aria-label="Image generation in progress">
-                              <i /><i /><i />
+                            <div className="aichat-media-skeleton is-image" role="status" aria-live="polite">
+                              <div className="aichat-media-skeleton-preview" aria-hidden="true">
+                                <span className="aichat-media-skeleton-shimmer" />
+                                <span className="aichat-media-skeleton-orbit"><i /><i /><i /></span>
+                              </div>
+                              <div className="aichat-media-skeleton-copy">
+                                <strong>Creating your image</strong>
+                                <span>Agnes is rendering your image…</span>
+                                <div className="aichat-image-progress-track" role="progressbar" aria-label="Estimated image creation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={mediaProgressPercent}>
+                                  <i style={{ width: `${mediaProgressPercent}%` }} />
+                                </div>
+                                <div className="aichat-image-progress-label"><small>Estimated progress</small><strong>{mediaProgressPercent}%</strong></div>
+                                <small>Estimate only. Agnes does not currently report live image-generation percentages.</small>
+                              </div>
                             </div>
                           ) : msg.pendingMedia === "video" ? (
                             <div className="aichat-media-skeleton is-video" role="status" aria-live="polite">
@@ -3230,12 +3259,6 @@ function Dashboard() {
                   )}
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
-                      {composerFocused && <div className="aichat-composer-focus-hint">
-                        <span>Message Misma</span>
-                        <button type="button" className={`aichat-composer-thinking-chip${thinkHarder ? " active" : ""}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { setThinkHarder((value) => !value); textareaRef.current?.focus(); }}>
-                          @Thinking{thinkHarder ? " ✓" : ""}
-                        </button>
-                      </div>}
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
                         {plusMenuOpen ? (
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>

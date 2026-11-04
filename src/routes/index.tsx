@@ -23,7 +23,7 @@ function Index() {
         <div className="nav-links"><a href="#home">Home</a><a href="#product">Product</a><a href="#about">About</a><a href="#how">How it works</a><a href="#features">Features</a><a href="#contact">Contact</a></div>
         <div className="nav-actions">
           <a href="/login" className="nav-login">Log in</a>
-          <a href="/login" className="nav-cta">Get started</a>
+          <a href="/login?mode=signup" className="nav-cta">Get started</a>
         </div>
       </nav>
 
@@ -32,7 +32,7 @@ function Index() {
           <p className="eyebrow">BUSINESS AI, CONNECTED</p>
           <h1>One AI. Every customer conversation.</h1>
           <p className="hero-sub">Misma connects your business channels to an AI agent trained on your business.</p>
-          <div className="actions"><a className="primary" href="#contact">Get started</a><a className="secondary" href="#how">See how it works</a></div>
+          <div className="actions"><a className="primary" href="/login?mode=signup">Get started</a><a className="secondary" href="#how">See how it works</a></div>
         </div>
         <div className="hero-visual" aria-label="Misma solar system of connected business tools">
           <div className="solar-system">
@@ -67,7 +67,7 @@ function Index() {
         <div className="knowledge-card"><div className="doc"><span>FAQ</span><b>Delivery &amp; returns</b><p>Questions your customers ask most often.</p></div><div className="doc"><span>PRODUCTS</span><b>Your catalog</b><p>Services, prices and product details.</p></div><div className="doc"><span>POLICY</span><b>Business rules</b><p>Instructions for consistent answers.</p></div></div>
       </section>
 
-      <section className="cta" id="contact"><div><p className="eyebrow">READY WHEN YOU ARE</p><h2>Put your customer conversations to work.</h2></div><a className="primary big" href="mailto:hello@misma.ai">Start with Misma</a></section>
+      <section className="cta" id="contact"><div><p className="eyebrow">READY WHEN YOU ARE</p><h2>Put your customer conversations to work.</h2></div><a className="primary big" href="/login?mode=signup">Get started</a></section>
 
       <footer><div className="brand"><MismaIcon size={24} className="brand-mark-svg" /><span>Misma</span></div><span>Business AI, connected.</span></footer>
       <LandingChatWidget />
