@@ -3,6 +3,7 @@ name: Validate Misma
 on:
   push:
     branches:
+      - main
       - fix/misma-video-search-voice-settings
       - fix/media-generation-timeouts-composer-layout
       - feat/mobile-message-actions-composer
