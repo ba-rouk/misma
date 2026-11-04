@@ -506,6 +506,16 @@ export const setWebsiteConnectionStatus = createServerFn({ method: "POST" })
       .eq("id", data.websiteId).eq("workspace_id", workspaceId)
       .select("id,status").single();
     const saved = check(website, error);
+    if (data.status === "connected") {
+      const { data: details } = await db.from("website_connections").select("name,website_url").eq("id", saved.id).eq("workspace_id", workspaceId).single();
+      await db.from("workspace_notifications").insert({
+        workspace_id: workspaceId,
+        notification_type: "website_connected",
+        title: "Website marked as connected",
+        body: `${details?.name || "Your website"} is ready for its Misma widget installation.`,
+        website_connection_id: saved.id,
+      });
+    }
     await recordAudit(db, workspaceId, "website.status_changed", saved.id, { status: data.status });
     return { website: saved };
   });
