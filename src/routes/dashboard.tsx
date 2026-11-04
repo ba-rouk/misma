@@ -3828,7 +3828,17 @@ function Dashboard() {
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
                 <h2>Notifications {unreadVisitorCount > 0 ? `(${unreadVisitorCount} unread)` : ""}</h2>
-                <p>New messages sent by visitors through your website.</p>
+                <p>New and previous workspace activity, including visitors asking to speak with a person.</p>
+              </div>
+              <div className="aichat-card">
+                <h3>All notifications ({allNotifications.length})</h3>
+                {allNotifications.length === 0 ? <p>No saved notifications yet.</p> : <div className="aichat-notifications-list">
+                  {allNotifications.map((item) => <button type="button" key={item.id} className={`aichat-notification-item${item.is_read ? " is-read" : ""}`} onClick={() => item.conversation_id ? void selectConversation(Number(item.conversation_id)) : item.human_request_id ? setActiveTab("customers") : void 0}>
+                    <span className="aichat-notification-item-icon" aria-hidden="true">{item.notification_type === "human_request" ? "♙" : "●"}</span>
+                    <span className="aichat-notification-item-copy"><strong>{item.title}</strong><small>{item.created_at ? new Date(item.created_at).toLocaleString() : "Workspace activity"}</small><span>{item.body || item.notification_type}</span></span>
+                    <span className="aichat-notification-open">{item.is_read ? "Read" : "New"}</span>
+                  </button>)}
+                </div>}
               </div>
               <div className="aichat-card aichat-notifications-card">
                 {unreadVisitorMessages.length === 0 ? (
