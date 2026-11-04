@@ -439,10 +439,10 @@ function GeneratedImageActions({
       </button>
       {menuOpen && (
         <div className="aichat-image-options-menu" role="menu" aria-label="Image actions">
-          {onDownload && <button type="button" role="menuitem" onClick={() => runAction(onDownload)}><ActionIcon name="download" />Download image</button>}
-          {onShare && <button type="button" role="menuitem" onClick={() => runAction(onShare)}><ActionIcon name="share" />Share image</button>}
-          {onCrop && <button type="button" role="menuitem" onClick={() => runAction(onCrop)}><ActionIcon name="crop" />Crop image</button>}
-          {onCopy && <button type="button" role="menuitem" onClick={() => runAction(onCopy)}><ActionIcon name="copy" />Copy image</button>}
+          {onDownload && <button type="button" role="menuitem" onClick={(event) => { event.preventDefault(); event.stopPropagation(); runAction(onDownload); }}><ActionIcon name="download" />Download image</button>}
+          {onShare && <button type="button" role="menuitem" onClick={(event) => { event.preventDefault(); event.stopPropagation(); runAction(onShare); }}><ActionIcon name="share" />Share image</button>}
+          {onCrop && <button type="button" role="menuitem" onClick={(event) => { event.preventDefault(); event.stopPropagation(); runAction(onCrop); }}><ActionIcon name="crop" />Crop image</button>}
+          {onCopy && <button type="button" role="menuitem" onClick={(event) => { event.preventDefault(); event.stopPropagation(); runAction(onCopy); }}><ActionIcon name="copy" />Copy image</button>}
         </div>
       )}
     </div>
@@ -472,7 +472,7 @@ function MessageAttachmentViews({
         if (item.kind === "image" || item.kind === "generated-image" || item.mimeType?.startsWith("image/")) {
           const isGenerated = item.kind === "generated-image";
           return (
-            <div key={key} className="aichat-generated-media-wrap">
+            <div key={key} className="aichat-generated-media-wrap is-image">
               <a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link">
                 <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="eager" decoding="async" fetchPriority="high" />
               </a>
@@ -3139,10 +3139,9 @@ function Dashboard() {
                               aria-valuemax={100}
                               aria-valuenow={mediaProgressPercent}
                             >
-                              <div className="aichat-image-generation-dots" aria-hidden="true">
-                                <i /><i /><i />
-                              </div>
-                              <span className="aichat-image-progress-badge" aria-hidden="true">{mediaProgressPercent}%</span>
+                              <span className="aichat-image-generation-status">Sketching it out</span>
+                              <div className="aichat-image-generation-grid" aria-hidden="true" />
+                              <span className="aichat-image-progress-badge">{mediaProgressPercent}%</span>
                             </div>
                           ) : msg.pendingMedia === "video" ? (
                             <div className="aichat-media-skeleton is-video" role="status" aria-live="polite">
