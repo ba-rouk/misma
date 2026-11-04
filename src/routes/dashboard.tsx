@@ -1833,6 +1833,7 @@ function Dashboard() {
     try {
       const blob = await fetchAttachmentBlob(attachment, conversationId);
       downloadBlob(blob, attachment.name || (attachment.kind === "generated-video" ? "misma-video.mp4" : "misma-image.png"));
+      showMediaActionStatus("Download started");
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : "Could not download this file.");
     } finally {
@@ -1869,13 +1870,28 @@ function Dashboard() {
     try {
       const blob = await fetchAttachmentBlob(attachment, conversationId);
       const file = new File([blob], attachment.name || "misma-image.png", { type: blob.type || "image/png" });
-      if (typeof navigator.share === "function" && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-        await navigator.share({ files: [file], title: attachment.name || "Misma image" });
+      if (typeof navigator.share === "function") {
+        try {
+          if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: attachment.name || "Misma image" });
+          } else if (attachment.url) {
+            await navigator.share({ title: attachment.name || "Misma image", url: attachment.url });
+          } else {
+            throw new Error("This browser cannot share image files.");
+          }
+          showMediaActionStatus("Image shared");
+          return;
+        } catch (shareError) {
+          if (shareError instanceof Error && shareError.name === "AbortError") return;
+          // Continue with a clipboard fallback when this WebView cannot share files or URLs.
+        }
+      }
+      if (navigator.clipboard?.writeText && attachment.url) {
+        await navigator.clipboard.writeText(attachment.url);
+        showMediaActionStatus("Image link copied");
         return;
       }
-      if (!navigator.clipboard?.writeText || !attachment.url) throw new Error("Image sharing is not supported by this browser.");
-      await navigator.clipboard.writeText(attachment.url);
-      showMediaActionStatus("Image link copied");
+      throw new Error("Image sharing is unavailable in this browser. Try downloading the image instead.");
     } catch (cause) {
       if (cause instanceof Error && cause.name === "AbortError") return;
       setChatError(cause instanceof Error ? cause.message : "Could not share this image.");
