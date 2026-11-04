@@ -206,13 +206,14 @@ export const markVisitorMessagesRead = createServerFn({ method: "POST" })
       .eq("workspace_id", workspaceId)
       .maybeSingle();
     if (conversationError || !conversation) throw new Error("Conversation not found.");
-    const { error } = await db.from("messages")
+    const { data: markedMessages, error } = await db.from("messages")
       .update({ read_at: new Date().toISOString() })
       .eq("conversation_id", data.conversationId)
       .eq("role", "customer")
-      .is("read_at", null);
+      .is("read_at", null)
+      .select("id");
     if (error) throw new Error("Could not mark visitor messages as read.");
-    return { ok: true };
+    return { ok: true, markedCount: markedMessages?.length ?? 0 };
   });
 
 export const addKnowledge = createServerFn({ method: "POST" })
