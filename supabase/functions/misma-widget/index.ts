@@ -506,14 +506,22 @@ async function handlePhoneWebhook(request: Request, db: Db) {
   let spoken = "Hello. Thank you for calling. I am Misma, the business assistant. How can I help you today?";
   if (speech) {
     await db.from("messages").insert({ conversation_id: conversation.id, role: "customer", text: speech });
-    try {
-      spoken = await answerCustomer(db, workspaceId, speech);
-      await db.from("messages").insert({ conversation_id: conversation.id, role: "ai", text: spoken });
-      await db.from("conversations").update({ latest_text: spoken.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.id);
-    } catch {
-      spoken = "I am having trouble retrieving that information right now. Please try again or ask to speak with a team member.";
+    const wantsHuman = /\b(human|person|staff|agent|someone|representative)\b/i.test(speech);
+    const currentState = await db.from("conversations").select("status").eq("id", conversation.id).eq("workspace_id", workspaceId).single();
+    if (wantsHuman) {
+      spoken = "I have sent your request to the business team. They will call you back using the number you provided.";
+    } else if (currentState.data?.status === "Needs you") {
+      spoken = "Your request is with the business team. They will call you back as soon as possible.";
+    } else {
+      try {
+        spoken = await answerCustomer(db, workspaceId, speech);
+        await db.from("messages").insert({ conversation_id: conversation.id, role: "ai", text: spoken });
+        await db.from("conversations").update({ latest_text: spoken.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+      } catch {
+        spoken = "I am having trouble retrieving that information right now. Please try again or ask to speak with a team member.";
+      }
     }
-    if (/\b(human|person|staff|agent|someone|representative)\b/i.test(speech)) {
+    if (wantsHuman) {
       const request = await db.from("human_requests").insert({
         workspace_id: workspaceId, conversation_id: conversation.id, contact_id: conversation.contact_id,
         visitor_name: "Phone caller", visitor_phone: from, reason: speech, status: "pending",
@@ -577,12 +585,23 @@ async function handleWhatsAppWebhook(request: Request, db: Db) {
         }
         if (conversation.error || !conversation.data) continue;
         await db.from("messages").insert({ conversation_id: conversation.data.id, role: "customer", text: body });
+        const wantsHuman = /\b(human|person|staff|agent|someone|representative)\b/i.test(body);
+        const currentState = await db.from("conversations").select("status").eq("id", conversation.data.id).eq("workspace_id", workspaceId).single();
+        if (currentState.error) continue;
+        if (currentState.data.status === "Needs you" && !wantsHuman) {
+          await db.from("conversations").update({ latest_text: body.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.data.id);
+          continue;
+        }
         let answer = "";
-        try { answer = await answerCustomer(db, workspaceId, body); }
-        catch { answer = "I am having trouble responding right now. Please try again shortly or ask to speak with a team member."; }
+        if (wantsHuman) {
+          answer = "I have notified the business team. A person will follow up with you in this WhatsApp conversation.";
+        } else {
+          try { answer = await answerCustomer(db, workspaceId, body); }
+          catch { answer = "I am having trouble responding right now. Please try again shortly or ask to speak with a team member."; }
+        }
         await db.from("messages").insert({ conversation_id: conversation.data.id, role: "ai", text: answer });
         await db.from("conversations").update({ latest_text: answer.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.data.id);
-        if (/\b(human|person|staff|agent|someone|representative)\b/i.test(body)) {
+        if (wantsHuman) {
           const request = await db.from("human_requests").insert({
             workspace_id: workspaceId, conversation_id: conversation.data.id, contact_id: contact,
             visitor_name: name, visitor_phone: "+" + sender, reason: body, status: "pending",
