@@ -16,6 +16,7 @@ type WorkspaceAsset = {
   size: number;
   path: string;
   url: string;
+  libraryFileId?: string;
 };
 
 const auth = z.string().min(20);
@@ -45,7 +46,7 @@ export const getMismaData = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
-    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
+    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult, libraryFilesResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
         db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
@@ -57,6 +58,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("channel_connections").select("id,channel,provider,display_name,external_id,phone_number,status,created_at").eq("workspace_id", workspaceId),
+        db.from("workspace_library_files").select("id,storage_path,file_name,mime_type,file_size,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(500),
       ]);
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const rawConversations = check(conversationsResult.data, conversationsResult.error);
@@ -197,6 +199,29 @@ export const getMismaData = createServerFn({ method: "POST" })
         (asset): asset is WorkspaceAsset => asset !== null,
       ));
     }
+    const libraryFiles = check(libraryFilesResult.data, libraryFilesResult.error);
+    const libraryAssets = await Promise.all(libraryFiles.map(async (row: any): Promise<WorkspaceAsset | null> => {
+      const { data: signed, error } = await db.storage.from("misma-media").createSignedUrl(row.storage_path, 3600);
+      if (error || !signed?.signedUrl) return null;
+      const mimeType = String(row.mime_type || "application/octet-stream");
+      const kind = mimeType.startsWith("image/") ? "image" : mimeType.startsWith("video/") ? "video" : "file";
+      return {
+        id: "library-" + String(row.id),
+        libraryFileId: String(row.id),
+        messageId: 0,
+        conversationId: 0,
+        role: "library",
+        text: "",
+        created_at: String(row.created_at || ""),
+        kind,
+        name: String(row.file_name || "Library file"),
+        mimeType,
+        size: Number(row.file_size || 0),
+        path: String(row.storage_path),
+        url: signed.signedUrl,
+      };
+    }));
+    assets.push(...libraryAssets.filter((asset): asset is WorkspaceAsset => asset !== null));
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
       id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
       customer: Array.isArray(o.contacts) ? o.contacts[0]?.name || "Customer" : o.contacts?.name || "Customer",
@@ -436,6 +461,89 @@ export const createConversation = createServerFn({ method: "POST" })
       .single();
     if (error || !conv) throw new Error(error?.message || "Could not start conversation.");
     return { conversation: conv };
+  });
+
+export const createWorkspaceLibraryFile = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    path: z.string().min(1).max(1024),
+    name: z.string().trim().min(1).max(180),
+    mimeType: z.string().trim().max(180).default("application/octet-stream"),
+    size: z.number().int().min(0).max(25 * 1024 * 1024),
+  }))
+  .handler(async ({ data }) => {
+    const { db, user, workspaceId } = await ensureWorkspace(data.token);
+    if (!data.path.startsWith(`${workspaceId}/${user.id}/`)) throw new Error("The uploaded file does not belong to this workspace.");
+    const result = await db.from("workspace_library_files").insert({
+      workspace_id: workspaceId,
+      uploaded_by: user.id,
+      storage_path: data.path,
+      file_name: data.name,
+      mime_type: data.mimeType || "application/octet-stream",
+      file_size: data.size,
+    }).select("id").single();
+    const saved = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "library.file_uploaded", String(saved.id), { name: data.name, size: data.size });
+    return { id: String(saved.id) };
+  });
+
+export const deleteWorkspaceLibraryFile = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, id: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const found = await db.from("workspace_library_files").select("id,storage_path,file_name")
+      .eq("id", data.id).eq("workspace_id", workspaceId).single();
+    if (found.error || !found.data) throw new Error("Library file not found.");
+    const removed = await db.from("workspace_library_files").delete()
+      .eq("id", data.id).eq("workspace_id", workspaceId);
+    if (removed.error) throw new Error(removed.error.message);
+    const storage = await db.storage.from("misma-media").remove([found.data.storage_path]);
+    if (storage.error) console.warn("Library record deleted but its storage object could not be removed:", storage.error.message);
+    await recordAudit(db, workspaceId, "library.file_deleted", data.id, { name: found.data.file_name });
+    return { ok: true };
+  });
+
+export const deleteChatAttachment = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    conversationId: z.number().int().positive(),
+    messageId: z.number().int().positive(),
+    path: z.string().max(1024).optional(),
+    url: z.string().url().max(4096).optional(),
+  }).refine((value) => Boolean(value.path || value.url), { message: "A file path or URL is required." }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const [conversation, message] = await Promise.all([
+      db.from("conversations").select("id").eq("id", data.conversationId).eq("workspace_id", workspaceId).single(),
+      db.from("messages").select("id,conversation_id,attachments").eq("id", data.messageId).eq("conversation_id", data.conversationId).single(),
+    ]);
+    if (conversation.error || !conversation.data || message.error || !message.data) throw new Error("Chat attachment not found.");
+    const attachments: unknown[] = Array.isArray(message.data.attachments) ? message.data.attachments : [];
+    let removedPath = "";
+    let found = false;
+    const next = attachments.filter((raw) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
+      const item = raw as Record<string, unknown>;
+      const matches = data.path
+        ? item.path === data.path
+        : item.url === data.url;
+      if (matches && !found) {
+        found = true;
+        if (typeof item.path === "string" && item.path.startsWith(`${workspaceId}/`)) removedPath = item.path;
+        return false;
+      }
+      return true;
+    });
+    if (!found) throw new Error("This media item is no longer attached to that chat.");
+    const updated = await db.from("messages").update({ attachments: next })
+      .eq("id", data.messageId).eq("conversation_id", data.conversationId);
+    if (updated.error) throw new Error(updated.error.message);
+    if (removedPath) {
+      const storage = await db.storage.from("misma-media").remove([removedPath]);
+      if (storage.error) console.warn("Chat attachment removed but storage cleanup failed:", storage.error.message);
+    }
+    await recordAudit(db, workspaceId, "chat.attachment_deleted", String(data.messageId), { path: data.path || null });
+    return { ok: true };
   });
 
 export const deleteConversation = createServerFn({ method: "POST" })
