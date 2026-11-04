@@ -232,3 +232,5 @@ test("business workspace navigation, website widget, handoff, scan and product w
   assert.match(migration, /enable row level security/i);
   assert.match(migration, /is_workspace_member\(workspace_id\)/);
 });
+
+// Business workspace flows are validated alongside the dashboard and Edge Function checks.
