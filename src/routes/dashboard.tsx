@@ -33,7 +33,7 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "recent" | "settings";
+type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "settings";
 
 type UnreadVisitorMessage = {
   id: number;
@@ -773,7 +773,6 @@ function Dashboard() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
-  const [recentSearch, setRecentSearch] = useState("");
   const supabaseApiBase = (() => {
     const url = getSupabaseConfig()?.url || "";
     return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -3829,8 +3828,7 @@ function Dashboard() {
                   <button type="button" className="aichat-action-btn secondary" onClick={exportCurrentChat} disabled={!messages.length}>Export chat</button>
                 </div>
                 <div className="aichat-settings-action-row">
-                  <div><strong>Manage saved conversations</strong><small>Open Recent chats to group or permanently delete conversations.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("recent")}>Open history</button>
+                  <div><strong>Manage saved conversations</strong><small>Long-press any chat in Recents to delete it.</small></div>
                 </div>
               </section>
 
@@ -3866,120 +3864,6 @@ function Dashboard() {
           </div>
         )}
 
-        {/* ── View 6: Recent Conversations ── */}
-        {activeTab === "recent" && (
-          <div className="aichat-tab-view">
-            <div className="aichat-tab-content">
-              <div className="aichat-tab-header">
-                <h2>Recent chats ({recentChats.length})</h2>
-                <p>
-                  Find, reopen, group, or permanently delete your recent Misma chats.
-                </p>
-              </div>
-
-              <div className="aichat-card">
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 16,
-                    gap: 12,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <input
-                    type="search"
-                    className="aichat-input"
-                    style={{ maxWidth: 320, padding: "8px 12px", height: 38 }}
-                    placeholder="Search recent conversations…"
-                    value={recentSearch}
-                    onChange={(e) => setRecentSearch(e.target.value)}
-                    aria-label="Search conversations"
-                  />
-                  <button
-                    type="button"
-                    className="aichat-action-btn"
-                    style={{ padding: "8px 14px", height: 38 }}
-                    onClick={handleNewChat}
-                  >
-                    + Start New Chat
-                  </button>
-                </div>
-
-                {recentChats.length === 0 ? (
-                  <p style={{ color: "#657180" }}>
-                    No recorded conversations yet. Start chatting in Workspace!
-                  </p>
-                ) : (
-                  <div className="aichat-table-wrap">
-                    <table className="aichat-table">
-                      <thead>
-                        <tr>
-                          <th>Chat</th>
-                          <th>Channel</th>
-                          <th>Group</th>
-                          <th>Latest activity</th>
-                          <th>Status</th>
-                          <th style={{ textAlign: "right" }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentChats
-                          .filter(
-                            (c) =>
-                              !recentSearch.trim() ||
-                              (c.name || "")
-                                .toLowerCase()
-                                .includes(recentSearch.toLowerCase()) ||
-                              (c.text || "")
-                                .toLowerCase()
-                                .includes(recentSearch.toLowerCase()) ||
-                              (c.channel || "")
-                                .toLowerCase()
-                                .includes(recentSearch.toLowerCase()),
-                          )
-                          .map((c) => (
-                            <tr key={c.id}>
-                              <td style={{ fontWeight: 600 }}>
-                                {c.name || "New chat"}
-                              </td>
-                              <td>
-                                <span className="aichat-header-badge">
-                                  {c.channel || "Dashboard"}
-                                </span>
-                              </td>
-                              <td>{c.group_name || "—"}</td>
-                              <td>
-                                {c.text ? c.text.slice(0, 50) : "No message"}
-                              </td>
-                              <td>{c.status || "AI"}</td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                <div className="aichat-chat-list-item aichat-recent-chat-actions">
-                                  <button type="button" className="aichat-action-btn secondary" style={{ height: 32, padding: "0 10px", fontSize: 13 }} onClick={() => void selectConversation(c.id)}>
-                                    Open Chat
-                                  </button>
-                                  <button type="button" className="aichat-chat-more" aria-label={`Options for ${c.name || "chat"}`} aria-expanded={chatMenuOpenId === c.id} onClick={() => setChatMenuOpenId((current) => current === c.id ? null : c.id)}>⋯</button>
-                                  {chatMenuOpenId === c.id && (
-                                    <div className="aichat-chat-menu" role="menu">
-                                      <button type="button" role="menuitem" onClick={() => handleCreateConversationGroup(c.id)}>Group in…</button>
-                                      {conversationGroups.map((group) => <button key={group} type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, group)}>Move to {group}</button>)}
-                                      {c.group_name && <button type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, null)}>Remove group</button>}
-                                      <button type="button" role="menuitem" className="is-danger" onClick={() => { setChatMenuOpenId(null); void handleDeleteConversation(c.id); }}>Delete permanently</button>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
         {activeTab === "website-statistics" && (
           <div className="aichat-tab-view"><div className="aichat-tab-content">
             <div className="aichat-tab-header"><h2>Website statistics</h2><p>Monitor the websites connected to this workspace.</p></div>
