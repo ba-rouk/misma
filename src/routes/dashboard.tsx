@@ -2399,8 +2399,10 @@ function Dashboard() {
             <button
               type="button"
               className="aichat-chats-widget-filter"
-              title="Filter chats"
-              aria-label="Filter chats"
+              title="Group and filter recent chats"
+              aria-label="Group and filter recent chats"
+              aria-expanded={chatGroupMenuOpen}
+              onClick={() => setChatGroupMenuOpen((open) => !open)}
             >
               <svg
                 width="14"
@@ -2418,12 +2420,25 @@ function Dashboard() {
               </svg>
             </button>
           </div>
+          {chatGroupMenuOpen && (
+            <div className="aichat-chat-group-filter-menu" role="group" aria-label="Filter chats by group">
+              <button type="button" className={chatGroupFilter === "all" ? "active" : ""} onClick={() => { setChatGroupFilter("all"); setChatGroupMenuOpen(false); }}>All chats</button>
+              {conversationGroups.map((group) => (
+                <button key={group} type="button" className={chatGroupFilter === group ? "active" : ""} onClick={() => { setChatGroupFilter(group); setChatGroupMenuOpen(false); }}>
+                  {group}
+                </button>
+              ))}
+              <button type="button" className={chatGroupFilter === "__ungrouped__" ? "active" : ""} onClick={() => { setChatGroupFilter("__ungrouped__"); setChatGroupMenuOpen(false); }}>Ungrouped</button>
+            </div>
+          )}
           {chatsExpanded && (
             <div className="aichat-chats-widget-list">
               {recentChats.length === 0 ? (
                 <div className="aichat-chats-widget-empty">No chats yet.</div>
+              ) : filteredRecentChats.length === 0 ? (
+                <div className="aichat-chats-widget-empty">No chats in this group.</div>
               ) : (
-                recentChats.slice(0, 5).map((c) => (
+                filteredRecentChats.slice(0, 5).map((c) => (
                   <div className="aichat-chat-list-item" key={c.id}>
                   <button
                     type="button"
@@ -2557,6 +2572,19 @@ function Dashboard() {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
+          <button
+            type="button"
+            className={`aichat-notification-trigger${unreadVisitorCount > 0 ? " has-unread" : ""}`}
+            onClick={() => { setActiveTab("notifications"); setMobileMenuOpen(false); }}
+            aria-label={unreadVisitorCount > 0 ? `Notifications, ${unreadVisitorCount} unread visitor messages` : "Notifications"}
+            title="Website visitor notifications"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+              <path d="M10 21h4" />
+            </svg>
+            {unreadVisitorCount > 0 && <span className="aichat-notification-count">{unreadVisitorCount > 99 ? "99+" : unreadVisitorCount}</span>}
+          </button>
         </header>
 
         {loadError && (
@@ -2593,28 +2621,7 @@ function Dashboard() {
                     </svg>
                   </div>
                   <div className="aichat-greeting">
-                    <h1>
-                      Hi {profileName}.<em>How can I help you today?</em>
-                    </h1>
-                    <p>
-                      Ask anything about your business, incoming orders,
-                      customer conversations, or website operations.
-                    </p>
-                  </div>
-
-                  {/* Suggestion Chips */}
-                  <div className="aichat-suggestions">
-                    {SUGGESTIONS.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="aichat-chip"
-                        onClick={() => void handleSend(s)}
-                      >
-                        <span>{s}</span>
-                        <span className="aichat-chip-arrow">↑</span>
-                      </button>
-                    ))}
+                    <h1>{greeting}, {profileName}</h1>
                   </div>
                 </div>
               ) : (
