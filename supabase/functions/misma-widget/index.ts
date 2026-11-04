@@ -254,6 +254,40 @@ function isSafeWebsiteUrl(value: string): URL | null {
     return url;
   } catch { return null; }
 }
+function isPublicIpAddress(address: string): boolean {
+  const value = address.toLowerCase().split("%")[0];
+  if (value.includes(".")) {
+    const parts = value.split(".").map((part) => Number(part));
+    if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && (b === 0 || b === 168)) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a === 198 && (b === 18 || b === 19 || b === 51)) return false;
+    if (a === 203 && b === 0) return false;
+    return true;
+  }
+  const first = Number.parseInt(value.split(":")[0] || "0", 16);
+  if (!Number.isFinite(first) || (first & 0xe000) !== 0x2000) return false;
+  if (value === "::" || value === "::1" || value.startsWith("2001:db8:")) return false;
+  if (value.startsWith("2001:20:") || value.startsWith("64:ff9b:1:")) return false;
+  return true;
+}
+async function isPublicHostname(hostname: string): Promise<boolean> {
+  try {
+    const [ipv4, ipv6] = await Promise.all([
+      Deno.resolveDns(hostname, "A").catch(() => [] as string[]),
+      Deno.resolveDns(hostname, "AAAA").catch(() => [] as string[]),
+    ]);
+    const addresses = [...ipv4, ...ipv6];
+    return addresses.length > 0 && addresses.every(isPublicIpAddress);
+  } catch {
+    return false;
+  }
+}
+
 function cleanHtml(html: string): string {
   return html
     .replace(/<(script|style|noscript|svg|nav|footer|header|form|iframe)[\s\S]*?<\/\1>/gi, " ")
@@ -268,6 +302,7 @@ function cleanHtml(html: string): string {
 async function crawlWebsite(startUrl: string): Promise<Array<{ url: string; title: string; text: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
+  if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
   const queue = [first.href];
   const seen = new Set<string>();
   const pages: Array<{ url: string; title: string; text: string }> = [];
