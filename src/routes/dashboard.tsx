@@ -2879,7 +2879,7 @@ function Dashboard() {
                     />
                     <button
                       type="button"
-                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending ? " can-send" : ""}${isSending ? " is-thinking" : ""}`}
+                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
                       disabled={isSending || isGeneratingMedia}
                       onClick={() => {
                         if (voiceInputActive) {
@@ -2891,10 +2891,10 @@ function Dashboard() {
                           handleVoiceInput();
                         }
                       }}
-                      title={isSending ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Use voice"}
-                      aria-label={isSending ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice dictation"}
+                      title={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Use voice"}
+                      aria-label={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice dictation"}
                     >
-                      {isSending ? (
+                      {isSending || isGeneratingMedia ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
                       ) : draft.trim() || selectedFiles.length || createMode ? (
                         createMode ? <span aria-hidden="true">✦</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
