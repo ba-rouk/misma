@@ -27,6 +27,7 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   const dashboard = await read("../src/routes/dashboard.tsx");
   const server = await read("../src/server.ts");
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+  const supabaseClient = await read("../src/lib/supabase.ts");
   const callback = await read("../src/routes/auth/callback.tsx");
 
   assert.match(login, /signInWithPassword/);
@@ -52,7 +53,7 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   assert.match(edgeFunction, /Deno\.env\.get\(secret\)/);
   assert.match(edgeFunction, /"GEMINI_API_KEY"/);
   assert.match(edgeFunction, /\.auth\.getUser\(accessToken\)/);
-  assert.doesNotMatch(client, /SERVICE_ROLE|service_role|NEXT_PUBLIC_SUPABASE_SERVICE_ROLE/i);
+  assert.doesNotMatch(supabaseClient, /SERVICE_ROLE|service_role|NEXT_PUBLIC_SUPABASE_SERVICE_ROLE/i);
   assert.match(edgeFunction, /handlePublicWidgetAction/);
   assert.match(edgeFunction, /SUPABASE_SERVICE_ROLE_KEY/);
 });
