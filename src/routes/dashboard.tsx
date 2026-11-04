@@ -2712,6 +2712,20 @@ function Dashboard() {
                       ))}
                     </div>
                   )}
+                  <div className="aichat-composer-input-row">
+                    <textarea
+                      ref={textareaRef}
+                      rows={1}
+                      className="aichat-composer-textarea"
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handleComposerPaste}
+                      disabled={isSending}
+                      aria-label="Message Misma"
+                    />
+                  </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
@@ -2748,18 +2762,7 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <textarea
-                      ref={textareaRef}
-                      rows={1}
-                      className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handleComposerPaste}
-                      disabled={isSending}
-                      aria-label="Message Misma"
-                    />
+                    <div className="aichat-composer-sendrow-spacer" />
                     <button
                       type="button"
                       className={`aichat-composer-voice${voiceInputActive ? " is-listening" : ""}`}
@@ -2788,10 +2791,6 @@ function Dashboard() {
                   <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                 </form>
-                <p className="aichat-disclaimer-text">
-                  Misma can make mistakes. Verify important business details.{" "}
-                  <a href="#">Learn more</a>
-                </p>
               </div>
             </div>
           </div>
