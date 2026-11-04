@@ -1860,7 +1860,15 @@ function Dashboard() {
     setChatError("");
     try {
       const blob = await fetchAttachmentBlob(attachment, conversationId);
-      downloadBlob(blob, attachment.name || (attachment.kind === "generated-video" ? "misma-video.mp4" : "misma-image.png"));
+      const downloadExtension = blob.type === "image/jpeg"
+        ? "jpg"
+        : (blob.type.split("/")[1] || (attachment.kind === "generated-video" ? "mp4" : "png"))
+            .replace(/[^a-z0-9]/gi, "") || "bin";
+      const requestedName = attachment.name?.trim() || "misma-media";
+      const downloadName = /\.[a-z0-9]{2,8}$/i.test(requestedName)
+        ? requestedName
+        : requestedName + "." + downloadExtension;
+      downloadBlob(blob, downloadName);
       showMediaActionStatus("Download started");
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : "Could not download this file.");
