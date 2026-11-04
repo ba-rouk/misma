@@ -52,7 +52,9 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   assert.match(edgeFunction, /Deno\.env\.get\(secret\)/);
   assert.match(edgeFunction, /"GEMINI_API_KEY"/);
   assert.match(edgeFunction, /\.auth\.getUser\(accessToken\)/);
-  assert.doesNotMatch(edgeFunction, /SERVICE_ROLE|service_role|NEXT_PUBLIC_/i);
+  assert.doesNotMatch(client, /SERVICE_ROLE|service_role|NEXT_PUBLIC_SUPABASE_SERVICE_ROLE/i);
+  assert.match(edgeFunction, /handlePublicWidgetAction/);
+  assert.match(edgeFunction, /SUPABASE_SERVICE_ROLE_KEY/);
 });
 
 test("the Misma migration provisions only the dashboard's required RLS schema", async () => {
@@ -176,4 +178,54 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
 
   assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
   assert.match(dashboard, /Start voice input/);
+});
+
+
+test("business workspace navigation, website widget, handoff, scan and product workflows are wired", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const edge = await read("../supabase/functions/misma-chat/index.ts");
+  const widget = await read("../public/misma-widget.js");
+  const styles = await read("../src/styles.css");
+  const migration = await read("../supabase/migrations/20261104104500_workspace_websites_handoff_products.sql");
+
+  for (const tab of ["website-stats", "websites", "products", "manage-customers", "connect-phone", "connect-website", "connect-whatsapp"]) {
+    assert.match(dashboard, new RegExp('activeTab === "' + tab + '"'));
+  }
+  assert.match(dashboard, /workspaceMenuOpen/);
+  assert.match(dashboard, /buildMenuOpen/);
+  assert.match(dashboard, /connectMenuOpen/);
+  assert.match(dashboard, /manageMenuOpen/);
+  assert.match(dashboard, /data-website-key=/);
+  assert.match(dashboard, /Scan website with Misma/);
+  assert.match(dashboard, /handleScanWebsite/);
+  assert.match(dashboard, /handleApproveWebsiteKnowledge/);
+  assert.match(dashboard, /handleApproveWebsiteProduct/);
+  assert.match(dashboard, /@Thinking for deeper reasoning/);
+  assert.match(dashboard, /handleComposerDraftChange/);
+  assert.match(dashboard, /Analyze the attached business document or image/);
+  assert.match(api, /getBusinessWorkspaceFeatures/);
+  assert.match(api, /createWorkspaceWebsite/);
+  assert.match(api, /updateHumanHandoffStatus/);
+  assert.match(api, /markWorkspaceNotificationRead/);
+  assert.match(api, /createWorkspaceProduct/);
+  assert.match(api, /latestScansByWebsite/);
+  assert.match(edge, /action === "scan-website"/);
+  assert.match(edge, /https:\/\/api\.tavily\.com\/crawl/);
+  assert.match(edge, /action === "widget-handoff"/);
+  assert.match(edge, /human_handoff_requests/);
+  assert.match(edge, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(widget, /Request a human/);
+  assert.match(widget, /widget-chat/);
+  assert.match(widget, /widget-handoff/);
+  assert.match(widget, /data-website-key/);
+  assert.match(styles, /\.aichat-nav-submenu/);
+  assert.match(styles, /\.aichat-stat-grid/);
+  assert.match(styles, /\.aichat-website-card/);
+  assert.match(styles, /\.aichat-scan-suggestions/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.workspace_websites/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.human_handoff_requests/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.workspace_products/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /is_workspace_member\(workspace_id\)/);
 });
