@@ -3268,8 +3268,13 @@ function Dashboard() {
                 <h3>Add New Business Knowledge</h3>
                 <p>
                   When customers ask this question, Misma will answer with the
-                  approved response.
+                  approved response. You can also load text from a business document and review it before saving.
                 </p>
+                <div className="aichat-inline-actions aichat-knowledge-upload">
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => knowledgeFileInputRef.current?.click()}>Upload knowledge file</button>
+                  <input ref={knowledgeFileInputRef} type="file" hidden accept=".txt,.md,.csv,.json,.html,.htm,text/plain,text/csv,application/json,text/html" onChange={(event) => void handleKnowledgeFileSelected(event)} />
+                  {knowledgeFileStatus && <span className="aichat-settings-hint" role="status">{knowledgeFileStatus}</span>}
+                </div>
                 <form onSubmit={handleAddKnowledge}>
                   <div className="aichat-input-group">
                     <label htmlFor="k-question">Question / Trigger</label>
@@ -3354,6 +3359,42 @@ function Dashboard() {
           </div>
         )}
 
+
+        {activeTab === "connect-phone" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Connect a phone channel</h2><p>Prepare a business phone channel so customers can reach your team and request a call back.</p></div>
+            <div className="aichat-card">
+              <div className="aichat-connection-heading"><span className="aichat-connection-icon">☎</span><span><strong>Phone and voice support</strong><small className="aichat-status-pill is-pending">Setup required</small></span></div>
+              <p>Phone calling requires a telephony provider (for example, Twilio or Vonage), a verified business number, and a server-side webhook. Misma does not collect provider passwords or API tokens in this page.</p>
+              <div className="aichat-setup-steps"><div><b>1. Choose a provider</b><small>Purchase or verify a business phone number with your telephony provider.</small></div><div><b>2. Configure server credentials</b><small>Keep provider account credentials in server-side secrets, never in website JavaScript.</small></div><div><b>3. Enable the phone webhook</b><small>Once the provider credentials and webhook are provisioned, Misma can route call events and follow-ups to the workspace.</small></div></div>
+              <button type="button" className="aichat-action-btn" onClick={() => { setActiveTab("workspace"); setDraft("Help me plan the phone and voice support integration for my business. What phone provider, business number, and webhook setup should I use?"); window.setTimeout(() => textareaRef.current?.focus(), 80); }}>Ask Misma about phone setup</button>
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "connect-website" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Connect a website</h2><p>Install the Misma widget on your website to answer visitor questions and route human-support requests.</p></div>
+            <div className="aichat-card">
+              <h3>Website widget integration</h3>
+              <div className="aichat-setup-steps"><div><b>1. Add your website URL</b><small>Misma registers the domain and creates a unique installation key.</small></div><div><b>2. Copy the script</b><small>Paste the script in your website's global footer, immediately before the closing body tag.</small></div><div><b>3. Confirm installation</b><small>Return to Misma and click Done. Website chat becomes active for that domain.</small></div></div>
+              <button type="button" className="aichat-action-btn" onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Open website connections</button>
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "connect-whatsapp" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Connect WhatsApp</h2><p>Prepare the WhatsApp Business Cloud API connection for your business number.</p></div>
+            <div className="aichat-card">
+              <div className="aichat-connection-heading"><span className="aichat-connection-icon">◉</span><span><strong>WhatsApp Business Platform</strong><small className="aichat-status-pill is-pending">Not connected</small></span></div>
+              <p>Live WhatsApp messaging requires an approved Meta Business app and server-side webhook credentials. Keep access tokens private; do not paste them into the browser or a public website.</p>
+              <div className="aichat-setup-steps"><div><b>1. Prepare Meta Business</b><small>Have a verified Meta Business account, WhatsApp Business Account ID, and a phone number registered for the Cloud API.</small></div><div><b>2. Configure secure credentials</b><small>Store the permanent access token, Phone Number ID, and App Secret in Supabase Edge Function secrets after the webhook endpoint is enabled.</small></div><div><b>3. Verify the webhook</b><small>Subscribe the WhatsApp messages webhook and verify incoming events before enabling live customer replies.</small></div></div>
+              <button type="button" className="aichat-action-btn" onClick={() => { setActiveTab("workspace"); setDraft("Help me prepare the Meta WhatsApp Business Cloud API integration for my workspace. Explain the required IDs, server-side secrets, webhook verification, and safe testing steps."); window.setTimeout(() => textareaRef.current?.focus(), 80); }}>Ask Misma about WhatsApp setup</button>
+            </div>
+          </div></div>
+        )}
+
         {/* ── View 3: Connect Channels ── */}
         {activeTab === "connect" && (
           <div className="aichat-tab-view">
@@ -3406,6 +3447,33 @@ function Dashboard() {
               </div>
             </div>
           </div>
+        )}
+
+
+        {activeTab === "manage-customers" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Customers requesting a human</h2><p>Customers who tapped the human-support icon in your website chat widget. Open a customer to read the full saved conversation.</p></div>
+            <div className="aichat-card">
+              <div className="aichat-section-title-row"><div><h3>Human support queue ({(businessFeatures.handoffs || []).length})</h3><p>Requests remain here until your team resolves them.</p></div><button type="button" className="aichat-action-btn secondary" onClick={() => void refreshBusinessFeatures()}>Refresh</button></div>
+              {(businessFeatures.handoffs || []).length === 0 ? (
+                <div className="aichat-empty-state"><h3>No human requests yet</h3><p>When a website visitor asks for a person, the request and their conversation will appear here.</p></div>
+              ) : (
+                <div className="aichat-customer-request-list">
+                  {(businessFeatures.handoffs || []).map((item: any) => (
+                    <article className="aichat-customer-request" key={item.id}>
+                      <div className="aichat-customer-request-head"><div><strong>{item.visitor_name || "Website visitor"}</strong><small>{item.visitor_email || "No email provided"} · {new Date(item.created_at).toLocaleString()}</small></div><span className={`aichat-status-pill ${item.status === "resolved" ? "is-muted" : "is-pending"}`}>{item.status}</span></div>
+                      <p>{item.request_note || item.conversation?.latest_text || "Requested to speak with a human."}</p>
+                      <div className="aichat-inline-actions">
+                        <button type="button" className="aichat-action-btn" onClick={() => void handleOpenBusinessConversation(Number(item.conversation_id))}>View conversation</button>
+                        {item.status === "open" && <button type="button" className="aichat-action-btn secondary" onClick={() => void handleUpdateHandoff(Number(item.id), "assigned")}>Assign to team</button>}
+                        {item.status !== "resolved" && <button type="button" className="aichat-action-btn secondary" onClick={() => void handleUpdateHandoff(Number(item.id), "resolved")}>Resolve request</button>}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div></div>
         )}
 
         {/* ── View 4: Manage (Business, Orders & Settings) ── */}
@@ -3951,43 +4019,27 @@ function Dashboard() {
             </div>
           </div>
         )}
+
         {activeTab === "notifications" && (
-          <div className="aichat-tab-view">
-            <div className="aichat-tab-content">
-              <div className="aichat-tab-header">
-                <h2>Notifications {unreadVisitorCount > 0 ? `(${unreadVisitorCount} unread)` : ""}</h2>
-                <p>New messages sent by visitors through your website.</p>
-              </div>
-              <div className="aichat-card aichat-notifications-card">
-                {unreadVisitorMessages.length === 0 ? (
-                  <div className="aichat-notifications-empty">
-                    <span className="aichat-notifications-empty-icon" aria-hidden="true">✓</span>
-                    <h3>You're all caught up</h3>
-                    <p>New website visitor messages will appear here.</p>
-                  </div>
-                ) : (
-                  <>
-                    {unreadVisitorCount > unreadVisitorMessages.length && (
-                      <p className="aichat-notifications-overflow">Showing the latest {unreadVisitorMessages.length} unread messages.</p>
-                    )}
-                    <div className="aichat-notifications-list">
-                      {unreadVisitorMessages.map((item) => (
-                        <button key={item.id} type="button" className="aichat-notification-item" onClick={() => void selectConversation(item.conversationId)}>
-                          <span className="aichat-notification-item-icon" aria-hidden="true">●</span>
-                          <span className="aichat-notification-item-copy">
-                            <strong>{item.conversationTitle}</strong>
-                            <small>{item.channel} · {item.created_at ? new Date(item.created_at).toLocaleString() : "New message"}</small>
-                            <span>{item.text}</span>
-                          </span>
-                          <span className="aichat-notification-open">Open chat ↗</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Notifications</h2><p>New and previous website messages, plus every request from a visitor asking to speak with a human.</p></div>
+            <div className="aichat-card">
+              <div className="aichat-section-title-row"><div><h3>Activity history ({(businessFeatures.notifications || []).length})</h3><p>{businessFeatures.stats?.unreadNotifications || 0} unread updates</p></div><button type="button" className="aichat-action-btn secondary" onClick={() => void refreshBusinessFeatures()}>Refresh</button></div>
+              {(businessFeatures.notifications || []).length === 0 ? (
+                <div className="aichat-empty-state"><h3>No notifications yet</h3><p>Website messages and human-support requests will appear here. Previously read activity stays in the history.</p></div>
+              ) : (
+                <div className="aichat-notifications-list">
+                  {(businessFeatures.notifications || []).map((item: any) => (
+                    <article className={`aichat-notification-history-item ${item.read_at ? "is-read" : "is-unread"}`} key={item.id}>
+                      <span className={`aichat-notification-item-icon ${item.type === "human_request" ? "is-human" : ""}`}>{item.type === "human_request" ? "●" : "•"}</span>
+                      <div className="aichat-notification-item-copy"><strong>{item.type === "human_request" ? `Human support: ${item.title}` : item.title}</strong><small>{item.type === "human_request" ? "Human support request" : "Website visitor message"} · {item.created_at ? new Date(item.created_at).toLocaleString() : ""} · {item.read_at ? "Read" : "New"}</small><span>{item.body}</span></div>
+                      <button type="button" className="aichat-notification-open" onClick={() => void handleOpenBusinessConversation(Number(item.conversationId), item)}>Open conversation ↗</button>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          </div></div>
         )}
 
         {cropTarget && (
