@@ -6229,3 +6229,107 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .aichat-composer-input-row .aichat-composer-textarea { transition: none; }
 }
+
+
+/* Business workspace navigation and customer operations */
+.aichat-nav-caret { margin-left: auto; color: #6f8297; font-size: 16px; line-height: 1; }
+.aichat-nav-submenu { display: grid; gap: 3px; margin: 0 0 7px 38px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.09); }
+.aichat-nav-subbtn { width: 100%; min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 9px; border: 0; border-radius: 7px; background: transparent; color: #8092a6; text-align: left; font: inherit; font-size: 11px; cursor: pointer; }
+.aichat-nav-subbtn:hover, .aichat-nav-subbtn.active { color: #f4f8fd; background: rgba(77,141,255,.1); }
+.aichat-nav-subbtn span { color: #8fb8ff; font-size: 10px; }
+.aichat-metric-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
+.aichat-metric-grid .aichat-card { display: grid; gap: 8px; margin: 0; }
+.aichat-metric-grid .aichat-card > span { color: #8295aa; font-size: 11px; }
+.aichat-metric-grid .aichat-card > strong { font-size: 30px; line-height: 1.1; letter-spacing: -.04em; }
+.aichat-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.aichat-panel-heading h3 { margin: 0; }
+.aichat-panel-heading > div { display: grid; gap: 4px; min-width: 0; }
+.aichat-panel-heading small, .aichat-hub-row small { display: block; color: #8295aa; font-size: 11px; overflow-wrap: anywhere; }
+.aichat-hub-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 0; border-top: 1px solid rgba(255,255,255,.07); }
+.aichat-hub-row > div { min-width: 0; }
+.aichat-hub-row p { margin: 5px 0 0; color: #8295aa; font-size: 12px; }
+.aichat-status-pill { flex: none; display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 99px; color: #9eb2c7; background: rgba(150,170,190,.1); font-size: 10px; text-transform: capitalize; }
+.aichat-status-pill.is-connected { color: #67d89a; background: rgba(87,216,145,.1); }
+.aichat-status-pill.is-pending, .aichat-status-pill.is-open { color: #ffbd79; background: rgba(255,176,110,.1); }
+.aichat-status-pill.is-paused, .aichat-status-pill.is-resolved, .aichat-status-pill.is-handled { color: #9eb2c7; }
+.aichat-hub-form { display: grid; gap: 14px; max-width: 680px; }
+.aichat-hub-form label { display: grid; gap: 7px; color: #aab9c9; font-size: 12px; }
+.aichat-website-card { padding: 16px 0; border-top: 1px solid rgba(255,255,255,.07); }
+.aichat-website-card p { margin: 12px 0 0; color: #8295aa; font-size: 12px; line-height: 1.6; }
+.aichat-handoff-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 0; border: 0; border-top: 1px solid rgba(255,255,255,.07); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.aichat-handoff-row:hover { background: rgba(255,255,255,.025); }
+.aichat-handoff-avatar { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(77,141,255,.14); color: #a9c8ff; }
+.aichat-handoff-copy { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.aichat-handoff-copy small { color: #8295aa; font-size: 10px; overflow-wrap: anywhere; }
+.aichat-handoff-copy > span { color: #aebdcb; font-size: 12px; }
+.aichat-notification-item.is-read { opacity: .65; }
+@media (max-width: 900px) { .aichat-metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 560px) { .aichat-metric-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .aichat-metric-grid .aichat-card { padding: 13px; } .aichat-metric-grid .aichat-card > strong { font-size: 24px; } .aichat-handoff-row { align-items: flex-start; flex-wrap: wrap; } .aichat-panel-heading { align-items: flex-start; flex-direction: column; } }
+
+
+/* Website widget installation, customer handoff, channel setup and knowledge imports. */
+.aichat-widget-script-label { display:block; margin-top:12px; color:#9cafc2; font-size:11px; font-weight:650; }
+.aichat-widget-script, .aichat-channel-setup pre {
+  max-width:100%; overflow:auto; margin:8px 0; padding:12px; border:1px solid rgba(143,165,190,.2);
+  border-radius:10px; background:rgba(5,12,22,.42); color:#d8e4f2; font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;
+  white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.aichat-website-actions, .aichat-product-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.aichat-website-card > small { display:block; margin-top:8px; color:#8295aa; font-size:10px; line-height:1.5; }
+.aichat-handoff-card { padding:0 0 12px; border-top:1px solid rgba(255,255,255,.07); }
+.aichat-handoff-card .aichat-handoff-row { border-top:0; padding-bottom:10px; }
+.aichat-handoff-card > .aichat-action-btn { margin-left:48px; }
+.aichat-knowledge-import { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:18px; padding-top:16px; border-top:1px solid rgba(255,255,255,.08); }
+.aichat-knowledge-import > div { display:grid; gap:5px; min-width:0; }
+.aichat-knowledge-import strong { font-size:12px; }
+.aichat-knowledge-import small { max-width:550px; color:#8799ae; font-size:11px; line-height:1.5; }
+.aichat-channel-setup { display:grid; gap:8px; margin:16px 0; padding:14px; border:1px solid rgba(143,165,190,.16); border-radius:12px; background:rgba(5,12,22,.18); }
+.aichat-channel-setup strong { color:#c4d3e3; font-size:11px; }
+.aichat-channel-setup code { width:fit-content; padding:4px 7px; border-radius:6px; background:rgba(143,165,190,.12); color:#d8e4f2; font:11px ui-monospace,SFMono-Regular,Consolas,monospace; }
+.aichat-channel-setup small { color:#8295aa; font-size:10px; line-height:1.5; }
+.aichat-integration-warning { padding:10px 12px; border:1px solid rgba(255,188,120,.22); border-radius:9px; background:rgba(255,188,120,.07); color:#e8b77c !important; font-size:11px; line-height:1.5; }
+.aichat-product-actions { margin-top:0; justify-content:flex-end; }
+.aichat-hub-row .aichat-product-actions { flex:none; }
+
+/* Keep the composer footprint aligned with its 38px action controls. */
+.aichat-composer-input-row .aichat-composer-textarea {
+  height:34px; min-height:34px; padding-top:7px; padding-bottom:7px; font-size:14px; line-height:20px;
+}
+.aichat-composer-sendrow .aichat-composer-plus-wrap { position:relative; }
+.aichat-composer-focus-hint {
+  position:absolute; left:-2px; bottom:calc(100% + 11px); z-index:30; display:flex; align-items:center; gap:8px;
+  max-width:min(260px,calc(100vw - 40px)); white-space:nowrap; padding:6px 8px;
+  border:1px solid rgba(148,166,188,.22); border-radius:9px; background:#1c2633;
+  box-shadow:0 8px 22px rgba(0,0,0,.22); color:#d6e1ef; font-size:10px; line-height:1;
+  animation:misma-focus-hint-in .12s ease-out;
+}
+.aichat-composer-focus-hint::after {
+  content:""; position:absolute; left:15px; top:100%; width:7px; height:7px; transform:translateY(-50%) rotate(45deg);
+  border-right:1px solid rgba(148,166,188,.22); border-bottom:1px solid rgba(148,166,188,.22); background:#1c2633;
+}
+.aichat-composer-focus-hint > span { color:#aab8c9; }
+.aichat-composer-thinking-chip {
+  position:relative; z-index:1; padding:5px 7px; border:1px solid rgba(139,179,243,.28); border-radius:6px;
+  background:rgba(92,145,219,.12); color:#b7d1f8; font:600 10px/1 var(--font-sans); cursor:pointer;
+}
+.aichat-composer-thinking-chip.active { border-color:rgba(129,187,255,.56); background:rgba(92,145,219,.25); color:#e6f0ff; }
+@keyframes misma-focus-hint-in { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
+@media (max-width:560px) {
+  .aichat-knowledge-import { align-items:stretch; flex-direction:column; }
+  .aichat-knowledge-import .aichat-action-btn { width:100%; }
+  .aichat-product-actions { flex-direction:column; align-items:flex-end; }
+  .aichat-website-actions > button { flex:1; min-width:135px; }
+  .aichat-composer-focus-hint { bottom:calc(100% + 8px); }
+}
+
+/* Compact business chat composer: keep the textarea aligned with its controls. */
+.aichat-composer-card.aichat-composer-card-tools { padding: 8px 12px; gap: 6px; }
+.aichat-composer-tools-row { min-height: 22px; gap: 7px; }
+.aichat-composer-input-row .aichat-composer-textarea {
+  min-height: 30px;
+  max-height: 160px;
+  padding: 5px 3px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.aichat-composer-sendrow { padding: 5px 0 0; }

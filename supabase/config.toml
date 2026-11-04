@@ -2,3 +2,6 @@ project_id = "grlrrmebnthxguluybgb"
 
 [functions.misma-chat]
 verify_jwt = true
+
+[functions.misma-widget]
+verify_jwt = false

@@ -45,16 +45,26 @@ export const getMismaData = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
-    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult] =
+    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
+        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
-        db.from("knowledge_entries").select("id,question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
-        db.from("contacts").select("id,name,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("lifetime_value_rwf", { ascending: false }),
+        db.from("knowledge_entries").select("id,question,answer,source_type,source_ref").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
+        db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
+        db.from("website_connections").select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+        db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("channel_connections").select("id,channel,provider,display_name,external_id,phone_number,status,created_at").eq("workspace_id", workspaceId),
       ]);
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const rawConversations = check(conversationsResult.data, conversationsResult.error);
+    const websites = check(websitesResult.data, websitesResult.error);
+    const handoffs = check(handoffsResult.data, handoffsResult.error);
+    const notifications = check(notificationsResult.data, notificationsResult.error);
+    const products = check(productsResult.data, productsResult.error);
+    const channelConnections = check(channelConnectionsResult.data, channelConnectionsResult.error);
     const conversationIds = rawConversations.map((conversation: any) => conversation.id);
     const promptTitles = new Map<number, string>();
     if (conversationIds.length) {
@@ -193,7 +203,10 @@ export const getMismaData = createServerFn({ method: "POST" })
     }));
     const knowledge = check(knowledgeResult.data, knowledgeResult.error);
     const customers = check(customersResult.data, customersResult.error);
-    return { workspace, conversations, orders, knowledge, customers, assets, unreadVisitorMessages, unreadVisitorCount };
+    return {
+      workspace, conversations, orders, knowledge, customers, assets,
+      unreadVisitorMessages, unreadVisitorCount, websites, handoffs, notifications, products, channelConnections,
+    };
   });
 
 export const getVisitorNotifications = createServerFn({ method: "POST" })
@@ -425,4 +438,100 @@ export const setConversationGroup = createServerFn({ method: "POST" })
       .eq("workspace_id", workspaceId);
     if (error) throw new Error(error.message);
     return { ok: true, groupName: normalizedGroup };
+  });
+
+
+export const createWebsiteConnection = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    name: z.string().trim().max(120).optional(),
+    websiteUrl: z.string().url().max(2048),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const parsed = new URL(data.websiteUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use an HTTP or HTTPS website URL.");
+    const websiteUrl = parsed.origin;
+    const result = await db.from("website_connections").insert({
+      workspace_id: workspaceId,
+      name: data.name?.trim() || parsed.hostname,
+      website_url: websiteUrl,
+      domain: parsed.hostname.toLowerCase(),
+      status: "pending",
+    }).select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").single();
+    const website = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "website.connection_created", website.id, { domain: website.domain });
+    return { website };
+  });
+
+export const createProductService = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    kind: z.enum(["product", "service"]),
+    name: z.string().trim().min(1).max(160),
+    description: z.string().trim().max(4000).default(""),
+    price: z.string().trim().max(120).default(""),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const result = await db.from("products_services").insert({
+      workspace_id: workspaceId,
+      item_type: data.kind,
+      name: data.name,
+      description: data.description,
+      price_text: data.price,
+      active: true,
+      created_from: "manual",
+    }).select("id,item_type,name,description,price_text,active,created_from,created_at").single();
+    const product = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "product_service.created", String(product.id), { kind: data.kind, name: data.name });
+    return { product };
+  });
+
+
+export const updateHumanRequestStatus = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    requestId: z.number().int().positive(),
+    status: z.enum(["pending", "handled"]),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: request, error } = await db.from("human_requests")
+      .update({
+        status: data.status,
+        handled_at: data.status === "handled" ? new Date().toISOString() : null,
+      })
+      .eq("id", data.requestId)
+      .eq("workspace_id", workspaceId)
+      .select("id,conversation_id,status,handled_at")
+      .single();
+    const saved = check(request, error);
+    if (data.status === "handled") {
+      await db.from("conversations").update({ status: "AI", updated_at: new Date().toISOString() })
+        .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
+    } else {
+      await db.from("conversations").update({ status: "Needs you", updated_at: new Date().toISOString() })
+        .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
+    }
+    return { request: saved };
+  });
+
+export const updateProductServiceStatus = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    productId: z.number().int().positive(),
+    active: z.boolean(),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: product, error } = await db.from("products_services")
+      .update({ active: data.active, updated_at: new Date().toISOString() })
+      .eq("id", data.productId)
+      .eq("workspace_id", workspaceId)
+      .select("id,item_type,name,description,price_text,active,created_from,created_at")
+      .single();
+    const saved = check(product, error);
+    await recordAudit(db, workspaceId, "product_service.status_changed", String(saved.id), { active: data.active });
+    return { product: saved };
   });
