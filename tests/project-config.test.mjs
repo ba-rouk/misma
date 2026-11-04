@@ -106,7 +106,9 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.doesNotMatch(dashboard, /aichat-composer-input-row/);
   assert.match(dashboard, /aichat-composer-send-btn.*is-thinking/);
   assert.match(dashboard, /getLoginGreeting/);
-  assert.doesNotMatch(dashboard, /How many orders came in today\\?|Show me recent conversations|How can I help you today\\?/);
+  assert.equal(dashboard.includes("How many orders came in today?"), false);
+  assert.equal(dashboard.includes("Show me recent conversations"), false);
+  assert.equal(dashboard.includes("How can I help you today?"), false);
   assert.match(dashboard, /chatGroupFilter === "__ungrouped__"/);
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
   assert.match(dashboard, /microphonePermissionOpen/);
