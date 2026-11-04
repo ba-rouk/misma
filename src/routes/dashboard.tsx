@@ -3167,6 +3167,11 @@ function Dashboard() {
                     {savingKnowledge ? "Saving…" : "+ Add Knowledge Q&A"}
                   </button>
                 </form>
+                <div className="aichat-knowledge-import">
+                  <input ref={knowledgeFileInputRef} type="file" accept=".txt,.md,.csv,.json,.html,.htm,.xml,text/plain,text/markdown,text/csv,application/json,text/html,application/xml" hidden onChange={(event) => void handleExtractKnowledgeFile(event)} />
+                  <div><strong>Import business knowledge</strong><small>Upload TXT, Markdown, CSV, JSON, HTML, or XML text files up to 2 MB. Misma extracts FAQs and inactive catalog suggestions for review.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" disabled={knowledgeUploadBusy} onClick={() => knowledgeFileInputRef.current?.click()}>{knowledgeUploadBusy ? "Extracting…" : "Upload knowledge file"}</button>
+                </div>
               </div>
 
               {/* Approved Knowledge Library Table */}
@@ -3925,13 +3930,52 @@ function Dashboard() {
         )}
 
         {activeTab === "phone" && (
-          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Connect a phone number</h2><p>Prepare a business phone channel for customer calls and handoff.</p></div><div className="aichat-card"><h3>Phone channel</h3><p>Phone integration is not connected yet. A supported telephony provider and verified business number are required before calls can be routed to Misma.</p><span className="aichat-status-pill">Not connected</span></div></div></div>
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Connect a phone number</h2><p>Route incoming business calls through Twilio Voice to Misma. The number must belong to the configured Twilio account.</p></div>
+            <div className="aichat-card">
+              <div className="aichat-panel-heading"><h3>Twilio Voice</h3><span className={`aichat-status-pill ${channelConnections.find((item) => item.channel === "phone")?.status === "connected" ? "is-connected" : "is-pending"}`}>{channelConnections.find((item) => item.channel === "phone")?.status || "Not configured"}</span></div>
+              <label>Twilio business phone number<input className="aichat-input" placeholder="+250…" value={twilioPhoneNumber || channelConnections.find((item) => item.channel === "phone")?.phone_number || ""} onChange={(event) => setTwilioPhoneNumber(event.target.value)} /></label>
+              <div className="aichat-channel-setup">
+                <strong>1. Add these secrets in Supabase → Edge Functions → Secrets</strong>
+                <code>TWILIO_ACCOUNT_SID</code><code>TWILIO_AUTH_TOKEN</code>
+                <strong>2. Set your Twilio number's Voice webhook</strong>
+                <pre><code>{`${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget?action=phone`}</code></pre>
+                <small>HTTP method: POST · Optional secret: TWILIO_WEBHOOK_URL should equal the exact public webhook URL if Twilio signature validation sees a different proxy URL.</small>
+                <small>Calls are answered using Twilio speech recognition and Misma's approved business knowledge. A caller can say “human” or “agent” to create a handoff.</small>
+              </div>
+              {!channelEnvironment.phoneConfigured && <p className="aichat-integration-warning">Twilio credentials are not detected in Supabase function secrets yet. Add them before verification.</p>}
+              <div className="aichat-website-actions">
+                <button type="button" className="aichat-action-btn" disabled={channelBusy === "phone" || !twilioPhoneNumber.trim()} onClick={() => void handleSaveChannel("phone")}>{channelBusy === "phone" ? "Saving…" : "Save phone number"}</button>
+                <button type="button" className="aichat-action-btn secondary" disabled={channelBusy === "phone-test" || !channelEnvironment.phoneConfigured} onClick={() => void handleTestChannel("phone")}>{channelBusy === "phone-test" ? "Verifying…" : "Verify connection"}</button>
+              </div>
+            </div>
+          </div></div>
         )}
         {activeTab === "website-connect" && (
           <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Website connection</h2><p>Manage website chat installation from the Websites page.</p></div><div className="aichat-card"><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open Websites</button></div></div></div>
         )}
         {activeTab === "whatsapp" && (
-          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Connect WhatsApp</h2><p>Bring WhatsApp Business conversations into your Misma inbox.</p></div><div className="aichat-card"><h3>WhatsApp Business</h3><p>WhatsApp is not connected yet. The integration requires Meta WhatsApp Business Cloud API credentials and a verified webhook.</p><span className="aichat-status-pill">Not connected</span></div></div></div>
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Connect WhatsApp</h2><p>Connect a Meta WhatsApp Business Cloud API phone number. Incoming messages and AI replies will appear in your Misma inbox.</p></div>
+            <div className="aichat-card">
+              <div className="aichat-panel-heading"><h3>WhatsApp Business Cloud API</h3><span className={`aichat-status-pill ${channelConnections.find((item) => item.channel === "whatsapp")?.status === "connected" ? "is-connected" : "is-pending"}`}>{channelConnections.find((item) => item.channel === "whatsapp")?.status || "Not configured"}</span></div>
+              <label>Meta Phone Number ID<input className="aichat-input" placeholder="Phone Number ID from WhatsApp Manager" value={whatsappPhoneNumberId || channelConnections.find((item) => item.channel === "whatsapp")?.external_id || ""} onChange={(event) => setWhatsappPhoneNumberId(event.target.value)} /></label>
+              <label>WhatsApp Business number (display only)<input className="aichat-input" placeholder="+250…" value={whatsappPhoneNumber} onChange={(event) => setWhatsappPhoneNumber(event.target.value)} /></label>
+              <div className="aichat-channel-setup">
+                <strong>1. Add these secrets in Supabase → Edge Functions → Secrets</strong>
+                <code>WHATSAPP_ACCESS_TOKEN</code><code>WHATSAPP_VERIFY_TOKEN</code><code>META_APP_SECRET</code>
+                <strong>2. Set the Meta webhook callback URL</strong>
+                <pre><code>{`${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget?channel=whatsapp`}</code></pre>
+                <small>Use the same WHATSAPP_VERIFY_TOKEN value in Meta's webhook verification field. Subscribe the WhatsApp Business Account to the messages webhook field.</small>
+                <small>Keep access tokens and the Meta app secret in Supabase function secrets only. Never paste them into this dashboard or website code.</small>
+              </div>
+              {!channelEnvironment.whatsappConfigured && <p className="aichat-integration-warning">Meta webhook credentials are not detected in Supabase function secrets yet.</p>}
+              <div className="aichat-website-actions">
+                <button type="button" className="aichat-action-btn" disabled={channelBusy === "whatsapp" || !whatsappPhoneNumberId.trim()} onClick={() => void handleSaveChannel("whatsapp")}>{channelBusy === "whatsapp" ? "Saving…" : "Save WhatsApp number"}</button>
+                <button type="button" className="aichat-action-btn secondary" disabled={channelBusy === "whatsapp-test" || !channelEnvironment.whatsappConfigured} onClick={() => void handleTestChannel("whatsapp")}>{channelBusy === "whatsapp-test" ? "Verifying…" : "Verify connection"}</button>
+              </div>
+            </div>
+          </div></div>
         )}
 
         {activeTab === "notifications" && (
