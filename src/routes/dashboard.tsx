@@ -942,7 +942,7 @@ function Dashboard() {
   }, [isAuthenticated, navigate]);
 
   // All calls to the public widget function use a real signed-in workspace token.
-  const callWidgetFunction = async (payload: Record<string, unknown>) => {
+  const callWidgetFunction = async (payload: Record<string, unknown>, signal?: AbortSignal) => {
     const config = getSupabaseConfig();
     if (!token || !config) throw new Error("Your Misma workspace session or Supabase configuration is unavailable.");
     const baseUrl = config.url.endsWith("/") ? config.url.slice(0, -1) : config.url;
@@ -954,6 +954,7 @@ function Dashboard() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ ...payload, workspaceId: payload.workspaceId || workspace?.id }),
+      signal,
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.error) throw new Error(result.error || `Misma integration request failed (${response.status}).`);
@@ -1639,7 +1640,7 @@ function Dashboard() {
     }
   };
 
-  const postChatAction = async (body: Record<string, unknown>) => {
+  const postChatAction = async (body: Record<string, unknown>, signal?: AbortSignal) => {
     const config = getSupabaseConfig();
     if (!config) throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
     const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
@@ -1650,6 +1651,7 @@ function Dashboard() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
+      signal,
     });
     const result = await response.json() as Record<string, any>;
     if (!response.ok) {
@@ -1863,6 +1865,8 @@ function Dashboard() {
     setFailedAction(null);
     setIsSending(true);
     shouldAutoScrollRef.current = true;
+    const requestController = new AbortController();
+    chatAbortControllerRef.current = requestController;
 
     try {
       const selectedConversation = conversations.find((item: any) => Number(item.id) === Number(currentConversationId));
@@ -1873,7 +1877,7 @@ function Dashboard() {
           workspaceId: workspace?.id,
           conversationId: currentConversationId,
           message: textToSend,
-        });
+        }, requestController.signal);
         if (!reply.message) throw new Error("The human reply was not saved.");
         setMessages((prev) => prev.map((item) => item.id === tempUserId ? reply.message : item));
         setSelectedFiles([]);
@@ -1890,10 +1894,11 @@ function Dashboard() {
         attachments,
         thinkHarder,
         ...(editId ? { editMessageId: Number(editId) } : {}),
-      });
+      }, requestController.signal);
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!currentConversationId && res.conversationId) {
+        activeConversationIdRef.current = Number(res.conversationId);
         setCurrentConversationId(res.conversationId);
       }
 
@@ -1926,6 +1931,7 @@ function Dashboard() {
       setFailedPrompt("");
       loadData();
     } catch (cause) {
+      if (requestController.signal.aborted) return;
       const errMsg = cause instanceof Error ? cause.message : "Failed to connect to Misma AI.";
       setChatError(errMsg);
       setFailedPrompt(textToSend);
@@ -1933,7 +1939,32 @@ function Dashboard() {
       setFailedMessageId(tempUserId);
       setDraft(textToSend);
     } finally {
+      if (chatAbortControllerRef.current === requestController) {
+        chatAbortControllerRef.current = null;
+        setIsSending(false);
+      }
+    }
+  };
+
+  const stopMisma = () => {
+    let stopped = false;
+    if (chatAbortControllerRef.current) {
+      const controller = chatAbortControllerRef.current;
+      chatAbortControllerRef.current = null;
+      controller.abort();
+      stopped = true;
+    }
+    if (mediaAbortControllerRef.current) {
+      const controller = mediaAbortControllerRef.current;
+      mediaAbortControllerRef.current = null;
+      controller.abort();
+      stopped = true;
+    }
+    if (stopped) {
       setIsSending(false);
+      setIsGeneratingMedia(false);
+      setMediaProgress("");
+      setChatError("Stopped.");
     }
   };
 
