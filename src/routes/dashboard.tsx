@@ -1240,8 +1240,7 @@ function Dashboard() {
     } catch {
       setVoiceInputActive(false);
       speechRecognitionRef.current = null;
-      setMicrophonePermissionError("The microphone could not be started. Check this site's microphone permission and try again.");
-      setMicrophonePermissionOpen(true);
+      setChatError("The microphone could not be started. Check your browser's site permissions and try again.");
     }
   };
 
