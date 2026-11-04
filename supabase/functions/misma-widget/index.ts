@@ -117,6 +117,56 @@ Deno.serve(async (request) => {
     .eq("public_key", publicKey).maybeSingle();
   if (websiteError || !website || website.status === "paused") return response(404, { error: "This website chat is not currently available." }, origin);
 
+  if (action === "suggest-products") {
+    const auth = request.headers.get("authorization") || "";
+    const bearer = auth.match(/^Bearer\\s+(.+)$/i)?.[1] || "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
+    if (!bearer || !anonKey) return response(401, { error: "Sign in to request product advice." }, origin);
+    const userClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${bearer}` } } });
+    const { data: userData, error: userError } = await userClient.auth.getUser(bearer);
+    if (userError || !userData.user) return response(401, { error: "Your Misma session has expired." }, origin);
+    const { data: membership } = await db.from("workspace_members").select("workspace_id")
+      .eq("workspace_id", website.workspace_id).eq("user_id", userData.user.id).maybeSingle();
+    if (!membership) return response(403, { error: "You do not have access to this workspace." }, origin);
+    const [workspaceResult, conversationsResult, productsResult] = await Promise.all([
+      db.from("workspaces").select("name,description").eq("id", website.workspace_id).single(),
+      db.from("conversations").select("id,latest_text").eq("workspace_id", website.workspace_id)
+        .neq("channel", "Dashboard").order("updated_at", { ascending: false }).limit(40),
+      db.from("products_services").select("item_type,name,description,price_text").eq("workspace_id", website.workspace_id).eq("active", true).limit(50),
+    ]);
+    const conversationIds = (conversationsResult.data || []).map((item: any) => Number(item.id));
+    const messageResult = conversationIds.length
+      ? await db.from("messages").select("text").in("conversation_id", conversationIds).eq("role", "customer").order("id", { ascending: false }).limit(80)
+      : { data: [], error: null };
+    const demand = (messageResult.data || []).map((item: any) => String(item.text || "").slice(0, 350)).filter(Boolean);
+    if (!demand.length) return response(200, { suggestions: [], message: "There are not enough website visitor requests yet. Connect your widget and collect a few conversations first." }, origin);
+    const system = [
+      "You are Misma's business product strategist. Suggest realistic products or services using customer demand, not guesses.",
+      "Return only a valid JSON array with 3 objects: itemType ('product' or 'service'), name, description, and priceText (empty if there is no grounded price).",
+      "Do not invent exact prices, inventory, capabilities, or commitments. Focus on repeated unmet needs visible in visitor messages.",
+      `Business: ${workspaceResult.data?.name || website.name}. Description: ${workspaceResult.data?.description || "Not supplied"}.`,
+      "Current catalogue:\\n" + (productsResult.data || []).map((item: any) => `${item.item_type}: ${item.name} — ${item.description}`).join("\\n").slice(0, 5000),
+      "Recent visitor requests:\\n" + demand.join("\\n").slice(0, 10000),
+    ].join("\\n\\n");
+    try {
+      const raw = await askModel(system, [], "Create three grounded product or service opportunities from these requests. Return only JSON.");
+      const jsonText = raw.match(/\\[[\\s\\S]*\\]/)?.[0] || "[]";
+      const parsed = JSON.parse(jsonText);
+      const suggestions = Array.isArray(parsed) ? parsed.slice(0, 5).flatMap((item: any) => {
+        if (!item || typeof item.name !== "string" || typeof item.description !== "string") return [];
+        return [{
+          itemType: item.itemType === "service" ? "service" : "product",
+          name: item.name.slice(0, 160),
+          description: item.description.slice(0, 3000),
+          priceText: typeof item.priceText === "string" ? item.priceText.slice(0, 120) : "",
+        }];
+      }) : [];
+      return response(200, { suggestions }, origin);
+    } catch (error) {
+      return response(503, { error: error instanceof Error ? error.message : "Misma could not prepare suggestions." }, origin);
+    }
+  }
+
   if (action === "scan") {
     const auth = request.headers.get("authorization") || "";
     const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1] || "";
