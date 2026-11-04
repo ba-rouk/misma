@@ -3233,10 +3233,16 @@ function Dashboard() {
         {activeTab === "library" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
-              <div className="aichat-tab-header">
-                <h2>Library</h2>
-                <p>Find images, documents, and media shared in your workspace conversations.</p>
+              <div className="aichat-tab-header aichat-library-heading">
+                <div>
+                  <h2>Library</h2>
+                  <p>Find, upload, and manage files shared in your workspace.</p>
+                </div>
+                <button type="button" className="aichat-action-btn" disabled={libraryUploadBusy} onClick={() => libraryFileInputRef.current?.click()}>
+                  {libraryUploadBusy ? "Uploading…" : "＋ Upload files"}
+                </button>
               </div>
+              <input ref={libraryFileInputRef} type="file" hidden multiple onChange={(event) => void handleLibraryUpload(event)} />
               <div className="aichat-card">
                 <div className="aichat-library-toolbar">
                   <span>{workspaceAssets.length} saved items</span>
@@ -3246,8 +3252,10 @@ function Dashboard() {
                   <div className="aichat-assets-empty">
                     <div className="aichat-assets-empty-icon">▤</div>
                     <h3>No library items found</h3>
-                    <p>Upload an image or document in Workspace to add it to your library.</p>
-                    <button type="button" className="aichat-action-btn secondary" onClick={() => { setActiveTab("workspace"); setMobileMenuOpen(false); }}>Open workspace</button>
+                    <p>Upload an image or document, or save media from any Misma conversation.</p>
+                    <button type="button" className="aichat-action-btn secondary" disabled={libraryUploadBusy} onClick={() => libraryFileInputRef.current?.click()}>
+                      {libraryUploadBusy ? "Uploading…" : "Upload a file"}
+                    </button>
                   </div>
                 ) : (
                   <div className="aichat-library-list">
@@ -3258,12 +3266,23 @@ function Dashboard() {
                         const isVideo = asset.kind === "video" || asset.kind === "generated-video" || String(asset.mimeType || "").startsWith("video/");
                         return (
                           <article className="aichat-library-item" key={asset.id}>
-                            {isImage ? <img src={asset.url} alt={asset.name || "Library image"} loading="lazy" /> : <span className="aichat-library-file-icon">{isVideo ? "▶" : "▤"}</span>}
+                            {isImage ? <img src={asset.url} alt={asset.name || "Library image"} loading="lazy" decoding="async" /> : <span className="aichat-library-file-icon">{isVideo ? "▶" : "▤"}</span>}
                             <div className="aichat-library-item-copy">
                               <strong title={asset.name}>{asset.name || "Workspace file"}</strong>
                               <small>{asset.mimeType || asset.kind} · {asset.created_at ? new Date(asset.created_at).toLocaleDateString() : "Saved item"}</small>
                             </div>
-                            <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Open ${asset.name || "file"}`} title="Open file"><ActionIcon name="download" /></a>
+                            <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Download ${asset.name || "file"}`} title="Download file"><ActionIcon name="download" /></a>
+                            <div className="aichat-library-item-menu">
+                              <button type="button" className="aichat-library-more" aria-label={`More actions for ${asset.name || "file"}`} aria-expanded={libraryAssetMenuId === asset.id} onClick={() => setLibraryAssetMenuId((current) => current === asset.id ? null : asset.id)}>⋯</button>
+                              {libraryAssetMenuId === asset.id && (
+                                <div className="aichat-library-item-menu-popover" role="menu">
+                                  <button type="button" role="menuitem" className="is-danger" onClick={() => {
+                                    setDeleteAssetTarget(asset);
+                                    setLibraryAssetMenuId(null);
+                                  }}>{asset.libraryFileId ? "Delete from Library" : "Delete from chat"}</button>
+                                </div>
+                              )}
+                            </div>
                           </article>
                         );
                       })}
