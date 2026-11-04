@@ -102,8 +102,40 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.doesNotMatch(edgeFunction, /async function isAgnesMediaSafe/);
   assert.match(dashboard, /function ComposerAttachmentPreview/);
   assert.match(dashboard, /setUploadingAttachments\(true\)/);
-  assert.match(dashboard, /aichat-composer-input-row/);
+  assert.match(dashboard, /aichat-composer-sendrow/);
+  assert.doesNotMatch(dashboard, /aichat-composer-input-row/);
+  assert.match(dashboard, /aichat-composer-send-btn.*is-thinking/);
+  assert.match(dashboard, /getLoginGreeting/);
+  assert.doesNotMatch(dashboard, /How many orders came in today\\?|Show me recent conversations|How can I help you today\\?/);
+  assert.match(dashboard, /chatGroupFilter === "__ungrouped__"/);
+  assert.match(dashboard, /aichat-chat-group-filter-menu/);
+  assert.match(dashboard, /microphonePermissionOpen/);
+  assert.match(dashboard, /requestMicrophoneAccess/);
+  assert.match(dashboard, /aichat-notification-trigger/);
+  assert.match(dashboard, /activeTab === "notifications"/);
+  assert.match(dashboard, /markVisitorMessagesRead/);
   assert.doesNotMatch(dashboard, /Misma can make mistakes|aichat-disclaimer-text/);
   assert.match(styles, /\.aichat-composer-attachment-square/);
   assert.match(styles, /\.aichat-composer-upload-state\.is-ready/);
+});
+
+
+test("dashboard groups, dynamic greetings, visitor notifications and voice permissions are wired", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const migration = await read("../supabase/migrations/20261104000000_message_read_tracking.sql");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /const choices = hour < 12/);
+  assert.match(dashboard, /misma_last_login_greeting/);
+  assert.match(dashboard, /onClick=\{\(\) => setChatGroupMenuOpen/);
+  assert.match(dashboard, /filteredRecentChats\.slice/);
+  assert.match(api, /unreadVisitorCount/);
+  assert.match(api, /markVisitorMessagesRead/);
+  assert.match(api, /\.is\("read_at", null\)/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS read_at timestamptz/);
+  assert.match(migration, /messages_unread_visitor_idx/);
+  assert.match(styles, /\.aichat-notification-trigger\.has-unread/);
+  assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
+  assert.match(styles, /overflow-x: clip/);
 });
