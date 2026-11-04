@@ -51,7 +51,7 @@ function getUserClient(token: string): Db {
     global: { headers: { Authorization: "Bearer " + token } },
   });
 }
-async function requireWorkspace(token: string): Promise<{ db: Db; workspaceId: string }> {
+async function requireWorkspace(token: string, requestedWorkspaceId: string): Promise<{ db: Db; workspaceId: string }> {
   if (!token) throw new Error("Sign in to manage this workspace.");
   const userDb = getUserClient(token);
   const userResult = await userDb.auth.getUser(token);
@@ -59,11 +59,12 @@ async function requireWorkspace(token: string): Promise<{ db: Db; workspaceId: s
   const memberResult = await userDb.from("workspace_members")
     .select("workspace_id")
     .eq("user_id", userResult.data.user.id)
-    .limit(20);
+    .limit(50);
   if (memberResult.error || !memberResult.data?.length) throw new Error("No accessible Misma workspace was found.");
   const workspaceIds = Array.from(new Set(memberResult.data.map((row: AnyRecord) => String(row.workspace_id))));
-  if (workspaceIds.length !== 1) throw new Error("Select a single workspace before managing channel integrations.");
-  return { db: getAdmin(), workspaceId: workspaceIds[0] };
+  const selected = requestedWorkspaceId || (workspaceIds.length === 1 ? workspaceIds[0] : "");
+  if (!selected || !workspaceIds.includes(selected)) throw new Error("Select a workspace you belong to before continuing.");
+  return { db: getAdmin(), workspaceId: selected };
 }
 function providerList() {
   const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" }> = [];
@@ -209,7 +210,7 @@ async function createOrFindContact(db: Db, workspaceId: string, visitorId: strin
   }
   const inserted = await db.from("contacts").insert({
     workspace_id: workspaceId, name: name || "Website visitor", email: email || null, phone: phone || null,
-    visitor_id: visitorId || null, source: "website",
+    visitor_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(visitorId) ? visitorId : null, source: "website",
   }).select("id").single();
   if (inserted.error || !inserted.data) throw new Error("Could not save the customer contact.");
   return Number(inserted.data.id);
@@ -416,7 +417,7 @@ async function handlePhoneWebhook(request: Request, db: Db) {
     }
   }
   const callback = new URL(request.url);
-  callback.searchParams.set("channel", "phone");
+  callback.searchParams.set("action", "phone");
   const twiml = "<Response><Gather input=\"speech\" speechTimeout=\"auto\" timeout=\"7\" action=\"" +
     xmlEscape(callback.toString()) + "\" method=\"POST\"><Say>" + xmlEscape(spoken) +
     "</Say></Gather><Say>Sorry, I did not hear a response. Goodbye.</Say><Hangup/></Response>";
@@ -567,7 +568,7 @@ Deno.serve(async (request: Request) => {
 
     const authorization = request.headers.get("authorization") || "";
     const token = authorization.replace(/^Bearer\s+/i, "");
-    const { workspaceId } = await requireWorkspace(token);
+    const { workspaceId } = await requireWorkspace(token, safeString(input.workspaceId, 80));
 
     if (input.action === "connection-status") {
       const [site, channelRows] = await Promise.all([
