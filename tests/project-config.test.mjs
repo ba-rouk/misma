@@ -220,7 +220,7 @@ test("image creation uses a screenshot-style dot-grid skeleton with a compact pr
   assert.match(dashboard, /function GeneratedImageActions/);
   assert.match(dashboard, /aichat-image-options-menu/);
   assert.doesNotMatch(dashboard, /aichat-image-action-bar/);
-  assert.match(dashboard, /Download \\{mediaType\\}/);
+  assert.match(dashboard, /Download \{mediaType\}/);
   assert.match(dashboard, /Share image/);
   assert.match(dashboard, /Crop image/);
   assert.match(dashboard, /Copy image/);
