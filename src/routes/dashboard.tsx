@@ -2486,6 +2486,7 @@ function Dashboard() {
                             </div>
                           ) : <MarkdownContent content={msg.text} /> }
                         </div>
+                        {!msg.pendingMedia && (
                         <div
                           className="aichat-message-actions"
                           role="group"
@@ -2551,6 +2552,7 @@ function Dashboard() {
                             <span className="aichat-action-status" role="status">Copied</span>
                           )}
                         </div>
+                        )}
                       </div>
                     </div>
                   );
