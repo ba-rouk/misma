@@ -235,7 +235,7 @@ test("generated-image safety review has multiple provider fallbacks and reads th
 
   assert.match(edgeFunction, /prepareGeneratedImageForReview/);
   assert.match(edgeFunction, /dataUrl:\s*`data:\$\{mimeType\};base64,/);
-  assert.match(edgeFunction, /\.slice\(0, 3\)/);
+  assert.match(edgeFunction, /\.slice\(0, 4\)/);
   assert.match(edgeFunction, /dataUrl\?\.match/);
   assert.match(edgeFunction, /retryable:\s*true/);
 });
@@ -284,7 +284,7 @@ test("chat and media safety provider fallbacks enforce explicit latency budgets 
   assert.match(edgeFunction, /providerDeadline/);
   assert.match(edgeFunction, /providerTimeoutMs/);
   assert.match(edgeFunction, /elapsedMs/);
-  assert.match(edgeFunction, /\.slice\(0, 3\)/);
+  assert.match(edgeFunction, /\.slice\(0, 4\)/);
   assert.match(edgeFunction, /requestProvider\([\s\S]*?8_000/);
   assert.match(edgeFunction, /MEDIA_SAFETY_UNAVAILABLE/);
   assert.match(edgeFunction, /AbortSignal\.timeout\(6_000\)/);
