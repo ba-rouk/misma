@@ -324,7 +324,7 @@ function ComposerAttachmentPreview({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const isImage = file.type.startsWith("image/");
-  const isVideo = file.type.startsWith("video/") || /\\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
+  const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   const previewPending = (isImage || isVideo) && !previewLoaded;
   const extension = file.name.split(".").pop()?.slice(0, 5).toUpperCase() || "FILE";
