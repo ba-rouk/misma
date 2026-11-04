@@ -2470,10 +2470,19 @@ function Dashboard() {
     }
   };
 
+  useEffect(() => {
+    if (!token || !["notifications", "manage-customers", "website-stats", "websites"].includes(activeTab)) return;
+    const refresh = () => { void refreshBusinessFeatures(); };
+    refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(interval);
+  }, [token, activeTab]);
+
   const userName = workspace?.name
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
+  const unreadWorkspaceNotificationCount = businessFeatures.stats?.unreadNotifications ?? unreadVisitorCount;
   const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-general","label":"General","icon":"general"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
   const filteredSettingsNavItems = settingsNavItems.filter((item) =>
     !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
