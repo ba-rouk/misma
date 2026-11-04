@@ -1014,8 +1014,6 @@ Deno.serve(async (request) => {
     if (action === "review-video-frames") {
       const videoId = typeof input.videoId === "string" ? input.videoId : "";
       const url = typeof input.url === "string" ? input.url : "";
-      const agnesKey = Deno.env.get("AGNES_API_KEY");
-      if (!agnesKey) return jsonResponse(503, { error: "Agnes is not configured for video safety review." });
       if (!Number.isSafeInteger(conversationId) || !videoId || !/^https:\/\//i.test(url) || prepared.images.length < 2) return jsonResponse(400, { error: "At least two sampled frames and a valid Agnes video job are required." });
       let parsedUrl: URL;
       try { parsedUrl = new URL(url); } catch { return jsonResponse(400, { error: "Invalid video URL." }); }
@@ -1031,15 +1029,25 @@ Deno.serve(async (request) => {
         row.attachments.some((item: unknown) => isRecord(item) && item.videoId === videoId));
       if (!ownerRow) return jsonResponse(403, { error: "This video job does not belong to the selected conversation." });
       let passed = false;
+      let reviewUnavailable = false;
       try {
-        passed = await isAgnesMediaSafe(
-          agnesKey,
+        passed = await isMismaMediaSafe(
           "Review every sampled frame from this generated video. BLOCK if any frame contains nudity, sexual or lustful content, erotic or suggestive posing, lingerie, swimwear-focused imagery, fetish themes, graphic violence, gore, self-harm, hate, or extremist content. Reply ALLOW only when every sampled frame is safe for a general audience.",
           prepared.images,
         );
+      } catch {
+        reviewUnavailable = true;
       } finally {
         const temporaryFramePaths = requestedAttachments.filter((item) => item.kind === "video-frame").map((item) => item.path);
         if (temporaryFramePaths.length) await db.storage.from("misma-media").remove(temporaryFramePaths).catch(() => undefined);
+      }
+      if (reviewUnavailable) {
+        return jsonResponse(503, {
+          error: "Misma's video safety review is temporarily unavailable. The video has not been saved.",
+          code: "MEDIA_SAFETY_UNAVAILABLE",
+          retryable: true,
+          conversationId,
+        });
       }
       if (!passed) return jsonResponse(422, { error: "The generated video did not pass Misma's safety review. It was not saved to this chat." });
       const stampedAttachments = (ownerRow.attachments as unknown[]).map((item: unknown) =>
@@ -1091,9 +1099,20 @@ Deno.serve(async (request) => {
         metadata.thumbnail_url, metadata.cover_url, metadata.poster_url, metadata.preview_url]
         .find((value): value is string => typeof value === "string" && /^https:\/\//i.test(value)) ?? null;
       if (status === "completed" && previewUrl) {
-        const previewPassed = await isAgnesMediaSafe(agnesKey, "Review this generated video preview frame for sexual or otherwise disallowed content.", [
-          { url: previewUrl, name: "Generated video preview" },
-        ]);
+        let previewPassed = false;
+        try {
+          previewPassed = await isMismaMediaSafe("Review this generated video preview frame for sexual or otherwise disallowed content.", [
+            { url: previewUrl, name: "Generated video preview" },
+          ]);
+        } catch {
+          return jsonResponse(503, {
+            error: "Misma's video safety review is temporarily unavailable. Please retry the video check.",
+            code: "MEDIA_SAFETY_UNAVAILABLE",
+            retryable: true,
+            videoId,
+            model,
+          });
+        }
         if (!previewPassed) {
           return jsonResponse(200, { status: "failed", progress: 100, error: "The generated video preview did not pass Misma's safety review. Try a different prompt.", videoId, model });
         }
