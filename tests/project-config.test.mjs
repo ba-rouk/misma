@@ -225,9 +225,9 @@ test("business workspace navigation, website widget, handoff, scan and product w
   assert.match(styles, /\.aichat-stat-grid/);
   assert.match(styles, /\.aichat-website-card/);
   assert.match(styles, /\.aichat-scan-suggestions/);
-  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.workspace_websites/);
-  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.human_handoff_requests/);
-  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.workspace_products/);
-  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /create table if not exists public\.workspace_websites/i);
+  assert.match(migration, /create table if not exists public\.human_handoff_requests/i);
+  assert.match(migration, /create table if not exists public\.workspace_products/i);
+  assert.match(migration, /enable row level security/i);
   assert.match(migration, /is_workspace_member\(workspace_id\)/);
 });
