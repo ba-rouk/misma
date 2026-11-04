@@ -766,6 +766,10 @@ function Dashboard() {
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
   const [recentSearch, setRecentSearch] = useState("");
+  const supabaseApiBase = (() => {
+    const url = getSupabaseConfig()?.url || "";
+    return url.endsWith("/") ? url.slice(0, -1) : url;
+  })();
   const recentChats = conversations
     .filter((item) => String(item.channel || "").trim().toLowerCase() === "dashboard")
     .map((item) => ({ ...item, name: cleanRecentChatTitle(item.name) || "New chat" }));
@@ -927,14 +931,15 @@ function Dashboard() {
   const callWidgetFunction = async (payload: Record<string, unknown>) => {
     const config = getSupabaseConfig();
     if (!token || !config) throw new Error("Your Misma workspace session or Supabase configuration is unavailable.");
-    const response = await fetch(`${config.url.replace(/\\/$/, "")}/functions/v1/misma-widget`, {
+    const baseUrl = config.url.endsWith("/") ? config.url.slice(0, -1) : config.url;
+    const response = await fetch(`${baseUrl}/functions/v1/misma-widget`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: config.publishableKey,
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ ...payload, workspaceId: workspace?.id || payload.workspaceId }),
+      body: JSON.stringify({ ...payload, workspaceId: payload.workspaceId || workspace?.id }),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.error) throw new Error(result.error || `Misma integration request failed (${response.status}).`);
@@ -2899,9 +2904,9 @@ function Dashboard() {
                       value={draft}
                       onChange={(e) => {
                         const nextValue = e.target.value;
-                        if (/^@thinking(?:\\s|$)/i.test(nextValue)) {
+                        if (nextValue.toLowerCase().startsWith("@thinking") && (nextValue.length === 9 || /\s/.test(nextValue[9]))) {
                           setThinkHarder(true);
-                          setDraft(nextValue.replace(/^@thinking\\s*/i, ""));
+                          setDraft(nextValue.slice(9).trimStart());
                         } else {
                           setDraft(nextValue);
                         }
