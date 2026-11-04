@@ -27,6 +27,7 @@ import {
   setProductServiceActive,
   updateHumanRequestStatus,
   markWorkspaceNotificationRead,
+  sendHumanReply,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -1719,6 +1720,18 @@ function Dashboard() {
     shouldAutoScrollRef.current = true;
 
     try {
+      const activeVisitorConversation = conversations.find((item) => Number(item.id) === Number(currentConversationId));
+      if (!editId && !isRetry && activeVisitorConversation &&
+          String(activeVisitorConversation.channel || "").toLowerCase() !== "dashboard" &&
+          activeVisitorConversation.status === "Needs you") {
+        if (selectedFiles.length) throw new Error("File attachments are not available in human takeover replies yet. Send your text reply first.");
+        const humanResult = await sendHumanReply({ data: { token, conversationId: Number(currentConversationId), text: textToSend } });
+        setMessages((prev) => [...prev.filter((item) => item.id !== tempUserId), humanResult.message]);
+        setFailedPrompt("");
+        setFailedMessageId(null);
+        loadData();
+        return;
+      }
       const attachments = editId ? [] : await uploadSelectedAttachments();
       const res = await postChatAction({
         action: "chat",
@@ -2414,6 +2427,9 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
+  const activeConversation = conversations.find((item) => Number(item.id) === Number(currentConversationId));
+  const isHumanTakeover = Boolean(activeConversation && String(activeConversation.channel || "").toLowerCase() !== "dashboard" && activeConversation.status === "Needs you");
+  const hubUnreadCount = workspaceNotifications.filter((item) => !item.is_read).length;
   const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-general","label":"General","icon":"general"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
   const filteredSettingsNavItems = settingsNavItems.filter((item) =>
     !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
@@ -2760,14 +2776,14 @@ function Dashboard() {
             type="button"
             className={`aichat-notification-trigger${unreadVisitorCount > 0 ? " has-unread" : ""}`}
             onClick={() => { setActiveTab("notifications"); setMobileMenuOpen(false); }}
-            aria-label={unreadVisitorCount > 0 ? `Notifications, ${unreadVisitorCount} unread visitor messages` : "Notifications"}
+            aria-label={hubUnreadCount > 0 ? `Notifications, ${hubUnreadCount} unread items` : "Notifications"}
             title="Website visitor notifications"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
               <path d="M10 21h4" />
             </svg>
-            {unreadVisitorCount > 0 && <span className="aichat-notification-count">{unreadVisitorCount > 99 ? "99+" : unreadVisitorCount}</span>}
+            {hubUnreadCount > 0 && <span className="aichat-notification-count">{hubUnreadCount > 99 ? "99+" : hubUnreadCount}</span>}
           </button>
         </header>
 
@@ -3092,6 +3108,7 @@ function Dashboard() {
                   }}
                 >
                   <div className="aichat-composer-tools-row">
+                    {isHumanTakeover && <span className="aichat-composer-mode-pill is-create">Human takeover · replies sent as your team</span>}
                     {thinkHarder && (
                       <button type="button" className="aichat-composer-mode-pill" onClick={() => setThinkHarder(false)}>✧ Think harder <span>×</span></button>
                     )}
@@ -3105,7 +3122,7 @@ function Dashboard() {
                       ref={textareaRef}
                       rows={1}
                       className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : isHumanTakeover ? "Reply to this customer as your team…" : "Message Misma…"}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={handleKeyDown}
