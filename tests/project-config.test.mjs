@@ -199,7 +199,7 @@ test("the business hub connects websites, stores human handoffs, and manages pro
   assert.match(embed, /Request a human/);
   assert.match(dashboard, /handleKnowledgeFileUpload/);
   assert.match(dashboard, /sendHumanReply/);
-  assert.match(dashboard, /@thinking\\b/i);
+  assert.match(dashboard, /@thinking\b/i);
 
   for (const operation of ["getBusinessHubData", "createWebsiteConnection", "saveProductService", "updateHumanRequestStatus", "markWorkspaceNotificationRead", "sendHumanReply"]) {
     assert.match(api, new RegExp(`export const ${operation} = createServerFn`));
