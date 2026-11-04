@@ -276,3 +276,31 @@ test("mobile sidebar uses a hamburger, has a top-row new-chat control, and no Ch
   assert.match(styles, /\.aichat-mobile-newchat/);
   assert.match(styles, /\.aichat-newchat-wrap\s*\{\s*display:\s*none/);
 });
+
+
+test("chat and media safety provider fallbacks enforce explicit latency budgets and safe timing diagnostics", async () => {
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+
+  assert.match(edgeFunction, /providerDeadline/);
+  assert.match(edgeFunction, /providerTimeoutMs/);
+  assert.match(edgeFunction, /elapsedMs/);
+  assert.match(edgeFunction, /\.slice\(0, 3\)/);
+  assert.match(edgeFunction, /requestProvider\([\s\S]*?6_000/);
+  assert.match(edgeFunction, /MEDIA_SAFETY_UNAVAILABLE/);
+  assert.match(edgeFunction, /AbortSignal\.timeout\(6_000\)/);
+});
+
+test("generated images and videos can be saved into Library and Library media opens in a preview viewer", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /handleSaveGeneratedMediaToLibrary/);
+  assert.match(dashboard, /createWorkspaceLibraryFile/);
+  assert.match(dashboard, /Save to Library/);
+  assert.match(dashboard, /setLibraryPreviewAsset/);
+  assert.match(dashboard, /aichat-library-media-preview/);
+  assert.match(dashboard, /aichat-library-media-viewer/);
+  assert.match(dashboard, /<video[^>]*controls/);
+  assert.match(dashboard, /Download image|Download video/);
+  assert.match(styles, /\.aichat-library-media-viewer/);
+});
