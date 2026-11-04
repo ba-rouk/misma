@@ -3882,10 +3882,10 @@ function Dashboard() {
                 <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>
                 <p>Install this script on the registered domain. Misma will verify the live connection automatically when the widget loads and calls home.</p>
                 <label className="aichat-widget-script-label">Website installation script</label>
-                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget"></script>`}</code></pre>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget"></script>`;
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
@@ -3960,7 +3960,7 @@ function Dashboard() {
                 <strong>1. Add these secrets in Supabase → Edge Functions → Secrets</strong>
                 <code>TWILIO_ACCOUNT_SID</code><code>TWILIO_AUTH_TOKEN</code>
                 <strong>2. Set your Twilio number's Voice webhook</strong>
-                <pre><code>{`${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget?action=phone`}</code></pre>
+                <pre><code>{`${supabaseApiBase}/functions/v1/misma-widget?action=phone`}</code></pre>
                 <small>HTTP method: POST · Optional secret: TWILIO_WEBHOOK_URL should equal the exact public webhook URL if Twilio signature validation sees a different proxy URL.</small>
                 <small>Calls are answered using Twilio speech recognition and Misma's approved business knowledge. A caller can say “human” or “agent” to create a handoff.</small>
               </div>
@@ -3986,7 +3986,7 @@ function Dashboard() {
                 <strong>1. Add these secrets in Supabase → Edge Functions → Secrets</strong>
                 <code>WHATSAPP_ACCESS_TOKEN</code><code>WHATSAPP_VERIFY_TOKEN</code><code>META_APP_SECRET</code>
                 <strong>2. Set the Meta webhook callback URL</strong>
-                <pre><code>{`${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget?channel=whatsapp`}</code></pre>
+                <pre><code>{`${supabaseApiBase}/functions/v1/misma-widget?channel=whatsapp`}</code></pre>
                 <small>Use the same WHATSAPP_VERIFY_TOKEN value in Meta's webhook verification field. Subscribe the WhatsApp Business Account to the messages webhook field.</small>
                 <small>Keep access tokens and the Meta app secret in Supabase function secrets only. Never paste them into this dashboard or website code.</small>
               </div>
