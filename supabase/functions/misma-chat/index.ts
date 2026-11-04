@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +7,7 @@ const corsHeaders = {
   "Vary": "Origin",
 };
 
+type MismaDbClient = SupabaseClient<any, "public", "public", any, any>;
 type JsonRecord = Record<string, unknown>;
 type ChatMessage = { role: "user" | "model"; text: string };
 type AttachmentInput = {
@@ -439,7 +440,7 @@ function validateAttachmentList(value: unknown): AttachmentInput[] {
 }
 
 async function prepareAttachments(
-  db: ReturnType<typeof createClient>,
+  db: MismaDbClient,
   attachments: AttachmentInput[],
   expectedPrefix: string,
 ): Promise<{ stored: StoredAttachment[]; images: PreparedImage[]; pdfs: PreparedPdf[]; extractedText: string }> {
@@ -1372,7 +1373,7 @@ Deno.serve(async (request) => {
       }
       const { data: storedMessages, error: historyError } = await historyQuery;
       if (historyError) throw new Error("Could not load conversation history.");
-      history = (storedMessages ?? []).reverse().flatMap((item) => {
+      history = (storedMessages ?? []).reverse().flatMap<ChatMessage>((item): ChatMessage[] => {
         if (item.role === "ai") return [{ role: "model" as const, text: item.text.slice(0, 4_000) }];
         if (item.role === "human" || item.role === "customer") {
           return [{ role: "user" as const, text: item.text.slice(0, 4_000) }];
