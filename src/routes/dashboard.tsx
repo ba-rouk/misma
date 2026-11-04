@@ -2219,6 +2219,185 @@ function Dashboard() {
     }
   };
 
+
+  const refreshBusinessFeatures = async () => {
+    if (!token) return;
+    try {
+      const features = await getBusinessWorkspaceFeatures({ data: { token } });
+      setBusinessFeatures(features);
+    } catch (cause) {
+      console.warn("Could not refresh business workspace data:", cause);
+    }
+  };
+
+  const handleAddWebsite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!token || !websiteUrlDraft.trim() || websiteCreateBusy) return;
+    setWebsiteCreateBusy(true);
+    setWebsiteAddError("");
+    try {
+      const result = await createWorkspaceWebsite({
+        data: { token, name: websiteNameDraft.trim() || undefined, websiteUrl: websiteUrlDraft.trim() },
+      });
+      setWebsiteSetupId(result.website.id);
+      setWebsiteNameDraft("");
+      setWebsiteUrlDraft("");
+      await refreshBusinessFeatures();
+    } catch (cause) {
+      setWebsiteAddError(cause instanceof Error ? cause.message : "Could not add this website.");
+    } finally {
+      setWebsiteCreateBusy(false);
+    }
+  };
+
+  const handleWebsiteStatus = async (websiteId: string, status: "connected" | "paused") => {
+    if (!token) return;
+    try {
+      await updateWorkspaceWebsite({ data: { token, websiteId, status } });
+      await refreshBusinessFeatures();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not update website status.");
+    }
+  };
+
+  const websiteInstallSnippet = (website: any) => {
+    const config = getSupabaseConfig();
+    if (!config) return "Supabase is not configured for this dashboard.";
+    const endpoint = `${config.url.replace(/\\/$/, "")}/functions/v1/misma-chat`;
+    return `<script src="https://misma.onrender.com/misma-widget.js" data-website-key="${website.public_key}" data-endpoint="${endpoint}" data-api-key="${config.publishableKey}" async></script>`;
+  };
+
+  const handleCopyWebsiteSnippet = async (website: any) => {
+    try {
+      await navigator.clipboard.writeText(websiteInstallSnippet(website));
+      setMediaActionStatus("Website installation script copied.");
+    } catch {
+      setMediaActionStatus("Copy was blocked. Select the script and copy it manually.");
+    }
+  };
+
+  const handleUpdateHandoff = async (requestId: number, status: "open" | "assigned" | "resolved") => {
+    if (!token) return;
+    try {
+      await updateHumanHandoffStatus({ data: { token, requestId, status } });
+      await refreshBusinessFeatures();
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not update the human support request.");
+    }
+  };
+
+  const handleOpenBusinessConversation = async (conversationId: number, notification?: any) => {
+    if (token && notification && !notification.read_at) {
+      try {
+        await markWorkspaceNotificationRead({
+          data: { token, type: notification.type, id: Number(notification.sourceId) },
+        });
+      } catch (cause) {
+        console.warn("Could not mark this notification as read:", cause);
+      }
+    }
+    await refreshBusinessFeatures();
+    await selectConversation(conversationId);
+  };
+
+  const handleCreateProduct = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!token || !productDraft.name.trim() || savingProduct) return;
+    setSavingProduct(true);
+    try {
+      await createWorkspaceProduct({
+        data: {
+          token,
+          kind: productDraft.kind,
+          name: productDraft.name.trim(),
+          description: productDraft.description.trim(),
+          price: productDraft.price.trim() ? Number(productDraft.price) : null,
+          currency: productDraft.currency,
+          source: "manual",
+          status: "draft",
+        },
+      });
+      setProductDraft({ kind: "product", name: "", description: "", price: "", currency: "RWF" });
+      await refreshBusinessFeatures();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not save the product or service.");
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
+  const handleProductStatus = async (id: number, status: "draft" | "active" | "archived") => {
+    if (!token) return;
+    try {
+      await updateWorkspaceProductStatus({ data: { token, id, status } });
+      await refreshBusinessFeatures();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not update the product.");
+    }
+  };
+
+  const handleAskMismaForProductIdeas = () => {
+    const examples = (businessFeatures.recentVisitorMessages || [])
+      .slice(0, 30)
+      .map((item: any) => `- [${item.websiteName}] ${item.message}`)
+      .join("\\n");
+    const knowledge = (knowledgeList || [])
+      .slice(0, 20)
+      .map((item: any) => `- ${item.question}: ${item.answer}`)
+      .join("\\n");
+    const prompt = [
+      "Act as my business product and service strategist. Review the customer needs below together with my approved business knowledge and current active products.",
+      "Identify repeated unmet needs, then propose practical products or services that my business could genuinely deliver. For each idea include customer need, target customer, suggested offer, operations required, and questions I must answer before publishing. Do not invent costs or claim demand beyond these examples.",
+      "Recent website visitor requests:",
+      examples || "No website visitor messages have been recorded yet. Use my business profile and knowledge to suggest questions to validate first.",
+      "Approved business knowledge:",
+      knowledge || "No approved Q&A items yet.",
+      "Current catalog:",
+      (businessFeatures.products || []).map((item: any) => `- ${item.kind}: ${item.name} — ${item.description}`).join("\\n") || "No products or services saved yet.",
+    ].join("\\n\\n");
+    setActiveTab("workspace");
+    setDraft(prompt);
+    window.setTimeout(() => textareaRef.current?.focus(), 80);
+  };
+
+  const handleReviewWebsiteWithMisma = (website: any) => {
+    const prompt = [
+      `Review the public website ${website.website_url} for my business.`,
+      "Search the web for publicly indexed pages on this domain and compare the information you can verify with my approved business knowledge. Identify missing FAQs, outdated or conflicting claims, product/service details that should be confirmed, and suggested knowledge questions and draft answers. Clearly separate verified findings from assumptions and tell me when the site cannot be fully inspected.",
+      "Do not claim to have scanned pages you could not access. Provide Q&A suggestions I can approve in Build → Business knowledge.",
+    ].join("\\n\\n");
+    setActiveTab("workspace");
+    setDraft(prompt);
+    window.setTimeout(() => textareaRef.current?.focus(), 80);
+  };
+
+  const handleKnowledgeFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      setKnowledgeFileStatus("This file is larger than 4 MB. Upload a smaller text, Markdown, CSV, JSON, or HTML file.");
+      return;
+    }
+    if (!/\\.(txt|md|csv|json|html|htm)$/i.test(file.name)) {
+      setKnowledgeFileStatus("Supported knowledge files: .txt, .md, .csv, .json, .html. PDF and Word extraction is not enabled in this upload flow yet.");
+      return;
+    }
+    setKnowledgeFileStatus("Reading file…");
+    try {
+      const text = (await file.text()).trim();
+      if (!text) throw new Error("The selected file is empty.");
+      setNewQuestion(`What should Misma know from ${file.name}?`);
+      setNewAnswer(text.slice(0, 4000));
+      setKnowledgeFileStatus(text.length > 4000
+        ? "File content loaded. The first 4,000 characters are in the answer field; review and refine them before saving."
+        : "File content loaded into the Q&A fields. Review it and click Add Knowledge Q&A.");
+    } catch (cause) {
+      setKnowledgeFileStatus(cause instanceof Error ? cause.message : "Could not read this file.");
+    }
+  };
+
   const userName = workspace?.name
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
