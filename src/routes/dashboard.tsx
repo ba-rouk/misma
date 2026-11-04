@@ -1978,6 +1978,32 @@ function Dashboard() {
     const prompt = promptOverride?.trim() || draft.trim() || (mode === "image"
       ? "Create a high-quality image using the attached reference."
       : "Create a short cinematic video using the attached reference.");
+    const controller = new AbortController();
+    mediaAbortControllerRef.current = controller;
+    const startViewVersion = chatViewVersionRef.current;
+    let targetConversationId: number | null = currentConversationId ? Number(currentConversationId) : null;
+    const isTargetOpen = () => targetConversationId !== null && activeConversationIdRef.current === targetConversationId;
+    const updateTargetMessages = (updater: (current: Message[]) => Message[]) => {
+      if (!isTargetOpen()) return;
+      setMessages((current) => isTargetOpen() ? updater(current) : current);
+    };
+    const pause = (milliseconds: number) => new Promise<void>((resolve, reject) => {
+      if (controller.signal.aborted) {
+        reject(new DOMException("Stopped", "AbortError"));
+        return;
+      }
+      const timer = window.setTimeout(() => {
+        controller.signal.removeEventListener("abort", abort);
+        resolve();
+      }, milliseconds);
+      const abort = () => {
+        window.clearTimeout(timer);
+        controller.signal.removeEventListener("abort", abort);
+        reject(new DOMException("Stopped", "AbortError"));
+      };
+      controller.signal.addEventListener("abort", abort, { once: true });
+    });
+
     setChatError("");
     setMediaProgress(mode === "image" ? "" : "Preparing your video with Agnes…");
     setIsGeneratingMedia(true);
@@ -1995,16 +2021,34 @@ function Dashboard() {
       pendingMedia: mode,
       created_at: new Date().toISOString(),
     };
-    setMessages((current) => reuse
-      ? [...current, pendingMessage]
-      : [...current, {
-          id: tempUserId!,
-          role: "human",
-          text: prompt,
-          created_at: new Date().toISOString(),
-        }, pendingMessage]);
 
     try {
+      if (!targetConversationId) {
+        const created = await createConversation({ data: { token, title: prompt.slice(0, 72) || "Media creation" } });
+        targetConversationId = Number(created.conversation.id);
+        if (!Number.isSafeInteger(targetConversationId) || targetConversationId <= 0) {
+          throw new Error("Misma could not reserve a conversation for this media request.");
+        }
+        // Only attach the new conversation to the screen when the user has not moved away.
+        if (chatViewVersionRef.current === startViewVersion && activeConversationIdRef.current === null) {
+          activeConversationIdRef.current = targetConversationId;
+          setCurrentConversationId(targetConversationId);
+        }
+        loadData();
+      } else {
+        activeConversationIdRef.current = targetConversationId;
+      }
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+
+      updateTargetMessages((current) => reuse
+        ? [...current, pendingMessage]
+        : [...current, {
+            id: tempUserId!,
+            role: "human",
+            text: prompt,
+            created_at: new Date().toISOString(),
+          }, pendingMessage]);
+
       const attachments = reuse
         ? reuse.attachments.filter((item) => Boolean(item.path)).map((item) => ({
             path: item.path!,
@@ -2014,10 +2058,12 @@ function Dashboard() {
             kind: item.kind,
           }))
         : await uploadSelectedAttachments();
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+
       const result = await postChatAction({
         action: mode === "image" ? "create-image" : "create-video",
         message: prompt,
-        conversationId: currentConversationId,
+        conversationId: targetConversationId,
         workspaceId: workspace?.id,
         attachments,
         ...(reuse ? {
@@ -2025,22 +2071,27 @@ function Dashboard() {
           sourceUserMessageId: reuse.sourceUserMessageId,
           replaceAiMessageId: reuse.replaceAiMessageId,
         } : {}),
-      });
-      if (result.conversationId) setCurrentConversationId(result.conversationId);
-      if (result.userMessage && tempUserId) {
-        setMessages((current) => current.map((item) => item.id === tempUserId ? result.userMessage : item));
+      }, controller.signal);
+
+      if (result.conversationId && Number(result.conversationId) !== targetConversationId) {
+        throw new Error("Misma returned a different conversation for this media request.");
       }
-      setSelectedFiles([]);
+      if (isTargetOpen() && result.userMessage && tempUserId) {
+        updateTargetMessages((current) => current.some((item) => item.id === tempUserId)
+          ? current.map((item) => item.id === tempUserId ? result.userMessage : item)
+          : [...current, result.userMessage]);
+        setSelectedFiles([]);
+      }
 
       if (mode === "image") {
         if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
-        setMessages((current) => {
+        updateTargetMessages((current) => {
           const withoutPending = current.filter((item) => item.id !== pendingMediaId);
           return reuse
             ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
             : [...withoutPending, result.aiMessage];
         });
-        setMediaProgress("");
+        if (isTargetOpen()) setMediaProgress("");
         loadData();
         return;
       }
@@ -2050,15 +2101,15 @@ function Dashboard() {
       if (typeof videoId !== "string" || typeof model !== "string") {
         throw new Error("Agnes did not return a video generation job.");
       }
-      const progressMessageId = pendingMediaId;
-      setMessages((current) => current.map((item) => item.id === progressMessageId ? {
+      updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
         ...item,
         text: "Agnes is generating your video…",
         pendingMedia: "video",
       } : item));
+
       let completedUrl: string | null = null;
       for (let attempt = 0; attempt < 120; attempt++) {
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 5000));
+        await pause(5000);
         let status: Record<string, any> | null = null;
         let pollError: unknown = null;
         for (let retry = 0; retry < 3; retry++) {
@@ -2066,23 +2117,24 @@ function Dashboard() {
             status = await postChatAction({
               action: "poll-video",
               workspaceId: workspace?.id,
-              conversationId: result.conversationId,
+              conversationId: targetConversationId,
               videoId,
               model,
-            });
+            }, controller.signal);
             pollError = null;
             break;
           } catch (error) {
             pollError = error;
+            if (controller.signal.aborted) throw error;
             const detail = error instanceof Error ? error.message : String(error);
             if (!/agnes video status|temporar|network|failed to fetch|http (408|429|500|502|503|504)/i.test(detail) || retry === 2) break;
-            await new Promise<void>((resolve) => window.setTimeout(resolve, 1200 * (retry + 1)));
+            await pause(1200 * (retry + 1));
           }
         }
         if (pollError || !status) throw pollError instanceof Error ? pollError : new Error("Agnes video status could not be retrieved.");
         const progress = Number(status.progress) || 0;
-        setMediaProgress(`Creating video… ${progress}%`);
-        setMessages((current) => current.map((item) => item.id === progressMessageId ? {
+        if (isTargetOpen()) setMediaProgress(`Creating video… ${progress}%`);
+        updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
           ...item,
           text: `Agnes is generating your video… ${progress}%`,
           pendingMedia: "video",
@@ -2096,7 +2148,8 @@ function Dashboard() {
         }
       }
       if (!completedUrl) throw new Error("Video generation is taking longer than expected. The job may still be running; you can try again later.");
-      setMediaProgress("Checking video frames for safe content…");
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+      if (isTargetOpen()) setMediaProgress("Checking video frames for safe content…");
       const reviewConfig = getSupabaseConfig();
       if (!reviewConfig || !completedUrl) throw new Error("Could not prepare the generated video for its safety review.");
       const reviewDownload = await fetch(`${reviewConfig.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
@@ -2109,10 +2162,11 @@ function Dashboard() {
         body: JSON.stringify({
           action: "download-video-for-review",
           workspaceId: workspace?.id,
-          conversationId: result.conversationId,
+          conversationId: targetConversationId,
           videoId,
           url: completedUrl,
         }),
+        signal: controller.signal,
       });
       if (!reviewDownload.ok) {
         const detail = await reviewDownload.json().catch(() => ({})) as { error?: string };
@@ -2122,53 +2176,67 @@ function Dashboard() {
       if (reviewBlob.size <= 0 || reviewBlob.size > 150 * 1024 * 1024) {
         throw new Error("The generated video is empty or too large to run a safety review.");
       }
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
       const reviewFile = new File([reviewBlob], "misma-generated-video-review.mp4", {
         type: reviewBlob.type.startsWith("video/") ? reviewBlob.type : "video/mp4",
       });
       const reviewFrames = await extractVideoKeyframes(reviewFile);
       if (reviewFrames.length < 2) throw new Error("Misma could not sample enough frames to review this video safely.");
       const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true);
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
       await postChatAction({
         action: "review-video-frames",
         workspaceId: workspace?.id,
-        conversationId: result.conversationId,
+        conversationId: targetConversationId,
         videoId,
         url: completedUrl,
         attachments: reviewAttachments,
-      });
+      }, controller.signal);
       const saved = await postChatAction({
         action: "save-generated-media",
         workspaceId: workspace?.id,
-        conversationId: result.conversationId,
+        conversationId: targetConversationId,
         videoId,
         url: completedUrl,
         ...(reuse ? { replaceAiMessageId: reuse.replaceAiMessageId } : {}),
-      });
+      }, controller.signal);
       if (!saved.aiMessage) throw new Error("The generated video could not be saved to this chat.");
-      setMessages((current) => {
-        const withoutPending = current.filter((item) => item.id !== progressMessageId);
+      updateTargetMessages((current) => {
+        const withoutPending = current.filter((item) => item.id !== pendingMediaId);
         return reuse
           ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? saved.aiMessage : item)
           : [...withoutPending, saved.aiMessage];
       });
-      setMediaProgress("Video created.");
-      window.setTimeout(() => setMediaProgress(""), 3500);
+      if (isTargetOpen()) {
+        setMediaProgress("Video created.");
+        window.setTimeout(() => setMediaProgress(""), 3500);
+      }
       loadData();
     } catch (cause) {
       const responseData = cause instanceof Error
         ? (cause as Error & { responseData?: Record<string, any> }).responseData
         : undefined;
-      if (responseData?.conversationId) setCurrentConversationId(Number(responseData.conversationId));
-      if (responseData?.userMessage && tempUserId) {
-        setMessages((current) => current.map((item) => item.id === tempUserId ? responseData.userMessage : item));
+      if (isTargetOpen()) {
+        if (responseData?.userMessage && tempUserId) {
+          updateTargetMessages((current) => current.some((item) => item.id === tempUserId)
+            ? current.map((item) => item.id === tempUserId ? responseData.userMessage : item)
+            : [...current, responseData.userMessage]);
+        }
+        updateTargetMessages((current) => current.filter((item) => item.id !== pendingMediaId));
+        if (controller.signal.aborted) {
+          setChatError("Generation stopped.");
+        } else {
+          setDraft(prompt);
+          setCreateMode(mode);
+          setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
+        }
+        setMediaProgress("");
       }
-      setMessages((current) => current.filter((item) => item.id !== pendingMediaId));
-      setDraft(prompt);
-      setCreateMode(mode);
-      setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
-      setMediaProgress("");
     } finally {
-      setIsGeneratingMedia(false);
+      if (mediaAbortControllerRef.current === controller) {
+        mediaAbortControllerRef.current = null;
+        setIsGeneratingMedia(false);
+      }
     }
   };
 
