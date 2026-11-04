@@ -8,6 +8,7 @@ on:
       - feat/mobile-message-actions-composer
       - feat/voice-controls-composer-alignment
       - feat/business-workspace-navigation
+      - feat/chat-library-performance-polish
   pull_request:
     branches:
       - main

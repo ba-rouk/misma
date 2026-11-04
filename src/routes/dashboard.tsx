@@ -25,6 +25,9 @@ import {
   createProductService,
   updateHumanRequestStatus,
   updateProductServiceStatus,
+  createWorkspaceLibraryFile,
+  deleteWorkspaceLibraryFile,
+  deleteChatAttachment,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -33,7 +36,7 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "recent" | "settings";
+type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "settings";
 
 type UnreadVisitorMessage = {
   id: number;
@@ -365,9 +368,9 @@ function ComposerAttachmentPreview({
     <div className="aichat-composer-attachment-card" title={file.name}>
       <div className="aichat-composer-attachment-square">
         {isImage && previewUrl ? (
-          <img src={previewUrl} alt={file.name} onLoad={() => setPreviewLoaded(true)} />
+          <img src={previewUrl} alt={file.name} decoding="async" fetchPriority="high" onLoad={() => setPreviewLoaded(true)} onError={() => setPreviewLoaded(true)} />
         ) : isVideo && previewUrl ? (
-          <video src={previewUrl} muted playsInline preload="metadata" onLoadedData={() => setPreviewLoaded(true)} />
+          <video src={previewUrl} muted playsInline preload="metadata" onLoadedMetadata={() => setPreviewLoaded(true)} onError={() => setPreviewLoaded(true)} />
         ) : (
           <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
             <span>{isPdf ? "PDF" : extension}</span>
@@ -420,7 +423,7 @@ function MessageAttachmentViews({
           return (
             <div key={key} className="aichat-generated-media-wrap">
               <a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link">
-                <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="lazy" />
+                <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="eager" decoding="async" fetchPriority="high" />
               </a>
               {isGenerated && (
                 <div className="aichat-image-action-bar" role="group" aria-label="Generated image actions">
@@ -594,8 +597,14 @@ function Dashboard() {
 
   // Chats and tasks panel state
   const [chatsExpanded, setChatsExpanded] = useState(true);
-  const [chatMenuOpenId, setChatMenuOpenId] = useState<number | null>(null);
+  const [chatActionMenuId, setChatActionMenuId] = useState<number | null>(null);
+  const [deleteChatTarget, setDeleteChatTarget] = useState<{ id: number; name: string } | null>(null);
+  const [deletingChat, setDeletingChat] = useState(false);
   const [chatGroupMenuOpen, setChatGroupMenuOpen] = useState(false);
+  const [libraryUploadBusy, setLibraryUploadBusy] = useState(false);
+  const [libraryAssetMenuId, setLibraryAssetMenuId] = useState<string | null>(null);
+  const [deleteAssetTarget, setDeleteAssetTarget] = useState<any>(null);
+  const [deletingAsset, setDeletingAsset] = useState(false);
   const [chatGroupFilter, setChatGroupFilter] = useState("all");
   const [downloadingMediaUrl, setDownloadingMediaUrl] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ attachment: MessageAttachment; conversationId: number | null } | null>(null);
@@ -767,7 +776,6 @@ function Dashboard() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
 
-  const [recentSearch, setRecentSearch] = useState("");
   const supabaseApiBase = (() => {
     const url = getSupabaseConfig()?.url || "";
     return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -788,12 +796,19 @@ function Dashboard() {
   const mobileMessageActionTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const knowledgeFileInputRef = useRef<HTMLInputElement>(null);
+  const libraryFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
   const shouldAutoScrollRef = useRef(true);
   const regenerateInFlightRef = useRef(false);
+  const chatLongPressTimerRef = useRef<number | null>(null);
+  const chatLongPressTriggeredRef = useRef(false);
+  const chatViewVersionRef = useRef(0);
+  const activeConversationIdRef = useRef<number | null>(null);
+  const chatAbortControllerRef = useRef<AbortController | null>(null);
+  const mediaAbortControllerRef = useRef<AbortController | null>(null);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -930,7 +945,7 @@ function Dashboard() {
   }, [isAuthenticated, navigate]);
 
   // All calls to the public widget function use a real signed-in workspace token.
-  const callWidgetFunction = async (payload: Record<string, unknown>) => {
+  const callWidgetFunction = async (payload: Record<string, unknown>, signal?: AbortSignal) => {
     const config = getSupabaseConfig();
     if (!token || !config) throw new Error("Your Misma workspace session or Supabase configuration is unavailable.");
     const baseUrl = config.url.endsWith("/") ? config.url.slice(0, -1) : config.url;
@@ -942,6 +957,7 @@ function Dashboard() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ ...payload, workspaceId: payload.workspaceId || workspace?.id }),
+      signal,
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.error) throw new Error(result.error || `Misma integration request failed (${response.status}).`);
@@ -1092,6 +1108,9 @@ function Dashboard() {
   // Load messages when selecting a conversation
   const selectConversation = async (convId: number) => {
     if (!token) return;
+    chatViewVersionRef.current += 1;
+    activeConversationIdRef.current = convId;
+    setChatActionMenuId(null);
     setCurrentConversationId(convId);
     setActiveTab("workspace");
     setMobileMenuOpen(false);
@@ -1139,6 +1158,9 @@ function Dashboard() {
 
   // Start a fresh new chat
   const handleNewChat = () => {
+    chatViewVersionRef.current += 1;
+    activeConversationIdRef.current = null;
+    setChatActionMenuId(null);
     setCurrentConversationId(null);
     setMessages([]);
     setDraft("");
@@ -1164,7 +1186,7 @@ function Dashboard() {
     if (!token) return;
     try {
       await setConversationGroup({ data: { token, conversationId, groupName } });
-      setChatMenuOpenId(null);
+      setChatActionMenuId(null);
       loadData();
     } catch (cause) {
       alert(cause instanceof Error ? cause.message : "Could not update this chat group.");
@@ -1175,30 +1197,110 @@ function Dashboard() {
     const value = window.prompt("Enter a group name for this chat:");
     const groupName = value?.trim().slice(0, 60);
     if (groupName) void handleSetConversationGroup(conversationId, groupName);
-    setChatMenuOpenId(null);
+    setChatActionMenuId(null);
   };
 
-  // Delete conversation with confirmation
+  const startChatLongPress = (conversationId: number) => {
+    if (chatLongPressTimerRef.current !== null) window.clearTimeout(chatLongPressTimerRef.current);
+    chatLongPressTriggeredRef.current = false;
+    chatLongPressTimerRef.current = window.setTimeout(() => {
+      chatLongPressTriggeredRef.current = true;
+      setChatActionMenuId(conversationId);
+    }, 520);
+  };
+
+  const cancelChatLongPress = () => {
+    if (chatLongPressTimerRef.current !== null) {
+      window.clearTimeout(chatLongPressTimerRef.current);
+      chatLongPressTimerRef.current = null;
+    }
+  };
+
   const handleDeleteConversation = async (convId: number) => {
-    if (!token) return;
-    if (
-      !confirm(
-        "Are you sure you want to delete this conversation? This action cannot be undone.",
-      )
-    )
-      return;
+    if (!token || deletingChat) return;
+    setDeletingChat(true);
     try {
       await deleteConversation({ data: { token, conversationId: convId } });
-      if (currentConversationId === convId) {
-        handleNewChat();
+      if (activeConversationIdRef.current === convId) handleNewChat();
+      setDeleteChatTarget(null);
+      setChatActionMenuId(null);
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not delete conversation.");
+    } finally {
+      setDeletingChat(false);
+    }
+  };
+
+  const handleDeleteLibraryAsset = async (asset: any) => {
+    if (!token || deletingAsset) return;
+    setDeletingAsset(true);
+    try {
+      if (asset.libraryFileId) {
+        await deleteWorkspaceLibraryFile({ data: { token, id: String(asset.libraryFileId) } });
+      } else {
+        await deleteChatAttachment({
+          data: {
+            token,
+            conversationId: Number(asset.conversationId),
+            messageId: Number(asset.messageId),
+            ...(asset.path ? { path: asset.path } : { url: asset.url }),
+          },
+        });
+        setMessages((current) => current.map((message) => Number(message.id) === Number(asset.messageId)
+          ? { ...message, attachments: (message.attachments || []).filter((attachment) => asset.path ? attachment.path !== asset.path : attachment.url !== asset.url) }
+          : message));
+      }
+      setDeleteAssetTarget(null);
+      setLibraryAssetMenuId(null);
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not delete this library item.");
+    } finally {
+      setDeletingAsset(false);
+    }
+  };
+
+  const handleLibraryUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length || !token || !workspace?.id || libraryUploadBusy) return;
+    const oversized = files.find((file) => file.size > 25 * 1024 * 1024);
+    if (oversized) {
+      alert(oversized.name + " is larger than 25 MB.");
+      return;
+    }
+    setLibraryUploadBusy(true);
+    try {
+      const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
+      if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
+      const client = getSupabaseClient();
+      const uploadOne = async (file: File) => {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
+        const path = `${workspace.id}/${userData.user.id}/library-${crypto.randomUUID()}-${safeName}`;
+        const { error } = await client.storage.from("misma-media").upload(path, file, {
+          upsert: false,
+          cacheControl: "3600",
+          contentType: file.type || "application/octet-stream",
+        });
+        if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+        try {
+          await createWorkspaceLibraryFile({ data: {
+            token, path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size,
+          } });
+        } catch (cause) {
+          await client.storage.from("misma-media").remove([path]);
+          throw cause;
+        }
+      };
+      for (let index = 0; index < files.length; index += 3) {
+        await Promise.all(files.slice(index, index + 3).map(uploadOne));
       }
       loadData();
     } catch (cause) {
-      alert(
-        cause instanceof Error
-          ? cause.message
-          : "Could not delete conversation.",
-      );
+      alert(cause instanceof Error ? cause.message : "Could not upload files to Library.");
+    } finally {
+      setLibraryUploadBusy(false);
     }
   };
 
@@ -1492,56 +1594,93 @@ function Dashboard() {
   const uploadSelectedAttachments = async (
     filesToUpload: File[] = selectedFiles,
     videoFrameMode = false,
+    signal?: AbortSignal,
   ): Promise<MessageAttachment[]> => {
     if (!filesToUpload.length) return [];
     setUploadingAttachments(true);
+    const uploadedPaths: string[] = [];
     try {
       if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
-    const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
-    if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
+      const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
+      if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
 
-    const uploaded: MessageAttachment[] = [];
-    const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "file") => {
-      if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
-      if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
-        throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
-      }
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
-      const path = `${workspace.id}/${userData.user.id}/${crypto.randomUUID()}-${safeName}`;
-      const { error } = await getSupabaseClient().storage.from("misma-media").upload(path, file, {
-        upsert: false,
-        contentType: file.type || "application/octet-stream",
-      });
-      if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
-      uploaded.push({ path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, kind });
-    };
-
-    let videoCount = 0;
-    for (const original of filesToUpload) {
+      const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "file"): Promise<MessageAttachment> => {
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+        if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
+        if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
+          throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
+        }
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
+        const path = `${workspace.id}/${userData.user.id}/${crypto.randomUUID()}-${safeName}`;
+        const { error } = await getSupabaseClient().storage.from("misma-media").upload(path, file, {
+          upsert: false,
+          cacheControl: "3600",
+          contentType: file.type || "application/octet-stream",
+        });
+        if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+        uploadedPaths.push(path);
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+        return { path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, kind };
+      };
+      const uploadFrames = async (frames: File[]) => {
+        const result: MessageAttachment[] = [];
+        for (let index = 0; index < frames.length; index += 3) {
+          const batch = frames.slice(index, index + 3);
+          const prepared = await Promise.all(batch.map(compressImageForUpload));
+          const settled = await Promise.allSettled(prepared.map((frame) => uploadOne(frame, "video-frame")));
+          const failed = settled.find((item): item is PromiseRejectedResult => item.status === "rejected");
+          if (failed) throw failed.reason;
+          result.push(...settled.map((item) => (item as PromiseFulfilledResult<MessageAttachment>).value));
+        }
+        return result;
+      };
       if (videoFrameMode) {
-        const preparedFrame = await compressImageForUpload(original);
-        await uploadOne(preparedFrame, "video-frame");
-      } else if (original.type.startsWith("image/")) {
-        const preparedImage = await compressImageForUpload(original);
-        await uploadOne(preparedImage, "image");
-      } else if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
-        videoCount += 1;
-        if (videoCount > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
-        await uploadOne(original, "video");
-        const frames = await extractVideoKeyframes(original);
-        for (const frame of frames) await uploadOne(frame, "video-frame");
-      } else {
-        await uploadOne(original, "file");
+        const frames = await uploadFrames(filesToUpload);
+        if (frames.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
+        return frames;
       }
-    }
-      if (uploaded.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
-      return uploaded;
+
+      const videos = filesToUpload.filter((file) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name));
+      if (videos.length > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
+
+      const processFile = async (original: File): Promise<MessageAttachment[]> => {
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+        if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
+          const uploadedVideo = await uploadOne(original, "video");
+          const frames = await extractVideoKeyframes(original);
+          return [uploadedVideo, ...await uploadFrames(frames)];
+        }
+        if (original.type.startsWith("image/")) {
+          const prepared = await compressImageForUpload(original);
+          if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+          return [await uploadOne(prepared, "image")];
+        }
+        return [await uploadOne(original, "file")];
+      };
+
+      const result: MessageAttachment[] = [];
+      // Bounded parallelism keeps multiple images moving without exhausting mobile RAM or connections.
+      for (let index = 0; index < filesToUpload.length; index += 2) {
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+        const batch = filesToUpload.slice(index, index + 2);
+        const settled = await Promise.allSettled(batch.map(processFile));
+        const failed = settled.find((item): item is PromiseRejectedResult => item.status === "rejected");
+        if (failed) throw failed.reason;
+        result.push(...settled.flatMap((item) => (item as PromiseFulfilledResult<MessageAttachment[]>).value));
+        if (result.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
+      }
+      return result;
+    } catch (error) {
+      if (uploadedPaths.length) {
+        await getSupabaseClient().storage.from("misma-media").remove(uploadedPaths).catch(() => undefined);
+      }
+      throw error;
     } finally {
       setUploadingAttachments(false);
     }
   };
 
-  const postChatAction = async (body: Record<string, unknown>) => {
+  const postChatAction = async (body: Record<string, unknown>, signal?: AbortSignal) => {
     const config = getSupabaseConfig();
     if (!config) throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
     const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
@@ -1552,6 +1691,7 @@ function Dashboard() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
+      signal,
     });
     const result = await response.json() as Record<string, any>;
     if (!response.ok) {
@@ -1765,6 +1905,8 @@ function Dashboard() {
     setFailedAction(null);
     setIsSending(true);
     shouldAutoScrollRef.current = true;
+    const requestController = new AbortController();
+    chatAbortControllerRef.current = requestController;
 
     try {
       const selectedConversation = conversations.find((item: any) => Number(item.id) === Number(currentConversationId));
@@ -1775,7 +1917,7 @@ function Dashboard() {
           workspaceId: workspace?.id,
           conversationId: currentConversationId,
           message: textToSend,
-        });
+        }, requestController.signal);
         if (!reply.message) throw new Error("The human reply was not saved.");
         setMessages((prev) => prev.map((item) => item.id === tempUserId ? reply.message : item));
         setSelectedFiles([]);
@@ -1783,7 +1925,7 @@ function Dashboard() {
         loadData();
         return;
       }
-      const attachments = editId ? [] : await uploadSelectedAttachments();
+      const attachments = editId ? [] : await uploadSelectedAttachments(selectedFiles, false, requestController.signal);
       const res = await postChatAction({
         action: "chat",
         message: textToSend,
@@ -1792,10 +1934,11 @@ function Dashboard() {
         attachments,
         thinkHarder,
         ...(editId ? { editMessageId: Number(editId) } : {}),
-      });
+      }, requestController.signal);
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!currentConversationId && res.conversationId) {
+        activeConversationIdRef.current = Number(res.conversationId);
         setCurrentConversationId(res.conversationId);
       }
 
@@ -1828,6 +1971,7 @@ function Dashboard() {
       setFailedPrompt("");
       loadData();
     } catch (cause) {
+      if (requestController.signal.aborted) return;
       const errMsg = cause instanceof Error ? cause.message : "Failed to connect to Misma AI.";
       setChatError(errMsg);
       setFailedPrompt(textToSend);
@@ -1835,7 +1979,32 @@ function Dashboard() {
       setFailedMessageId(tempUserId);
       setDraft(textToSend);
     } finally {
+      if (chatAbortControllerRef.current === requestController) {
+        chatAbortControllerRef.current = null;
+        setIsSending(false);
+      }
+    }
+  };
+
+  const stopMisma = () => {
+    let stopped = false;
+    if (chatAbortControllerRef.current) {
+      const controller = chatAbortControllerRef.current;
+      chatAbortControllerRef.current = null;
+      controller.abort();
+      stopped = true;
+    }
+    if (mediaAbortControllerRef.current) {
+      const controller = mediaAbortControllerRef.current;
+      mediaAbortControllerRef.current = null;
+      controller.abort();
+      stopped = true;
+    }
+    if (stopped) {
       setIsSending(false);
+      setIsGeneratingMedia(false);
+      setMediaProgress("");
+      setChatError("Stopped.");
     }
   };
 
@@ -1849,6 +2018,32 @@ function Dashboard() {
     const prompt = promptOverride?.trim() || draft.trim() || (mode === "image"
       ? "Create a high-quality image using the attached reference."
       : "Create a short cinematic video using the attached reference.");
+    const controller = new AbortController();
+    mediaAbortControllerRef.current = controller;
+    const startViewVersion = chatViewVersionRef.current;
+    let targetConversationId: number | null = currentConversationId ? Number(currentConversationId) : null;
+    const isTargetOpen = () => targetConversationId !== null && activeConversationIdRef.current === targetConversationId;
+    const updateTargetMessages = (updater: (current: Message[]) => Message[]) => {
+      if (!isTargetOpen()) return;
+      setMessages((current) => isTargetOpen() ? updater(current) : current);
+    };
+    const pause = (milliseconds: number) => new Promise<void>((resolve, reject) => {
+      if (controller.signal.aborted) {
+        reject(new DOMException("Stopped", "AbortError"));
+        return;
+      }
+      const timer = window.setTimeout(() => {
+        controller.signal.removeEventListener("abort", abort);
+        resolve();
+      }, milliseconds);
+      const abort = () => {
+        window.clearTimeout(timer);
+        controller.signal.removeEventListener("abort", abort);
+        reject(new DOMException("Stopped", "AbortError"));
+      };
+      controller.signal.addEventListener("abort", abort, { once: true });
+    });
+
     setChatError("");
     setMediaProgress(mode === "image" ? "" : "Preparing your video with Agnes…");
     setIsGeneratingMedia(true);
@@ -1866,16 +2061,34 @@ function Dashboard() {
       pendingMedia: mode,
       created_at: new Date().toISOString(),
     };
-    setMessages((current) => reuse
-      ? [...current, pendingMessage]
-      : [...current, {
-          id: tempUserId!,
-          role: "human",
-          text: prompt,
-          created_at: new Date().toISOString(),
-        }, pendingMessage]);
 
     try {
+      if (!targetConversationId) {
+        const created = await createConversation({ data: { token, title: prompt.slice(0, 72) || "Media creation" } });
+        targetConversationId = Number(created.conversation.id);
+        if (!Number.isSafeInteger(targetConversationId) || targetConversationId <= 0) {
+          throw new Error("Misma could not reserve a conversation for this media request.");
+        }
+        // Only attach the new conversation to the screen when the user has not moved away.
+        if (chatViewVersionRef.current === startViewVersion && activeConversationIdRef.current === null) {
+          activeConversationIdRef.current = targetConversationId;
+          setCurrentConversationId(targetConversationId);
+        }
+        loadData();
+      } else {
+        activeConversationIdRef.current = targetConversationId;
+      }
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+
+      updateTargetMessages((current) => reuse
+        ? [...current, pendingMessage]
+        : [...current, {
+            id: tempUserId!,
+            role: "human",
+            text: prompt,
+            created_at: new Date().toISOString(),
+          }, pendingMessage]);
+
       const attachments = reuse
         ? reuse.attachments.filter((item) => Boolean(item.path)).map((item) => ({
             path: item.path!,
@@ -1884,11 +2097,13 @@ function Dashboard() {
             size: item.size || 0,
             kind: item.kind,
           }))
-        : await uploadSelectedAttachments();
+        : await uploadSelectedAttachments(selectedFiles, false, controller.signal);
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+
       const result = await postChatAction({
         action: mode === "image" ? "create-image" : "create-video",
         message: prompt,
-        conversationId: currentConversationId,
+        conversationId: targetConversationId,
         workspaceId: workspace?.id,
         attachments,
         ...(reuse ? {
@@ -1896,22 +2111,27 @@ function Dashboard() {
           sourceUserMessageId: reuse.sourceUserMessageId,
           replaceAiMessageId: reuse.replaceAiMessageId,
         } : {}),
-      });
-      if (result.conversationId) setCurrentConversationId(result.conversationId);
-      if (result.userMessage && tempUserId) {
-        setMessages((current) => current.map((item) => item.id === tempUserId ? result.userMessage : item));
+      }, controller.signal);
+
+      if (result.conversationId && Number(result.conversationId) !== targetConversationId) {
+        throw new Error("Misma returned a different conversation for this media request.");
       }
-      setSelectedFiles([]);
+      if (isTargetOpen() && result.userMessage && tempUserId) {
+        updateTargetMessages((current) => current.some((item) => item.id === tempUserId)
+          ? current.map((item) => item.id === tempUserId ? result.userMessage : item)
+          : [...current, result.userMessage]);
+        setSelectedFiles([]);
+      }
 
       if (mode === "image") {
         if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
-        setMessages((current) => {
+        updateTargetMessages((current) => {
           const withoutPending = current.filter((item) => item.id !== pendingMediaId);
           return reuse
             ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
             : [...withoutPending, result.aiMessage];
         });
-        setMediaProgress("");
+        if (isTargetOpen()) setMediaProgress("");
         loadData();
         return;
       }
@@ -1921,15 +2141,15 @@ function Dashboard() {
       if (typeof videoId !== "string" || typeof model !== "string") {
         throw new Error("Agnes did not return a video generation job.");
       }
-      const progressMessageId = pendingMediaId;
-      setMessages((current) => current.map((item) => item.id === progressMessageId ? {
+      updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
         ...item,
         text: "Agnes is generating your video…",
         pendingMedia: "video",
       } : item));
+
       let completedUrl: string | null = null;
       for (let attempt = 0; attempt < 120; attempt++) {
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 5000));
+        await pause(5000);
         let status: Record<string, any> | null = null;
         let pollError: unknown = null;
         for (let retry = 0; retry < 3; retry++) {
@@ -1937,23 +2157,24 @@ function Dashboard() {
             status = await postChatAction({
               action: "poll-video",
               workspaceId: workspace?.id,
-              conversationId: result.conversationId,
+              conversationId: targetConversationId,
               videoId,
               model,
-            });
+            }, controller.signal);
             pollError = null;
             break;
           } catch (error) {
             pollError = error;
+            if (controller.signal.aborted) throw error;
             const detail = error instanceof Error ? error.message : String(error);
             if (!/agnes video status|temporar|network|failed to fetch|http (408|429|500|502|503|504)/i.test(detail) || retry === 2) break;
-            await new Promise<void>((resolve) => window.setTimeout(resolve, 1200 * (retry + 1)));
+            await pause(1200 * (retry + 1));
           }
         }
         if (pollError || !status) throw pollError instanceof Error ? pollError : new Error("Agnes video status could not be retrieved.");
         const progress = Number(status.progress) || 0;
-        setMediaProgress(`Creating video… ${progress}%`);
-        setMessages((current) => current.map((item) => item.id === progressMessageId ? {
+        if (isTargetOpen()) setMediaProgress(`Creating video… ${progress}%`);
+        updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
           ...item,
           text: `Agnes is generating your video… ${progress}%`,
           pendingMedia: "video",
@@ -1967,7 +2188,8 @@ function Dashboard() {
         }
       }
       if (!completedUrl) throw new Error("Video generation is taking longer than expected. The job may still be running; you can try again later.");
-      setMediaProgress("Checking video frames for safe content…");
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+      if (isTargetOpen()) setMediaProgress("Checking video frames for safe content…");
       const reviewConfig = getSupabaseConfig();
       if (!reviewConfig || !completedUrl) throw new Error("Could not prepare the generated video for its safety review.");
       const reviewDownload = await fetch(`${reviewConfig.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
@@ -1980,10 +2202,11 @@ function Dashboard() {
         body: JSON.stringify({
           action: "download-video-for-review",
           workspaceId: workspace?.id,
-          conversationId: result.conversationId,
+          conversationId: targetConversationId,
           videoId,
           url: completedUrl,
         }),
+        signal: controller.signal,
       });
       if (!reviewDownload.ok) {
         const detail = await reviewDownload.json().catch(() => ({})) as { error?: string };
@@ -1993,53 +2216,67 @@ function Dashboard() {
       if (reviewBlob.size <= 0 || reviewBlob.size > 150 * 1024 * 1024) {
         throw new Error("The generated video is empty or too large to run a safety review.");
       }
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
       const reviewFile = new File([reviewBlob], "misma-generated-video-review.mp4", {
         type: reviewBlob.type.startsWith("video/") ? reviewBlob.type : "video/mp4",
       });
       const reviewFrames = await extractVideoKeyframes(reviewFile);
       if (reviewFrames.length < 2) throw new Error("Misma could not sample enough frames to review this video safely.");
-      const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true);
+      const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true, controller.signal);
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
       await postChatAction({
         action: "review-video-frames",
         workspaceId: workspace?.id,
-        conversationId: result.conversationId,
+        conversationId: targetConversationId,
         videoId,
         url: completedUrl,
         attachments: reviewAttachments,
-      });
+      }, controller.signal);
       const saved = await postChatAction({
         action: "save-generated-media",
         workspaceId: workspace?.id,
-        conversationId: result.conversationId,
+        conversationId: targetConversationId,
         videoId,
         url: completedUrl,
         ...(reuse ? { replaceAiMessageId: reuse.replaceAiMessageId } : {}),
-      });
+      }, controller.signal);
       if (!saved.aiMessage) throw new Error("The generated video could not be saved to this chat.");
-      setMessages((current) => {
-        const withoutPending = current.filter((item) => item.id !== progressMessageId);
+      updateTargetMessages((current) => {
+        const withoutPending = current.filter((item) => item.id !== pendingMediaId);
         return reuse
           ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? saved.aiMessage : item)
           : [...withoutPending, saved.aiMessage];
       });
-      setMediaProgress("Video created.");
-      window.setTimeout(() => setMediaProgress(""), 3500);
+      if (isTargetOpen()) {
+        setMediaProgress("Video created.");
+        window.setTimeout(() => setMediaProgress(""), 3500);
+      }
       loadData();
     } catch (cause) {
       const responseData = cause instanceof Error
         ? (cause as Error & { responseData?: Record<string, any> }).responseData
         : undefined;
-      if (responseData?.conversationId) setCurrentConversationId(Number(responseData.conversationId));
-      if (responseData?.userMessage && tempUserId) {
-        setMessages((current) => current.map((item) => item.id === tempUserId ? responseData.userMessage : item));
+      if (isTargetOpen()) {
+        if (responseData?.userMessage && tempUserId) {
+          updateTargetMessages((current) => current.some((item) => item.id === tempUserId)
+            ? current.map((item) => item.id === tempUserId ? responseData.userMessage : item)
+            : [...current, responseData.userMessage]);
+        }
+        updateTargetMessages((current) => current.filter((item) => item.id !== pendingMediaId));
+        if (controller.signal.aborted) {
+          setChatError("Generation stopped.");
+        } else {
+          setDraft(prompt);
+          setCreateMode(mode);
+          setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
+        }
+        setMediaProgress("");
       }
-      setMessages((current) => current.filter((item) => item.id !== pendingMediaId));
-      setDraft(prompt);
-      setCreateMode(mode);
-      setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
-      setMediaProgress("");
     } finally {
-      setIsGeneratingMedia(false);
+      if (mediaAbortControllerRef.current === controller) {
+        mediaAbortControllerRef.current = null;
+        setIsGeneratingMedia(false);
+      }
     }
   };
 
@@ -2120,6 +2357,8 @@ function Dashboard() {
     setFailedAction(null);
     setIsSending(true);
     shouldAutoScrollRef.current = true;
+    const requestController = new AbortController();
+    chatAbortControllerRef.current = requestController;
 
     try {
       const config = getSupabaseConfig();
@@ -2134,6 +2373,7 @@ function Dashboard() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ conversationId: currentConversationId, regenerate: true }),
+        signal: requestController.signal,
       });
       const res = (await response.json()) as {
         error?: string;
@@ -2156,11 +2396,16 @@ function Dashboard() {
       setMessageFeedback({});
       loadData();
     } catch (cause) {
-      setChatError(cause instanceof Error ? cause.message : "Could not regenerate this response.");
-      setFailedAction("regenerate");
+      if (!requestController.signal.aborted) {
+        setChatError(cause instanceof Error ? cause.message : "Could not regenerate this response.");
+        setFailedAction("regenerate");
+      }
     } finally {
       regenerateInFlightRef.current = false;
-      setIsSending(false);
+      if (chatAbortControllerRef.current === requestController) {
+        chatAbortControllerRef.current = null;
+        setIsSending(false);
+      }
     }
   };
 
@@ -2490,7 +2735,7 @@ function Dashboard() {
               onClick={() => setChatsExpanded((v) => !v)}
               aria-expanded={chatsExpanded}
             >
-              <span className="aichat-chats-widget-title">Chats and tasks</span>
+              <span className="aichat-chats-widget-title">Recents</span>
               <svg
                 className={`aichat-chats-widget-caret${chatsExpanded ? " open" : ""}`}
                 width="12"
@@ -2545,43 +2790,42 @@ function Dashboard() {
               ) : (
                 filteredRecentChats.slice(0, 5).map((c) => (
                   <div className="aichat-chat-list-item" key={c.id}>
-                  <button
-                    type="button"
-                    className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
-                    onClick={() => void selectConversation(c.id)}
-                    title={c.name || "New chat"}
-                  >
-                    <span
-                      className="aichat-chats-widget-dot"
-                      aria-hidden="true"
-                    />
-                    <span className="aichat-chats-widget-item-text">
-                      {c.name || "New chat"}
-                    </span>
-                  </button>
-                  <button type="button" className="aichat-chat-more" aria-label="Chat options" aria-expanded={chatMenuOpenId === c.id} onClick={() => setChatMenuOpenId((current) => current === c.id ? null : c.id)}>⋯</button>
-                  {chatMenuOpenId === c.id && (
-                    <div className="aichat-chat-menu" role="menu">
-                      <button type="button" role="menuitem" onClick={() => handleCreateConversationGroup(c.id)}>Group in…</button>
-                      {conversationGroups.map((group) => <button key={group} type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, group)}>Move to {group}</button>)}
-                      {c.group_name && <button type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, null)}>Remove group</button>}
-                      <button type="button" role="menuitem" className="is-danger" onClick={() => { setChatMenuOpenId(null); void handleDeleteConversation(c.id); }}>Delete permanently</button>
-                    </div>
-                  )}
+                    <button
+                      type="button"
+                      className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
+                      onClick={() => {
+                        if (chatLongPressTriggeredRef.current) {
+                          chatLongPressTriggeredRef.current = false;
+                          return;
+                        }
+                        void selectConversation(c.id);
+                      }}
+                      onPointerDown={() => startChatLongPress(c.id)}
+                      onPointerUp={cancelChatLongPress}
+                      onPointerLeave={cancelChatLongPress}
+                      onPointerMove={cancelChatLongPress}
+                      onPointerCancel={cancelChatLongPress}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        cancelChatLongPress();
+                        chatLongPressTriggeredRef.current = true;
+                        setChatActionMenuId(c.id);
+                      }}
+                      title={c.name || "New chat"}
+                    >
+                      <span className="aichat-chats-widget-dot" aria-hidden="true" />
+                      <span className="aichat-chats-widget-item-text">{c.name || "New chat"}</span>
+                    </button>
+                    {chatActionMenuId === c.id && (
+                      <div className="aichat-chat-context-menu" role="menu">
+                        <button type="button" role="menuitem" className="is-danger" onClick={() => {
+                          setChatActionMenuId(null);
+                          setDeleteChatTarget({ id: c.id, name: c.name || "New chat" });
+                        }}>Delete chat</button>
+                      </div>
+                    )}
                   </div>
                 ))
-              )}
-              {recentChats.length > 0 && (
-                <button
-                  type="button"
-                  className="aichat-chats-widget-viewall"
-                  onClick={() => {
-                    setActiveTab("recent");
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  View all
-                </button>
               )}
             </div>
           )}
@@ -2671,11 +2915,13 @@ function Dashboard() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
+              aria-hidden="true"
             >
               <line x1="3" y1="12" x2="21" y2="12" />
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
+            <span className="aichat-mobile-recents-label">Recents</span>
           </button>
           <button
             type="button"
@@ -3043,9 +3289,10 @@ function Dashboard() {
                     <button
                       type="button"
                       className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
-                      disabled={isSending || isGeneratingMedia}
                       onClick={() => {
-                        if (voiceInputActive) {
+                        if (isSending || isGeneratingMedia) {
+                          stopMisma();
+                        } else if (voiceInputActive) {
                           handleVoiceInput();
                         } else if (draft.trim() || selectedFiles.length || createMode) {
                           if (createMode) void handleCreateMedia();
@@ -3054,8 +3301,8 @@ function Dashboard() {
                           handleVoiceInput();
                         }
                       }}
-                      title={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
-                      aria-label={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
+                      title={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
+                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
                     >
                       {isSending || isGeneratingMedia ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
@@ -3135,10 +3382,16 @@ function Dashboard() {
         {activeTab === "library" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
-              <div className="aichat-tab-header">
-                <h2>Library</h2>
-                <p>Find images, documents, and media shared in your workspace conversations.</p>
+              <div className="aichat-tab-header aichat-library-heading">
+                <div>
+                  <h2>Library</h2>
+                  <p>Find, upload, and manage files shared in your workspace.</p>
+                </div>
+                <button type="button" className="aichat-action-btn" disabled={libraryUploadBusy} onClick={() => libraryFileInputRef.current?.click()}>
+                  {libraryUploadBusy ? "Uploading…" : "＋ Upload files"}
+                </button>
               </div>
+              <input ref={libraryFileInputRef} type="file" hidden multiple onChange={(event) => void handleLibraryUpload(event)} />
               <div className="aichat-card">
                 <div className="aichat-library-toolbar">
                   <span>{workspaceAssets.length} saved items</span>
@@ -3148,8 +3401,10 @@ function Dashboard() {
                   <div className="aichat-assets-empty">
                     <div className="aichat-assets-empty-icon">▤</div>
                     <h3>No library items found</h3>
-                    <p>Upload an image or document in Workspace to add it to your library.</p>
-                    <button type="button" className="aichat-action-btn secondary" onClick={() => { setActiveTab("workspace"); setMobileMenuOpen(false); }}>Open workspace</button>
+                    <p>Upload an image or document, or save media from any Misma conversation.</p>
+                    <button type="button" className="aichat-action-btn secondary" disabled={libraryUploadBusy} onClick={() => libraryFileInputRef.current?.click()}>
+                      {libraryUploadBusy ? "Uploading…" : "Upload a file"}
+                    </button>
                   </div>
                 ) : (
                   <div className="aichat-library-list">
@@ -3160,12 +3415,23 @@ function Dashboard() {
                         const isVideo = asset.kind === "video" || asset.kind === "generated-video" || String(asset.mimeType || "").startsWith("video/");
                         return (
                           <article className="aichat-library-item" key={asset.id}>
-                            {isImage ? <img src={asset.url} alt={asset.name || "Library image"} loading="lazy" /> : <span className="aichat-library-file-icon">{isVideo ? "▶" : "▤"}</span>}
+                            {isImage ? <img src={asset.url} alt={asset.name || "Library image"} loading="lazy" decoding="async" /> : <span className="aichat-library-file-icon">{isVideo ? "▶" : "▤"}</span>}
                             <div className="aichat-library-item-copy">
                               <strong title={asset.name}>{asset.name || "Workspace file"}</strong>
                               <small>{asset.mimeType || asset.kind} · {asset.created_at ? new Date(asset.created_at).toLocaleDateString() : "Saved item"}</small>
                             </div>
-                            <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Open ${asset.name || "file"}`} title="Open file"><ActionIcon name="download" /></a>
+                            <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Download ${asset.name || "file"}`} title="Download file"><ActionIcon name="download" /></a>
+                            <div className="aichat-library-item-menu">
+                              <button type="button" className="aichat-library-more" aria-label={`More actions for ${asset.name || "file"}`} aria-expanded={libraryAssetMenuId === asset.id} onClick={() => setLibraryAssetMenuId((current) => current === asset.id ? null : asset.id)}>⋯</button>
+                              {libraryAssetMenuId === asset.id && (
+                                <div className="aichat-library-item-menu-popover" role="menu">
+                                  <button type="button" role="menuitem" className="is-danger" onClick={() => {
+                                    setDeleteAssetTarget(asset);
+                                    setLibraryAssetMenuId(null);
+                                  }}>{asset.libraryFileId ? "Delete from Library" : "Delete from chat"}</button>
+                                </div>
+                              )}
+                            </div>
                           </article>
                         );
                       })}
@@ -3730,8 +3996,7 @@ function Dashboard() {
                   <button type="button" className="aichat-action-btn secondary" onClick={exportCurrentChat} disabled={!messages.length}>Export chat</button>
                 </div>
                 <div className="aichat-settings-action-row">
-                  <div><strong>Manage saved conversations</strong><small>Open Recent chats to group or permanently delete conversations.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("recent")}>Open history</button>
+                  <div><strong>Manage saved conversations</strong><small>Long-press any chat in Recents to delete it.</small></div>
                 </div>
               </section>
 
@@ -3767,120 +4032,6 @@ function Dashboard() {
           </div>
         )}
 
-        {/* ── View 6: Recent Conversations ── */}
-        {activeTab === "recent" && (
-          <div className="aichat-tab-view">
-            <div className="aichat-tab-content">
-              <div className="aichat-tab-header">
-                <h2>Recent chats ({recentChats.length})</h2>
-                <p>
-                  Find, reopen, group, or permanently delete your recent Misma chats.
-                </p>
-              </div>
-
-              <div className="aichat-card">
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 16,
-                    gap: 12,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <input
-                    type="search"
-                    className="aichat-input"
-                    style={{ maxWidth: 320, padding: "8px 12px", height: 38 }}
-                    placeholder="Search recent conversations…"
-                    value={recentSearch}
-                    onChange={(e) => setRecentSearch(e.target.value)}
-                    aria-label="Search conversations"
-                  />
-                  <button
-                    type="button"
-                    className="aichat-action-btn"
-                    style={{ padding: "8px 14px", height: 38 }}
-                    onClick={handleNewChat}
-                  >
-                    + Start New Chat
-                  </button>
-                </div>
-
-                {recentChats.length === 0 ? (
-                  <p style={{ color: "#657180" }}>
-                    No recorded conversations yet. Start chatting in Workspace!
-                  </p>
-                ) : (
-                  <div className="aichat-table-wrap">
-                    <table className="aichat-table">
-                      <thead>
-                        <tr>
-                          <th>Chat</th>
-                          <th>Channel</th>
-                          <th>Group</th>
-                          <th>Latest activity</th>
-                          <th>Status</th>
-                          <th style={{ textAlign: "right" }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentChats
-                          .filter(
-                            (c) =>
-                              !recentSearch.trim() ||
-                              (c.name || "")
-                                .toLowerCase()
-                                .includes(recentSearch.toLowerCase()) ||
-                              (c.text || "")
-                                .toLowerCase()
-                                .includes(recentSearch.toLowerCase()) ||
-                              (c.channel || "")
-                                .toLowerCase()
-                                .includes(recentSearch.toLowerCase()),
-                          )
-                          .map((c) => (
-                            <tr key={c.id}>
-                              <td style={{ fontWeight: 600 }}>
-                                {c.name || "New chat"}
-                              </td>
-                              <td>
-                                <span className="aichat-header-badge">
-                                  {c.channel || "Dashboard"}
-                                </span>
-                              </td>
-                              <td>{c.group_name || "—"}</td>
-                              <td>
-                                {c.text ? c.text.slice(0, 50) : "No message"}
-                              </td>
-                              <td>{c.status || "AI"}</td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                <div className="aichat-chat-list-item aichat-recent-chat-actions">
-                                  <button type="button" className="aichat-action-btn secondary" style={{ height: 32, padding: "0 10px", fontSize: 13 }} onClick={() => void selectConversation(c.id)}>
-                                    Open Chat
-                                  </button>
-                                  <button type="button" className="aichat-chat-more" aria-label={`Options for ${c.name || "chat"}`} aria-expanded={chatMenuOpenId === c.id} onClick={() => setChatMenuOpenId((current) => current === c.id ? null : c.id)}>⋯</button>
-                                  {chatMenuOpenId === c.id && (
-                                    <div className="aichat-chat-menu" role="menu">
-                                      <button type="button" role="menuitem" onClick={() => handleCreateConversationGroup(c.id)}>Group in…</button>
-                                      {conversationGroups.map((group) => <button key={group} type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, group)}>Move to {group}</button>)}
-                                      {c.group_name && <button type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, null)}>Remove group</button>}
-                                      <button type="button" role="menuitem" className="is-danger" onClick={() => { setChatMenuOpenId(null); void handleDeleteConversation(c.id); }}>Delete permanently</button>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
         {activeTab === "website-statistics" && (
           <div className="aichat-tab-view"><div className="aichat-tab-content">
             <div className="aichat-tab-header"><h2>Website statistics</h2><p>Monitor the websites connected to this workspace.</p></div>
@@ -4106,6 +4257,34 @@ function Dashboard() {
           </div>
         )}
 
+        {deleteChatTarget && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingChat) setDeleteChatTarget(null); }}>
+            <section className="aichat-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-chat-title">
+              <div className="aichat-confirm-icon is-danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-.8 13H6.8L6 7m3 3v7m6-7v7" /></svg></div>
+              <h2 id="misma-delete-chat-title">Delete chat?</h2>
+              <p><strong>{deleteChatTarget.name}</strong> and all messages in this conversation will be permanently deleted. This action cannot be undone.</p>
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-action-btn secondary" disabled={deletingChat} onClick={() => setDeleteChatTarget(null)}>Cancel</button>
+                <button type="button" className="aichat-confirm-danger" disabled={deletingChat} onClick={() => void handleDeleteConversation(deleteChatTarget.id)}>{deletingChat ? "Deleting…" : "Delete chat"}</button>
+              </div>
+            </section>
+          </div>
+        )}
+        {deleteAssetTarget && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingAsset) setDeleteAssetTarget(null); }}>
+            <section className="aichat-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-media-title">
+              <div className="aichat-confirm-icon is-danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-.8 13H6.8L6 7m3 3v7m6-7v7" /></svg></div>
+              <h2 id="misma-delete-media-title">{deleteAssetTarget.libraryFileId ? "Delete from Library?" : "Delete from chat?"}</h2>
+              <p>{deleteAssetTarget.libraryFileId
+                ? `“${deleteAssetTarget.name || "This file"}” will be removed from your Library and its stored file will be deleted.`
+                : `“${deleteAssetTarget.name || "This media"}” will be removed from its original conversation. Other chat messages will remain.`}</p>
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-action-btn secondary" disabled={deletingAsset} onClick={() => setDeleteAssetTarget(null)}>Cancel</button>
+                <button type="button" className="aichat-confirm-danger" disabled={deletingAsset} onClick={() => void handleDeleteLibraryAsset(deleteAssetTarget)}>{deletingAsset ? "Deleting…" : "Delete media"}</button>
+              </div>
+            </section>
+          </div>
+        )}
         {cropTarget && (
           <div className="aichat-crop-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCropTarget(null); }}>
             <section className="aichat-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-crop-title">
