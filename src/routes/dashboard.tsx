@@ -3131,7 +3131,15 @@ function Dashboard() {
                       className="aichat-composer-textarea"
                       placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : isHumanTakeover ? "Reply to this customer as your team…" : "Message Misma…"}
                       value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (/^\\s*@thinking\\b\\s*/i.test(value)) {
+                          setThinkHarder(true);
+                          setDraft(value.replace(/^\\s*@thinking\\b\\s*/i, ""));
+                        } else {
+                          setDraft(value);
+                        }
+                      }}
                       onKeyDown={handleKeyDown}
                       onPaste={handleComposerPaste}
                       onFocus={() => {
