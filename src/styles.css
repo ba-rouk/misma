@@ -6053,3 +6053,12 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .aichat-notification-trigger.has-unread { animation: none; }
 }
+
+
+/* Do not reserve a blank toolbar row when no composer modes are active. */
+.aichat-composer-tools-row:empty {
+  display: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
