@@ -511,7 +511,7 @@ async function prepareAttachments(
 }
 
 async function createConversationIfNeeded(
-  db: ReturnType<typeof createClient>,
+  db: MismaDbClient,
   workspaceId: string,
   conversationId: number | null,
   message: string,
@@ -533,7 +533,7 @@ async function createConversationIfNeeded(
 }
 
 async function saveMediaPrompt(
-  db: ReturnType<typeof createClient>,
+  db: MismaDbClient,
   workspaceId: string,
   conversationId: number | null,
   message: string,
@@ -573,7 +573,7 @@ async function saveMediaPrompt(
 }
 
 async function saveGeneratedMessage(
-  db: ReturnType<typeof createClient>,
+  db: MismaDbClient,
   conversationId: number,
   kind: string,
   url: string,
