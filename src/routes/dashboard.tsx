@@ -322,16 +322,23 @@ function ComposerAttachmentPreview({
   onRemove: (index: number) => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoaded, setPreviewLoaded] = useState(false);
   const isImage = file.type.startsWith("image/");
   const isVideo = file.type.startsWith("video/") || /\\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const previewPending = (isImage || isVideo) && !previewLoaded;
   const extension = file.name.split(".").pop()?.slice(0, 5).toUpperCase() || "FILE";
   const sizeLabel = file.size < 1024 * 1024
     ? Math.max(1, Math.round(file.size / 1024)) + " KB"
     : (file.size / (1024 * 1024)).toFixed(1) + " MB";
 
   useEffect(() => {
-    if (!isImage && !isVideo) return;
+    setPreviewLoaded(false);
+    if (!isImage && !isVideo) {
+      setPreviewUrl(null);
+      setPreviewLoaded(true);
+      return;
+    }
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
@@ -341,9 +348,9 @@ function ComposerAttachmentPreview({
     <div className="aichat-composer-attachment-card" title={file.name}>
       <div className="aichat-composer-attachment-square">
         {isImage && previewUrl ? (
-          <img src={previewUrl} alt={file.name} />
+          <img src={previewUrl} alt={file.name} onLoad={() => setPreviewLoaded(true)} />
         ) : isVideo && previewUrl ? (
-          <video src={previewUrl} muted playsInline preload="metadata" />
+          <video src={previewUrl} muted playsInline preload="metadata" onLoadedData={() => setPreviewLoaded(true)} />
         ) : (
           <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
             <span>{isPdf ? "PDF" : extension}</span>
@@ -356,10 +363,10 @@ function ComposerAttachmentPreview({
           aria-label={"Remove " + file.name}
           onClick={() => onRemove(index)}
         >×</button>
-        {isUploading ? (
+        {isUploading || previewPending ? (
           <div className="aichat-composer-upload-state is-uploading" role="status">
             <i />
-            <span>Uploading</span>
+            <span>{isUploading ? "Uploading" : "Loading"}</span>
           </div>
         ) : (
           <span className="aichat-composer-upload-state is-ready"><i>✓</i></span>
