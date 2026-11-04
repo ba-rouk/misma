@@ -89,6 +89,50 @@ export const getMismaData = createServerFn({ method: "POST" })
       group_name: c.group_name || null,
     }));
 
+    // Unread customer messages from non-dashboard channels are website visitor notifications.
+    const visitorConversationIds = rawConversations
+      .filter((conversation: any) => String(conversation.channel || "").trim().toLowerCase() !== "dashboard")
+      .map((conversation: any) => Number(conversation.id));
+    let unreadVisitorCount = 0;
+    let unreadVisitorMessages: Array<{
+      id: number;
+      conversationId: number;
+      text: string;
+      created_at: string;
+      channel: string;
+      conversationTitle: string;
+    }> = [];
+    if (visitorConversationIds.length) {
+      const [unreadCountResult, unreadRowsResult] = await Promise.all([
+        db.from("messages").select("id", { count: "exact", head: true })
+          .in("conversation_id", visitorConversationIds)
+          .eq("role", "customer")
+          .is("read_at", null),
+        db.from("messages").select("id,conversation_id,text,created_at")
+          .in("conversation_id", visitorConversationIds)
+          .eq("role", "customer")
+          .is("read_at", null)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+      if (unreadCountResult.error) throw new Error("Could not count unread visitor messages.");
+      if (unreadRowsResult.error) throw new Error("Could not load unread visitor messages.");
+      unreadVisitorCount = unreadCountResult.count ?? 0;
+      const conversationById = new Map(rawConversations.map((conversation: any) => [Number(conversation.id), conversation]));
+      unreadVisitorMessages = (unreadRowsResult.data ?? []).map((message: any) => {
+        const conversationId = Number(message.conversation_id);
+        const conversation = conversationById.get(conversationId) as any;
+        return {
+          id: Number(message.id),
+          conversationId,
+          text: String(message.text || ""),
+          created_at: String(message.created_at || ""),
+          channel: String(conversation?.channel || "Website"),
+          conversationTitle: cleanConversationTitle(promptTitles.get(conversationId)) || "Website visitor",
+        };
+      });
+    }
+
     // Collect recent chat attachments for the Images and Library views.
     const assets: WorkspaceAsset[] = [];
     if (conversationIds.length) {
@@ -149,7 +193,26 @@ export const getMismaData = createServerFn({ method: "POST" })
     }));
     const knowledge = check(knowledgeResult.data, knowledgeResult.error);
     const customers = check(customersResult.data, customersResult.error);
-    return { workspace, conversations, orders, knowledge, customers, assets };
+    return { workspace, conversations, orders, knowledge, customers, assets, unreadVisitorMessages, unreadVisitorCount };
+  });
+
+export const markVisitorMessagesRead = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, conversationId: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: conversation, error: conversationError } = await db.from("conversations")
+      .select("id")
+      .eq("id", data.conversationId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (conversationError || !conversation) throw new Error("Conversation not found.");
+    const { error } = await db.from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("conversation_id", data.conversationId)
+      .eq("role", "customer")
+      .is("read_at", null);
+    if (error) throw new Error("Could not mark visitor messages as read.");
+    return { ok: true };
   });
 
 export const addKnowledge = createServerFn({ method: "POST" })
