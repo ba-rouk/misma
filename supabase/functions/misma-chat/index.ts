@@ -722,7 +722,7 @@ async function isMismaMediaSafe(
         images,
         [],
         false,
-        6_000,
+        8_000,
       );
       const decision = answer.trim().match(/^(ALLOW|BLOCK)\b/i)?.[1]?.toUpperCase();
       if (decision === "ALLOW") return true;
