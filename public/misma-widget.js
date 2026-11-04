@@ -19,7 +19,7 @@
   style.textContent = `
     :host { all: initial; color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
-    .launcher { position: fixed; right: 22px; bottom: 22px; z-index: 2147483000; border: 0; border-radius: 999px; min-width: 58px; height: 58px; padding: 0 20px; display:flex; align-items:center; justify-content:center; gap:10px; background:#111827; color:#fff; box-shadow:0 12px 40px #0003; cursor:pointer; font:600 14px/1 inherit; }
+    .launcher { position: fixed; right: 22px; bottom: 22px; z-index: 2147483000; border: 0; border-radius: 999px; min-width: 58px; height: 58px; padding: 0 20px; display:flex; align-items:center; justify-content:center; gap:10px; background:#111827; color:#fff; box-shadow:0 12px 40px #0003; cursor:pointer; font-family:inherit; font-size:14px; font-weight:600; line-height:1; }
     .brandmark { width:24px; height:24px; display:grid; place-items:center; border:1.5px solid #fff; border-radius:8px; font-size:16px; line-height:1; }
     .panel { position:fixed; right:22px; bottom:92px; z-index:2147483000; width:min(380px,calc(100vw - 28px)); height:min(580px,calc(100dvh - 120px)); display:none; overflow:hidden; border:1px solid #dbe2ea; border-radius:18px; background:#fff; box-shadow:0 24px 75px #0b142433; color:#182230; }
     .panel.open { display:flex; flex-direction:column; }
@@ -36,7 +36,7 @@
     .bubble.visitor { align-self:flex-end; background:#1c2939; color:#fff; border-top-right-radius:4px; }
     .status { padding:7px 12px; font-size:11px; color:#6a7888; text-align:center; }
     .composer { display:flex; align-items:flex-end; gap:8px; padding:11px; border-top:1px solid #e7ebf1; background:#fff; }
-    .composer textarea { flex:1; min-width:0; max-height:110px; min-height:40px; padding:10px 11px; border:1px solid #d9e0e8; border-radius:12px; outline:none; resize:none; font:400 13px/1.45 inherit; color:#182230; background:#fff; }
+    .composer textarea { flex:1; min-width:0; max-height:110px; min-height:40px; padding:10px 11px; border:1px solid #d9e0e8; border-radius:12px; outline:none; resize:none; font-family:inherit; font-size:13px; font-weight:400; line-height:1.45; color:#182230; background:#fff; }
     .composer textarea:focus { border-color:#7188a8; box-shadow:0 0 0 3px #7188a81c; }
     .send { width:40px;height:40px;flex:none;border:0;border-radius:12px;background:#172435;color:#fff;display:grid;place-items:center;cursor:pointer;font-size:18px; }
     .send:disabled { opacity:.45;cursor:wait; }
@@ -44,7 +44,7 @@
     .handoff.open { display:flex; }
     .handoff h3 { margin:0; font-size:16px; }
     .handoff p { margin:0; color:#68778a; font-size:12px; line-height:1.5; }
-    .handoff input,.handoff textarea { width:100%; padding:10px 11px; border:1px solid #dce3eb; border-radius:10px; background:#fff; color:#172233; font:400 13px/1.4 inherit; }
+    .handoff input,.handoff textarea { width:100%; padding:10px 11px; border:1px solid #dce3eb; border-radius:10px; background:#fff; color:#172233; font-family:inherit; font-size:13px; font-weight:400; line-height:1.4; }
     .handoff textarea { min-height:72px; resize:vertical; }
     .handoff-actions { display:flex; gap:8px; justify-content:flex-end; }
     .handoff-actions button { border:1px solid #d6dde6; border-radius:9px; background:#fff; color:#243246; padding:9px 12px; font-size:12px; cursor:pointer; }
