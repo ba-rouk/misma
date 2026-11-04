@@ -6229,3 +6229,39 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .aichat-composer-input-row .aichat-composer-textarea { transition: none; }
 }
+
+
+/* Business workspace navigation and customer operations */
+.aichat-nav-caret { margin-left: auto; color: #6f8297; font-size: 16px; line-height: 1; }
+.aichat-nav-submenu { display: grid; gap: 3px; margin: 0 0 7px 38px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.09); }
+.aichat-nav-subbtn { width: 100%; min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 9px; border: 0; border-radius: 7px; background: transparent; color: #8092a6; text-align: left; font: inherit; font-size: 11px; cursor: pointer; }
+.aichat-nav-subbtn:hover, .aichat-nav-subbtn.active { color: #f4f8fd; background: rgba(77,141,255,.1); }
+.aichat-nav-subbtn span { color: #8fb8ff; font-size: 10px; }
+.aichat-metric-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
+.aichat-metric-grid .aichat-card { display: grid; gap: 8px; margin: 0; }
+.aichat-metric-grid .aichat-card > span { color: #8295aa; font-size: 11px; }
+.aichat-metric-grid .aichat-card > strong { font-size: 30px; line-height: 1.1; letter-spacing: -.04em; }
+.aichat-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.aichat-panel-heading h3 { margin: 0; }
+.aichat-panel-heading > div { display: grid; gap: 4px; min-width: 0; }
+.aichat-panel-heading small, .aichat-hub-row small { display: block; color: #8295aa; font-size: 11px; overflow-wrap: anywhere; }
+.aichat-hub-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 0; border-top: 1px solid rgba(255,255,255,.07); }
+.aichat-hub-row > div { min-width: 0; }
+.aichat-hub-row p { margin: 5px 0 0; color: #8295aa; font-size: 12px; }
+.aichat-status-pill { flex: none; display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 99px; color: #9eb2c7; background: rgba(150,170,190,.1); font-size: 10px; text-transform: capitalize; }
+.aichat-status-pill.is-connected { color: #67d89a; background: rgba(87,216,145,.1); }
+.aichat-status-pill.is-pending, .aichat-status-pill.is-open { color: #ffbd79; background: rgba(255,176,110,.1); }
+.aichat-status-pill.is-paused, .aichat-status-pill.is-resolved, .aichat-status-pill.is-handled { color: #9eb2c7; }
+.aichat-hub-form { display: grid; gap: 14px; max-width: 680px; }
+.aichat-hub-form label { display: grid; gap: 7px; color: #aab9c9; font-size: 12px; }
+.aichat-website-card { padding: 16px 0; border-top: 1px solid rgba(255,255,255,.07); }
+.aichat-website-card p { margin: 12px 0 0; color: #8295aa; font-size: 12px; line-height: 1.6; }
+.aichat-handoff-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 0; border: 0; border-top: 1px solid rgba(255,255,255,.07); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.aichat-handoff-row:hover { background: rgba(255,255,255,.025); }
+.aichat-handoff-avatar { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(77,141,255,.14); color: #a9c8ff; }
+.aichat-handoff-copy { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.aichat-handoff-copy small { color: #8295aa; font-size: 10px; overflow-wrap: anywhere; }
+.aichat-handoff-copy > span { color: #aebdcb; font-size: 12px; }
+.aichat-notification-item.is-read { opacity: .65; }
+@media (max-width: 900px) { .aichat-metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 560px) { .aichat-metric-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .aichat-metric-grid .aichat-card { padding: 13px; } .aichat-metric-grid .aichat-card > strong { font-size: 24px; } .aichat-handoff-row { align-items: flex-start; flex-wrap: wrap; } .aichat-panel-heading { align-items: flex-start; flex-direction: column; } }
