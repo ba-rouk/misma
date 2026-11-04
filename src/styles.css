@@ -6321,3 +6321,15 @@ html, body, #app-root {
   .aichat-website-actions > button { flex:1; min-width:135px; }
   .aichat-composer-focus-hint { bottom:calc(100% + 8px); }
 }
+
+/* Compact business chat composer: keep the textarea aligned with its controls. */
+.aichat-composer-card.aichat-composer-card-tools { padding: 8px 12px; gap: 6px; }
+.aichat-composer-tools-row { min-height: 22px; gap: 7px; }
+.aichat-composer-input-row .aichat-composer-textarea {
+  min-height: 30px;
+  max-height: 160px;
+  padding: 5px 3px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.aichat-composer-sendrow { padding: 5px 0 0; }
