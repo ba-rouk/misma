@@ -3610,60 +3610,6 @@ function Dashboard() {
         )}
 
         {/* ── View 3: Connect Channels ── */}
-        {activeTab === "connect" && (
-          <div className="aichat-tab-view">
-            <div className="aichat-tab-content">
-              <div className="aichat-tab-header">
-                <h2>Connect Channels</h2>
-                <p>
-                  Connect Misma to your external communication channels.
-                </p>
-              </div>
-
-              {/* Channels Grid */}
-              <div className="aichat-card">
-                <h3>Connected Business Channels</h3>
-                <p>
-                  Synchronize conversations from messaging apps into one unified
-                  inbox.
-                </p>
-                <div className="aichat-form-grid">
-                  <div
-                    style={{
-                      padding: 14,
-                      border: "1px solid #212631",
-                      borderRadius: 8,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <b>💬 WhatsApp Business</b>
-                      <span style={{ color: "#8b949e", fontSize: 12 }}>
-                        Ready to link
-                      </span>
-                    </div>
-                    <p
-                      style={{
-                        margin: "8px 0 0",
-                        fontSize: 13,
-                        color: "#8b949e",
-                      }}
-                    >
-                      Connect via Meta Cloud API webhook.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-
         {activeTab === "manage-customers" && (
           <div className="aichat-tab-view"><div className="aichat-tab-content">
             <div className="aichat-tab-header"><h2>Customers requesting a human</h2><p>Customers who tapped the human-support icon in your website chat widget. Open a customer to read the full saved conversation.</p></div>
