@@ -7,6 +7,7 @@ on:
       - fix/media-generation-timeouts-composer-layout
       - feat/mobile-message-actions-composer
       - feat/voice-controls-composer-alignment
+      - feat/business-website-customer-hub
   pull_request:
     branches:
       - main
@@ -41,4 +42,4 @@ jobs:
         run: bun test
 
       - name: Check Supabase Edge Function
-        run: deno check supabase/functions/misma-chat/index.ts
+        run: deno check supabase/functions/misma-chat/index.ts && deno check supabase/functions/misma-widget/index.ts
