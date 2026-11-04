@@ -1594,47 +1594,72 @@ function Dashboard() {
   ): Promise<MessageAttachment[]> => {
     if (!filesToUpload.length) return [];
     setUploadingAttachments(true);
+    const uploadedPaths: string[] = [];
     try {
       if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
-    const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
-    if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
+      const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
+      if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
 
-    const uploaded: MessageAttachment[] = [];
-    const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "file") => {
-      if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
-      if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
-        throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
-      }
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
-      const path = `${workspace.id}/${userData.user.id}/${crypto.randomUUID()}-${safeName}`;
-      const { error } = await getSupabaseClient().storage.from("misma-media").upload(path, file, {
-        upsert: false,
-        contentType: file.type || "application/octet-stream",
-      });
-      if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
-      uploaded.push({ path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, kind });
-    };
-
-    let videoCount = 0;
-    for (const original of filesToUpload) {
+      const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "file"): Promise<MessageAttachment> => {
+        if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
+        if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
+          throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
+        }
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
+        const path = `${workspace.id}/${userData.user.id}/${crypto.randomUUID()}-${safeName}`;
+        const { error } = await getSupabaseClient().storage.from("misma-media").upload(path, file, {
+          upsert: false,
+          cacheControl: "3600",
+          contentType: file.type || "application/octet-stream",
+        });
+        if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+        uploadedPaths.push(path);
+        return { path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, kind };
+      };
+      const uploadFrames = async (frames: File[]) => {
+        const result: MessageAttachment[] = [];
+        for (let index = 0; index < frames.length; index += 3) {
+          const batch = frames.slice(index, index + 3);
+          const prepared = await Promise.all(batch.map(compressImageForUpload));
+          result.push(...await Promise.all(prepared.map((frame) => uploadOne(frame, "video-frame"))));
+        }
+        return result;
+      };
       if (videoFrameMode) {
-        const preparedFrame = await compressImageForUpload(original);
-        await uploadOne(preparedFrame, "video-frame");
-      } else if (original.type.startsWith("image/")) {
-        const preparedImage = await compressImageForUpload(original);
-        await uploadOne(preparedImage, "image");
-      } else if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
-        videoCount += 1;
-        if (videoCount > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
-        await uploadOne(original, "video");
-        const frames = await extractVideoKeyframes(original);
-        for (const frame of frames) await uploadOne(frame, "video-frame");
-      } else {
-        await uploadOne(original, "file");
+        const frames = await uploadFrames(filesToUpload);
+        if (frames.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
+        return frames;
       }
-    }
-      if (uploaded.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
-      return uploaded;
+
+      const videos = filesToUpload.filter((file) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name));
+      if (videos.length > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
+
+      const processFile = async (original: File): Promise<MessageAttachment[]> => {
+        if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
+          const uploadedVideo = await uploadOne(original, "video");
+          const frames = await extractVideoKeyframes(original);
+          return [uploadedVideo, ...await uploadFrames(frames)];
+        }
+        if (original.type.startsWith("image/")) {
+          const prepared = await compressImageForUpload(original);
+          return [await uploadOne(prepared, "image")];
+        }
+        return [await uploadOne(original, "file")];
+      };
+
+      const result: MessageAttachment[] = [];
+      // Bounded parallelism keeps multiple images moving without exhausting mobile RAM or connections.
+      for (let index = 0; index < filesToUpload.length; index += 2) {
+        const batch = filesToUpload.slice(index, index + 2);
+        result.push(...(await Promise.all(batch.map(processFile))).flat());
+        if (result.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
+      }
+      return result;
+    } catch (error) {
+      if (uploadedPaths.length) {
+        await getSupabaseClient().storage.from("misma-media").remove(uploadedPaths).catch(() => undefined);
+      }
+      throw error;
     } finally {
       setUploadingAttachments(false);
     }
