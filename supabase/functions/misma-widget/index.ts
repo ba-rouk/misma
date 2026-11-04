@@ -369,14 +369,13 @@ Deno.serve(async (request) => {
     if (action === "message" && !preview) {
       return response(400, { error: "Enter a message first." }, origin);
     }
-    if (action === "message" && cleanText(input.message, 2_000).length > 2_000) {
+    if (action === "message" && (typeof input.message !== "string" || input.message.trim().length > 2_000)) {
       return response(400, { error: "Messages must be 2,000 characters or less." }, origin);
     }
 
-    const { data: conversation, error: conversationError } = await getOrCreateConversation(
+    const conversation = await getOrCreateConversation(
       db, site, visitorId, Number(contact.id), preview,
     );
-    if (conversationError || !conversation) throw new Error("Could not open this conversation.");
     const conversationId = Number(conversation.id);
     if (action === "message") {
       const cutoff = new Date(Date.now() - 60_000).toISOString();
