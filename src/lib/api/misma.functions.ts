@@ -437,3 +437,51 @@ export const setConversationGroup = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true, groupName: normalizedGroup };
   });
+
+
+export const createWebsiteConnection = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    name: z.string().trim().max(120).optional(),
+    websiteUrl: z.string().url().max(2048),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const parsed = new URL(data.websiteUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use an HTTP or HTTPS website URL.");
+    const websiteUrl = parsed.origin;
+    const result = await db.from("website_connections").insert({
+      workspace_id: workspaceId,
+      name: data.name?.trim() || parsed.hostname,
+      website_url: websiteUrl,
+      domain: parsed.hostname.toLowerCase(),
+      status: "pending",
+    }).select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").single();
+    const website = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "website.connection_created", website.id, { domain: website.domain });
+    return { website };
+  });
+
+export const createProductService = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    kind: z.enum(["product", "service"]),
+    name: z.string().trim().min(1).max(160),
+    description: z.string().trim().max(4000).default(""),
+    price: z.string().trim().max(120).default(""),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const result = await db.from("products_services").insert({
+      workspace_id: workspaceId,
+      item_type: data.kind,
+      name: data.name,
+      description: data.description,
+      price_text: data.price,
+      active: true,
+      created_from: "manual",
+    }).select("id,item_type,name,description,price_text,active,created_from,created_at").single();
+    const product = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "product_service.created", String(product.id), { kind: data.kind, name: data.name });
+    return { product };
+  });
