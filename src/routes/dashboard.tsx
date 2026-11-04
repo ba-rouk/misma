@@ -3713,6 +3713,62 @@ function Dashboard() {
             </div>
           </div>
         )}
+        {activeTab === "notifications" && (
+          <div className="aichat-tab-view">
+            <div className="aichat-tab-content">
+              <div className="aichat-tab-header">
+                <h2>Notifications {unreadVisitorCount > 0 ? `(${unreadVisitorCount} unread)` : ""}</h2>
+                <p>New messages sent by visitors through your website.</p>
+              </div>
+              <div className="aichat-card aichat-notifications-card">
+                {unreadVisitorMessages.length === 0 ? (
+                  <div className="aichat-notifications-empty">
+                    <span className="aichat-notifications-empty-icon" aria-hidden="true">✓</span>
+                    <h3>You're all caught up</h3>
+                    <p>New website visitor messages will appear here.</p>
+                  </div>
+                ) : (
+                  <>
+                    {unreadVisitorCount > unreadVisitorMessages.length && (
+                      <p className="aichat-notifications-overflow">Showing the latest {unreadVisitorMessages.length} unread messages.</p>
+                    )}
+                    <div className="aichat-notifications-list">
+                      {unreadVisitorMessages.map((item) => (
+                        <button key={item.id} type="button" className="aichat-notification-item" onClick={() => void selectConversation(item.conversationId)}>
+                          <span className="aichat-notification-item-icon" aria-hidden="true">●</span>
+                          <span className="aichat-notification-item-copy">
+                            <strong>{item.conversationTitle}</strong>
+                            <small>{item.channel} · {item.created_at ? new Date(item.created_at).toLocaleString() : "New message"}</small>
+                            <span>{item.text}</span>
+                          </span>
+                          <span className="aichat-notification-open">Open chat ↗</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {microphonePermissionOpen && (
+          <div className="aichat-mic-permission-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setMicrophonePermissionOpen(false); }}>
+            <section className="aichat-mic-permission-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-mic-permission-title">
+              <div className="aichat-mic-permission-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+              </div>
+              <h2 id="misma-mic-permission-title">Allow microphone access</h2>
+              <p>Misma uses your microphone for voice dictation. Your browser will ask for permission; only the recognized text is added to your message.</p>
+              {microphonePermissionError && <p className="aichat-mic-permission-error" role="alert">{microphonePermissionError}</p>}
+              <div className="aichat-mic-permission-actions">
+                <button type="button" className="aichat-action-btn secondary" onClick={() => setMicrophonePermissionOpen(false)}>Not now</button>
+                <button type="button" className="aichat-action-btn" onClick={() => void requestMicrophoneAccess()}>Allow microphone</button>
+              </div>
+            </section>
+          </div>
+        )}
+
         {cropTarget && (
           <div className="aichat-crop-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCropTarget(null); }}>
             <section className="aichat-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-crop-title">
