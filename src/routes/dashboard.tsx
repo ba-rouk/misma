@@ -310,6 +310,67 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
   }
 }
 
+function ComposerAttachmentPreview({
+  file,
+  index,
+  isUploading,
+  onRemove,
+}: {
+  file: File;
+  index: number;
+  isUploading: boolean;
+  onRemove: (index: number) => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/") || /\\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const extension = file.name.split(".").pop()?.slice(0, 5).toUpperCase() || "FILE";
+  const sizeLabel = file.size < 1024 * 1024
+    ? Math.max(1, Math.round(file.size / 1024)) + " KB"
+    : (file.size / (1024 * 1024)).toFixed(1) + " MB";
+
+  useEffect(() => {
+    if (!isImage && !isVideo) return;
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file, isImage, isVideo]);
+
+  return (
+    <div className="aichat-composer-attachment-card" title={file.name}>
+      <div className="aichat-composer-attachment-square">
+        {isImage && previewUrl ? (
+          <img src={previewUrl} alt={file.name} />
+        ) : isVideo && previewUrl ? (
+          <video src={previewUrl} muted playsInline preload="metadata" />
+        ) : (
+          <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
+            <span>{isPdf ? "PDF" : extension}</span>
+            <small>{isPdf ? "Document" : isVideo ? "Video" : "File"}</small>
+          </div>
+        )}
+        <button
+          type="button"
+          className="aichat-composer-attachment-remove"
+          aria-label={"Remove " + file.name}
+          onClick={() => onRemove(index)}
+        >×</button>
+        {isUploading ? (
+          <div className="aichat-composer-upload-state is-uploading" role="status">
+            <i />
+            <span>Uploading</span>
+          </div>
+        ) : (
+          <span className="aichat-composer-upload-state is-ready"><i>✓</i></span>
+        )}
+      </div>
+      <span className="aichat-composer-attachment-name">{file.name}</span>
+      <span className="aichat-composer-attachment-size">{sizeLabel}</span>
+    </div>
+  );
+}
+
 function MessageAttachmentViews({
   attachments,
   onDownload,
