@@ -3314,6 +3314,118 @@ function Dashboard() {
           </div>
         )}
 
+
+        {activeTab === "website-stats" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Website statistics</h2><p>Monitor visitor conversations, messages, and human-support requests across your connected websites.</p></div>
+            <div className="aichat-stat-grid">
+              <div className="aichat-stat-card"><small>Connected websites</small><strong>{businessFeatures.stats?.connectedWebsites ?? 0}</strong></div>
+              <div className="aichat-stat-card"><small>Visitor conversations</small><strong>{businessFeatures.stats?.visitors ?? 0}</strong></div>
+              <div className="aichat-stat-card"><small>Visitor messages</small><strong>{businessFeatures.stats?.visitorMessages ?? 0}</strong></div>
+              <div className="aichat-stat-card"><small>Open human requests</small><strong>{businessFeatures.stats?.openHumanRequests ?? 0}</strong></div>
+            </div>
+            <div className="aichat-card">
+              <div className="aichat-section-title-row"><div><h3>Website performance</h3><p>Visitor counts are saved conversations, not unique page views.</p></div><button type="button" className="aichat-action-btn secondary" onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Manage websites</button></div>
+              {(businessFeatures.websites || []).length === 0 ? (
+                <div className="aichat-empty-state"><h3>No websites connected yet</h3><p>Add your first website and install the Misma widget to begin receiving visitor messages.</p><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Add a website</button></div>
+              ) : <div className="aichat-website-list">
+                {(businessFeatures.websites || []).map((site: any) => (
+                  <article className="aichat-website-card" key={site.id}>
+                    <div className="aichat-website-card-head"><div><strong>{site.name}</strong><small>{site.domain}</small></div><span className={"aichat-status-pill " + (site.status === "connected" ? "is-success" : site.status === "paused" ? "is-muted" : "is-pending")}>{site.status}</span></div>
+                    <div className="aichat-website-metrics"><span><b>{site.visitorCount}</b><small>Conversations</small></span><span><b>{site.messageCount}</b><small>Messages</small></span><span><b>{site.unreadCount}</b><small>Unread</small></span><span><b>{site.humanRequests}</b><small>Human requests</small></span></div>
+                    <a href={site.website_url} target="_blank" rel="noreferrer">{site.website_url}</a>
+                  </article>
+                ))}
+              </div>}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "websites" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Websites</h2><p>Connect a site, install the Misma chat widget, and let Misma answer visitors and route human-support requests.</p></div>
+            <div className="aichat-card">
+              <h3>Add a website</h3><p>Enter your public HTTPS website address. Misma creates a unique installation key and generates a script for your website footer.</p>
+              <form className="aichat-website-add-form" onSubmit={handleAddWebsite}>
+                <div className="aichat-input-group"><label htmlFor="misma-website-name">Website name (optional)</label><input id="misma-website-name" className="aichat-input" value={websiteNameDraft} onChange={(event) => setWebsiteNameDraft(event.target.value)} placeholder="My business website"/></div>
+                <div className="aichat-input-group"><label htmlFor="misma-website-url">Website URL</label><input id="misma-website-url" className="aichat-input" type="url" required value={websiteUrlDraft} onChange={(event) => setWebsiteUrlDraft(event.target.value)} placeholder="https://www.example.com"/></div>
+                {websiteAddError && <p className="aichat-profile-error" role="alert">{websiteAddError}</p>}
+                <button type="submit" className="aichat-action-btn" disabled={websiteCreateBusy || !websiteUrlDraft.trim()}>{websiteCreateBusy ? "Adding website…" : "+ Add website"}</button>
+              </form>
+            </div>
+
+            {websiteSetupId && (businessFeatures.websites || []).find((site: any) => site.id === websiteSetupId) && (
+              <div className="aichat-card aichat-website-install-card">
+                {(() => {
+                  const site = (businessFeatures.websites || []).find((item: any) => item.id === websiteSetupId);
+                  return <>
+                    <div className="aichat-section-title-row"><div><h3>Install Misma on {site.name}</h3><p>Paste this script immediately before the closing <code>&lt;/body&gt;</code> tag in your website HTML or global footer.</p></div><span className="aichat-status-pill is-pending">{site.status}</span></div>
+                    <pre className="aichat-code-snippet"><code>{websiteInstallSnippet(site)}</code></pre>
+                    <div className="aichat-inline-actions"><button type="button" className="aichat-action-btn secondary" onClick={() => void handleCopyWebsiteSnippet(site)}>Copy installation script</button><button type="button" className="aichat-action-btn" onClick={() => void handleWebsiteStatus(site.id, "connected")}>Done — I installed it</button></div>
+                    <p className="aichat-settings-hint">Click Done only after the script is published. Misma will then accept widget conversations from this exact domain. This confirms installation based on your action; it is not an automatic live-script verification.</p>
+                  </>;
+                })()}
+              </div>
+            )}
+
+            <div className="aichat-card">
+              <div className="aichat-section-title-row"><div><h3>Connected websites ({(businessFeatures.websites || []).length})</h3><p>Open a website, manage its widget, or scan public pages for business knowledge suggestions.</p></div><button type="button" className="aichat-action-btn secondary" onClick={() => void refreshBusinessFeatures()}>Refresh</button></div>
+              {websiteScanError && <p className="aichat-profile-error" role="alert">{websiteScanError}</p>}
+              {(businessFeatures.websites || []).length === 0 ? <div className="aichat-empty-state"><h3>Your websites will appear here</h3><p>Add a URL above to get its installation script.</p></div> : (
+                <div className="aichat-website-list">
+                  {(businessFeatures.websites || []).map((site: any) => {
+                    const scan = businessFeatures.latestScansByWebsite?.[site.id];
+                    const result = scan?.result;
+                    return <article className="aichat-website-card" key={site.id}>
+                      <div className="aichat-website-card-head"><div><strong>{site.name}</strong><small>{site.domain}</small></div><span className={"aichat-status-pill " + (site.status === "connected" ? "is-success" : site.status === "paused" ? "is-muted" : "is-pending")}>{site.status}</span></div>
+                      <a href={site.website_url} target="_blank" rel="noreferrer">{site.website_url}</a>
+                      <div className="aichat-inline-actions">
+                        <button type="button" className="aichat-action-btn secondary" onClick={() => setWebsiteSetupId(site.id)}>Installation script</button>
+                        <button type="button" className="aichat-action-btn secondary" disabled={site.status !== "connected" || websiteScanBusyId !== null} onClick={() => void handleScanWebsite(site)}>{websiteScanBusyId === site.id ? "Scanning website…" : "Scan website with Misma"}</button>
+                        {site.status === "connected" ? <button type="button" className="aichat-action-btn secondary" onClick={() => void handleWebsiteStatus(site.id, "paused")}>Pause widget</button> : <button type="button" className="aichat-action-btn" onClick={() => void handleWebsiteStatus(site.id, "connected")}>Mark installed</button>}
+                      </div>
+                      {scan?.status === "scanning" && <p className="aichat-settings-hint">Website scan is running…</p>}
+                      {scan?.status === "failed" && <p className="aichat-profile-error">{scan.error || "The previous scan failed."}</p>}
+                      {scan?.status === "completed" && result && (
+                        <div className="aichat-scan-result">
+                          <div className="aichat-section-title-row"><div><strong>Latest website review</strong><small>{result.pagesScanned} public pages · {result.reviewedAt ? new Date(result.reviewedAt).toLocaleString() : ""}</small></div></div>
+                          <p>{result.summary}</p>
+                          <details><summary>Pages reviewed ({result.pages?.length || result.pagesScanned})</summary><ul>{(result.pages || []).map((url: string) => <li key={url}><a href={url} target="_blank" rel="noreferrer">{url}</a></li>)}</ul></details>
+                          {(result.knowledge || []).length > 0 && <div className="aichat-scan-suggestions"><h4>Suggested business knowledge ({result.knowledge.length})</h4>{result.knowledge.map((suggestion: any, index: number) => <article key={index}><strong>{suggestion.question}</strong><p>{suggestion.answer}</p><button type="button" className="aichat-action-btn secondary" onClick={() => void handleApproveWebsiteKnowledge(suggestion)}>Add approved Q&amp;A</button></article>)}</div>}
+                          {(result.products || []).length > 0 && <div className="aichat-scan-suggestions"><h4>Suggested products and services ({result.products.length})</h4>{result.products.map((suggestion: any, index: number) => <article key={index}><strong>{suggestion.name} · {suggestion.kind}</strong><p>{suggestion.description}</p><button type="button" className="aichat-action-btn secondary" onClick={() => void handleApproveWebsiteProduct(suggestion)}>Add to catalog as draft</button></article>)}</div>}
+                        </div>
+                      )}
+                    </article>;
+                  })}
+                </div>
+              )}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "products" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Products &amp; services</h2><p>Create a catalog that Misma can use when helping visitors. Review customer requests and website findings before creating new offers.</p></div>
+            <div className="aichat-card">
+              <div className="aichat-section-title-row"><div><h3>Product and service ideas</h3><p>Misma can use saved visitor requests and your approved knowledge to identify unmet needs.</p></div><button type="button" className="aichat-action-btn" onClick={handleAskMismaForProductIdeas}>Ask Misma for ideas</button></div>
+              <div className="aichat-inline-actions"><button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("websites")}>Review connected websites</button><button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("build")}>Open business knowledge</button></div>
+            </div>
+            <div className="aichat-card">
+              <h3>Create a product or service</h3>
+              <form className="aichat-product-form" onSubmit={handleCreateProduct}>
+                <div className="aichat-form-grid"><div className="aichat-input-group"><label htmlFor="misma-product-kind">Type</label><select id="misma-product-kind" className="aichat-select" value={productDraft.kind} onChange={(event) => setProductDraft((old) => ({ ...old, kind: event.target.value as "product" | "service" }))}><option value="product">Product</option><option value="service">Service</option></select></div><div className="aichat-input-group"><label htmlFor="misma-product-name">Name</label><input id="misma-product-name" className="aichat-input" required minLength={2} value={productDraft.name} onChange={(event) => setProductDraft((old) => ({ ...old, name: event.target.value }))} placeholder="e.g. Express delivery"/></div></div>
+                <div className="aichat-input-group"><label htmlFor="misma-product-description">Description</label><textarea id="misma-product-description" className="aichat-textarea" rows={3} value={productDraft.description} onChange={(event) => setProductDraft((old) => ({ ...old, description: event.target.value }))} placeholder="Describe what the customer receives and any conditions."/></div>
+                <div className="aichat-form-grid"><div className="aichat-input-group"><label htmlFor="misma-product-price">Price (optional)</label><input id="misma-product-price" className="aichat-input" type="number" min="0" step="0.01" value={productDraft.price} onChange={(event) => setProductDraft((old) => ({ ...old, price: event.target.value }))} placeholder="Enter a confirmed price"/></div><div className="aichat-input-group"><label htmlFor="misma-product-currency">Currency</label><select id="misma-product-currency" className="aichat-select" value={productDraft.currency} onChange={(event) => setProductDraft((old) => ({ ...old, currency: event.target.value }))}><option>RWF</option><option>USD</option><option>EUR</option><option>KES</option><option>UGX</option><option>TZS</option></select></div></div>
+                <button type="submit" className="aichat-action-btn" disabled={savingProduct || !productDraft.name.trim()}>{savingProduct ? "Saving…" : "Save as draft"}</button>
+              </form>
+            </div>
+            <div className="aichat-card">
+              <h3>Catalog ({(businessFeatures.products || []).length})</h3>
+              {(businessFeatures.products || []).length === 0 ? <p className="aichat-empty-copy">No products or services yet. Create a draft above.</p> : <div className="aichat-product-list">{(businessFeatures.products || []).map((product: any) => <article className="aichat-product-item" key={product.id}><div><strong>{product.name}</strong><small>{product.kind} · {product.source.replaceAll("_", " ")} · {product.price == null ? "Price not set" : Number(product.price).toLocaleString() + " " + product.currency}</small><p>{product.description || "No description added yet."}</p></div><select aria-label={"Status for " + product.name} className="aichat-select" value={product.status} onChange={(event) => void handleProductStatus(Number(product.id), event.target.value as "draft" | "active" | "archived")}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></article>)}</div>}
+            </div>
+          </div></div>
+        )}
+
         {/* ── View 2: Build (AI Agent & Knowledge Base) ── */}
         {activeTab === "build" && (
           <div className="aichat-tab-view">
