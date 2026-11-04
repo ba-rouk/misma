@@ -320,7 +320,7 @@ async function crawlWebsite(startUrl: string): Promise<Array<{ url: string; titl
     });
     if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
       const sitemap = (await sitemapResponse.text()).slice(0, 1000000);
-      const locations = Array.from(sitemap.matchAll(/<loc>\\s*([^<]+)\\s*<\\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim());
+      const locations = Array.from(sitemap.matchAll(new RegExp("<loc>\\s*([^<]+)\\s*</loc>", "gi"))).map((match) => match[1].replace(/&amp;/g, "&").trim());
       for (const location of locations) {
         try {
           const linked = new URL(location, first.origin);
