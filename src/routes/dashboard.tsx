@@ -809,6 +809,12 @@ function Dashboard() {
   const [mediaProgress, setMediaProgress] = useState("");
   const [mediaProgressPercent, setMediaProgressPercent] = useState(0);
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
+  const [failedMediaRetry, setFailedMediaRetry] = useState<{
+    mode: "image" | "video";
+    prompt: string;
+    conversationId: number;
+    sourceUserMessageId: number;
+  } | null>(null);
 
 
   // Forms in other tabs
@@ -2066,16 +2072,24 @@ function Dashboard() {
     requestedMode?: "image" | "video",
     promptOverride?: string,
     reuse?: { sourceUserMessageId: number; replaceAiMessageId: number; attachments: MessageAttachment[] },
+    retrySaved?: { sourceUserMessageId: number; conversationId: number; prompt: string; mode: "image" | "video" },
   ) => {
-    const mode = requestedMode ?? createMode;
+    const mode = requestedMode ?? retrySaved?.mode ?? createMode;
     if (!mode || !token || isSending || isGeneratingMedia) return;
-    const prompt = promptOverride?.trim() || draft.trim() || (mode === "image"
+    const typedPrompt = promptOverride?.trim() || draft.trim();
+    const activeSavedRetry = retrySaved ?? (
+      failedMediaRetry && failedMediaRetry.mode === mode && failedMediaRetry.prompt === typedPrompt
+        ? failedMediaRetry
+        : undefined
+    );
+    const prompt = activeSavedRetry?.prompt || typedPrompt || (mode === "image"
       ? "Create a high-quality image using the attached reference."
       : "Create a short cinematic video using the attached reference.");
     const controller = new AbortController();
     mediaAbortControllerRef.current = controller;
     const startViewVersion = chatViewVersionRef.current;
-    let targetConversationId: number | null = currentConversationId ? Number(currentConversationId) : null;
+    let targetConversationId: number | null = activeSavedRetry?.conversationId ?? (currentConversationId ? Number(currentConversationId) : null);
+    let savedPromptMessageId: number | null = activeSavedRetry?.sourceUserMessageId ?? (reuse?.sourceUserMessageId ?? null);
     const isTargetOpen = () => targetConversationId !== null && activeConversationIdRef.current === targetConversationId;
     const updateTargetMessages = (updater: (current: Message[]) => Message[]) => {
       if (!isTargetOpen()) return;
@@ -2116,9 +2130,10 @@ function Dashboard() {
     setPlusMenuOpen(false);
     setCreateMode(null);
     setDraft("");
+    if (!activeSavedRetry && !reuse) setFailedMediaRetry(null);
     shouldAutoScrollRef.current = true;
 
-    const tempUserId = reuse ? null : `media-user-${Date.now()}`;
+    const tempUserId = (reuse || activeSavedRetry) ? null : `media-user-${Date.now()}`;
     const pendingMediaId = `media-pending-${Date.now()}`;
     const pendingMessage: Message = {
       id: pendingMediaId,
@@ -2146,7 +2161,7 @@ function Dashboard() {
       }
       if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
 
-      updateTargetMessages((current) => reuse
+      updateTargetMessages((current) => (reuse || activeSavedRetry)
         ? [...current, pendingMessage]
         : [...current, {
             id: tempUserId!,
@@ -2155,15 +2170,17 @@ function Dashboard() {
             created_at: new Date().toISOString(),
           }, pendingMessage]);
 
-      const attachments = reuse
-        ? reuse.attachments.filter((item) => Boolean(item.path)).map((item) => ({
-            path: item.path!,
-            name: item.name,
-            mimeType: item.mimeType || "application/octet-stream",
-            size: item.size || 0,
-            kind: item.kind,
-          }))
-        : await uploadSelectedAttachments(selectedFiles, false, controller.signal);
+      const attachments = activeSavedRetry
+        ? []
+        : reuse
+          ? reuse.attachments.filter((item) => Boolean(item.path)).map((item) => ({
+              path: item.path!,
+              name: item.name,
+              mimeType: item.mimeType || "application/octet-stream",
+              size: item.size || 0,
+              kind: item.kind,
+            }))
+          : await uploadSelectedAttachments(selectedFiles, false, controller.signal);
       if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
 
       const result = await postChatAction({
@@ -2172,7 +2189,10 @@ function Dashboard() {
         conversationId: targetConversationId,
         workspaceId: workspace?.id,
         attachments,
-        ...(reuse ? {
+        ...(activeSavedRetry ? {
+          retryMedia: true,
+          sourceUserMessageId: activeSavedRetry.sourceUserMessageId,
+        } : reuse ? {
           regenerateMedia: true,
           sourceUserMessageId: reuse.sourceUserMessageId,
           replaceAiMessageId: reuse.replaceAiMessageId,
@@ -2182,10 +2202,14 @@ function Dashboard() {
       if (result.conversationId && Number(result.conversationId) !== targetConversationId) {
         throw new Error("Misma returned a different conversation for this media request.");
       }
-      if (isTargetOpen() && result.userMessage && tempUserId) {
-        updateTargetMessages((current) => current.some((item) => item.id === tempUserId)
-          ? current.map((item) => item.id === tempUserId ? result.userMessage : item)
-          : [...current, result.userMessage]);
+      if (result.userMessage && tempUserId) {
+        const savedId = Number(result.userMessage.id);
+        if (Number.isSafeInteger(savedId) && savedId > 0) savedPromptMessageId = savedId;
+        if (isTargetOpen()) {
+          updateTargetMessages((current) => current.some((item) => item.id === tempUserId)
+            ? current.map((item) => item.id === tempUserId ? result.userMessage : item)
+            : [...current, result.userMessage]);
+        }
         setSelectedFiles([]);
       }
 
@@ -2198,6 +2222,7 @@ function Dashboard() {
             : [...withoutPending, result.aiMessage];
         });
         if (isTargetOpen()) setMediaProgress("");
+        setFailedMediaRetry(null);
         loadData();
         return;
       }
@@ -2317,6 +2342,7 @@ function Dashboard() {
         setMediaProgress("Video created.");
         window.setTimeout(() => setMediaProgress(""), 3500);
       }
+      setFailedMediaRetry(null);
       loadData();
     } catch (cause) {
       const responseData = cause instanceof Error
@@ -2324,9 +2350,12 @@ function Dashboard() {
         : undefined;
       if (isTargetOpen()) {
         if (responseData?.userMessage && tempUserId) {
+          const savedId = Number(responseData.userMessage.id);
+          if (Number.isSafeInteger(savedId) && savedId > 0) savedPromptMessageId = savedId;
           updateTargetMessages((current) => current.some((item) => item.id === tempUserId)
             ? current.map((item) => item.id === tempUserId ? responseData.userMessage : item)
             : [...current, responseData.userMessage]);
+          setSelectedFiles([]);
         }
         updateTargetMessages((current) => current.filter((item) => item.id !== pendingMediaId));
         if (controller.signal.aborted) {
@@ -2337,6 +2366,9 @@ function Dashboard() {
           setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
         }
         setMediaProgress("");
+      }
+      if (!controller.signal.aborted && !reuse && savedPromptMessageId && targetConversationId) {
+        setFailedMediaRetry({ mode, prompt, conversationId: targetConversationId, sourceUserMessageId: savedPromptMessageId });
       }
     } finally {
       if (imageProgressTimer !== null) window.clearInterval(imageProgressTimer);
