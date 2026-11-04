@@ -623,6 +623,8 @@ function Dashboard() {
   const [websiteAddError, setWebsiteAddError] = useState("");
   const [websiteCreateBusy, setWebsiteCreateBusy] = useState(false);
   const [websiteSetupId, setWebsiteSetupId] = useState<string | null>(null);
+  const [websiteScanBusyId, setWebsiteScanBusyId] = useState<string | null>(null);
+  const [websiteScanError, setWebsiteScanError] = useState("");
   const [productDraft, setProductDraft] = useState({ kind: "product" as "product" | "service", name: "", description: "", price: "", currency: "RWF" });
   const [savingProduct, setSavingProduct] = useState(false);
   const [knowledgeFileStatus, setKnowledgeFileStatus] = useState("");
@@ -2247,6 +2249,67 @@ function Dashboard() {
       setWebsiteAddError(cause instanceof Error ? cause.message : "Could not add this website.");
     } finally {
       setWebsiteCreateBusy(false);
+    }
+  };
+
+  const handleScanWebsite = async (website: any) => {
+    if (!token || websiteScanBusyId) return;
+    const config = getSupabaseConfig();
+    if (!config) {
+      setWebsiteScanError("Supabase is not configured for website scanning.");
+      return;
+    }
+    setWebsiteScanBusyId(String(website.id));
+    setWebsiteScanError("");
+    try {
+      const response = await fetch(config.url.replace(/\/$/, "") + "/functions/v1/misma-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: config.publishableKey,
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ action: "scan-website", websiteId: website.id, workspaceId: workspace?.id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not scan this website.");
+      await refreshBusinessFeatures();
+      setActiveTab("websites");
+    } catch (cause) {
+      setWebsiteScanError(cause instanceof Error ? cause.message : "Website scan failed.");
+    } finally {
+      setWebsiteScanBusyId(null);
+    }
+  };
+
+  const handleApproveWebsiteKnowledge = async (suggestion: any) => {
+    if (!token) return;
+    try {
+      await addKnowledge({ data: { token, question: suggestion.question, answer: suggestion.answer } });
+      await refreshBusinessFeatures();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not add this knowledge suggestion.");
+    }
+  };
+
+  const handleApproveWebsiteProduct = async (suggestion: any) => {
+    if (!token) return;
+    try {
+      await createWorkspaceProduct({
+        data: {
+          token,
+          kind: suggestion.kind,
+          name: suggestion.name,
+          description: suggestion.description,
+          price: typeof suggestion.price === "number" ? suggestion.price : null,
+          currency: "RWF",
+          source: "website_review",
+          status: "draft",
+        },
+      });
+      await refreshBusinessFeatures();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not add this product suggestion.");
     }
   };
 
