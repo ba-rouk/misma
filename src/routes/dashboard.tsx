@@ -2851,16 +2851,16 @@ function Dashboard() {
           </button>
           <button
             type="button"
-            className={`aichat-notification-trigger${unreadVisitorCount > 0 ? " has-unread" : ""}`}
+            className={`aichat-notification-trigger${unreadWorkspaceNotificationCount > 0 ? " has-unread" : ""}`}
             onClick={() => { setActiveTab("notifications"); setMobileMenuOpen(false); }}
-            aria-label={unreadVisitorCount > 0 ? `Notifications, ${unreadVisitorCount} unread visitor messages` : "Notifications"}
+            aria-label={unreadWorkspaceNotificationCount > 0 ? `Notifications, ${unreadWorkspaceNotificationCount} unread updates` : "Notifications"}
             title="Website visitor notifications"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
               <path d="M10 21h4" />
             </svg>
-            {unreadVisitorCount > 0 && <span className="aichat-notification-count">{unreadVisitorCount > 99 ? "99+" : unreadVisitorCount}</span>}
+            {unreadWorkspaceNotificationCount > 0 && <span className="aichat-notification-count">{unreadWorkspaceNotificationCount > 99 ? "99+" : unreadWorkspaceNotificationCount}</span>}
           </button>
         </header>
 
