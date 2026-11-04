@@ -103,7 +103,7 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /function ComposerAttachmentPreview/);
   assert.match(dashboard, /setUploadingAttachments\(true\)/);
   assert.match(dashboard, /aichat-composer-sendrow/);
-  assert.doesNotMatch(dashboard, /aichat-composer-input-row/);
+  assert.match(dashboard, /aichat-composer-input-row/);
   assert.match(dashboard, /aichat-composer-send-btn.*is-thinking/);
   assert.match(dashboard, /getLoginGreeting/);
   assert.equal(dashboard.includes("How many orders came in today?"), false);
@@ -143,4 +143,31 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(styles, /\.aichat-notification-trigger\.has-unread/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
+});
+
+
+test("user message tools are desktop-hover and mobile-long-press only, with a stacked keyboard-aware composer", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /startMobileMessageLongPress/);
+  assert.match(dashboard, /onTouchStart=\{isUserMessage \? \(\) => startMobileMessageLongPress/);
+  assert.match(dashboard, /onContextMenu=\{isUserMessage \? \(event\) => openMobileMessageActionsFromContextMenu/);
+  assert.match(dashboard, /is-mobile-open/);
+  assert.match(dashboard, /setMobileActionMessageId\(null\)/);
+  assert.match(styles, /@media \(hover: hover\) and \(min-width: 768px\)/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-actions\.is-mobile-open/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-actions \{/);
+  assert.match(dashboard, /window\.visualViewport/);
+  assert.match(dashboard, /--misma-mobile-viewport-height/);
+  assert.match(styles, /height: var\(--misma-mobile-viewport-height, 100dvh\)/);
+  assert.match(styles, /scrollbar-width: none/);
+  assert.match(styles, /\.aichat-composer-input-row \.aichat-composer-textarea::-webkit-scrollbar/);
+
+  const inputRow = dashboard.indexOf('className="aichat-composer-input-row"');
+  const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
+  assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
+
+  assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
+  assert.match(dashboard, /Start voice dictation/);
 });
