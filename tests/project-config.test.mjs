@@ -285,7 +285,7 @@ test("chat and media safety provider fallbacks enforce explicit latency budgets 
   assert.match(edgeFunction, /providerTimeoutMs/);
   assert.match(edgeFunction, /elapsedMs/);
   assert.match(edgeFunction, /\.slice\(0, 3\)/);
-  assert.match(edgeFunction, /requestProvider\([\s\S]*?6_000/);
+  assert.match(edgeFunction, /requestProvider\([\s\S]*?8_000/);
   assert.match(edgeFunction, /MEDIA_SAFETY_UNAVAILABLE/);
   assert.match(edgeFunction, /AbortSignal\.timeout\(6_000\)/);
 });
