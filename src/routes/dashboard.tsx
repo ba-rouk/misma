@@ -629,8 +629,6 @@ function Dashboard() {
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [voiceInputActive, setVoiceInputActive] = useState(false);
-  const [microphonePermissionOpen, setMicrophonePermissionOpen] = useState(false);
-  const [microphonePermissionError, setMicrophonePermissionError] = useState("");
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -990,13 +988,14 @@ function Dashboard() {
     };
   }, []);
 
-  // Autogrow textarea as user types
+  // Keep the textarea compact when empty, then grow smoothly as content wraps.
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      const newHeight = Math.min(textareaRef.current.scrollHeight, 220);
-      textareaRef.current.style.height = `${Math.max(newHeight, 24)}px`;
-    }
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "38px";
+    const contentHeight = textarea.scrollHeight;
+    textarea.style.height = `${Math.max(38, Math.min(contentHeight, 180))}px`;
+    textarea.style.overflowY = contentHeight > 180 ? "auto" : "hidden";
   }, [draft]);
 
   // Auto-scroll message list to bottom when appropriate
@@ -1224,8 +1223,7 @@ function Dashboard() {
     recognition.onerror = (event: any) => {
       setVoiceInputActive(false);
       if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
-        setMicrophonePermissionError("Microphone access was blocked. Allow it in your browser's site permissions, then try again.");
-        setMicrophonePermissionOpen(true);
+        setChatError("Microphone access was denied. Use your browser's site controls to allow microphone access for Misma, then try again.");
       } else {
         setChatError("Voice dictation stopped. Please try again.");
       }
@@ -1242,12 +1240,12 @@ function Dashboard() {
     } catch {
       setVoiceInputActive(false);
       speechRecognitionRef.current = null;
-      setMicrophonePermissionError("The microphone could not be started. Check this site's microphone permission and try again.");
-      setMicrophonePermissionOpen(true);
+      setChatError("The microphone could not be started. Check your browser's site permissions and try again.");
     }
   };
 
-  const handleVoiceInput = () => {
+  // Request access from the browser directly so its native site-permission prompt appears.
+  const handleVoiceInput = async () => {
     if (voiceInputActive) {
       speechRecognitionRef.current?.stop?.();
       setVoiceInputActive(false);
@@ -1258,32 +1256,25 @@ function Dashboard() {
       webkitSpeechRecognition?: new () => any;
     };
     if (!(browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition)) {
-      setChatError("Voice dictation is not supported in this browser. Try a recent version of Chrome.");
+      setChatError("Voice input is not supported in this browser. Try a recent version of Chrome.");
       return;
     }
-    setMicrophonePermissionError("");
-    if (navigator.permissions?.query) {
-      void navigator.permissions.query({ name: "microphone" as PermissionName }).then((permission) => {
-        if (permission.state === "granted") startVoiceRecognition();
-        else setMicrophonePermissionOpen(true);
-      }).catch(() => setMicrophonePermissionOpen(true));
-    } else {
-      setMicrophonePermissionOpen(true);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setChatError("This browser cannot request microphone access. Open Misma in a secure, up-to-date browser.");
+      return;
     }
-  };
-
-  const requestMicrophoneAccess = async () => {
-    setMicrophonePermissionError("");
+    setChatError("");
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("This browser does not support microphone permissions.");
-      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
-      setMicrophonePermissionOpen(false);
       startVoiceRecognition();
-    } catch {
-      setMicrophonePermissionError("Microphone access is still blocked. Open your browser's site settings, set Microphone to Allow for Misma, then try again.");
+    } catch (cause) {
+      const errorName = cause instanceof Error ? cause.name : "";
+      setChatError(
+        errorName === "NotAllowedError" || errorName === "PermissionDeniedError"
+          ? "Microphone access was denied. Use your browser's site controls to allow microphone access for Misma, then try again."
+          : "Misma could not access your microphone. Check your browser's site permissions and try again.",
+      );
     }
   };
 
@@ -2982,6 +2973,21 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
+                    <div className="aichat-composer-sendrow-spacer" />
+                    <button
+                      type="button"
+                      className={`aichat-composer-voice-btn${voiceInputActive ? " is-listening" : ""}`}
+                      disabled={isSending || isGeneratingMedia}
+                      onClick={() => void handleVoiceInput()}
+                      title={voiceInputActive ? "Stop voice input" : "Voice input"}
+                      aria-label={voiceInputActive ? "Stop voice input" : "Start voice input"}
+                    >
+                      {voiceInputActive ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+                      )}
+                    </button>
 
                     <button
                       type="button"
@@ -2997,8 +3003,8 @@ function Dashboard() {
                           handleVoiceInput();
                         }
                       }}
-                      title={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Use voice"}
-                      aria-label={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice dictation"}
+                      title={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
+                      aria-label={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
                     >
                       {isSending || isGeneratingMedia ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
@@ -3007,7 +3013,7 @@ function Dashboard() {
                       ) : voiceInputActive ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
                       ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 10v4M22 11v2" /></svg>
                       )}
                     </button>
                   </div>
@@ -3855,23 +3861,6 @@ function Dashboard() {
                 )}
               </div>
             </div>
-          </div>
-        )}
-
-        {microphonePermissionOpen && (
-          <div className="aichat-mic-permission-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setMicrophonePermissionOpen(false); }}>
-            <section className="aichat-mic-permission-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-mic-permission-title">
-              <div className="aichat-mic-permission-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
-              </div>
-              <h2 id="misma-mic-permission-title">Allow microphone access</h2>
-              <p>Misma uses your microphone for voice dictation. Your browser will ask for permission; only the recognized text is added to your message.</p>
-              {microphonePermissionError && <p className="aichat-mic-permission-error" role="alert">{microphonePermissionError}</p>}
-              <div className="aichat-mic-permission-actions">
-                <button type="button" className="aichat-action-btn secondary" onClick={() => setMicrophonePermissionOpen(false)}>Not now</button>
-                <button type="button" className="aichat-action-btn" onClick={() => void requestMicrophoneAccess()}>Allow microphone</button>
-              </div>
-            </section>
           </div>
         )}
 

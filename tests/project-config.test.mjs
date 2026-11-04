@@ -111,8 +111,9 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.equal(dashboard.includes("How can I help you today?"), false);
   assert.match(dashboard, /chatGroupFilter === "__ungrouped__"/);
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
-  assert.match(dashboard, /microphonePermissionOpen/);
-  assert.match(dashboard, /requestMicrophoneAccess/);
+  assert.match(dashboard, /getUserMedia\(\{ audio: true \}\)/);
+  assert.match(dashboard, /browser\'s site controls/);
+  assert.doesNotMatch(dashboard, /microphonePermissionOpen|requestMicrophoneAccess/);
   assert.match(dashboard, /aichat-notification-trigger/);
   assert.match(dashboard, /activeTab === "notifications"/);
   assert.match(dashboard, /markVisitorMessagesRead/);
@@ -140,7 +141,12 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.doesNotMatch(dashboard, /setInterval\(\(\) => loadData\(\)/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS read_at timestamptz/);
   assert.match(migration, /messages_unread_visitor_idx/);
+  assert.match(styles, /\.aichat-notification-trigger\s*\{[\s\S]*?margin-left:\s*auto/);
   assert.match(styles, /\.aichat-notification-trigger\.has-unread/);
+  assert.match(styles, /\.aichat-message-row\.is-ai > \.aichat-msg-avatar\.ai/);
+  assert.match(styles, /transition:\s*height\s*\.16s ease/);
+  assert.match(dashboard, /aichat-composer-voice-btn/);
+  assert.match(dashboard, /Start voice chat/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
 });
@@ -169,5 +175,5 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
   assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
-  assert.match(dashboard, /Start voice dictation/);
+  assert.match(dashboard, /Start voice input/);
 });

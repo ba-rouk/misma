@@ -6,6 +6,7 @@ on:
       - fix/misma-video-search-voice-settings
       - fix/media-generation-timeouts-composer-layout
       - feat/mobile-message-actions-composer
+      - feat/voice-controls-composer-alignment
   pull_request:
     branches:
       - main
