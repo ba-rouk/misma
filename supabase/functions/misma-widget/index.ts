@@ -67,16 +67,16 @@ async function requireWorkspace(token: string, requestedWorkspaceId: string): Pr
   return { db: getAdmin(), workspaceId: selected };
 }
 function providerList() {
-  const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" }> = [];
+  const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" | "cohere" }> = [];
   const add = (name: string, keyName: string, modelName: string, model: string, endpoint: string, kind: "gemini" | "openai" = "openai") => {
     const key = getEnv(keyName);
     if (key) providers.push({ name, key, model: getEnv(modelName) || model, endpoint, kind });
   };
   add("groq", "GROQ_API_KEY", "GROQ_MODEL", "openai/gpt-oss-120b", "https://api.groq.com/openai/v1/chat/completions");
-  add("gemini", "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-3.6-flash", "https://generativelanguage.googleapis.com/v1beta/models", "gemini");
+  add("gemini", "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-3.8-flash", "https://generativelanguage.googleapis.com/v1beta/models", "gemini");
   add("openrouter", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "openrouter/auto", "https://openrouter.ai/api/v1/chat/completions");
   add("mistral", "MISTRAL_API_KEY", "MISTRAL_MODEL", "mistral-small-latest", "https://api.mistral.ai/v1/chat/completions");
-  add("cohere", "COHERE_API_KEY", "COHERE_MODEL", "command-a-plus-05-2026", "https://api.cohere.com/v2/chat/completions");
+  add("cohere", "COHERE_API_KEY", "COHERE_MODEL", "command-a-plus-05-2026", "https://api.cohere.com/v2/chat", "cohere");
   return providers;
 }
 async function generateText(systemPrompt: string, prompt: string): Promise<string> {
@@ -118,6 +118,9 @@ async function generateText(systemPrompt: string, prompt: string): Promise<strin
       let answer = "";
       if (provider.kind === "gemini") {
         const parts = result?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) answer = parts.map((item: AnyRecord) => safeString(item?.text, 12000)).join("");
+      } else if (provider.kind === "cohere") {
+        const parts = result?.message?.content;
         if (Array.isArray(parts)) answer = parts.map((item: AnyRecord) => safeString(item?.text, 12000)).join("");
       } else {
         answer = safeString(result?.choices?.[0]?.message?.content, 12000);
@@ -520,7 +523,7 @@ async function handleWhatsAppWebhook(request: Request, db: Db) {
   let payload: AnyRecord;
   try { payload = JSON.parse(bodyText); } catch { return new Response("Bad Request", { status: 400 }); }
   const accessToken = getEnv("WHATSAPP_ACCESS_TOKEN");
-  const apiVersion = getEnv("META_GRAPH_API_VERSION") || "v23.0";
+  const apiVersion = getEnv("META_GRAPH_API_VERSION") || "v26.0";
   for (const entry of payload.entry || []) {
     for (const change of entry.changes || []) {
       const value = change.value || {};
