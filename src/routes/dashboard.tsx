@@ -2589,7 +2589,7 @@ function Dashboard() {
               onClick={() => setChatsExpanded((v) => !v)}
               aria-expanded={chatsExpanded}
             >
-              <span className="aichat-chats-widget-title">Chats and tasks</span>
+              <span className="aichat-chats-widget-title">Recents</span>
               <svg
                 className={`aichat-chats-widget-caret${chatsExpanded ? " open" : ""}`}
                 width="12"
@@ -2644,43 +2644,41 @@ function Dashboard() {
               ) : (
                 filteredRecentChats.slice(0, 5).map((c) => (
                   <div className="aichat-chat-list-item" key={c.id}>
-                  <button
-                    type="button"
-                    className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
-                    onClick={() => void selectConversation(c.id)}
-                    title={c.name || "New chat"}
-                  >
-                    <span
-                      className="aichat-chats-widget-dot"
-                      aria-hidden="true"
-                    />
-                    <span className="aichat-chats-widget-item-text">
-                      {c.name || "New chat"}
-                    </span>
-                  </button>
-                  <button type="button" className="aichat-chat-more" aria-label="Chat options" aria-expanded={chatMenuOpenId === c.id} onClick={() => setChatMenuOpenId((current) => current === c.id ? null : c.id)}>⋯</button>
-                  {chatMenuOpenId === c.id && (
-                    <div className="aichat-chat-menu" role="menu">
-                      <button type="button" role="menuitem" onClick={() => handleCreateConversationGroup(c.id)}>Group in…</button>
-                      {conversationGroups.map((group) => <button key={group} type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, group)}>Move to {group}</button>)}
-                      {c.group_name && <button type="button" role="menuitem" onClick={() => void handleSetConversationGroup(c.id, null)}>Remove group</button>}
-                      <button type="button" role="menuitem" className="is-danger" onClick={() => { setChatMenuOpenId(null); void handleDeleteConversation(c.id); }}>Delete permanently</button>
-                    </div>
-                  )}
+                    <button
+                      type="button"
+                      className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
+                      onClick={() => {
+                        if (chatLongPressTriggeredRef.current) {
+                          chatLongPressTriggeredRef.current = false;
+                          return;
+                        }
+                        void selectConversation(c.id);
+                      }}
+                      onPointerDown={() => startChatLongPress(c.id)}
+                      onPointerUp={cancelChatLongPress}
+                      onPointerLeave={cancelChatLongPress}
+                      onPointerCancel={cancelChatLongPress}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        cancelChatLongPress();
+                        chatLongPressTriggeredRef.current = true;
+                        setChatActionMenuId(c.id);
+                      }}
+                      title={c.name || "New chat"}
+                    >
+                      <span className="aichat-chats-widget-dot" aria-hidden="true" />
+                      <span className="aichat-chats-widget-item-text">{c.name || "New chat"}</span>
+                    </button>
+                    {chatActionMenuId === c.id && (
+                      <div className="aichat-chat-context-menu" role="menu">
+                        <button type="button" role="menuitem" className="is-danger" onClick={() => {
+                          setChatActionMenuId(null);
+                          setDeleteChatTarget({ id: c.id, name: c.name || "New chat" });
+                        }}>Delete chat</button>
+                      </div>
+                    )}
                   </div>
                 ))
-              )}
-              {recentChats.length > 0 && (
-                <button
-                  type="button"
-                  className="aichat-chats-widget-viewall"
-                  onClick={() => {
-                    setActiveTab("recent");
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  View all
-                </button>
               )}
             </div>
           )}
@@ -2770,11 +2768,13 @@ function Dashboard() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
+              aria-hidden="true"
             >
               <line x1="3" y1="12" x2="21" y2="12" />
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
+            <span className="aichat-mobile-recents-label">Recents</span>
           </button>
           <button
             type="button"
