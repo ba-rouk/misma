@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   getMismaData,
+  getVisitorNotifications,
   getConversationMessages,
   createConversation,
   deleteConversation,
@@ -933,10 +934,29 @@ function Dashboard() {
     loadData();
   }, [authChecked, token]);
 
+  const refreshVisitorNotifications = () => {
+    if (!token) return;
+    getVisitorNotifications({ data: { token } })
+      .then((data) => {
+        setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
+        setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
+      })
+      .catch((cause) => {
+        console.warn("Could not refresh visitor notifications:", cause);
+      });
+  };
+
   useEffect(() => {
     if (!authChecked || !token) return;
-    const refreshId = window.setInterval(() => loadData(), 30000);
-    return () => window.clearInterval(refreshId);
+    const refreshId = window.setInterval(refreshVisitorNotifications, 30000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshVisitorNotifications();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(refreshId);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [authChecked, token]);
 
   // Autogrow textarea as user types
