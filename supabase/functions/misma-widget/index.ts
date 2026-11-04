@@ -170,6 +170,7 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
     .eq("public_key", key)
     .maybeSingle();
   if (result.error || !result.data) throw new Error("This Misma website key is not valid.");
+  if (result.data.status === "paused") throw new Error("This website connection is paused by its owner.");
   const originHeader = request.headers.get("origin") || "";
   if (!originHeader) throw new Error("A website origin is required.");
   let origin: URL;
@@ -625,7 +626,7 @@ Deno.serve(async (request: Request) => {
   if (!isRecord(input)) return respond(400, { error: "Invalid request." });
 
   try {
-    if (input.action === "heartbeat" || input.action === "chat" || input.action === "human-request") {
+    if (input.action === "heartbeat" || input.action === "history" || input.action === "chat" || input.action === "human-request") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       await db.from("website_connections").update({
         status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
