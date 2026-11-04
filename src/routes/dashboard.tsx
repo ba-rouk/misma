@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent,
   type ClipboardEvent,
+  type MouseEvent,
 } from "react";
 import {
   getMismaData,
@@ -1146,7 +1147,7 @@ function Dashboard() {
     clearMobileMessageActionTimer();
   };
 
-  const openMobileMessageActionsFromContextMenu = (event: React.MouseEvent, messageId: string) => {
+  const openMobileMessageActionsFromContextMenu = (event: MouseEvent, messageId: string) => {
     if (!window.matchMedia("(hover: none)").matches) return;
     event.preventDefault();
     clearMobileMessageActionTimer();
