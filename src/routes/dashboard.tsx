@@ -180,7 +180,8 @@ type ActionIconName =
   | "thumbs-down"
   | "volume"
   | "volume-off"
-  | "refresh";
+  | "refresh"
+  | "folder-plus";
 
 function ActionIcon({ name }: { name: ActionIconName }) {
   const common = {
@@ -217,7 +218,8 @@ function ActionIcon({ name }: { name: ActionIconName }) {
           <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
         </>
       )}
-      {name === "download" && <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>}
+      {name === "folder-plus" && <><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2" /><path d="M3 7v10a2 2 0 0 0 2 2h7" /><path d="M16 15v6m-3-3h6" /></>}
+            {name === "download" && <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>}
       {name === "crop" && <><path d="M7 3v14a2 2 0 0 0 2 2h12" /><path d="M3 7h14a2 2 0 0 1 2 2v12" /></>}
       {name === "thumbs-up" && (
         <path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Zm0 0 5-8c2 0 3 1 3 3l-1 5h5a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7" />
