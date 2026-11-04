@@ -6455,24 +6455,48 @@ html, body, #app-root {
 .aichat-topbar { border-bottom:0; border-top:0; }
 @media (max-width:767px) {
   .aichat-header-toggle {
+    display:grid !important;
+    place-items:center;
+    flex:none;
+    width:40px;
+    min-width:40px;
+    height:40px;
+    padding:0;
+    border:0;
+    border-radius:9px;
+    background:transparent;
+    color:#d4dce7;
+  }
+  .aichat-header-toggle svg {
+    display:block !important;
+    width:21px;
+    height:21px;
+  }
+  .aichat-mobile-newchat {
     display:inline-flex;
     align-items:center;
-    justify-content:flex-start;
-    width:auto;
-    min-width:0;
-    padding:0 3px;
-    border:0;
-    background:transparent;
+    justify-content:center;
+    gap:7px;
+    min-height:36px;
+    padding:0 10px;
+    border:1px solid #303b4a;
+    border-radius:9px;
+    background:#1b2430;
+    color:#e6edf7;
+    font:500 12px/1 var(--font-sans);
+    white-space:nowrap;
   }
-  .aichat-header-toggle svg { display:none; }
-  .aichat-mobile-recents-label {
-    display:inline;
-    color:#8994a4;
-    font-size:13px;
-    font-weight:500;
-    opacity:.58;
-    letter-spacing:.01em;
+  .aichat-mobile-newchat .aichat-newchat-plus {
+    display:grid;
+    place-items:center;
+    width:18px;
+    height:18px;
+    color:#c9d8eb;
   }
+  .aichat-newchat-wrap { display:none !important; }
+  .aichat-side-top { gap:8px; }
+  .aichat-side-top .aichat-brand-link { flex:1 1 auto; min-width:0; }
+  .aichat-side-top .aichat-mobile-newchat { flex:none; }
   .aichat-library-toolbar { align-items:stretch; flex-direction:column; }
   .aichat-library-toolbar .aichat-input { max-width:none; width:100%; }
   .aichat-library-heading { align-items:flex-start; flex-direction:column; }
@@ -6482,37 +6506,6 @@ html, body, #app-root {
   .aichat-confirm-actions > button { width:100%; }
 }
 
-
-/* Image generation progress is an estimate: the image provider returns a final
-   asset rather than streaming a percentage through its API. */
-.aichat-media-skeleton.is-image .aichat-media-skeleton-preview {
-  min-height: 150px;
-  aspect-ratio: 4 / 3;
-}
-.aichat-image-progress-track {
-  width: 100%;
-  height: 6px;
-  margin-top: 5px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #293443;
-}
-.aichat-image-progress-track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #6f9ee7, #b5d0ff);
-  transition: width .55s ease;
-}
-.aichat-image-progress-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.aichat-image-progress-label small { color: #93a2b5; font-size: 11px; }
-.aichat-image-progress-label strong { color: #dce9ff; font-size: 12px; font-variant-numeric: tabular-nums; }
-.aichat-media-skeleton-copy > small { display: block; }
 
 /* Keep the composer one-line height stable, then grow it from measured content. */
 .aichat-composer-input-row {
@@ -6541,3 +6534,115 @@ html, body, #app-root {
   }
 }
 .aichat-composer-focus-hint { display: none !important; }
+
+
+/* Image generation: quiet three-dot loading with a compact estimate badge. */
+.aichat-image-generation-loading {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  min-height: 58px;
+  margin: 2px 0 7px;
+  padding: 5px 8px 10px;
+}
+.aichat-image-generation-loading .aichat-image-generation-dots {
+  justify-content: center;
+  width: 100%;
+  min-height: 42px;
+  padding: 0;
+}
+.aichat-image-progress-badge {
+  position: absolute;
+  right: -5px;
+  bottom: -1px;
+  min-width: 43px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid #46566c;
+  border-radius: 7px;
+  background: #171f2b;
+  color: #dce8f7;
+  font: 600 10px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 3px 10px rgba(0,0,0,.3);
+}
+
+/* Generated images expose their four actions through a single top-right menu. */
+.aichat-generated-media-wrap { position: relative; }
+.aichat-asset-image-wrap { position: relative; min-width: 0; }
+.aichat-image-options {
+  position: absolute;
+  z-index: 12;
+  top: 9px;
+  right: 9px;
+}
+.aichat-image-more {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(190,205,225,.3);
+  border-radius: 9px;
+  background: rgba(12,17,25,.84);
+  color: #eef4fc;
+  box-shadow: 0 4px 14px rgba(0,0,0,.3);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+.aichat-image-more:hover,
+.aichat-image-more[aria-expanded="true"] {
+  border-color: #8199b8;
+  background: rgba(35,48,66,.96);
+}
+.aichat-image-more svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.aichat-image-options-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 174px;
+  padding: 5px;
+  border: 1px solid #354254;
+  border-radius: 11px;
+  background: #151d28;
+  box-shadow: 0 14px 36px rgba(0,0,0,.5);
+}
+.aichat-image-options-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 37px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #e2eaf5;
+  text-align: left;
+  font: 400 12px/1.25 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-image-options-menu button:hover { background: #273548; }
+.aichat-image-options-menu button svg {
+  flex:none;
+  width:16px;
+  height:16px;
+  color:#bacbe0;
+}
+@media (max-width:767px) {
+  .aichat-side-top { height:60px; }
+  .aichat-mobile-newchat { min-height:35px; }
+}
+
+
+/* The compact New chat shortcut belongs in the mobile drawer header only. */
+@media (min-width:768px) { .aichat-mobile-newchat { display:none; } }

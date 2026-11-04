@@ -199,10 +199,41 @@ test("image attachments receive visual analysis and show estimated generation pr
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
 
-  assert.match(dashboard, /aichat-image-progress-track/);
+  assert.match(dashboard, /aichat-image-generation-loading/);
+  assert.match(dashboard, /aichat-image-progress-badge/);
   assert.match(dashboard, /mediaProgressPercent/);
-  assert.match(dashboard, /Estimate only/);
+  assert.doesNotMatch(dashboard, /Estimate only|aichat-image-progress-track/);
   assert.match(edgeFunction, /IMAGE INPUT:/);
   assert.match(edgeFunction, /IMAGE UNDERSTANDING:/);
   assert.match(edgeFunction, /prepared\.images\.length === 0 \|\| provider\.supportsImages/);
+});
+
+
+test("image creation uses only animated dots with a compact progress badge and menu actions", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /aichat-image-generation-loading/);
+  assert.match(dashboard, /aichat-image-progress-badge/);
+  assert.match(dashboard, /function GeneratedImageActions/);
+  assert.match(dashboard, /aichat-image-options-menu/);
+  assert.doesNotMatch(dashboard, /aichat-image-action-bar/);
+  assert.match(dashboard, /Download image/);
+  assert.match(dashboard, /Share image/);
+  assert.match(dashboard, /Crop image/);
+  assert.match(dashboard, /Copy image/);
+  assert.match(styles, /\.aichat-image-progress-badge/);
+  assert.match(styles, /\.aichat-image-options-menu/);
+});
+
+test("mobile sidebar uses a hamburger, has a top-row new-chat control, and no Chat shortcut", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /className="aichat-mobile-newchat"/);
+  assert.doesNotMatch(dashboard, /aichat-mobile-recents-label/);
+  assert.doesNotMatch(dashboard, /data-tooltip="Chat"/);
+  assert.match(styles, /\.aichat-header-toggle svg\s*\{\s*display:\s*block/);
+  assert.match(styles, /\.aichat-mobile-newchat/);
+  assert.match(styles, /\.aichat-newchat-wrap\s*\{\s*display:\s*none/);
 });
