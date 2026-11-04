@@ -25,6 +25,9 @@ import {
   createProductService,
   updateHumanRequestStatus,
   updateProductServiceStatus,
+  createWorkspaceLibraryFile,
+  deleteWorkspaceLibraryFile,
+  deleteChatAttachment,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -1183,7 +1186,7 @@ function Dashboard() {
     if (!token) return;
     try {
       await setConversationGroup({ data: { token, conversationId, groupName } });
-      setChatMenuOpenId(null);
+      setChatActionMenuId(null);
       loadData();
     } catch (cause) {
       alert(cause instanceof Error ? cause.message : "Could not update this chat group.");
@@ -1194,7 +1197,7 @@ function Dashboard() {
     const value = window.prompt("Enter a group name for this chat:");
     const groupName = value?.trim().slice(0, 60);
     if (groupName) void handleSetConversationGroup(conversationId, groupName);
-    setChatMenuOpenId(null);
+    setChatActionMenuId(null);
   };
 
   const startChatLongPress = (conversationId: number) => {
