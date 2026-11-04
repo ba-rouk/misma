@@ -11,6 +11,7 @@ import {
 import {
   getMismaData,
   getVisitorNotifications,
+  getWorkspaceLiveUpdates,
   getConversationMessages,
   createConversation,
   deleteConversation,
@@ -996,13 +997,37 @@ function Dashboard() {
 
   const refreshVisitorNotifications = () => {
     if (!token) return;
-    getVisitorNotifications({ data: { token } })
-      .then((data) => {
-        setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
-        setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
+    Promise.all([
+      getVisitorNotifications({ data: { token } }),
+      getWorkspaceLiveUpdates({ data: { token } }),
+    ])
+      .then(([visitorData, liveData]) => {
+        setUnreadVisitorMessages(visitorData.unreadVisitorMessages ?? []);
+        setUnreadVisitorCount(visitorData.unreadVisitorCount ?? 0);
+        setConnectedWebsites(liveData.websites ?? []);
+        setHumanHandoffs(liveData.handoffs ?? []);
+        setAllNotifications(liveData.notifications ?? []);
+        setCustomers(liveData.customers ?? []);
+        setChannelConnections(liveData.channelConnections ?? []);
+        setConversations((current) => {
+          const previous = new Map(current.map((item: any) => [Number(item.id), item]));
+          return (liveData.conversations ?? []).map((item: any) => {
+            const existing = previous.get(Number(item.id));
+            return {
+              ...existing,
+              id: item.id,
+              channel: item.channel,
+              text: item.latest_text || existing?.text || "",
+              status: item.status,
+              updated_at: item.updated_at,
+              group_name: item.group_name ?? null,
+              name: existing?.name || (item.channel === "Website" ? "Website visitor" : item.channel === "WhatsApp" ? "WhatsApp customer" : item.channel === "Phone" ? "Phone caller" : "New chat"),
+            };
+          });
+        });
       })
       .catch((cause) => {
-        console.warn("Could not refresh visitor notifications:", cause);
+        console.warn("Could not refresh workspace visitor activity:", cause);
       });
   };
 
