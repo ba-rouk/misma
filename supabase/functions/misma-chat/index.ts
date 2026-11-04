@@ -1635,7 +1635,7 @@ Deno.serve(async (request) => {
     const liveSearchPromise = shouldSearchWeb(message)
       ? searchLiveWeb(message)
       : Promise.resolve(null);
-    const [workspaceResult, knowledgeResult, orderResult, contactResult, core01LessonsResult, liveSearch] = await Promise.all([
+    const [workspaceResult, knowledgeResult, orderResult, contactResult, core01LessonsResult, productResult, liveSearch] = await Promise.all([
       db.from("workspaces")
         .select("name,location,description,opening_hours,primary_language")
         .eq("id", workspaceId)
@@ -1661,12 +1661,18 @@ Deno.serve(async (request) => {
         .order("confidence", { ascending: false })
         .order("updated_at", { ascending: false })
         .limit(12),
+      db.from("workspace_products")
+        .select("kind,name,description,price,currency,status")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(50),
       liveSearchPromise,
     ]);
     if (workspaceResult.error || !workspaceResult.data) {
       throw new Error("Could not load workspace profile.");
     }
-    if (knowledgeResult.error || orderResult.error || contactResult.error || core01LessonsResult.error) {
+    if (knowledgeResult.error || orderResult.error || contactResult.error || core01LessonsResult.error || productResult.error) {
       throw new Error("Could not load workspace context.");
     }
 
@@ -1752,6 +1758,13 @@ Deno.serve(async (request) => {
         totalRwf: Number(order.total_rwf) || 0,
         status: order.status,
         createdAt: order.created_at,
+      })),
+      activeProductsAndServices: (productResult.data ?? []).map((item) => ({
+        type: item.kind,
+        name: item.name,
+        description: item.description,
+        price: item.price == null ? null : Number(item.price),
+        currency: item.currency,
       })),
       contactCount: contactResult.count ?? 0,
       core01ValidatedLessons: (core01LessonsResult.data ?? []).map(({ room_key, lesson, confidence }) => ({
