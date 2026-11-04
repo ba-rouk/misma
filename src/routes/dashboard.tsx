@@ -1594,6 +1594,7 @@ function Dashboard() {
   const uploadSelectedAttachments = async (
     filesToUpload: File[] = selectedFiles,
     videoFrameMode = false,
+    signal?: AbortSignal,
   ): Promise<MessageAttachment[]> => {
     if (!filesToUpload.length) return [];
     setUploadingAttachments(true);
@@ -1604,6 +1605,7 @@ function Dashboard() {
       if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
 
       const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "file"): Promise<MessageAttachment> => {
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
         if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
           throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
@@ -1617,6 +1619,7 @@ function Dashboard() {
         });
         if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
         uploadedPaths.push(path);
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         return { path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, kind };
       };
       const uploadFrames = async (frames: File[]) => {
@@ -1624,7 +1627,10 @@ function Dashboard() {
         for (let index = 0; index < frames.length; index += 3) {
           const batch = frames.slice(index, index + 3);
           const prepared = await Promise.all(batch.map(compressImageForUpload));
-          result.push(...await Promise.all(prepared.map((frame) => uploadOne(frame, "video-frame"))));
+          const settled = await Promise.allSettled(prepared.map((frame) => uploadOne(frame, "video-frame")));
+          const failed = settled.find((item): item is PromiseRejectedResult => item.status === "rejected");
+          if (failed) throw failed.reason;
+          result.push(...settled.map((item) => (item as PromiseFulfilledResult<MessageAttachment>).value));
         }
         return result;
       };
@@ -1638,6 +1644,7 @@ function Dashboard() {
       if (videos.length > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
 
       const processFile = async (original: File): Promise<MessageAttachment[]> => {
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
           const uploadedVideo = await uploadOne(original, "video");
           const frames = await extractVideoKeyframes(original);
@@ -1645,6 +1652,7 @@ function Dashboard() {
         }
         if (original.type.startsWith("image/")) {
           const prepared = await compressImageForUpload(original);
+          if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
           return [await uploadOne(prepared, "image")];
         }
         return [await uploadOne(original, "file")];
@@ -1653,8 +1661,12 @@ function Dashboard() {
       const result: MessageAttachment[] = [];
       // Bounded parallelism keeps multiple images moving without exhausting mobile RAM or connections.
       for (let index = 0; index < filesToUpload.length; index += 2) {
+        if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         const batch = filesToUpload.slice(index, index + 2);
-        result.push(...(await Promise.all(batch.map(processFile))).flat());
+        const settled = await Promise.allSettled(batch.map(processFile));
+        const failed = settled.find((item): item is PromiseRejectedResult => item.status === "rejected");
+        if (failed) throw failed.reason;
+        result.push(...settled.flatMap((item) => (item as PromiseFulfilledResult<MessageAttachment[]>).value));
         if (result.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
       }
       return result;
@@ -1913,7 +1925,7 @@ function Dashboard() {
         loadData();
         return;
       }
-      const attachments = editId ? [] : await uploadSelectedAttachments();
+      const attachments = editId ? [] : await uploadSelectedAttachments(selectedFiles, false, requestController.signal);
       const res = await postChatAction({
         action: "chat",
         message: textToSend,
@@ -2085,7 +2097,7 @@ function Dashboard() {
             size: item.size || 0,
             kind: item.kind,
           }))
-        : await uploadSelectedAttachments();
+        : await uploadSelectedAttachments(selectedFiles, false, controller.signal);
       if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
 
       const result = await postChatAction({
@@ -2210,7 +2222,7 @@ function Dashboard() {
       });
       const reviewFrames = await extractVideoKeyframes(reviewFile);
       if (reviewFrames.length < 2) throw new Error("Misma could not sample enough frames to review this video safely.");
-      const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true);
+      const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true, controller.signal);
       if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
       await postChatAction({
         action: "review-video-frames",
@@ -2791,6 +2803,7 @@ function Dashboard() {
                       onPointerDown={() => startChatLongPress(c.id)}
                       onPointerUp={cancelChatLongPress}
                       onPointerLeave={cancelChatLongPress}
+                      onPointerMove={cancelChatLongPress}
                       onPointerCancel={cancelChatLongPress}
                       onContextMenu={(event) => {
                         event.preventDefault();
