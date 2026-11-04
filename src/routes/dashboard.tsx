@@ -3854,7 +3854,28 @@ function Dashboard() {
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
               {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className="aichat-website-card" key={site.id}>
                 <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>
-                <p>Website registration is saved. The public widget installer and live connection check are the next integration step; this site remains pending until the widget reports in.</p>
+                <p>Install this script on the registered domain. Misma will verify the live connection automatically when the widget loads and calls home.</p>
+                <label className="aichat-widget-script-label">Website installation script</label>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget"></script>`}</code></pre>
+                <div className="aichat-website-actions">
+                  <button type="button" className="aichat-action-btn" onClick={() => {
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${getSupabaseConfig()?.url.replace(/\/$/, "")}/functions/v1/misma-widget"></script>`;
+                    void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
+                  }}>Copy script</button>
+                  <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
+                    if (!workspace?.id) return;
+                    setWebsiteActionId(site.id);
+                    try {
+                      const result = await callWidgetFunction({ action: "scan-website", workspaceId: workspace.id, websiteId: site.id });
+                      alert(`Website scan complete: ${result.pagesScanned} pages scanned, ${result.knowledgeSaved || 0} knowledge answers extracted, and ${result.productSuggestions || 0} product/service suggestions added for review.`);
+                      loadData();
+                    } catch (cause) {
+                      alert(cause instanceof Error ? cause.message : "Website scan failed.");
+                    } finally { setWebsiteActionId(null); }
+                  }}>{websiteActionId === site.id ? "Scanning…" : "Scan website"}</button>
+                </div>
+                <small>Last verified: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
+                <small>Paste this snippet before the closing &lt;/body&gt; tag. Keep the site key unchanged. Only pages on this registered host are accepted.</small>
               </article>)}
             </div>
           </div></div>
@@ -3865,16 +3886,23 @@ function Dashboard() {
             <div className="aichat-tab-header"><h2>Customers requesting a human</h2><p>Visitors who asked to speak with a person. Open a request to review the complete conversation.</p></div>
             <div className="aichat-card">
               {humanHandoffs.length === 0 ? <div className="aichat-notifications-empty"><h3>No human requests yet</h3><p>Requests from your website chat will appear here with their conversation history.</p></div> :
-                humanHandoffs.map((request) => <button type="button" className="aichat-handoff-row" key={request.id} onClick={() => void selectConversation(Number(request.conversation_id))}>
-                  <span className="aichat-handoff-avatar">♙</span><span className="aichat-handoff-copy"><strong>{request.visitor_name || request.contacts?.name || "Website visitor"}</strong><small>{request.visitor_email || request.contacts?.email || "Contact details not provided"} · {request.created_at ? new Date(request.created_at).toLocaleString() : "New request"}</small><span>{request.reason || "Visitor requested a human agent"}</span></span><span className={`aichat-status-pill is-${request.status}`}>{request.status}</span>
-                </button>)}
+                humanHandoffs.map((request) => <article className="aichat-handoff-card" key={request.id}>
+                  <button type="button" className="aichat-handoff-row" onClick={() => void selectConversation(Number(request.conversation_id))}>
+                    <span className="aichat-handoff-avatar">♙</span><span className="aichat-handoff-copy"><strong>{request.visitor_name || request.contacts?.name || "Website visitor"}</strong><small>{request.visitor_email || request.contacts?.email || "Contact details not provided"} · {request.visitor_phone || request.contacts?.phone || "No phone"} · {request.created_at ? new Date(request.created_at).toLocaleString() : "New request"}</small><span>{request.reason || "Visitor requested a human agent"}</span><small>Latest conversation: {request.conversations?.latest_text || "Open the conversation to review the full history"}</small></span><span className={`aichat-status-pill is-${request.status}`}>{request.status}</span>
+                  </button>
+                  {request.status !== "handled" && <button type="button" className="aichat-action-btn" onClick={async () => {
+                    if (!token) return;
+                    try { await updateHumanRequestStatus({ data: { token, requestId: Number(request.id), status: "handled" } }); loadData(); }
+                    catch (cause) { alert(cause instanceof Error ? cause.message : "Could not mark this request handled."); }
+                  }}>Mark handled</button>}
+                </article>)}
             </div>
           </div></div>
         )}
 
         {activeTab === "products" && (
           <div className="aichat-tab-view"><div className="aichat-tab-content">
-            <div className="aichat-tab-header"><h2>Products &amp; services</h2><p>Create and manage what your business offers. Visitor demand and website-review suggestions can be added as sources in a later workflow.</p></div>
+            <div className="aichat-tab-header"><h2>Products &amp; services</h2><p>Create and manage what your business offers. Website scans and imported business documents create reviewable suggestions here.</p></div>
             <div className="aichat-card"><h3>Add a product or service</h3>
               <form className="aichat-hub-form" onSubmit={async (event) => {
                 event.preventDefault(); if (!workspace?.id || !productDraft.name.trim()) return;
@@ -3892,7 +3920,7 @@ function Dashboard() {
                 <button type="submit" className="aichat-action-btn" disabled={!productDraft.name.trim()}>Save product or service</button>
               </form>
             </div>
-            <div className="aichat-card"><h3>Catalog ({productsServices.length})</h3>{productsServices.length === 0 ? <p>No products or services have been added yet.</p> : productsServices.map((item) => <div className="aichat-hub-row" key={item.id}><div><strong>{item.name}</strong><small>{item.item_type} · {item.price_text || "Price not set"} · {item.created_from}</small><p>{item.description}</p></div><span className="aichat-status-pill">{item.active ? "Active" : "Inactive"}</span></div>)}</div>
+            <div className="aichat-card"><h3>Catalog ({productsServices.length})</h3>{productsServices.length === 0 ? <p>No products or services have been added yet.</p> : productsServices.map((item) => <div className="aichat-hub-row" key={item.id}><div><strong>{item.name}</strong><small>{item.item_type} · {item.price_text || "Price not set"} · {item.created_from || "manual"}</small><p>{item.description}</p></div><div className="aichat-product-actions"><span className={`aichat-status-pill ${item.active ? "is-connected" : "is-pending"}`}>{item.active ? "Active" : item.created_from === "website" || item.created_from === "file_upload" ? "Review suggestion" : "Inactive"}</span>{!item.active && (item.created_from === "website" || item.created_from === "file_upload") && <button type="button" className="aichat-action-btn" onClick={async () => { if (!token) return; try { await updateProductServiceStatus({ data: { token, productId: Number(item.id), active: true } }); loadData(); } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not approve this suggestion."); } }}>Approve &amp; activate</button>}</div></div>)}</div>
           </div></div>
         )}
 
