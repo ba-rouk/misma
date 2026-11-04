@@ -677,6 +677,9 @@ function Dashboard() {
   const [libraryUploadBusy, setLibraryUploadBusy] = useState(false);
   const [libraryAssetMenuId, setLibraryAssetMenuId] = useState<string | null>(null);
   const [libraryPreviewAsset, setLibraryPreviewAsset] = useState<any>(null);
+  const [libraryPreviewUrl, setLibraryPreviewUrl] = useState("");
+  const [libraryPreviewLoading, setLibraryPreviewLoading] = useState(false);
+  const [libraryPreviewError, setLibraryPreviewError] = useState("");
   const [deleteAssetTarget, setDeleteAssetTarget] = useState<any>(null);
   const [deletingAsset, setDeletingAsset] = useState(false);
   const [chatGroupFilter, setChatGroupFilter] = useState("all");
@@ -875,6 +878,7 @@ function Dashboard() {
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const libraryPreviewRequestRef = useRef(0);
   const mobileMessageActionTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const knowledgeFileInputRef = useRef<HTMLInputElement>(null);
@@ -1908,6 +1912,41 @@ function Dashboard() {
       setSavingLibraryAssetId(null);
     }
   };
+
+  const handleOpenLibraryAsset = async (asset: any) => {
+    const requestId = ++libraryPreviewRequestRef.current;
+    const conversationNumber = Number(asset.conversationId);
+    const conversationId = Number.isSafeInteger(conversationNumber) && conversationNumber > 0
+      ? conversationNumber
+      : null;
+    setLibraryPreviewAsset(asset);
+    setLibraryPreviewUrl("");
+    setLibraryPreviewLoading(true);
+    setLibraryPreviewError("");
+    try {
+      const blob = await fetchAttachmentBlob(asset as MessageAttachment, conversationId);
+      if (libraryPreviewRequestRef.current !== requestId) return;
+      setLibraryPreviewUrl(URL.createObjectURL(blob));
+    } catch (cause) {
+      if (libraryPreviewRequestRef.current !== requestId) return;
+      setLibraryPreviewError(cause instanceof Error ? cause.message : "Could not open this media.");
+    } finally {
+      if (libraryPreviewRequestRef.current === requestId) setLibraryPreviewLoading(false);
+    }
+  };
+
+  const handleCloseLibraryPreview = () => {
+    libraryPreviewRequestRef.current += 1;
+    setLibraryPreviewAsset(null);
+    setLibraryPreviewLoading(false);
+    setLibraryPreviewError("");
+    setLibraryPreviewUrl("");
+  };
+
+  useEffect(() => {
+    if (!libraryPreviewUrl) return;
+    return () => URL.revokeObjectURL(libraryPreviewUrl);
+  }, [libraryPreviewUrl]);
 
   const handleCopyImage = async (attachment: MessageAttachment, conversationId: number | null = currentConversationId) => {
     try {
@@ -3645,7 +3684,7 @@ function Dashboard() {
                               <button
                                 type="button"
                                 className="aichat-library-media-preview"
-                                onClick={() => setLibraryPreviewAsset(asset)}
+                                onClick={() => void handleOpenLibraryAsset(asset)}
                                 aria-label={`Open ${asset.name || (isVideo ? "video" : "image")}`}
                               >
                                 {isImage
@@ -4550,7 +4589,7 @@ function Dashboard() {
           <div
             className="aichat-library-media-viewer"
             role="presentation"
-            onMouseDown={(event) => { if (event.target === event.currentTarget) setLibraryPreviewAsset(null); }}
+            onMouseDown={(event) => { if (event.target === event.currentTarget) handleCloseLibraryPreview(); }}
           >
             <section className="aichat-library-media-viewer-dialog" role="dialog" aria-modal="true" aria-label={libraryPreviewAsset.name || "Media preview"}>
               <header className="aichat-library-media-viewer-header">
@@ -4558,25 +4597,31 @@ function Dashboard() {
                   <strong>{libraryPreviewAsset.name || "Media preview"}</strong>
                   <small>{libraryPreviewAsset.mimeType || libraryPreviewAsset.kind}</small>
                 </div>
-                <button type="button" aria-label="Close media preview" onClick={() => setLibraryPreviewAsset(null)}>×</button>
+                <button type="button" aria-label="Close media preview" onClick={handleCloseLibraryPreview}>×</button>
               </header>
               <div className="aichat-library-media-viewer-content">
-                {(libraryPreviewAsset.kind === "image" || libraryPreviewAsset.kind === "generated-image" || String(libraryPreviewAsset.mimeType || "").startsWith("image/")) ? (
-                  <img src={libraryPreviewAsset.url} alt={libraryPreviewAsset.name || "Library image"} />
+                {libraryPreviewLoading ? (
+                  <div className="aichat-library-media-viewer-file" role="status">Loading media…</div>
+                ) : libraryPreviewError ? (
+                  <div className="aichat-library-media-viewer-file" role="alert">{libraryPreviewError}</div>
+                ) : (libraryPreviewAsset.kind === "image" || libraryPreviewAsset.kind === "generated-image" || String(libraryPreviewAsset.mimeType || "").startsWith("image/")) ? (
+                  <img src={libraryPreviewUrl || libraryPreviewAsset.url} alt={libraryPreviewAsset.name || "Library image"} />
                 ) : (libraryPreviewAsset.kind === "video" || libraryPreviewAsset.kind === "generated-video" || String(libraryPreviewAsset.mimeType || "").startsWith("video/")) ? (
-                  <video src={libraryPreviewAsset.url} controls preload="metadata" />
+                  <video src={libraryPreviewUrl || libraryPreviewAsset.url} controls preload="metadata" />
                 ) : (
                   <div className="aichat-library-media-viewer-file">
                     <span>▤</span>
-                    <a href={libraryPreviewAsset.url} target="_blank" rel="noreferrer">Open file in a new tab</a>
+                    <a href={libraryPreviewUrl || libraryPreviewAsset.url} target="_blank" rel="noreferrer">Open file in a new tab</a>
                   </div>
                 )}
               </div>
               <footer className="aichat-library-media-viewer-actions">
                 <button type="button" className="aichat-action-btn secondary" onClick={() => void handleDownloadGeneratedMedia(libraryPreviewAsset, libraryPreviewAsset.conversationId == null ? null : Number(libraryPreviewAsset.conversationId))}>Download</button>
-                <button type="button" className="aichat-action-btn" disabled={savingLibraryAssetId === (libraryPreviewAsset.url || libraryPreviewAsset.path || libraryPreviewAsset.name)} onClick={() => void handleSaveGeneratedMediaToLibrary(libraryPreviewAsset, libraryPreviewAsset.conversationId == null ? null : Number(libraryPreviewAsset.conversationId))}>
-                  {savingLibraryAssetId === (libraryPreviewAsset.url || libraryPreviewAsset.path || libraryPreviewAsset.name) ? "Saving…" : "Save to Library"}
-                </button>
+                {!libraryPreviewAsset.libraryFileId && (
+                  <button type="button" className="aichat-action-btn" disabled={savingLibraryAssetId === (libraryPreviewAsset.url || libraryPreviewAsset.path || libraryPreviewAsset.name)} onClick={() => void handleSaveGeneratedMediaToLibrary(libraryPreviewAsset, libraryPreviewAsset.conversationId == null ? null : Number(libraryPreviewAsset.conversationId))}>
+                    {savingLibraryAssetId === (libraryPreviewAsset.url || libraryPreviewAsset.path || libraryPreviewAsset.name) ? "Saving…" : "Save to Library"}
+                  </button>
+                )}
               </footer>
             </section>
           </div>
