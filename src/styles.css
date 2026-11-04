@@ -6446,8 +6446,8 @@ html, body, #app-root {
 .aichat-confirm-danger:hover { background:#bd4d47; }
 .aichat-confirm-danger:disabled,
 .aichat-confirm-actions button:disabled { opacity:.5; cursor:wait; }
-.aichat-composer-send-btn.is-thinking { cursor:pointer; opacity:1; }
-.aichat-composer-send-btn.is-thinking:hover { background:#b84b45; color:#fff; border-color:#b84b45; }
+.aichat-composer-send-btn.is-thinking { background:#a33f3b; color:#fff; border-color:#a33f3b; cursor:pointer; opacity:1; }
+.aichat-composer-send-btn.is-thinking:hover { background:#bd4d47; color:#fff; border-color:#bd4d47; }
 
 /* Remove the thin rules around the dashboard shell that appear as a white screen edge. */
 .aichat-side-top,
