@@ -3752,15 +3752,11 @@ function Dashboard() {
                 try { parsed = new URL(websiteDraftUrl.trim()); } catch { alert("Enter a valid website URL."); return; }
                 if (!["http:", "https:"].includes(parsed.protocol)) { alert("Use an HTTP or HTTPS website URL."); return; }
                 const normalizedUrl = parsed.origin;
-                const { data, error } = await getSupabaseClient().from("website_connections").insert({
-                  workspace_id: workspace.id,
-                  name: websiteDraftName.trim() || parsed.hostname,
-                  website_url: normalizedUrl,
-                  domain: parsed.hostname.toLowerCase(),
-                  status: "pending",
-                }).select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").single();
-                if (error || !data) { alert(error?.message || "Could not add this website."); return; }
-                setConnectedWebsites((items) => [data, ...items]);
+                if (!token) return;
+                try {
+                  const result = await createWebsiteConnection({ data: { token, name: websiteDraftName.trim() || parsed.hostname, websiteUrl: normalizedUrl } });
+                  setConnectedWebsites((items) => [result.website, ...items]);
+                } catch (error) { alert(error instanceof Error ? error.message : "Could not add this website."); return; }
                 setWebsiteDraftUrl(""); setWebsiteDraftName("");
               }}>
                 <label>Website URL<input className="aichat-input" type="url" placeholder="https://example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
@@ -3795,12 +3791,12 @@ function Dashboard() {
             <div className="aichat-card"><h3>Add a product or service</h3>
               <form className="aichat-hub-form" onSubmit={async (event) => {
                 event.preventDefault(); if (!workspace?.id || !productDraft.name.trim()) return;
-                const { data, error } = await getSupabaseClient().from("products_services").insert({
-                  workspace_id: workspace.id, item_type: productDraft.kind, name: productDraft.name.trim(),
-                  description: productDraft.description.trim(), price_text: productDraft.price.trim(), active: true, created_from: "manual",
-                }).select("id,item_type,name,description,price_text,active,created_from,created_at").single();
-                if (error || !data) { alert(error?.message || "Could not save this item."); return; }
-                setProductsServices((items) => [data, ...items]); setProductDraft({ kind: "product", name: "", description: "", price: "" });
+                if (!token) return;
+                try {
+                  const result = await createProductService({ data: { token, kind: productDraft.kind as "product" | "service", name: productDraft.name.trim(), description: productDraft.description.trim(), price: productDraft.price.trim() } });
+                  setProductsServices((items) => [result.product, ...items]);
+                  setProductDraft({ kind: "product", name: "", description: "", price: "" });
+                } catch (error) { alert(error instanceof Error ? error.message : "Could not save this item."); }
               }}>
                 <label>Type<select className="aichat-select" value={productDraft.kind} onChange={(event) => setProductDraft((value) => ({ ...value, kind: event.target.value }))}><option value="product">Product</option><option value="service">Service</option></select></label>
                 <label>Name<input className="aichat-input" value={productDraft.name} onChange={(event) => setProductDraft((value) => ({ ...value, name: event.target.value }))} required /></label>
