@@ -20,6 +20,13 @@ import {
   updateOrderStatus,
   saveWorkspaceProfile,
   markVisitorMessagesRead,
+  getBusinessWorkspaceFeatures,
+  createWorkspaceWebsite,
+  updateWorkspaceWebsite,
+  updateHumanHandoffStatus,
+  markWorkspaceNotificationRead,
+  createWorkspaceProduct,
+  updateWorkspaceProductStatus,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -28,7 +35,7 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "notifications" | "settings";
+type TabId = "workspace" | "website-stats" | "websites" | "images" | "library" | "products" | "build" | "connect-phone" | "connect-website" | "connect-whatsapp" | "manage-customers" | "manage" | "recent" | "notifications" | "settings";
 
 type UnreadVisitorMessage = {
   id: number;
@@ -580,8 +587,12 @@ function Dashboard() {
     );
   }, []);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(true);
+  const [buildMenuOpen, setBuildMenuOpen] = useState(false);
+  const [manageMenuOpen, setManageMenuOpen] = useState(false);
+  const [connectMenuOpen, setConnectMenuOpen] = useState(false);
 
-  // Active navigation tab (5 primary items)
+  // Active navigation tab (grouped sidebar sections)
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
   const [greeting, setGreeting] = useState("Welcome back");
   const hasChosenGreetingRef = useRef(false);
@@ -606,6 +617,15 @@ function Dashboard() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [unreadVisitorMessages, setUnreadVisitorMessages] = useState<UnreadVisitorMessage[]>([]);
   const [unreadVisitorCount, setUnreadVisitorCount] = useState(0);
+  const [businessFeatures, setBusinessFeatures] = useState<any>({ websites: [], products: [], handoffs: [], notifications: [], recentVisitorMessages: [], stats: {} });
+  const [websiteNameDraft, setWebsiteNameDraft] = useState("");
+  const [websiteUrlDraft, setWebsiteUrlDraft] = useState("");
+  const [websiteAddError, setWebsiteAddError] = useState("");
+  const [websiteCreateBusy, setWebsiteCreateBusy] = useState(false);
+  const [websiteSetupId, setWebsiteSetupId] = useState<string | null>(null);
+  const [productDraft, setProductDraft] = useState({ kind: "product" as "product" | "service", name: "", description: "", price: "", currency: "RWF" });
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [knowledgeFileStatus, setKnowledgeFileStatus] = useState("");
 
   // Profile
   const [profileName, setProfileName] = useState("Your account");
@@ -762,6 +782,7 @@ function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const knowledgeFileInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -915,6 +936,9 @@ function Dashboard() {
         setKnowledgeList(data.knowledge ?? []);
         setCustomers(data.customers ?? []);
         setWorkspaceAssets(data.assets ?? []);
+        getBusinessWorkspaceFeatures({ data: { token } })
+          .then((features) => setBusinessFeatures(features))
+          .catch((cause) => console.warn("Could not load website and handoff data:", cause));
         if (data.workspace) {
           setProfileForm({
             name: data.workspace.name || "",
