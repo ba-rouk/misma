@@ -3026,7 +3026,7 @@ function Dashboard() {
         )}
 
         {/* ── View 2: Build (AI Agent & Knowledge Base) ── */}
-        {activeTab === "build" && (
+        {(activeTab === "knowledge" || activeTab === "build") && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
@@ -3725,6 +3725,104 @@ function Dashboard() {
             </div>
           </div>
         )}
+        {activeTab === "website-statistics" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Website statistics</h2><p>Monitor the websites connected to this workspace.</p></div>
+            <div className="aichat-metric-grid">
+              <article className="aichat-card"><span>Connected websites</span><strong>{connectedWebsites.filter((site) => site.status === "connected").length}</strong></article>
+              <article className="aichat-card"><span>Pending installations</span><strong>{connectedWebsites.filter((site) => site.status === "pending").length}</strong></article>
+              <article className="aichat-card"><span>Human requests</span><strong>{humanHandoffs.filter((request) => request.status === "pending").length}</strong></article>
+              <article className="aichat-card"><span>Unread notifications</span><strong>{allNotifications.filter((item) => !item.is_read).length + unreadVisitorCount}</strong></article>
+            </div>
+            <div className="aichat-card"><div className="aichat-panel-heading"><h3>Your websites</h3><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Manage websites</button></div>
+              {connectedWebsites.length === 0 ? <p>No websites have been added yet. Add a website to begin setup.</p> : connectedWebsites.map((site) => <div className="aichat-hub-row" key={site.id}><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>)}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "websites" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Websites</h2><p>Add your website, install Misma's visitor chat, and manage each connection.</p></div>
+            <div className="aichat-card">
+              <h3>Add a website</h3>
+              <form className="aichat-hub-form" onSubmit={async (event) => {
+                event.preventDefault();
+                if (!workspace?.id || !websiteDraftUrl.trim()) return;
+                let parsed: URL;
+                try { parsed = new URL(websiteDraftUrl.trim()); } catch { alert("Enter a valid website URL."); return; }
+                if (!["http:", "https:"].includes(parsed.protocol)) { alert("Use an HTTP or HTTPS website URL."); return; }
+                const normalizedUrl = parsed.origin;
+                const { data, error } = await getSupabaseClient().from("website_connections").insert({
+                  workspace_id: workspace.id,
+                  name: websiteDraftName.trim() || parsed.hostname,
+                  website_url: normalizedUrl,
+                  domain: parsed.hostname.toLowerCase(),
+                  status: "pending",
+                }).select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").single();
+                if (error || !data) { alert(error?.message || "Could not add this website."); return; }
+                setConnectedWebsites((items) => [data, ...items]);
+                setWebsiteDraftUrl(""); setWebsiteDraftName("");
+              }}>
+                <label>Website URL<input className="aichat-input" type="url" placeholder="https://example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
+                <label>Website name (optional)<input className="aichat-input" placeholder="My business website" value={websiteDraftName} onChange={(event) => setWebsiteDraftName(event.target.value)} /></label>
+                <button type="submit" className="aichat-action-btn" disabled={!websiteDraftUrl.trim()}>Add website</button>
+              </form>
+            </div>
+            <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
+              {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className="aichat-website-card" key={site.id}>
+                <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>
+                <p>Website registration is saved. The public widget installer and live connection check are the next integration step; this site remains pending until the widget reports in.</p>
+              </article>)}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "customers" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Customers requesting a human</h2><p>Visitors who asked to speak with a person. Open a request to review the complete conversation.</p></div>
+            <div className="aichat-card">
+              {humanHandoffs.length === 0 ? <div className="aichat-notifications-empty"><h3>No human requests yet</h3><p>Requests from your website chat will appear here with their conversation history.</p></div> :
+                humanHandoffs.map((request) => <button type="button" className="aichat-handoff-row" key={request.id} onClick={() => void selectConversation(Number(request.conversation_id))}>
+                  <span className="aichat-handoff-avatar">♙</span><span className="aichat-handoff-copy"><strong>{request.visitor_name || request.contacts?.name || "Website visitor"}</strong><small>{request.visitor_email || request.contacts?.email || "Contact details not provided"} · {request.created_at ? new Date(request.created_at).toLocaleString() : "New request"}</small><span>{request.reason || "Visitor requested a human agent"}</span></span><span className={`aichat-status-pill is-${request.status}`}>{request.status}</span>
+                </button>)}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "products" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Products &amp; services</h2><p>Create and manage what your business offers. Visitor demand and website-review suggestions can be added as sources in a later workflow.</p></div>
+            <div className="aichat-card"><h3>Add a product or service</h3>
+              <form className="aichat-hub-form" onSubmit={async (event) => {
+                event.preventDefault(); if (!workspace?.id || !productDraft.name.trim()) return;
+                const { data, error } = await getSupabaseClient().from("products_services").insert({
+                  workspace_id: workspace.id, item_type: productDraft.kind, name: productDraft.name.trim(),
+                  description: productDraft.description.trim(), price_text: productDraft.price.trim(), active: true, created_from: "manual",
+                }).select("id,item_type,name,description,price_text,active,created_from,created_at").single();
+                if (error || !data) { alert(error?.message || "Could not save this item."); return; }
+                setProductsServices((items) => [data, ...items]); setProductDraft({ kind: "product", name: "", description: "", price: "" });
+              }}>
+                <label>Type<select className="aichat-select" value={productDraft.kind} onChange={(event) => setProductDraft((value) => ({ ...value, kind: event.target.value }))}><option value="product">Product</option><option value="service">Service</option></select></label>
+                <label>Name<input className="aichat-input" value={productDraft.name} onChange={(event) => setProductDraft((value) => ({ ...value, name: event.target.value }))} required /></label>
+                <label>Description<textarea className="aichat-textarea" rows={3} value={productDraft.description} onChange={(event) => setProductDraft((value) => ({ ...value, description: event.target.value }))} /></label>
+                <label>Price / pricing details<input className="aichat-input" placeholder="e.g. From 25,000 RWF" value={productDraft.price} onChange={(event) => setProductDraft((value) => ({ ...value, price: event.target.value }))} /></label>
+                <button type="submit" className="aichat-action-btn" disabled={!productDraft.name.trim()}>Save product or service</button>
+              </form>
+            </div>
+            <div className="aichat-card"><h3>Catalog ({productsServices.length})</h3>{productsServices.length === 0 ? <p>No products or services have been added yet.</p> : productsServices.map((item) => <div className="aichat-hub-row" key={item.id}><div><strong>{item.name}</strong><small>{item.item_type} · {item.price_text || "Price not set"} · {item.created_from}</small><p>{item.description}</p></div><span className="aichat-status-pill">{item.active ? "Active" : "Inactive"}</span></div>)}</div>
+          </div></div>
+        )}
+
+        {activeTab === "phone" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Connect a phone number</h2><p>Prepare a business phone channel for customer calls and handoff.</p></div><div className="aichat-card"><h3>Phone channel</h3><p>Phone integration is not connected yet. A supported telephony provider and verified business number are required before calls can be routed to Misma.</p><span className="aichat-status-pill">Not connected</span></div></div></div>
+        )}
+        {activeTab === "website-connect" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Website connection</h2><p>Manage website chat installation from the Websites page.</p></div><div className="aichat-card"><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open Websites</button></div></div></div>
+        )}
+        {activeTab === "whatsapp" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Connect WhatsApp</h2><p>Bring WhatsApp Business conversations into your Misma inbox.</p></div><div className="aichat-card"><h3>WhatsApp Business</h3><p>WhatsApp is not connected yet. The integration requires Meta WhatsApp Business Cloud API credentials and a verified webhook.</p><span className="aichat-status-pill">Not connected</span></div></div></div>
+        )}
+
         {activeTab === "notifications" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
