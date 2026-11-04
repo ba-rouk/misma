@@ -426,3 +426,254 @@ export const setConversationGroup = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true, groupName: normalizedGroup };
   });
+
+
+export const getBusinessWorkspaceFeatures = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const [websitesResult, productsResult, conversationsResult, handoffsResult] = await Promise.all([
+      db.from("workspace_websites")
+        .select("id,name,website_url,domain,public_key,status,created_at")
+        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+      db.from("workspace_products")
+        .select("id,kind,name,description,price,currency,status,source,created_at")
+        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+      db.from("conversations")
+        .select("id,website_id,channel,latest_text,status,updated_at")
+        .eq("workspace_id", workspaceId)
+        .neq("channel", "Dashboard")
+        .order("updated_at", { ascending: false }).limit(300),
+      db.from("human_handoff_requests")
+        .select("id,website_id,conversation_id,visitor_name,visitor_email,request_note,status,read_at,created_at,resolved_at")
+        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+    ]);
+    const websites = check(websitesResult.data, websitesResult.error) as any[];
+    const products = check(productsResult.data, productsResult.error);
+    const conversations = check(conversationsResult.data, conversationsResult.error) as any[];
+    const handoffs = check(handoffsResult.data, handoffsResult.error) as any[];
+    const conversationIds = conversations.map((item) => Number(item.id));
+    const messagesResult = conversationIds.length
+      ? await db.from("messages")
+          .select("id,conversation_id,text,created_at,read_at")
+          .in("conversation_id", conversationIds).eq("role", "customer")
+          .order("created_at", { ascending: false }).limit(500)
+      : { data: [], error: null };
+    const customerMessages = check(messagesResult.data, messagesResult.error) as any[];
+    const conversationById = new Map<number, any>(conversations.map((item) => [Number(item.id), item]));
+    const websiteById = new Map<string, any>(websites.map((item) => [String(item.id), item]));
+
+    const websiteStats = websites.map((website) => {
+      const websiteConversations = conversations.filter((item) => item.website_id === website.id);
+      const ids = new Set(websiteConversations.map((item) => Number(item.id)));
+      const visitorMessages = customerMessages.filter((item) => ids.has(Number(item.conversation_id)));
+      const requestCount = handoffs.filter((item) => item.website_id === website.id).length;
+      return {
+        ...website,
+        visitorCount: websiteConversations.length,
+        messageCount: visitorMessages.length,
+        unreadCount: visitorMessages.filter((item) => !item.read_at).length,
+        humanRequests: requestCount,
+      };
+    });
+
+    const notifications = [
+      ...customerMessages.map((message) => {
+        const conversation = conversationById.get(Number(message.conversation_id));
+        const website = conversation?.website_id ? websiteById.get(String(conversation.website_id)) : null;
+        return {
+          id: `message-${message.id}`,
+          type: "visitor_message" as const,
+          sourceId: Number(message.id),
+          conversationId: Number(message.conversation_id),
+          title: website?.name || conversation?.channel || "Website visitor",
+          body: String(message.text || ""),
+          created_at: String(message.created_at || ""),
+          read_at: message.read_at || null,
+          status: conversation?.status || "AI",
+        };
+      }),
+      ...handoffs.map((request) => ({
+        id: `handoff-${request.id}`,
+        type: "human_request" as const,
+        sourceId: Number(request.id),
+        conversationId: Number(request.conversation_id),
+        title: request.visitor_name || "Website visitor",
+        body: request.request_note || "Requested to speak with a human",
+        created_at: String(request.created_at || ""),
+        read_at: request.read_at || null,
+        status: request.status,
+      })),
+    ].sort((left, right) => right.created_at.localeCompare(left.created_at));
+
+    const openHandoffs = handoffs.filter((item) => item.status !== "resolved");
+    const recentVisitorMessages = customerMessages.slice(0, 100).map((message) => {
+      const conversation = conversationById.get(Number(message.conversation_id));
+      return {
+        conversationId: Number(message.conversation_id),
+        websiteName: conversation?.website_id ? websiteById.get(String(conversation.website_id))?.name || "Website" : conversation?.channel || "Visitor",
+        message: String(message.text || ""),
+        created_at: String(message.created_at || ""),
+      };
+    });
+
+    return {
+      websites: websiteStats,
+      products,
+      handoffs: openHandoffs.map((request) => ({
+        ...request,
+        conversation: conversationById.get(Number(request.conversation_id)) || null,
+      })),
+      notifications,
+      recentVisitorMessages,
+      stats: {
+        websites: websites.length,
+        connectedWebsites: websites.filter((item) => item.status === "connected").length,
+        visitors: conversations.length,
+        visitorMessages: customerMessages.length,
+        openHumanRequests: openHandoffs.length,
+        unreadNotifications: notifications.filter((item) => !item.read_at).length,
+      },
+    };
+  });
+
+export const createWorkspaceWebsite = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    name: z.string().trim().max(100).optional(),
+    websiteUrl: z.string().trim().url().max(2048),
+  }))
+  .handler(async ({ data }) => {
+    const parsed = new URL(data.websiteUrl);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+        !parsed.hostname || parsed.hostname === "localhost" || parsed.hostname.endsWith(".local")) {
+      throw new Error("Enter a public HTTPS website address.");
+    }
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const domain = parsed.hostname.toLowerCase();
+    const websiteName = data.name?.trim() || domain;
+    const result = await db.from("workspace_websites").insert({
+      workspace_id: workspaceId,
+      name: websiteName,
+      website_url: parsed.toString(),
+      domain,
+      status: "pending",
+    }).select("id,name,website_url,domain,public_key,status,created_at").single();
+    const website = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "website.added", String(website.id), { domain });
+    return { website };
+  });
+
+export const updateWorkspaceWebsite = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    websiteId: z.string().uuid(),
+    status: z.enum(["connected", "paused"]),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: website, error } = await db.from("workspace_websites")
+      .update({ status: data.status, updated_at: new Date().toISOString() })
+      .eq("id", data.websiteId).eq("workspace_id", workspaceId)
+      .select("id,status").single();
+    if (error || !website) throw new Error(error?.message || "Website not found.");
+    await recordAudit(db, workspaceId, "website.status_changed", String(website.id), { status: data.status });
+    return { website };
+  });
+
+export const updateHumanHandoffStatus = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    requestId: z.number().int().positive(),
+    status: z.enum(["open", "assigned", "resolved"]),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const now = new Date().toISOString();
+    const { data: request, error } = await db.from("human_handoff_requests")
+      .update({
+        status: data.status,
+        read_at: now,
+        resolved_at: data.status === "resolved" ? now : null,
+      })
+      .eq("id", data.requestId).eq("workspace_id", workspaceId)
+      .select("id,conversation_id,status").single();
+    if (error || !request) throw new Error(error?.message || "Human request not found.");
+    if (data.status === "resolved") {
+      await db.from("conversations").update({ status: "AI", updated_at: now })
+        .eq("id", request.conversation_id).eq("workspace_id", workspaceId);
+    } else {
+      await db.from("conversations").update({ status: "Needs you", updated_at: now })
+        .eq("id", request.conversation_id).eq("workspace_id", workspaceId);
+    }
+    await recordAudit(db, workspaceId, "human_handoff.status_changed", String(request.id), { status: data.status });
+    return { request };
+  });
+
+export const markWorkspaceNotificationRead = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    type: z.enum(["visitor_message", "human_request"]),
+    id: z.number().int().positive(),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const now = new Date().toISOString();
+    if (data.type === "visitor_message") {
+      const { data: message, error: messageError } = await db.from("messages")
+        .select("id,conversation_id,conversations!inner(workspace_id)")
+        .eq("id", data.id).eq("role", "customer").eq("conversations.workspace_id", workspaceId).maybeSingle();
+      if (messageError || !message) throw new Error("Visitor message not found.");
+      const { error } = await db.from("messages").update({ read_at: now }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await db.from("human_handoff_requests")
+        .update({ read_at: now }).eq("id", data.id).eq("workspace_id", workspaceId);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
+  });
+
+export const createWorkspaceProduct = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    kind: z.enum(["product", "service"]),
+    name: z.string().trim().min(2).max(160),
+    description: z.string().trim().max(4000).default(""),
+    price: z.number().nonnegative().nullable().optional(),
+    currency: z.string().trim().min(3).max(6).default("RWF"),
+    source: z.enum(["manual", "visitor_request", "website_review", "ai_advice"]).default("manual"),
+    status: z.enum(["draft", "active"]).default("draft"),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const result = await db.from("workspace_products").insert({
+      workspace_id: workspaceId,
+      kind: data.kind,
+      name: data.name,
+      description: data.description,
+      price: data.price ?? null,
+      currency: data.currency,
+      source: data.source,
+      status: data.status,
+    }).select("id,kind,name,description,price,currency,status,source,created_at").single();
+    const product = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "product.created", String(product.id), { kind: product.kind, name: product.name, source: product.source });
+    return { product };
+  });
+
+export const updateWorkspaceProductStatus = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    id: z.number().int().positive(),
+    status: z.enum(["draft", "active", "archived"]),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { error } = await db.from("workspace_products")
+      .update({ status: data.status, updated_at: new Date().toISOString() })
+      .eq("id", data.id).eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    await recordAudit(db, workspaceId, "product.status_changed", String(data.id), { status: data.status });
+    return { ok: true };
+  });
