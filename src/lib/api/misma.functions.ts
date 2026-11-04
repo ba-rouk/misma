@@ -58,7 +58,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("channel_connections").select("id,channel,provider,display_name,external_id,phone_number,status,created_at").eq("workspace_id", workspaceId),
-        db.from("workspace_library_files").select("id,storage_path,file_name,mime_type,file_size,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(500),
+        db.from("workspace_library_files").select("id,storage_path,file_name,mime_type,file_size,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
       ]);
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const rawConversations = check(conversationsResult.data, conversationsResult.error);
@@ -152,7 +152,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         .select("id,conversation_id,role,text,created_at,attachments")
         .in("conversation_id", conversationIds)
         .order("id", { ascending: false })
-        .limit(600);
+        .limit(250);
       if (assetRowsError) throw new Error("Could not load your workspace media library.");
 
       const assetJobs: Array<Promise<WorkspaceAsset | null>> = [];
@@ -195,9 +195,12 @@ export const getMismaData = createServerFn({ method: "POST" })
           })());
         });
       }
-      assets.push(...(await Promise.all(assetJobs)).filter(
-        (asset): asset is WorkspaceAsset => asset !== null,
-      ));
+      const signedAssets: WorkspaceAsset[] = [];
+      for (let index = 0; index < assetJobs.length; index += 30) {
+        const batch = await Promise.all(assetJobs.slice(index, index + 30));
+        signedAssets.push(...batch.filter((asset): asset is WorkspaceAsset => asset !== null));
+      }
+      assets.push(...signedAssets);
     }
     const libraryFiles = check(libraryFilesResult.data, libraryFilesResult.error);
     const libraryAssets = await Promise.all(libraryFiles.map(async (row: any): Promise<WorkspaceAsset | null> => {
