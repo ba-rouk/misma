@@ -2448,19 +2448,40 @@ function Dashboard() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      setKnowledgeFileStatus("This file is larger than 4 MB. Upload a smaller text, Markdown, CSV, JSON, or HTML file.");
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    const isImage = file.type.startsWith("image/");
+    const isText = /\.(txt|md|csv|json|html|htm)$/i.test(file.name) ||
+      ["text/plain", "text/markdown", "text/csv", "application/json", "text/html"].includes(file.type);
+    if (isPdf && file.size > 12 * 1024 * 1024) {
+      setKnowledgeFileStatus("PDF files must be 12 MB or smaller for Misma document analysis.");
       return;
     }
-    if (!/\\.(txt|md|csv|json|html|htm)$/i.test(file.name)) {
-      setKnowledgeFileStatus("Supported knowledge files: .txt, .md, .csv, .json, .html. PDF and Word extraction is not enabled in this upload flow yet.");
+    if (isImage && file.size > 25 * 1024 * 1024) {
+      setKnowledgeFileStatus("Images must be 25 MB or smaller.");
+      return;
+    }
+    if (isText && file.size > 4 * 1024 * 1024) {
+      setKnowledgeFileStatus("Text knowledge files must be 4 MB or smaller.");
+      return;
+    }
+    if (isPdf || isImage) {
+      addSelectedFiles([file]);
+      setDraft("Analyze the attached business document or image. Extract only facts that are clearly supported. Suggest up to 10 useful customer question-and-answer pairs, preserving prices, terms, dates, and conditions exactly. Separate uncertain or missing information. Do not invent facts.");
+      setActiveTab("workspace");
+      setMobileMenuOpen(false);
+      setKnowledgeFileStatus("Attachment added to the Misma composer. Send it to extract facts and draft knowledge Q&A, then review and save approved answers in Build.");
+      window.setTimeout(() => textareaRef.current?.focus(), 80);
+      return;
+    }
+    if (!isText) {
+      setKnowledgeFileStatus("Supported knowledge files are text, Markdown, CSV, JSON, HTML, PDF, and common image formats. Word document extraction is not enabled yet.");
       return;
     }
     setKnowledgeFileStatus("Reading file…");
     try {
       const text = (await file.text()).trim();
       if (!text) throw new Error("The selected file is empty.");
-      setNewQuestion(`What should Misma know from ${file.name}?`);
+      setNewQuestion("What should Misma know from " + file.name + "?");
       setNewAnswer(text.slice(0, 4000));
       setKnowledgeFileStatus(text.length > 4000
         ? "File content loaded. The first 4,000 characters are in the answer field; review and refine them before saving."
@@ -3465,7 +3486,7 @@ function Dashboard() {
                 </p>
                 <div className="aichat-inline-actions aichat-knowledge-upload">
                   <button type="button" className="aichat-action-btn secondary" onClick={() => knowledgeFileInputRef.current?.click()}>Upload knowledge file</button>
-                  <input ref={knowledgeFileInputRef} type="file" hidden accept=".txt,.md,.csv,.json,.html,.htm,text/plain,text/csv,application/json,text/html" onChange={(event) => void handleKnowledgeFileSelected(event)} />
+                  <input ref={knowledgeFileInputRef} type="file" hidden accept=".txt,.md,.csv,.json,.html,.htm,.pdf,text/plain,text/csv,application/json,text/html,application/pdf,image/*" onChange={(event) => void handleKnowledgeFileSelected(event)} />
                   {knowledgeFileStatus && <span className="aichat-settings-hint" role="status">{knowledgeFileStatus}</span>}
                 </div>
                 <form onSubmit={handleAddKnowledge}>
