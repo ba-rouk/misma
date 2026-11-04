@@ -149,7 +149,7 @@ function getProviders(options: { thinkHarder?: boolean; hasImages?: boolean }): 
   add("mistral", "MISTRAL_API_KEY", "MISTRAL_MODEL", "mistral-small-latest",
     "https://api.mistral.ai/v1/chat/completions", "openai-compatible");
   add("openai", "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4o-mini",
-    "https://api.openai.com/v1/chat/completions", "openai-compatible");
+    "https://api.openai.com/v1/chat/completions", "openai-compatible", true);
 
   // If a think-hard request has no NVIDIA key, the remaining configured providers still work.
   return providers;
@@ -317,6 +317,11 @@ async function requestProvider(
       if (provider.kind === "gemini") {
         const parts: JsonRecord[] = [{ text: allText }];
         for (const image of images) {
+          const embedded = image.dataUrl?.match(/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);
+          if (embedded) {
+            parts.push({ inlineData: { mimeType: embedded[1], data: embedded[2] } });
+            continue;
+          }
           const response = await fetch(image.url, { signal: AbortSignal.timeout(timeoutMs ? Math.min(timeoutMs, 8_000) : 12_000) });
           if (!response.ok) throw new Error("Could not read an uploaded image.");
           const bytes = new Uint8Array(await response.arrayBuffer());
@@ -636,6 +641,34 @@ async function saveGeneratedMessage(
   };
 }
 
+async function prepareGeneratedImageForReview(url: string): Promise<PreparedImage> {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error("Agnes returned an invalid generated-image URL.");
+  }
+  const allowedAgnesImageHost =
+    (parsedUrl.hostname === "apihub.agnes-ai.com" && parsedUrl.pathname.startsWith("/storage/images/")) ||
+    (parsedUrl.hostname === "platform-outputs.agnes-ai.space" && /^\/images\//.test(parsedUrl.pathname));
+  if (parsedUrl.protocol !== "https:" || (parsedUrl.port && parsedUrl.port !== "443") || !allowedAgnesImageHost) {
+    throw new Error("Agnes returned an unsupported generated-image host.");
+  }
+  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error(`Generated image could not be fetched for safety review (HTTP ${response.status}).`);
+  const mimeType = (response.headers.get("content-type") || "").split(";")[0].toLowerCase();
+  if (!mimeType.startsWith("image/")) throw new Error("Agnes returned a non-image result for image generation.");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length || bytes.byteLength > 12 * 1024 * 1024) {
+    throw new Error("The generated image is empty or too large to review safely.");
+  }
+  return {
+    url,
+    name: "Generated image",
+    dataUrl: `data:${mimeType};base64,${bytesToBase64(bytes)}`,
+  };
+}
+
 async function isMismaMediaSafe(
   prompt: string,
   images: PreparedImage[] = [],
@@ -655,7 +688,7 @@ async function isMismaMediaSafe(
   ].join("\n");
 
   const reviewerPreferences = images.length
-    ? ["nvidia", "gemini", "openrouter", "cohere"]
+    ? ["nvidia", "gemini", "openrouter", "cohere", "openai"]
     : ["gemini", "groq", "nvidia", "mistral", "openrouter"];
   const candidates = getProviders({ hasImages: images.length > 0 })
     .filter((provider) =>
@@ -668,7 +701,7 @@ async function isMismaMediaSafe(
       const bIndex = reviewerPreferences.indexOf(b.name);
       return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex);
     })
-    .slice(0, 2);
+    .slice(0, 5);
 
   if (!candidates.length) {
     throw new Error("No configured provider is available for media safety review.");
@@ -741,6 +774,7 @@ Deno.serve(async (request) => {
   if (!allowedActions.has(action)) return jsonResponse(400, { error: "Unsupported Misma AI action." });
   const regenerate = input.regenerate === true;
   const regenerateMedia = input.regenerateMedia === true;
+  const retryMedia = input.retryMedia === true;
   const thinkHarder = input.thinkHarder === true;
   const editMessageId = input.editMessageId ?? null;
   if (regenerate && editMessageId !== null) {
@@ -748,7 +782,7 @@ Deno.serve(async (request) => {
   }
   const actionNeedsPrompt = action === "chat" || action === "create-image" || action === "create-video";
   const rawAttachmentList = Array.isArray(input.attachments) ? input.attachments : [];
-  if (actionNeedsPrompt && !regenerate && ((!message && rawAttachmentList.length === 0) || message.length > 4_000)) {
+  if (actionNeedsPrompt && !regenerate && !retryMedia && ((!message && rawAttachmentList.length === 0) || message.length > 4_000)) {
     return jsonResponse(400, { error: "Enter a prompt up to 4,000 characters or attach a file." });
   }
   if (editMessageId !== null && (!Number.isSafeInteger(editMessageId) || Number(editMessageId) < 1)) {
@@ -758,7 +792,7 @@ Deno.serve(async (request) => {
   if (conversationId !== null && (!Number.isSafeInteger(conversationId) || conversationId < 1)) {
     return jsonResponse(400, { error: "Invalid conversation." });
   }
-  if ((regenerate || editMessageId !== null) && conversationId === null) {
+  if ((regenerate || retryMedia || editMessageId !== null) && conversationId === null) {
     return jsonResponse(400, { error: "An existing conversation is required for this action." });
   }
   const sourceUserMessageId = input.sourceUserMessageId == null ? null : Number(input.sourceUserMessageId);
@@ -767,6 +801,10 @@ Deno.serve(async (request) => {
     !Number.isSafeInteger(sourceUserMessageId) || Number(sourceUserMessageId) < 1 ||
     !Number.isSafeInteger(replaceAiMessageId) || Number(replaceAiMessageId) < 1)) {
     return jsonResponse(400, { error: "A valid original prompt and media response are required to regenerate this asset." });
+  }
+  if (retryMedia && (regenerateMedia || !["create-image", "create-video"].includes(action) ||
+    !Number.isSafeInteger(sourceUserMessageId) || Number(sourceUserMessageId) < 1)) {
+    return jsonResponse(400, { error: "A valid saved media prompt is required to retry generation." });
   }
   const requestedWorkspaceId = input.workspaceId ?? null;
   if (requestedWorkspaceId !== null && typeof requestedWorkspaceId !== "string") {
@@ -964,11 +1002,37 @@ Deno.serve(async (request) => {
       });
     }
 
+    let retrySourceMessage: JsonRecord | null = null;
     let requestedAttachments: AttachmentInput[] = [];
-    try {
-      requestedAttachments = validateAttachmentList(input.attachments);
-    } catch (error) {
-      return jsonResponse(400, { error: error instanceof Error ? error.message : "Invalid attachments." });
+    if (retryMedia) {
+      const { data: sourcePrompt, error: sourcePromptError } = await db.from("messages")
+        .select("id,role,text,attachments")
+        .eq("id", sourceUserMessageId)
+        .eq("conversation_id", conversationId)
+        .in("role", ["human", "customer"])
+        .maybeSingle();
+      if (sourcePromptError || !sourcePrompt || typeof sourcePrompt.text !== "string") {
+        return jsonResponse(404, { error: "The saved media prompt could not be found." });
+      }
+      const savedAttachments = Array.isArray(sourcePrompt.attachments)
+        ? sourcePrompt.attachments.filter((item: unknown) =>
+            isRecord(item) && typeof item.path === "string" &&
+            ["image", "video", "video-frame", "file"].includes(String(item.kind))
+          )
+        : [];
+      try {
+        requestedAttachments = validateAttachmentList(savedAttachments);
+      } catch (error) {
+        return jsonResponse(400, { error: error instanceof Error ? error.message : "Saved prompt attachments are invalid." });
+      }
+      message = sourcePrompt.text;
+      retrySourceMessage = sourcePrompt as JsonRecord;
+    } else {
+      try {
+        requestedAttachments = validateAttachmentList(input.attachments);
+      } catch (error) {
+        return jsonResponse(400, { error: error instanceof Error ? error.message : "Invalid attachments." });
+      }
     }
     const attachmentPrefix = `${workspaceId}/${userData.user.id}/`;
     let prepared = { stored: [] as StoredAttachment[], images: [] as PreparedImage[], pdfs: [] as PreparedPdf[], extractedText: "" };
@@ -1154,7 +1218,11 @@ Deno.serve(async (request) => {
       let prompt = message || (action === "create-image" ? "Create an image based on the attached references." : "Create a video based on the attached references.");
       const hasImageReferences = prepared.images.length > 0;
       let mediaSaved: { conversationId: number; userMessage: JsonRecord | null };
-      if (regenerateMedia) {
+      if (retryMedia && retrySourceMessage) {
+        // Retry the saved human turn in place. Never insert another user message.
+        prompt = String(retrySourceMessage.text || "");
+        mediaSaved = { conversationId: Number(conversationId), userMessage: null };
+      } else if (regenerateMedia) {
         const { data: sourcePrompt, error: sourcePromptError } = await db.from("messages")
           .select("id,role,text,attachments")
           .eq("id", sourceUserMessageId)
@@ -1244,13 +1312,19 @@ Deno.serve(async (request) => {
         }
         let outputPassed = false;
         try {
-          outputPassed = await isMismaMediaSafe("Review the generated result.", [
-            { url: payload.data[0].url, name: "Generated result" },
-          ]);
-        } catch {
+          const generatedImageForReview = await prepareGeneratedImageForReview(payload.data[0].url);
+          outputPassed = await isMismaMediaSafe(
+            "Review the generated image for safety. Original creative brief: " + prompt,
+            [generatedImageForReview],
+          );
+        } catch (reviewError) {
+          console.error("[misma-chat] Generated-image safety review was unavailable.", {
+            reason: reviewError instanceof Error ? reviewError.message.slice(0, 180) : "unknown",
+          });
           return jsonResponse(503, {
-            error: "Misma could not complete the generated-image safety check. Your prompt has been saved; please try again shortly.",
+            error: "Misma could not complete the generated-image safety check. Your prompt is saved in this chat; press Try again to reuse it without sending a duplicate.",
             code: "MEDIA_SAFETY_UNAVAILABLE",
+            retryable: true,
             conversationId: mediaSaved.conversationId,
             ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
           });
@@ -1344,7 +1418,7 @@ Deno.serve(async (request) => {
       }
       const videoId = returnedVideoId;
       // Record the returned job ID on the prompt so only its owner can save the completed output.
-      const promptMessageId = regenerateMedia ? Number(sourceUserMessageId) : Number(mediaSaved.userMessage?.id);
+      const promptMessageId = (regenerateMedia || retryMedia) ? Number(sourceUserMessageId) : Number(mediaSaved.userMessage?.id);
       if (!Number.isSafeInteger(promptMessageId) || promptMessageId < 1) {
         throw new Error("Could not resolve the original video prompt message.");
       }
