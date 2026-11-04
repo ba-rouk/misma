@@ -446,7 +446,7 @@ export const getBusinessWorkspaceFeatures = createServerFn({ method: "POST" })
         .order("updated_at", { ascending: false }).limit(300),
       db.from("human_handoff_requests")
         .select("id,website_id,conversation_id,visitor_name,visitor_email,request_note,status,read_at,created_at,resolved_at")
-        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(1000),
       db.from("website_scan_runs")
         .select("id,website_id,status,pages_scanned,summary,error,started_at,completed_at")
         .eq("workspace_id", workspaceId).order("started_at", { ascending: false }).limit(20),
@@ -467,7 +467,7 @@ export const getBusinessWorkspaceFeatures = createServerFn({ method: "POST" })
       ? await db.from("messages")
           .select("id,conversation_id,text,created_at,read_at")
           .in("conversation_id", conversationIds).eq("role", "customer")
-          .order("created_at", { ascending: false }).limit(500)
+          .order("created_at", { ascending: false }).limit(1000)
       : { data: [], error: null };
     const customerMessages = check(messagesResult.data, messagesResult.error) as any[];
     const conversationById = new Map<number, any>(conversations.map((item) => [Number(item.id), item]));
@@ -535,7 +535,7 @@ export const getBusinessWorkspaceFeatures = createServerFn({ method: "POST" })
         String(website.id),
         scans.find((scan: any) => String(scan.website_id) === String(website.id)) || null,
       ])),
-      handoffs: openHandoffs.map((request) => ({
+      handoffs: handoffs.map((request) => ({
         ...request,
         conversation: conversationById.get(Number(request.conversation_id)) || null,
       })),
