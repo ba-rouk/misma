@@ -28,7 +28,7 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "notifications" | "settings";
+type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "recent" | "settings";
 
 type UnreadVisitorMessage = {
   id: number;
@@ -583,6 +583,7 @@ function Dashboard() {
 
   // Active navigation tab (5 primary items)
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const [expandedNavGroups, setExpandedNavGroups] = useState<Record<string, boolean>>({ workspace: true, manage: false, build: false, connect: false });
   const [greeting, setGreeting] = useState("Welcome back");
   const hasChosenGreetingRef = useRef(false);
 
@@ -604,6 +605,13 @@ function Dashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [connectedWebsites, setConnectedWebsites] = useState<any[]>([]);
+  const [humanHandoffs, setHumanHandoffs] = useState<any[]>([]);
+  const [allNotifications, setAllNotifications] = useState<any[]>([]);
+  const [productsServices, setProductsServices] = useState<any[]>([]);
+  const [websiteDraftUrl, setWebsiteDraftUrl] = useState("");
+  const [websiteDraftName, setWebsiteDraftName] = useState("");
+  const [productDraft, setProductDraft] = useState({ kind: "product", name: "", description: "", price: "" });
   const [unreadVisitorMessages, setUnreadVisitorMessages] = useState<UnreadVisitorMessage[]>([]);
   const [unreadVisitorCount, setUnreadVisitorCount] = useState(0);
 
@@ -914,6 +922,10 @@ function Dashboard() {
         setOrders(data.orders ?? []);
         setKnowledgeList(data.knowledge ?? []);
         setCustomers(data.customers ?? []);
+        setConnectedWebsites(data.websites ?? []);
+        setHumanHandoffs(data.handoffs ?? []);
+        setAllNotifications(data.notifications ?? []);
+        setProductsServices(data.products ?? []);
         setWorkspaceAssets(data.assets ?? []);
         if (data.workspace) {
           setProfileForm({
@@ -2294,157 +2306,45 @@ function Dashboard() {
 
         {/* Main sidebar navigation */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
-          {/* 1. Workspace */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("workspace");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Workspace"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Workspace</span>
+          <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => setExpandedNavGroups((v) => ({ ...v, workspace: !v.workspace }))} aria-expanded={Boolean(expandedNavGroups.workspace)} data-tooltip="Workspace">
+            <span className="aichat-nav-icon">▦</span><span className="aichat-nav-label">Workspace</span><span className="aichat-nav-caret">{expandedNavGroups.workspace ? "⌄" : "›"}</span>
           </button>
-
-          {/* Images */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`}
-            onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }}
-            data-tooltip="Images"
-          >
-            <span className="aichat-nav-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="3" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="m21 15-5-5L5 21" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Images</span>
+          {expandedNavGroups.workspace && <div className="aichat-nav-submenu">
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "website-statistics" ? " active" : ""}`} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "websites" ? " active" : ""}`} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{connectedWebsites.length}</span></button>
+          </div>}
+          <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => { setActiveTab("workspace"); setMobileMenuOpen(false); }} data-tooltip="Chat">
+            <span className="aichat-nav-icon">✧</span><span className="aichat-nav-label">Chat</span>
           </button>
-
-          {/* Library */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`}
-            onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }}
-            data-tooltip="Library"
-          >
-            <span className="aichat-nav-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z" />
-                <path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20" />
-                <path d="M8 6h8M8 9h8" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Library</span>
-            {workspaceAssets.length > 0 && <span className="aichat-nav-badge">{workspaceAssets.length}</span>}
+          <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
+            <span className="aichat-nav-icon">▧</span><span className="aichat-nav-label">Images</span>
           </button>
-
-          {/* Build */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "build" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("build");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Build"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Build</span>
-            {knowledgeList.length > 0 && (
-              <span className="aichat-nav-badge">{knowledgeList.length}</span>
-            )}
+          <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
+            <span className="aichat-nav-icon">▤</span><span className="aichat-nav-label">Library</span>{workspaceAssets.length > 0 && <span className="aichat-nav-badge">{workspaceAssets.length}</span>}
           </button>
-
-          {/* 3. Connect */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "connect" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("connect");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Connect"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Connect</span>
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)} data-tooltip="Manage">
+            <span className="aichat-nav-icon">◉</span><span className="aichat-nav-label">Manage</span><span className="aichat-nav-caret">{expandedNavGroups.manage ? "⌄" : "›"}</span>
           </button>
-
-          {/* 4. Manage */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "manage" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("manage");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Manage"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Manage</span>
-            {orders.length > 0 && (
-              <span className="aichat-nav-badge">{orders.length}</span>
-            )}
+          {expandedNavGroups.manage && <div className="aichat-nav-submenu">
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadVisitorCount > 0 && <span>{unreadVisitorCount}</span>}</button>
+          </div>}
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)} data-tooltip="Build">
+            <span className="aichat-nav-icon">⌘</span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret">{expandedNavGroups.build ? "⌄" : "›"}</span>
           </button>
-        </nav>
+          {expandedNavGroups.build && <div className="aichat-nav-submenu">
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
+          </div>}
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, connect: !v.connect }))} aria-expanded={Boolean(expandedNavGroups.connect)} data-tooltip="Connect">
+            <span className="aichat-nav-icon">↗</span><span className="aichat-nav-label">Connect</span><span className="aichat-nav-caret">{expandedNavGroups.connect ? "⌄" : "›"}</span>
+          </button>
+          {expandedNavGroups.connect && <div className="aichat-nav-submenu">
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "phone" ? " active" : ""}`} onClick={() => { setActiveTab("phone"); setMobileMenuOpen(false); }}>Phone</button>
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "website-connect" ? " active" : ""}`} onClick={() => { setActiveTab("website-connect"); setMobileMenuOpen(false); }}>Website</button>
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "whatsapp" ? " active" : ""}`} onClick={() => { setActiveTab("whatsapp"); setMobileMenuOpen(false); }}>WhatsApp</button>
+          </div>}
+                </nav>
 
         {/* ── Chats and tasks widget (Cloud AI style) ── */}
         <div className="aichat-chats-widget">
