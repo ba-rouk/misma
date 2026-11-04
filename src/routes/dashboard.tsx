@@ -1134,7 +1134,7 @@ function Dashboard() {
   };
 
   const startMobileMessageLongPress = (messageId: string) => {
-    if (!window.matchMedia("(hover: none)").matches) return;
+    if (!window.matchMedia("(hover: none)").matches && window.innerWidth >= 768) return;
     clearMobileMessageActionTimer();
     mobileMessageActionTimerRef.current = window.setTimeout(() => {
       setMobileActionMessageId(messageId);
@@ -2675,7 +2675,17 @@ function Dashboard() {
         {/* ── View 1: Workspace (ChatGPT-Style Interface) ── */}
         {activeTab === "workspace" && (
           <div className="aichat-scroll-area">
-            <div className="aichat-conversation-wrap" ref={scrollRef} onScroll={handleScroll}>
+            <div
+              className="aichat-conversation-wrap"
+              ref={scrollRef}
+              onScroll={handleScroll}
+              onTouchStart={(event) => {
+                const target = event.target;
+                if (target instanceof Element && !target.closest(".aichat-message-row.is-user") && !target.closest(".aichat-message-actions")) {
+                  setMobileActionMessageId(null);
+                }
+              }}
+            >
               {messages.length === 0 ? (
                 /* Empty State */
                 <div className="aichat-greeting-wrap">
@@ -2764,7 +2774,7 @@ function Dashboard() {
                         >
                           {isUserMessage ? (
                             <>
-                              <button type="button" className="aichat-message-action" title="Copy message" aria-label="Copy message" onClick={() => { setMobileActionMessageId(null); void handleCopyMessage(msg); }}>
+                              <button type="button" className="aichat-message-action" title="Copy message" aria-label="Copy message" onClick={() => { void handleCopyMessage(msg); }}>
                                 <ActionIcon name="copy" />
                               </button>
                               <button type="button" className="aichat-message-action" title="Share prompt" aria-label="Share prompt" onClick={() => { setMobileActionMessageId(null); void handleShareMessage(msg, "Misma prompt"); }}>
