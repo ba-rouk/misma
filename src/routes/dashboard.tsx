@@ -3734,7 +3734,7 @@ function Dashboard() {
               <article className="aichat-card"><span>Connected websites</span><strong>{connectedWebsites.filter((site) => site.status === "connected").length}</strong></article>
               <article className="aichat-card"><span>Pending installations</span><strong>{connectedWebsites.filter((site) => site.status === "pending").length}</strong></article>
               <article className="aichat-card"><span>Human requests</span><strong>{humanHandoffs.filter((request) => request.status === "pending").length}</strong></article>
-              <article className="aichat-card"><span>Unread notifications</span><strong>{allNotifications.filter((item) => !item.is_read).length + unreadVisitorCount}</strong></article>
+              <article className="aichat-card"><span>Unread notifications</span><strong>{allNotifications.filter((item) => !item.is_read).length}</strong></article>
             </div>
             <div className="aichat-card"><div className="aichat-panel-heading"><h3>Your websites</h3><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Manage websites</button></div>
               {connectedWebsites.length === 0 ? <p>No websites have been added yet. Add a website to begin setup.</p> : connectedWebsites.map((site) => <div className="aichat-hub-row" key={site.id}><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>)}
