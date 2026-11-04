@@ -33,7 +33,7 @@ The migration `supabase/migrations/20261031000000_misma_core.sql` defines the Mi
 - `contacts`, `conversations`, and `messages`
 - `orders`, `knowledge_entries`, and `audit_events`
 
-The migration does not import BizAI/Core.01 or website-widget tables, and does not create Storage buckets. The current app has no file-upload feature. Review the SQL and apply it only to the new Misma project after confirming the linked project ref; it does not migrate or delete existing data.
+The core migration does not import BizAI/Core.01 or website-widget tables and does not create Storage buckets. The separate chat-media migration below creates the private media bucket. Review the SQL and apply it only to the intended Misma project after confirming the linked project ref; it does not migrate or delete existing data.
 
 Enable Email/Password in Supabase Auth. Configure the site's allowed redirect URLs for `/dashboard`, `/login`, and `/auth/callback`. Google sign-in is optional and requires enabling/configuring the Google provider in the Supabase dashboard. Google OAuth uses PKCE; the callback exchanges the authorization code in the browser before navigating to the dashboard.
 
@@ -45,7 +45,7 @@ The authenticated dashboard calls `supabase/functions/misma-chat`. Provider rout
 - **Think harder**: NVIDIA DeepSeek V4.1 Flash is tried first with higher reasoning effort, followed by the configured fallbacks.
 - **Image or video upload**: Agnes vision is tried first. Video uploads are sampled into two keyframes in the browser; the original video is retained in the conversation. The current video-analysis path examines visual frames and does not transcribe video audio.
 - **PDF upload**: OpenRouter handles the PDF file input. Text, CSV, and common source-code files are extracted from private Storage and supplied as text context.
-- If a provider rejects a request with a retryable network error, HTTP 408, HTTP 429, or server (5xx) error, it receives one retry before the next provider is tried. Non-retryable errors move to the next compatible provider.
+- A provider gets one bounded request attempt before the next compatible provider is tried. Non-retryable and transient errors both move to the next provider.
 
 Configure keys in Supabase Edge Function Secrets only:
 
@@ -86,15 +86,29 @@ The migration `supabase/migrations/20261103000000_misma_chat_media.sql` adds `me
 The composer **+** menu provides:
 - **Think harder** for a higher-reasoning model route on questions, code and text-based files.
 - **File**, **Photo** and **Camera** upload options.
-- **Create image** and **Create video**, both routed to Agnes. Image generation returns an image to the chat. Video generation is asynchronous; the dashboard polls Agnes and saves the finished video as an assistant attachment. Uploaded image references can guide generation; video uploads supply sampled keyframes.
+- **Create image** and **Create video**, both routed to Agnes. Image generation returns an image to the chat. Video generation is asynchronous; the dashboard polls Agnes and saves the finished video as an assistant attachment. A queue-full HTTP 503 is classified separately, retried once with a backoff that respects `Retry-After`, and returned with a recoverable prompt so the user can retry without losing their message. Uploaded image references can guide generation; video uploads supply sampled keyframes.
 
 Never place AI provider API keys, a Supabase secret key, or a service-role key in `.env`, `NEXT_PUBLIC_*`, or `VITE_*` variables.
 
 ### Chat message controls
 
-The dashboard shows message actions on hover (and persistently on touch devices). User prompts can be copied, shared, or edited. Editing a saved prompt replaces that turn and removes later turns after confirmation. Misma responses can be copied, rated with thumbs up/down (the selection is currently local to the open dashboard session and is not persisted), read aloud with browser speech synthesis, shared, or regenerated. Regeneration reuses the last saved user prompt; the Edge Function replaces the assistant answer and does not insert another user message. Retrying a failed send reuses its optimistic message row instead of appending a duplicate. Uploaded files remain attached to their chat messages; history loads fresh one-hour signed URLs instead of storing public file URLs.
+The dashboard shows message actions on hover (and persistently on touch devices). User prompts can be copied, shared, or edited. Editing a saved prompt replaces that turn and removes later turns after confirmation. Misma responses can be copied, rated with thumbs up/down (the selection is currently local to the open dashboard session and is not persisted), read aloud with the selected browser speech-synthesis voice, shared, or regenerated. Regeneration reuses the last saved user prompt; the Edge Function replaces the assistant answer and does not insert another user message. Retrying a failed send reuses its optimistic message row instead of appending a duplicate. Uploaded files remain attached to their chat messages; history loads fresh one-hour signed URLs instead of storing public file URLs.
 
 
+### Live web search and current news
+
+The dashboard Edge Function performs a live search when a message asks for current information, recent updates, or news. It uses Tavily first and Brave Search as a fallback, retrieves up to six result snippets, and passes source titles, dates, and URLs to the model so answers can cite the retrieved pages. This searches indexed results; it does not guarantee an exhaustive search of the entire internet. The assistant is instructed not to invent current facts when search is unavailable.
+
+Configure at least one provider in **Supabase Dashboard → Edge Functions → Secrets**:
+
+```text
+TAVILY_API_KEY
+BRAVE_SEARCH_API_KEY
+```
+
+Tavily is preferred when both are configured; Brave is used if Tavily is missing or does not return usable results. These secrets must remain server-side and must never be added to `.env`, `NEXT_PUBLIC_*`, or `VITE_*` variables. After setting the secret, redeploy `misma-chat` so the updated Edge Function is active. Without either key, Misma will explain that live search is not configured instead of pretending to have searched.
+
+Provider requests now use a single bounded attempt before moving to the next configured provider, with a 15-second timeout for normal text, 22 seconds for image input, and 35 seconds for Think harder. This reduces time lost waiting on an unhealthy provider before fallback.
 ## Core.01 knowledge model
 
 Misma uses Core.01 as a workspace-scoped, room-based experience and knowledge layer. Each successful dashboard AI exchange is automatically recorded as an observed experience and pending training example, grouped into Business Profile, Products, Prices, Customers, Policies, FAQ, Orders, Staff, Procedures, or General. A positive response rating reinforces that experience into an approved Core.01 lesson; approved lessons are retrieved in future prompts when relevant. A negative rating rejects the lesson. This is retrieval-augmented learning from stored experiences, not direct fine-tuning or changing a provider model's weights.

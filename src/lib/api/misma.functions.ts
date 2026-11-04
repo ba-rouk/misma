@@ -3,6 +3,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { ensureWorkspace } from "./workspace-context.server";
 
+type WorkspaceAsset = {
+  id: string;
+  messageId: number;
+  conversationId: number;
+  role: string;
+  text: string;
+  created_at: string;
+  kind: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  path: string;
+  url: string;
+};
+
 const auth = z.string().min(20);
 function check<T>(data: T | null, error: { message: string } | null): T {
   if (error) throw new Error(error.message);
@@ -73,13 +88,68 @@ export const getMismaData = createServerFn({ method: "POST" })
       name: cleanConversationTitle(promptTitles.get(Number(c.id))) || cleanConversationTitle(c.latest_text) || "New chat",
       group_name: c.group_name || null,
     }));
+
+    // Collect recent chat attachments for the Images and Library views.
+    const assets: WorkspaceAsset[] = [];
+    if (conversationIds.length) {
+      const { data: assetRows, error: assetRowsError } = await db.from("messages")
+        .select("id,conversation_id,role,text,created_at,attachments")
+        .in("conversation_id", conversationIds)
+        .order("id", { ascending: false })
+        .limit(600);
+      if (assetRowsError) throw new Error("Could not load your workspace media library.");
+
+      const assetJobs: Array<Promise<WorkspaceAsset | null>> = [];
+      for (const row of assetRows ?? []) {
+        const attachments: unknown[] = Array.isArray(row.attachments) ? row.attachments : [];
+        attachments.forEach((rawAttachment, index) => {
+          if (!rawAttachment || typeof rawAttachment !== "object" || Array.isArray(rawAttachment)) return;
+          const item = rawAttachment as Record<string, unknown>;
+          const kind = typeof item.kind === "string" ? item.kind : "file";
+          if (kind === "video-frame" || kind === "video-job") return;
+          const path = typeof item.path === "string" && item.path.startsWith(`${workspaceId}/`)
+            ? item.path
+            : "";
+          const originalUrl = typeof item.url === "string" && /^https:\/\//i.test(item.url)
+            ? item.url
+            : "";
+          if (!path && !originalUrl) return;
+
+          assetJobs.push((async () => {
+            let url = originalUrl;
+            if (path) {
+              const { data: signed } = await db.storage.from("misma-media").createSignedUrl(path, 3600);
+              if (signed?.signedUrl) url = signed.signedUrl;
+            }
+            if (!url) return null;
+            return {
+              id: String(row.id) + "-" + index,
+              messageId: Number(row.id),
+              conversationId: Number(row.conversation_id),
+              role: typeof row.role === "string" ? row.role : "",
+              text: typeof row.text === "string" ? row.text : "",
+              created_at: typeof row.created_at === "string" ? row.created_at : "",
+              kind,
+              name: typeof item.name === "string" ? item.name : "Workspace file",
+              mimeType: typeof item.mimeType === "string" ? item.mimeType : "",
+              size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
+              path,
+              url,
+            };
+          })());
+        });
+      }
+      assets.push(...(await Promise.all(assetJobs)).filter(
+        (asset): asset is WorkspaceAsset => asset !== null,
+      ));
+    }
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
       id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
       customer: Array.isArray(o.contacts) ? o.contacts[0]?.name || "Customer" : o.contacts?.name || "Customer",
     }));
     const knowledge = check(knowledgeResult.data, knowledgeResult.error);
     const customers = check(customersResult.data, customersResult.error);
-    return { workspace, conversations, orders, knowledge, customers };
+    return { workspace, conversations, orders, knowledge, customers, assets };
   });
 
 export const addKnowledge = createServerFn({ method: "POST" })

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ClipboardEvent,
 } from "react";
 import {
   getMismaData,
@@ -24,7 +25,7 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "build" | "connect" | "manage" | "recent" | "settings";
+type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "settings";
 
 type MismaAiSettings = {
   assistantMode: "Sales & customer support" | "Customer support" | "Sales assistant";
@@ -59,6 +60,22 @@ const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
   welcomeGreeting: true,
   protectSensitiveData: true,
 };
+
+function SettingsNavIcon({ kind }: { kind: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {kind === "profile" ? <><circle cx="12" cy="8" r="3.5" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" /></>
+        : kind === "general" ? <><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="#151a22" /><circle cx="15" cy="17" r="2" fill="#151a22" /></>
+        : kind === "accent" ? <><path d="m12 3 7 7-7 11-7-11 7-7Z" /><path d="M5 10h14" /></>
+        : kind === "notifications" ? <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>
+        : kind === "voice" ? <><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></>
+        : kind === "privacy" ? <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" /></>
+        : kind === "history" ? <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>
+        : kind === "about" ? <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7h.01" /></>
+        : <><path d="M10 17l5-5-5-5M15 12H3" /><path d="M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" /></>}
+    </svg>
+  );
+}
 
 function SettingsToggle({
   title,
@@ -137,6 +154,8 @@ type ActionIconName =
   | "copy"
   | "share"
   | "edit"
+  | "download"
+  | "crop"
   | "thumbs-up"
   | "thumbs-down"
   | "volume"
@@ -178,6 +197,8 @@ function ActionIcon({ name }: { name: ActionIconName }) {
           <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
         </>
       )}
+      {name === "download" && <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>}
+      {name === "crop" && <><path d="M7 3v14a2 2 0 0 0 2 2h12" /><path d="M3 7h14a2 2 0 0 1 2 2v12" /></>}
       {name === "thumbs-up" && (
         <path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Zm0 0 5-8c2 0 3 1 3 3l-1 5h5a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7" />
       )}
@@ -289,7 +310,19 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
   }
 }
 
-function MessageAttachmentViews({ attachments, onDownload }: { attachments?: MessageAttachment[]; onDownload?: (attachment: MessageAttachment) => void }) {
+function MessageAttachmentViews({
+  attachments,
+  onDownload,
+  onCrop,
+  onShare,
+  onCopy,
+}: {
+  attachments?: MessageAttachment[];
+  onDownload?: (attachment: MessageAttachment) => void;
+  onCrop?: (attachment: MessageAttachment) => void;
+  onShare?: (attachment: MessageAttachment) => void;
+  onCopy?: (attachment: MessageAttachment) => void;
+}) {
   if (!attachments?.length) return null;
   const visible = attachments.filter((item) => item.kind !== "video-frame" && item.kind !== "video-job" && item.url);
   if (!visible.length) return null;
@@ -298,10 +331,25 @@ function MessageAttachmentViews({ attachments, onDownload }: { attachments?: Mes
       {visible.map((item, index) => {
         const key = item.path || item.videoId || item.url || `${item.name}-${index}`;
         if (item.kind === "image" || item.kind === "generated-image" || item.mimeType?.startsWith("image/")) {
-          return <div key={key} className="aichat-generated-media-wrap"><a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link"><img className="aichat-attachment-image" src={item.url} alt={item.name} loading="lazy" /></a>{item.kind === "generated-image" && onDownload && <button type="button" className="aichat-media-download" onClick={() => onDownload(item)}><span aria-hidden="true">↓</span> Download image</button>}</div>;
+          const isGenerated = item.kind === "generated-image";
+          return (
+            <div key={key} className="aichat-generated-media-wrap">
+              <a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link">
+                <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="lazy" />
+              </a>
+              {isGenerated && (
+                <div className="aichat-image-action-bar" role="group" aria-label="Generated image actions">
+                  {onDownload && <button type="button" title="Download image" aria-label="Download image" onClick={() => onDownload(item)}><ActionIcon name="download" /></button>}
+                  {onCrop && <button type="button" title="Crop image" aria-label="Crop image" onClick={() => onCrop(item)}><ActionIcon name="crop" /></button>}
+                  {onShare && <button type="button" title="Share image" aria-label="Share image" onClick={() => onShare(item)}><ActionIcon name="share" /></button>}
+                  {onCopy && <button type="button" title="Copy image" aria-label="Copy image" onClick={() => onCopy(item)}><ActionIcon name="copy" /></button>}
+                </div>
+              )}
+            </div>
+          );
         }
         if (item.kind === "video" || item.kind === "generated-video" || item.mimeType?.startsWith("video/")) {
-          return <div key={key} className="aichat-generated-media-wrap"><video className="aichat-attachment-video" src={item.url} controls preload="metadata" />{item.kind === "generated-video" && onDownload && <button type="button" className="aichat-media-download" onClick={() => onDownload(item)}><span aria-hidden="true">↓</span> Download video</button>}</div>;
+          return <div key={key} className="aichat-generated-media-wrap"><video className="aichat-attachment-video" src={item.url} controls preload="metadata" />{item.kind === "generated-video" && onDownload && <button type="button" className="aichat-media-download" onClick={() => onDownload(item)}><ActionIcon name="download" /> Download video</button>}</div>;
         }
         return <a key={key} className="aichat-attachment-file" href={item.url} target="_blank" rel="noreferrer" download={item.name}>📎 {item.name}</a>;
       })}
@@ -442,9 +490,14 @@ function Dashboard() {
   const [chatsExpanded, setChatsExpanded] = useState(true);
   const [chatMenuOpenId, setChatMenuOpenId] = useState<number | null>(null);
   const [downloadingMediaUrl, setDownloadingMediaUrl] = useState<string | null>(null);
+  const [cropTarget, setCropTarget] = useState<{ attachment: MessageAttachment; conversationId: number | null } | null>(null);
+  const [cropAspect, setCropAspect] = useState<"original" | "square" | "portrait" | "landscape">("original");
+  const [mediaActionStatus, setMediaActionStatus] = useState("");
 
   // Business and user data
   const [workspace, setWorkspace] = useState<any>(null);
+  const [workspaceAssets, setWorkspaceAssets] = useState<any[]>([]);
+  const [librarySearch, setLibrarySearch] = useState("");
   const [conversations, setConversations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
@@ -456,6 +509,22 @@ function Dashboard() {
   const [profileImage, setProfileImage] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [profileNameDraft, setProfileNameDraft] = useState("");
+  const [profileAvatarFile, setProfileAvatarFile] = useState<File | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [accentColor, setAccentColor] = useState("#8ab4ff");
+  const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
+  const [appearanceLoaded, setAppearanceLoaded] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    productUpdates: true,
+    securityAlerts: true,
+    chatActivity: true,
+  });
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
+  const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
+  const [voiceInputActive, setVoiceInputActive] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -481,6 +550,47 @@ function Dashboard() {
       // The preferences remain usable for this session if browser storage is unavailable.
     }
   }, [aiSettings, settingsLoaded]);
+
+  useEffect(() => {
+    try {
+      const savedAccent = localStorage.getItem("misma_accent_color");
+      const savedNotifications = localStorage.getItem("misma_notification_preferences");
+      const savedVoice = localStorage.getItem("misma_voice_uri");
+      const savedAutoSpeak = localStorage.getItem("misma_auto_speak_replies");
+      if (savedAccent && /^#[0-9a-f]{6}$/i.test(savedAccent)) setAccentColor(savedAccent);
+      if (savedNotifications) {
+        const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
+        setNotificationPreferences((current) => ({ ...current, ...parsed }));
+      }
+      if (savedVoice) setSelectedVoiceUri(savedVoice);
+      if (savedAutoSpeak === "true") setAutoSpeakReplies(true);
+    } catch {
+      // Keep accessible defaults if browser preferences cannot be read.
+    } finally {
+      setAppearanceLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!appearanceLoaded) return;
+    document.documentElement.style.setProperty("--misma-accent", accentColor);
+    try {
+      localStorage.setItem("misma_accent_color", accentColor);
+      localStorage.setItem("misma_notification_preferences", JSON.stringify(notificationPreferences));
+      localStorage.setItem("misma_voice_uri", selectedVoiceUri);
+      localStorage.setItem("misma_auto_speak_replies", String(autoSpeakReplies));
+    } catch {
+      // Preferences remain active for this session when storage is unavailable.
+    }
+  }, [accentColor, notificationPreferences, selectedVoiceUri, autoSpeakReplies, appearanceLoaded]);
+
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    const refreshVoices = () => setAvailableVoices(window.speechSynthesis.getVoices());
+    refreshVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", refreshVoices);
+  }, []);
 
   const updateAiSetting = <K extends keyof MismaAiSettings>(key: K, value: MismaAiSettings[K]) => {
     setAiSettings((current) => ({ ...current, [key]: value }));
@@ -540,6 +650,8 @@ function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const profileAvatarInputRef = useRef<HTMLInputElement>(null);
+  const speechRecognitionRef = useRef<any>(null);
   const shouldAutoScrollRef = useRef(true);
   const regenerateInFlightRef = useRef(false);
 
@@ -600,10 +712,18 @@ function Dashboard() {
           const image = [metadata.avatar_url, metadata.picture].find(
             (v): v is string => typeof v === "string" && v.trim().length > 0,
           );
-          setProfileName(
-            displayName ?? s.user.email?.split("@")[0] ?? "Your account",
-          );
-          setProfileImage(image ?? "");
+          const resolvedName = displayName ?? s.user.email?.split("@")[0] ?? "Your account";
+          setProfileName(resolvedName);
+          setProfileNameDraft(resolvedName);
+          const avatarPath = metadata.avatar_path;
+          if (typeof avatarPath === "string" && avatarPath.length > 0) {
+            void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 3600).then(({ data, error }) => {
+              if (!error && data?.signedUrl) setProfileImage(data.signedUrl);
+              else setProfileImage(image ?? "");
+            });
+          } else {
+            setProfileImage(image ?? "");
+          }
           setToken(s.access_token);
           setAuthChecked(true);
         },
@@ -676,6 +796,7 @@ function Dashboard() {
         setOrders(data.orders ?? []);
         setKnowledgeList(data.knowledge ?? []);
         setCustomers(data.customers ?? []);
+        setWorkspaceAssets(data.assets ?? []);
         if (data.workspace) {
           setProfileForm({
             name: data.workspace.name || "",
@@ -857,11 +978,139 @@ function Dashboard() {
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(msg.text);
+    const selectedVoice = availableVoices.find((voice) => voice.voiceURI === selectedVoiceUri);
+    if (selectedVoice) utterance.voice = selectedVoice;
     utterance.onend = () => setSpeakingMessageId(null);
     utterance.onerror = () => setSpeakingMessageId(null);
     setSpeakingMessageId(msg.id);
     window.speechSynthesis.speak(utterance);
   };
+
+
+
+  const handleVoiceInput = () => {
+    if (voiceInputActive) {
+      speechRecognitionRef.current?.stop?.();
+      setVoiceInputActive(false);
+      return;
+    }
+    const browserWindow = window as typeof window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    };
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setChatError("Voice dictation is not supported in this browser. Try a recent version of Chrome.");
+      return;
+    }
+    const recognition = new Recognition();
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results as ArrayLike<any>)
+        .map((result: any) => result?.[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (transcript) setDraft((current) => [current.trim(), transcript].filter(Boolean).join(current.trim() ? " " : ""));
+    };
+    recognition.onerror = (event: any) => {
+      setChatError(event?.error === "not-allowed"
+        ? "Allow microphone access to use voice dictation."
+        : "Voice dictation stopped. Please try again.");
+    };
+    recognition.onend = () => {
+      setVoiceInputActive(false);
+      speechRecognitionRef.current = null;
+    };
+    speechRecognitionRef.current = recognition;
+    setChatError("");
+    setVoiceInputActive(true);
+    try {
+      recognition.start();
+    } catch {
+      setVoiceInputActive(false);
+      speechRecognitionRef.current = null;
+      setChatError("The microphone could not be started. Please try again.");
+    }
+  };
+
+  const testSelectedVoice = () => {
+    if (!("speechSynthesis" in window)) {
+      setChatError("Voice playback is not supported by this browser.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance("Hello, this is your selected Misma voice.");
+    const voice = availableVoices.find((item) => item.voiceURI === selectedVoiceUri);
+    if (voice) utterance.voice = voice;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const saveAccountProfile = async () => {
+    const name = profileNameDraft.trim();
+    if (!token || profileSaving) return;
+    if (name.length < 2 || name.length > 80) {
+      setProfileError("Enter a profile name between 2 and 80 characters.");
+      return;
+    }
+    setProfileSaving(true);
+    setProfileError("");
+    setProfileSaved(false);
+    try {
+      const client = getSupabaseClient();
+      const { data: userData, error: userError } = await client.auth.getUser();
+      if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
+      let avatarPath = typeof userData.user.user_metadata?.avatar_path === "string"
+        ? userData.user.user_metadata.avatar_path
+        : "";
+      if (profileAvatarFile) {
+        if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
+        if (profileAvatarFile.size > 5 * 1024 * 1024) throw new Error("Profile photos must be 5 MB or smaller.");
+        const extension = profileAvatarFile.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "jpg";
+        avatarPath = workspace.id + "/" + userData.user.id + "/avatar-" + crypto.randomUUID() + "." + extension;
+        const { error: uploadError } = await client.storage.from("misma-media").upload(avatarPath, profileAvatarFile, {
+          upsert: true,
+          contentType: profileAvatarFile.type || "image/jpeg",
+        });
+        if (uploadError) throw new Error("Could not save the profile photo: " + uploadError.message);
+      }
+      const { error: updateError } = await client.auth.updateUser({
+        data: { ...userData.user.user_metadata, full_name: name, ...(avatarPath ? { avatar_path: avatarPath } : {}) },
+      });
+      if (updateError) throw new Error(updateError.message);
+      setProfileName(name);
+      if (avatarPath) {
+        const { data: signed, error: signedError } = await client.storage.from("misma-media").createSignedUrl(avatarPath, 3600);
+        if (!signedError && signed?.signedUrl) setProfileImage(signed.signedUrl);
+      }
+      setProfileAvatarFile(null);
+      setProfileSaved(true);
+      window.setTimeout(() => setProfileSaved(false), 3000);
+    } catch (cause) {
+      setProfileError(cause instanceof Error ? cause.message : "Could not save your profile.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const exportCurrentChat = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      conversationId: currentConversationId,
+      messages: messages.map(({ id, role, text, created_at }) => ({ id, role, text, created_at })),
+    };
+    const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = "misma-chat-export.json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  };
+
 
   const handleRateMessage = (messageId: string, rating: "up" | "down") => {
     const nextRating = messageFeedback[messageId] === rating ? undefined : rating;
@@ -974,21 +1223,30 @@ function Dashboard() {
       body: JSON.stringify(body),
     });
     const result = await response.json() as Record<string, any>;
-    if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Misma AI request failed.");
+    if (!response.ok) {
+      const error = new Error(typeof result.error === "string" ? result.error : "Misma AI request failed.") as Error & {
+        responseData?: Record<string, any>;
+        status?: number;
+      };
+      error.responseData = result;
+      error.status = response.status;
+      throw error;
+    }
     return result;
   };
 
 
-  const handleDownloadGeneratedMedia = async (attachment: MessageAttachment) => {
-    if (!token || !workspace?.id || !currentConversationId || !attachment.url || downloadingMediaUrl) return;
-    const config = getSupabaseConfig();
-    if (!config) {
-      setChatError("Supabase is not configured.");
-      return;
-    }
-    setDownloadingMediaUrl(attachment.url);
-    setChatError("");
-    try {
+  const fetchAttachmentBlob = async (
+    attachment: MessageAttachment,
+    conversationId: number | null = currentConversationId,
+  ): Promise<Blob> => {
+    if (!attachment.url && !attachment.path) throw new Error("This media file is unavailable.");
+    if (attachment.kind === "generated-image" || attachment.kind === "generated-video") {
+      if (!token || !workspace?.id || !conversationId || !attachment.url) {
+        throw new Error("Open the conversation containing this generated file, then try again.");
+      }
+      const config = getSupabaseConfig();
+      if (!config) throw new Error("Supabase is not configured.");
       const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
         method: "POST",
         headers: {
@@ -999,27 +1257,146 @@ function Dashboard() {
         body: JSON.stringify({
           action: "download-generated-media",
           workspaceId: workspace.id,
-          conversationId: currentConversationId,
+          conversationId,
           url: attachment.url,
         }),
       });
       if (!response.ok) {
         const result = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(result.error || "Could not download this file.");
+        throw new Error(result.error || "Could not retrieve this generated file.");
       }
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = attachment.name || (attachment.kind === "generated-video" ? "misma-video.mp4" : "misma-image.png");
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+      return response.blob();
+    }
+    if (attachment.path) {
+      const { data, error } = await getSupabaseClient().storage.from("misma-media").download(attachment.path);
+      if (error || !data) throw new Error(error?.message || "Could not retrieve this file from your library.");
+      return data;
+    }
+    const response = await fetch(attachment.url!);
+    if (!response.ok) throw new Error("Could not retrieve this image. Check that its link is still available.");
+    return response.blob();
+  };
+
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+  };
+
+  const showMediaActionStatus = (message: string) => {
+    setMediaActionStatus(message);
+    window.setTimeout(() => setMediaActionStatus(""), 2400);
+  };
+
+  const handleDownloadGeneratedMedia = async (
+    attachment: MessageAttachment,
+    conversationId: number | null = currentConversationId,
+  ) => {
+    if (!token || downloadingMediaUrl) return;
+    setDownloadingMediaUrl(attachment.url || attachment.path || attachment.name);
+    setChatError("");
+    try {
+      const blob = await fetchAttachmentBlob(attachment, conversationId);
+      downloadBlob(blob, attachment.name || (attachment.kind === "generated-video" ? "misma-video.mp4" : "misma-image.png"));
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : "Could not download this file.");
     } finally {
       setDownloadingMediaUrl(null);
+    }
+  };
+
+  const handleCopyImage = async (attachment: MessageAttachment, conversationId: number | null = currentConversationId) => {
+    try {
+      const blob = await fetchAttachmentBlob(attachment, conversationId);
+      const bitmap = await createImageBitmap(blob);
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Could not prepare this image for copying.");
+        context.drawImage(bitmap, 0, 0);
+        const png = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not prepare this image for copying.")), "image/png");
+        });
+        if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") throw new Error("Image clipboard access is not supported by this browser.");
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      } finally {
+        bitmap.close();
+      }
+      showMediaActionStatus("Image copied");
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : "Could not copy this image.");
+    }
+  };
+
+  const handleShareImage = async (attachment: MessageAttachment, conversationId: number | null = currentConversationId) => {
+    try {
+      const blob = await fetchAttachmentBlob(attachment, conversationId);
+      const file = new File([blob], attachment.name || "misma-image.png", { type: blob.type || "image/png" });
+      if (typeof navigator.share === "function" && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        await navigator.share({ files: [file], title: attachment.name || "Misma image" });
+        return;
+      }
+      if (!navigator.clipboard?.writeText || !attachment.url) throw new Error("Image sharing is not supported by this browser.");
+      await navigator.clipboard.writeText(attachment.url);
+      showMediaActionStatus("Image link copied");
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === "AbortError") return;
+      setChatError(cause instanceof Error ? cause.message : "Could not share this image.");
+    }
+  };
+
+  const handleOpenImageCrop = (attachment: MessageAttachment, conversationId: number | null = currentConversationId) => {
+    setCropAspect("original");
+    setCropTarget({ attachment, conversationId });
+  };
+
+  const handleDownloadCroppedImage = async () => {
+    if (!cropTarget) return;
+    try {
+      const blob = await fetchAttachmentBlob(cropTarget.attachment, cropTarget.conversationId);
+      const bitmap = await createImageBitmap(blob);
+      try {
+        const originalRatio = bitmap.width / bitmap.height;
+        const ratio = cropAspect === "square" ? 1 : cropAspect === "portrait" ? 4 / 5 : cropAspect === "landscape" ? 16 / 9 : originalRatio;
+        let sourceWidth = bitmap.width;
+        let sourceHeight = bitmap.height;
+        if (originalRatio > ratio) sourceWidth = bitmap.height * ratio;
+        else sourceHeight = bitmap.width / ratio;
+        const outputWidth = Math.min(2000, Math.round(sourceWidth));
+        const outputHeight = Math.max(1, Math.round(outputWidth / ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = outputWidth;
+        canvas.height = outputHeight;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Could not create a cropped image.");
+        context.drawImage(
+          bitmap,
+          (bitmap.width - sourceWidth) / 2,
+          (bitmap.height - sourceHeight) / 2,
+          sourceWidth,
+          sourceHeight,
+          0,
+          0,
+          outputWidth,
+          outputHeight,
+        );
+        const cropped = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not export the cropped image.")), "image/png");
+        });
+        downloadBlob(cropped, (cropTarget.attachment.name || "misma-image").replace(/\.[^.]+$/, "") + "-cropped.png");
+        setCropTarget(null);
+      } finally {
+        bitmap.close();
+      }
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : "Could not crop this image.");
     }
   };
 
@@ -1094,6 +1471,7 @@ function Dashboard() {
             : prev;
           return [...withPersistedUser, res.aiMessage];
         });
+        if (autoSpeakReplies) handleReadAloud(res.aiMessage);
       }
 
       setSelectedFiles([]);
@@ -1125,7 +1503,7 @@ function Dashboard() {
       ? "Create a high-quality image using the attached reference."
       : "Create a short cinematic video using the attached reference.");
     setChatError("");
-    setMediaProgress(mode === "image" ? "Creating your image with Agnes…" : "Preparing your video with Agnes…");
+    setMediaProgress(mode === "image" ? "" : "Preparing your video with Agnes…");
     setIsGeneratingMedia(true);
     setPlusMenuOpen(false);
     setCreateMode(null);
@@ -1137,7 +1515,7 @@ function Dashboard() {
     const pendingMessage: Message = {
       id: pendingMediaId,
       role: "ai",
-      text: mode === "image" ? "Misma is creating your image…" : "Misma is preparing your video…",
+      text: mode === "image" ? "" : "Misma is preparing your video…",
       pendingMedia: mode,
       created_at: new Date().toISOString(),
     };
@@ -1186,8 +1564,7 @@ function Dashboard() {
             ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
             : [...withoutPending, result.aiMessage];
         });
-        setMediaProgress("Image created.");
-        window.setTimeout(() => setMediaProgress(""), 3500);
+        setMediaProgress("");
         loadData();
         return;
       }
@@ -1302,17 +1679,24 @@ function Dashboard() {
       window.setTimeout(() => setMediaProgress(""), 3500);
       loadData();
     } catch (cause) {
+      const responseData = cause instanceof Error
+        ? (cause as Error & { responseData?: Record<string, any> }).responseData
+        : undefined;
+      if (responseData?.conversationId) setCurrentConversationId(Number(responseData.conversationId));
+      if (responseData?.userMessage && tempUserId) {
+        setMessages((current) => current.map((item) => item.id === tempUserId ? responseData.userMessage : item));
+      }
       setMessages((current) => current.filter((item) => item.id !== pendingMediaId));
+      setDraft(prompt);
+      setCreateMode(mode);
       setChatError(cause instanceof Error ? cause.message : "Agnes media generation failed.");
       setMediaProgress("");
     } finally {
-      setSelectedFiles([]);
-      setCreateMode(null);
       setIsGeneratingMedia(false);
     }
   };
 
-  const addSelectedFiles = (files: FileList | null) => {
+  const addSelectedFiles = (files: FileList | File[] | null) => {
     if (!files?.length) return;
     const additions = Array.from(files);
     const next = [...selectedFiles, ...additions];
@@ -1340,6 +1724,43 @@ function Dashboard() {
     }
     setChatError("");
     setSelectedFiles(next);
+  };
+
+  const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboard = event.clipboardData;
+    const pastedFiles = Array.from(clipboard.items)
+      .filter((item) => item.kind === "file")
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+
+    if (pastedFiles.length) {
+      event.preventDefault();
+      const normalized = pastedFiles.map((file, index) => file.name
+        ? file
+        : new File([file], file.type.startsWith("image/") ? `pasted-image-${index + 1}.png` : `pasted-file-${index + 1}`, { type: file.type || "application/octet-stream" }));
+      addSelectedFiles(normalized);
+      return;
+    }
+
+    const html = clipboard.getData("text/html");
+    if (!html) return;
+    const imageSource = new DOMParser().parseFromString(html, "text/html").querySelector("img")?.getAttribute("src");
+    if (!imageSource || !/^https?:\/\//i.test(imageSource)) return;
+
+    event.preventDefault();
+    void (async () => {
+      try {
+        const response = await fetch(imageSource, { signal: AbortSignal.timeout(15_000) });
+        if (!response.ok) throw new Error("The copied image could not be retrieved from that website.");
+        const blob = await response.blob();
+        if (!blob.type.startsWith("image/")) throw new Error("The copied link did not return an image.");
+        if (blob.size > 25 * 1024 * 1024) throw new Error("The copied image is larger than 25 MB.");
+        const extension = blob.type.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
+        addSelectedFiles([new File([blob], `pasted-image.${extension}`, { type: blob.type })]);
+      } catch {
+        setChatError("Your browser could not read the copied image from that website. Use Copy image or save the image first, then paste or upload it.");
+      }
+    })();
   };
 
   // Regenerate the latest AI response using the saved user prompt.
@@ -1531,6 +1952,10 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
+  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-general","label":"General","icon":"general"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
+  const filteredSettingsNavItems = settingsNavItems.filter((item) =>
+    !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
+  );
 
   return (
     <div className="aichat">
@@ -1620,7 +2045,7 @@ function Dashboard() {
           </button>
         </div>
 
-        {/* 1. MAIN SIDEBAR PRIMARY NAVIGATION (Exact 5 Required Items in Order) */}
+        {/* Main sidebar navigation */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
           {/* 1. Workspace */}
           <button
@@ -1649,7 +2074,42 @@ function Dashboard() {
             <span className="aichat-nav-label">Workspace</span>
           </button>
 
-          {/* 2. Build */}
+          {/* Images */}
+          <button
+            type="button"
+            className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`}
+            onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }}
+            data-tooltip="Images"
+          >
+            <span className="aichat-nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+            </span>
+            <span className="aichat-nav-label">Images</span>
+          </button>
+
+          {/* Library */}
+          <button
+            type="button"
+            className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`}
+            onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }}
+            data-tooltip="Library"
+          >
+            <span className="aichat-nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z" />
+                <path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20" />
+                <path d="M8 6h8M8 9h8" />
+              </svg>
+            </span>
+            <span className="aichat-nav-label">Library</span>
+            {workspaceAssets.length > 0 && <span className="aichat-nav-badge">{workspaceAssets.length}</span>}
+          </button>
+
+          {/* Build */}
           <button
             type="button"
             className={`aichat-nav-btn${activeTab === "build" ? " active" : ""}`}
@@ -1991,7 +2451,7 @@ function Dashboard() {
                       key={msg.id}
                       className={"aichat-message-row " + (isUserMessage ? "is-user" : "is-ai")}
                     >
-                      {isAiMessage && (
+                      {isAiMessage && msg.pendingMedia !== "image" && (
                         <div className="aichat-msg-avatar ai" title="Misma AI">
                           <svg viewBox="0 0 100 100" width="16" height="16">
                             <polyline points="26,52 38,64 60,38" fill="none" stroke="#fff" strokeWidth="10" strokeLinecap="square" />
@@ -2001,21 +2461,32 @@ function Dashboard() {
                       )}
                       <div className="aichat-message-content">
                         <div className="aichat-bubble">
-                          <MessageAttachmentViews attachments={msg.attachments} onDownload={handleDownloadGeneratedMedia} />
-                          {msg.pendingMedia ? (
-                            <div className={`aichat-media-skeleton is-${msg.pendingMedia}`} role="status" aria-live="polite">
+                          <MessageAttachmentViews
+                            attachments={msg.attachments}
+                            onDownload={(attachment) => void handleDownloadGeneratedMedia(attachment)}
+                            onCrop={(attachment) => handleOpenImageCrop(attachment)}
+                            onShare={(attachment) => void handleShareImage(attachment)}
+                            onCopy={(attachment) => void handleCopyImage(attachment)}
+                          />
+                          {msg.pendingMedia === "image" ? (
+                            <div className="aichat-image-generation-dots" role="status" aria-label="Image generation in progress">
+                              <i /><i /><i />
+                            </div>
+                          ) : msg.pendingMedia === "video" ? (
+                            <div className="aichat-media-skeleton is-video" role="status" aria-live="polite">
                               <div className="aichat-media-skeleton-preview" aria-hidden="true">
                                 <span className="aichat-media-skeleton-shimmer" />
                                 <span className="aichat-media-skeleton-orbit"><i /><i /><i /></span>
                               </div>
                               <div className="aichat-media-skeleton-copy">
-                                <strong>{msg.pendingMedia === "image" ? "Creating your image" : "Creating your video"}</strong>
+                                <strong>Creating your video</strong>
                                 <span>{msg.text}</span>
-                                <small>{msg.pendingMedia === "image" ? "Your visual will appear here as soon as it is ready." : "Video generation can take a little longer. You can keep this chat open."}</small>
+                                <small>Video generation can take a little longer. You can keep this chat open.</small>
                               </div>
                             </div>
                           ) : <MarkdownContent content={msg.text} /> }
                         </div>
+                        {!msg.pendingMedia && (
                         <div
                           className="aichat-message-actions"
                           role="group"
@@ -2081,6 +2552,7 @@ function Dashboard() {
                             <span className="aichat-action-status" role="status">Copied</span>
                           )}
                         </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -2200,10 +2672,6 @@ function Dashboard() {
                             <span><strong>Camera</strong></span>
                           </button>
                           <div className="aichat-plus-menu-divider" />
-                          <button type="button" role="menuitem" onClick={() => { setCreateMode("image"); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/><path d="M19 2v6M16 5h6"/></svg></span>
-                            <span><strong>Create image</strong></span>
-                          </button>
                           <button type="button" role="menuitem" onClick={() => { setCreateMode("video"); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
                             <span><strong>Create video</strong></span>
@@ -2219,9 +2687,24 @@ function Dashboard() {
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={handleKeyDown}
+                      onPaste={handleComposerPaste}
                       disabled={isSending}
                       aria-label="Message Misma"
                     />
+                    <button
+                      type="button"
+                      className={`aichat-composer-voice${voiceInputActive ? " is-listening" : ""}`}
+                      onClick={handleVoiceInput}
+                      disabled={isSending || isGeneratingMedia}
+                      aria-label={voiceInputActive ? "Stop voice dictation" : "Start voice dictation"}
+                      title={voiceInputActive ? "Stop voice dictation" : "Use voice"}
+                    >
+                      {voiceInputActive ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+                      )}
+                    </button>
                     <button
                       type="submit"
                       className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending ? " can-send" : ""}`}
@@ -2240,6 +2723,105 @@ function Dashboard() {
                   Misma can make mistakes. Verify important business details.{" "}
                   <a href="#">Learn more</a>
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Images: generated and uploaded image workspace ── */}
+        {activeTab === "images" && (
+          <div className="aichat-tab-view">
+            <div className="aichat-tab-content">
+              <div className="aichat-tab-header aichat-assets-heading">
+                <div>
+                  <h2>Images</h2>
+                  <p>Browse images from your Misma conversations and create new visuals.</p>
+                </div>
+                <button type="button" className="aichat-action-btn" onClick={() => {
+                  setActiveTab("workspace");
+                  setCreateMode("image");
+                  setPlusMenuOpen(false);
+                  setMobileMenuOpen(false);
+                  window.setTimeout(() => textareaRef.current?.focus(), 0);
+                }}>＋ Create image</button>
+              </div>
+              {workspaceAssets.filter((asset) => asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/")).length === 0 ? (
+                <div className="aichat-card aichat-assets-empty">
+                  <div className="aichat-assets-empty-icon">▧</div>
+                  <h3>Your image library is ready</h3>
+                  <p>Generated images and image uploads from your chats will appear here.</p>
+                  <button type="button" className="aichat-action-btn" onClick={() => {
+                    setActiveTab("workspace");
+                    setCreateMode("image");
+                    window.setTimeout(() => textareaRef.current?.focus(), 0);
+                  }}>Create your first image</button>
+                </div>
+              ) : (
+                <div className="aichat-assets-grid">
+                  {workspaceAssets
+                    .filter((asset) => asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/"))
+                    .map((asset) => (
+                      <article className="aichat-asset-card" key={asset.id}>
+                        <a href={asset.url} target="_blank" rel="noreferrer" className="aichat-asset-image-link">
+                          <img src={asset.url} alt={asset.name || "Misma image"} loading="lazy" />
+                        </a>
+                        <div className="aichat-asset-card-footer">
+                          <span title={asset.name}>{asset.name || (asset.kind === "generated-image" ? "Generated image" : "Image")}</span>
+                          <div className="aichat-image-action-bar" role="group" aria-label="Image actions">
+                            <button type="button" title="Download image" aria-label="Download image" onClick={() => void handleDownloadGeneratedMedia(asset, asset.conversationId)}><ActionIcon name="download" /></button>
+                            <button type="button" title="Crop image" aria-label="Crop image" onClick={() => handleOpenImageCrop(asset, asset.conversationId)}><ActionIcon name="crop" /></button>
+                            <button type="button" title="Share image" aria-label="Share image" onClick={() => void handleShareImage(asset, asset.conversationId)}><ActionIcon name="share" /></button>
+                            <button type="button" title="Copy image" aria-label="Copy image" onClick={() => void handleCopyImage(asset, asset.conversationId)}><ActionIcon name="copy" /></button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Library: uploaded documents, media, and generated assets ── */}
+        {activeTab === "library" && (
+          <div className="aichat-tab-view">
+            <div className="aichat-tab-content">
+              <div className="aichat-tab-header">
+                <h2>Library</h2>
+                <p>Find images, documents, and media shared in your workspace conversations.</p>
+              </div>
+              <div className="aichat-card">
+                <div className="aichat-library-toolbar">
+                  <span>{workspaceAssets.length} saved items</span>
+                  <input className="aichat-input" type="search" placeholder="Search your library…" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} aria-label="Search library" />
+                </div>
+                {workspaceAssets.filter((asset) => `${asset.name} ${asset.kind} ${asset.mimeType}`.toLowerCase().includes(librarySearch.trim().toLowerCase())).length === 0 ? (
+                  <div className="aichat-assets-empty">
+                    <div className="aichat-assets-empty-icon">▤</div>
+                    <h3>No library items found</h3>
+                    <p>Upload an image or document in Workspace to add it to your library.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => { setActiveTab("workspace"); setMobileMenuOpen(false); }}>Open workspace</button>
+                  </div>
+                ) : (
+                  <div className="aichat-library-list">
+                    {workspaceAssets
+                      .filter((asset) => `${asset.name} ${asset.kind} ${asset.mimeType}`.toLowerCase().includes(librarySearch.trim().toLowerCase()))
+                      .map((asset) => {
+                        const isImage = asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/");
+                        const isVideo = asset.kind === "video" || asset.kind === "generated-video" || String(asset.mimeType || "").startsWith("video/");
+                        return (
+                          <article className="aichat-library-item" key={asset.id}>
+                            {isImage ? <img src={asset.url} alt={asset.name || "Library image"} loading="lazy" /> : <span className="aichat-library-file-icon">{isVideo ? "▶" : "▤"}</span>}
+                            <div className="aichat-library-item-copy">
+                              <strong title={asset.name}>{asset.name || "Workspace file"}</strong>
+                              <small>{asset.mimeType || asset.kind} · {asset.created_at ? new Date(asset.created_at).toLocaleDateString() : "Saved item"}</small>
+                            </div>
+                            <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Open ${asset.name || "file"}`} title="Open file"><ActionIcon name="download" /></a>
+                          </article>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2631,6 +3213,53 @@ function Dashboard() {
                 <h2>Settings</h2>
                 <p>Configure how Misma represents your business, supports website visitors, and hands conversations to your team.</p>
               </div>
+              <div className="aichat-settings-nav" aria-label="Settings sections">
+                {settingsNavItems.filter((item) => item.icon !== "logout").map((item) => (
+                  <button key={item.id} type="button" className="aichat-settings-nav-button" onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                    <span className="aichat-settings-nav-icon"><SettingsNavIcon kind={item.icon} /></span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+              <section id="settings-profile" className="aichat-card aichat-settings-card aichat-profile-settings">
+                <div className="aichat-settings-profile-head">
+                  <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
+                    {profileImage ? <img src={profileImage} alt="" /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
+                    <span className="aichat-settings-avatar-edit" aria-hidden="true">✎</span>
+                  </button>
+                  <div>
+                    <h3>Profile</h3>
+                    <p>Update the name and picture used for your Misma account.</p>
+                    <small>{profileEmail}</small>
+                  </div>
+                  <input ref={profileAvatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    if (file) {
+                      if (file.size > 5 * 1024 * 1024) {
+                        setProfileError("Profile photos must be 5 MB or smaller.");
+                      } else {
+                        setProfileAvatarFile(file);
+                        setProfileImage(URL.createObjectURL(file));
+                        setProfileError("");
+                      }
+                    }
+                    event.target.value = "";
+                  }} />
+                </div>
+                <div className="aichat-profile-edit-row">
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-profile-name">Profile name</label>
+                    <input id="misma-profile-name" className="aichat-input" value={profileNameDraft} maxLength={80} onChange={(event) => setProfileNameDraft(event.target.value)} placeholder="Your name" />
+                  </div>
+                  <button type="button" className="aichat-action-btn" onClick={() => void saveAccountProfile()} disabled={profileSaving}>
+                    {profileSaving ? "Saving…" : "Save changes"}
+                  </button>
+                </div>
+                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
+                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
+                {profileAvatarFile && <p className="aichat-settings-hint">New profile photo selected. Save changes to upload it.</p>}
+              </section>
+              <div className="aichat-settings-divider-label" id="settings-general">General</div>
               <div className="aichat-settings-intro">
                 <span className="aichat-settings-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg></span>
                 <span><strong>Recommended business assistant profile</strong><small>Recommended defaults for a helpful, accurate, and trustworthy assistant on business websites.</small></span>
@@ -2675,6 +3304,110 @@ function Dashboard() {
                 </div>
                 <SettingsToggle title="Offer human handoff" description="Route complaints, sensitive issues, and requests for a real person to your team." checked={aiSettings.humanHandoff} onToggle={() => updateAiSetting("humanHandoff", !aiSettings.humanHandoff)} />
                 <SettingsToggle title="Protect sensitive information" description="Never ask customers to share passwords, full payment card details, or private account credentials." checked={aiSettings.protectSensitiveData} onToggle={() => updateAiSetting("protectSensitiveData", !aiSettings.protectSensitiveData)} />
+              </section>
+              <section id="settings-accent" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">◐</span>
+                  <span><h3>Accent color</h3><p>Choose the highlight color used for active controls and selection states.</p></span>
+                </div>
+                <div className="aichat-accent-options">
+                  {[
+                    { label: "Blue", value: "#8ab4ff" },
+                    { label: "Violet", value: "#b39bff" },
+                    { label: "Green", value: "#72cba4" },
+                    { label: "Rose", value: "#f18ca8" },
+                    { label: "Orange", value: "#efa66c" },
+                  ].map((color) => (
+                    <button key={color.value} type="button" className={`aichat-accent-option${accentColor === color.value ? " is-selected" : ""}`} onClick={() => setAccentColor(color.value)} aria-pressed={accentColor === color.value}>
+                      <span style={{ backgroundColor: color.value }} />
+                      {color.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section id="settings-notifications" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">♧</span>
+                  <span><h3>Notifications</h3><p>Choose which Misma activity reminders you want enabled in this browser.</p></span>
+                </div>
+                <SettingsToggle title="Product updates" description="Show relevant information about new Misma features." checked={notificationPreferences.productUpdates} onToggle={() => setNotificationPreferences((current) => ({ ...current, productUpdates: !current.productUpdates }))} />
+                <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
+                <SettingsToggle title="Chat activity" description="Enable notifications for new chat activity when supported by the browser." checked={notificationPreferences.chatActivity} onToggle={() => setNotificationPreferences((current) => ({ ...current, chatActivity: !current.chatActivity }))} />
+                <p className="aichat-settings-hint">These preferences are saved in this browser. Push delivery requires a notification service to be configured by the app.</p>
+              </section>
+
+              <section id="settings-voice" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">♫</span>
+                  <span><h3>Voice</h3><p>Choose the browser voice Misma uses when reading answers aloud. Voice availability depends on your device.</p></span>
+                </div>
+                <div className="aichat-settings-voice-row">
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-voice-choice">Reply voice</label>
+                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoiceUri} onChange={(event) => setSelectedVoiceUri(event.target.value)}>
+                      <option value="">Device default voice</option>
+                      {availableVoices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang}){voice.default ? " — default" : ""}</option>)}
+                    </select>
+                  </div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
+                </div>
+                <SettingsToggle title="Read new replies aloud" description="Automatically speak each new text answer using the selected device voice." checked={autoSpeakReplies} onToggle={() => setAutoSpeakReplies((current) => !current)} />
+                <p className="aichat-settings-hint">Voice dictation uses your browser's speech recognition and inserts a transcript into the message box. Misma does not upload microphone audio as a recording.</p>
+              </section>
+
+              <section id="settings-privacy" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">◇</span>
+                  <span><h3>Privacy &amp; Security</h3><p>Review how Misma handles your account and conversation data.</p></span>
+                </div>
+                <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
+                <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
+                <div className="aichat-settings-info-row"><strong>Voice dictation</strong><span>Audio capture is handled by the browser speech-recognition feature; only the resulting transcript is added to your draft.</span></div>
+              </section>
+
+              <section id="settings-history" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">◷</span>
+                  <span><h3>History &amp; Data</h3><p>Export the open conversation or manage saved chats from Recent chats.</p></span>
+                </div>
+                <div className="aichat-settings-action-row">
+                  <div><strong>Export current conversation</strong><small>Download the visible conversation as a JSON file.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={exportCurrentChat} disabled={!messages.length}>Export chat</button>
+                </div>
+                <div className="aichat-settings-action-row">
+                  <div><strong>Manage saved conversations</strong><small>Open Recent chats to group or permanently delete conversations.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("recent")}>Open history</button>
+                </div>
+              </section>
+
+              <section id="settings-about" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">ⓘ</span>
+                  <span><h3>About Misma</h3><p>Business AI workspace.</p></span>
+                </div>
+                <div className="aichat-settings-info-row"><strong>Application</strong><span>Misma</span></div>
+                <div className="aichat-settings-info-row"><strong>Version</strong><span>1.0.0</span></div>
+              </section>
+
+              <section id="settings-logout" className="aichat-card aichat-settings-card aichat-settings-logout">
+                <div><h3>Log out</h3><p>Sign out of your Misma account on this device.</p></div>
+                <button type="button" className="aichat-settings-logout-button" onClick={() => void signOut()}>Log out</button>
+              </section>
+
+              <section id="settings-search" className="aichat-card aichat-settings-card aichat-settings-search">
+                <label htmlFor="misma-settings-search">Search settings</label>
+                <div className="aichat-settings-search-control">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="misma-settings-search" type="search" value={settingsSearchQuery} onChange={(event) => setSettingsSearchQuery(event.target.value)} placeholder="Search for a setting…" />
+                </div>
+                {settingsSearchQuery.trim() && (
+                  <div className="aichat-settings-search-results">
+                    {filteredSettingsNavItems.length ? filteredSettingsNavItems.map((item) => (
+                      <button key={item.id} type="button" onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{item.label}<span>↗</span></button>
+                    )) : <p>No matching settings found.</p>}
+                  </div>
+                )}
               </section>
             </div>
           </div>
@@ -2794,6 +3527,31 @@ function Dashboard() {
             </div>
           </div>
         )}
+        {cropTarget && (
+          <div className="aichat-crop-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCropTarget(null); }}>
+            <section className="aichat-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-crop-title">
+              <div className="aichat-crop-heading">
+                <div><h2 id="misma-crop-title">Crop image</h2><p>Choose a crop ratio. Misma will export a centered crop at high resolution.</p></div>
+                <button type="button" aria-label="Close crop editor" onClick={() => setCropTarget(null)}>×</button>
+              </div>
+              <div className={`aichat-crop-preview is-${cropAspect}`}>
+                <img src={cropTarget.attachment.url} alt={cropTarget.attachment.name || "Image crop preview"} />
+              </div>
+              <label className="aichat-crop-ratio-label" htmlFor="misma-crop-ratio">Aspect ratio</label>
+              <select id="misma-crop-ratio" className="aichat-select" value={cropAspect} onChange={(event) => setCropAspect(event.target.value as typeof cropAspect)}>
+                <option value="original">Original</option>
+                <option value="square">Square · 1:1</option>
+                <option value="portrait">Portrait · 4:5</option>
+                <option value="landscape">Landscape · 16:9</option>
+              </select>
+              <div className="aichat-crop-actions">
+                <button type="button" className="aichat-action-btn secondary" onClick={() => setCropTarget(null)}>Cancel</button>
+                <button type="button" className="aichat-action-btn" onClick={() => void handleDownloadCroppedImage()}>Download crop</button>
+              </div>
+            </section>
+          </div>
+        )}
+        {mediaActionStatus && <div className="aichat-media-toast" role="status">{mediaActionStatus}</div>}
       </main>
     </div>
   );
