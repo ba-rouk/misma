@@ -2316,158 +2316,81 @@ function Dashboard() {
           </button>
         </div>
 
-        {/* Main sidebar navigation */}
+        {/* Main sidebar navigation: expandable business workspace sections. */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
-          {/* 1. Workspace */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("workspace");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Workspace"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </span>
+          <button type="button"
+            className={`aichat-nav-btn${["workspace","website-stats","websites"].includes(activeTab) ? " active" : ""}`}
+            onClick={() => setWorkspaceMenuOpen((open) => !open)}
+            aria-expanded={workspaceMenuOpen} data-tooltip="Workspace">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 20V10"/></svg></span>
             <span className="aichat-nav-label">Workspace</span>
+            <span className={`aichat-nav-caret${workspaceMenuOpen ? " open" : ""}`}>⌄</span>
           </button>
+          {workspaceMenuOpen && <div className="aichat-nav-submenu">
+            <button type="button" className={activeTab === "workspace" ? "active" : ""} onClick={() => { setActiveTab("workspace"); setMobileMenuOpen(false); }}>Chat</button>
+            <button type="button" className={activeTab === "website-stats" ? "active" : ""} onClick={() => { setActiveTab("website-stats"); setMobileMenuOpen(false); }}>Website statistics</button>
+            <button type="button" className={activeTab === "websites" ? "active" : ""} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>
+              Websites {businessFeatures.websites?.length ? <small>{businessFeatures.websites.length}</small> : null}
+            </button>
+          </div>}
 
-          {/* Images */}
-          <button
-            type="button"
+          <button type="button"
             className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`}
-            onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }}
-            data-tooltip="Images"
-          >
-            <span className="aichat-nav-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="3" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="m21 15-5-5L5 21" />
-              </svg>
-            </span>
+            onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
             <span className="aichat-nav-label">Images</span>
           </button>
-
-          {/* Library */}
-          <button
-            type="button"
+          <button type="button"
             className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`}
-            onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }}
-            data-tooltip="Library"
-          >
-            <span className="aichat-nav-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z" />
-                <path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20" />
-                <path d="M8 6h8M8 9h8" />
-              </svg>
-            </span>
+            onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20M8 6h8M8 9h8"/></svg></span>
             <span className="aichat-nav-label">Library</span>
             {workspaceAssets.length > 0 && <span className="aichat-nav-badge">{workspaceAssets.length}</span>}
           </button>
 
-          {/* Build */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "build" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("build");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Build"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-              </svg>
-            </span>
+          <button type="button"
+            className={`aichat-nav-btn${["build","products"].includes(activeTab) ? " active" : ""}`}
+            onClick={() => setBuildMenuOpen((open) => !open)}
+            aria-expanded={buildMenuOpen} data-tooltip="Build">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m14.7 6.3 1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/></svg></span>
             <span className="aichat-nav-label">Build</span>
-            {knowledgeList.length > 0 && (
-              <span className="aichat-nav-badge">{knowledgeList.length}</span>
-            )}
+            <span className={`aichat-nav-caret${buildMenuOpen ? " open" : ""}`}>⌄</span>
           </button>
+          {buildMenuOpen && <div className="aichat-nav-submenu">
+            <button type="button" className={activeTab === "products" ? "active" : ""} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
+            <button type="button" className={activeTab === "build" ? "active" : ""} onClick={() => { setActiveTab("build"); setMobileMenuOpen(false); }}>Business knowledge {knowledgeList.length ? <small>{knowledgeList.length}</small> : null}</button>
+          </div>}
 
-          {/* 3. Connect */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "connect" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("connect");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Connect"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-            </span>
+          <button type="button"
+            className={`aichat-nav-btn${["connect-phone","connect-website","connect-whatsapp"].includes(activeTab) ? " active" : ""}`}
+            onClick={() => setConnectMenuOpen((open) => !open)}
+            aria-expanded={connectMenuOpen} data-tooltip="Connect">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/></svg></span>
             <span className="aichat-nav-label">Connect</span>
+            <span className={`aichat-nav-caret${connectMenuOpen ? " open" : ""}`}>⌄</span>
           </button>
+          {connectMenuOpen && <div className="aichat-nav-submenu">
+            <button type="button" className={activeTab === "connect-phone" ? "active" : ""} onClick={() => { setActiveTab("connect-phone"); setMobileMenuOpen(false); }}>Phone</button>
+            <button type="button" className={activeTab === "connect-website" ? "active" : ""} onClick={() => { setActiveTab("connect-website"); setMobileMenuOpen(false); }}>Website</button>
+            <button type="button" className={activeTab === "connect-whatsapp" ? "active" : ""} onClick={() => { setActiveTab("connect-whatsapp"); setMobileMenuOpen(false); }}>WhatsApp</button>
+          </div>}
 
-          {/* 4. Manage */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "manage" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("manage");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Manage"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </span>
+          <button type="button"
+            className={`aichat-nav-btn${["manage-customers","notifications","manage"].includes(activeTab) ? " active" : ""}`}
+            onClick={() => setManageMenuOpen((open) => !open)}
+            aria-expanded={manageMenuOpen} data-tooltip="Manage">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 5"/></svg></span>
             <span className="aichat-nav-label">Manage</span>
-            {orders.length > 0 && (
-              <span className="aichat-nav-badge">{orders.length}</span>
-            )}
+            <span className={`aichat-nav-caret${manageMenuOpen ? " open" : ""}`}>⌄</span>
+            {businessFeatures.handoffs?.length > 0 && <span className="aichat-nav-badge">{businessFeatures.handoffs.length}</span>}
           </button>
+          {manageMenuOpen && <div className="aichat-nav-submenu">
+            <button type="button" className={activeTab === "manage-customers" ? "active" : ""} onClick={() => { setActiveTab("manage-customers"); setMobileMenuOpen(false); }}>Customers</button>
+            <button type="button" className={activeTab === "notifications" ? "active" : ""} onClick={() => { setActiveTab("notifications"); setMobileMenuOpen(false); }}>
+              Notifications {businessFeatures.stats?.unreadNotifications ? <small>{businessFeatures.stats.unreadNotifications}</small> : null}
+            </button>
+            <button type="button" className={activeTab === "manage" ? "active" : ""} onClick={() => { setActiveTab("manage"); setMobileMenuOpen(false); }}>Business profile &amp; orders</button>
+          </div>}
         </nav>
 
         {/* ── Chats and tasks widget (Cloud AI style) ── */}
