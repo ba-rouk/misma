@@ -3133,7 +3133,7 @@ function Dashboard() {
                       value={draft}
                       onChange={(e) => {
                         const value = e.target.value;
-                        if (/^\\s*@thinking\\b\\s*/i.test(value)) {
+                        if (/^\s*@thinking\b\s*/i.test(value)) {
                           setThinkHarder(true);
                           setDraft(value.replace(/^\\s*@thinking\\b\\s*/i, ""));
                         } else {
