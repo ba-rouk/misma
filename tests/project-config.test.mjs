@@ -177,3 +177,40 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
   assert.match(dashboard, /Start voice input/);
 });
+
+
+test("the business hub connects websites, stores human handoffs, and manages product knowledge", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const widget = await read("../supabase/functions/misma-widget/index.ts");
+  const embed = await read("../public/misma-widget.js");
+  const migration = await read("../supabase/migrations/20261104120000_business_website_customer_hub.sql");
+
+  for (const tab of ["website-statistics", "websites", "customers", "notifications", "products", "knowledge", "phone", "whatsapp"]) {
+    assert.match(dashboard, new RegExp(`activeTab === "${tab}"`));
+  }
+  assert.match(dashboard, /workspaceMenuOpen/);
+  assert.match(dashboard, /manageMenuOpen/);
+  assert.match(dashboard, /buildMenuOpen/);
+  assert.match(dashboard, /connectMenuOpen/);
+  assert.match(dashboard, /data-misma-key=/);
+  assert.match(dashboard, /Review website with Misma/);
+  assert.match(dashboard, /Suggest with Misma/);
+  assert.match(dashboard, /Request a human/);
+  assert.match(dashboard, /handleKnowledgeFileUpload/);
+  assert.match(dashboard, /sendHumanReply/);
+
+  for (const operation of ["getBusinessHubData", "createWebsiteConnection", "saveProductService", "updateHumanRequestStatus", "markWorkspaceNotificationRead", "sendHumanReply"]) {
+    assert.match(api, new RegExp(`export const ${operation} = createServerFn`));
+  }
+  assert.match(widget, /website_connections/);
+  assert.match(widget, /human_requests/);
+  assert.match(widget, /workspace_notifications/);
+  assert.match(widget, /suggest-products/);
+  assert.match(widget, /website_scan_completed/);
+  assert.match(embed, /Request a human/);
+  assert.match(embed, /functions\/v1\/misma-widget/);
+  assert.match(migration, /create table if not exists public\.website_connections/);
+  assert.match(migration, /create table if not exists public\.human_requests/);
+  assert.match(migration, /create table if not exists public\.products_services/);
+});
