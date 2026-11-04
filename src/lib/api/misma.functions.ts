@@ -426,3 +426,161 @@ export const setConversationGroup = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true, groupName: normalizedGroup };
   });
+
+
+export const getBusinessHubData = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const [websitesResult, handoffsResult, notificationsResult, productsResult] = await Promise.all([
+      db.from("website_connections")
+        .select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at")
+        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+      db.from("human_requests")
+        .select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at")
+        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+      db.from("workspace_notifications")
+        .select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at")
+        .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+      db.from("products_services")
+        .select("id,item_type,name,description,price_text,active,created_from,created_at,updated_at")
+        .eq("workspace_id", workspaceId).order("updated_at", { ascending: false }),
+    ]);
+    const websites = check(websitesResult.data, websitesResult.error);
+    const handoffs = check(handoffsResult.data, handoffsResult.error);
+    const notifications = check(notificationsResult.data, notificationsResult.error);
+    const products = check(productsResult.data, productsResult.error);
+    const contactIds = [...new Set(handoffs.map((item: any) => Number(item.contact_id)).filter((id: number) => Number.isSafeInteger(id) && id > 0))];
+    const contactsResult = contactIds.length
+      ? await db.from("contacts").select("id,name,email,phone,source").in("id", contactIds).eq("workspace_id", workspaceId)
+      : { data: [], error: null };
+    const contacts = check(contactsResult.data, contactsResult.error);
+    const contactById = new Map<number, any>(contacts.map((contact: any) => [Number(contact.id), contact]));
+    return {
+      websites,
+      handoffs: handoffs.map((item: any) => ({
+        ...item,
+        contact: contactById.get(Number(item.contact_id)) ?? null,
+      })),
+      notifications,
+      products,
+    };
+  });
+
+export const createWebsiteConnection = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    name: z.string().trim().min(1).max(100),
+    websiteUrl: z.string().trim().url().max(2048),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const parsed = new URL(data.websiteUrl);
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+      throw new Error("Enter a valid public website URL beginning with http:// or https://.");
+    }
+    const websiteUrl = parsed.origin + parsed.pathname.replace(/\/$/, "");
+    const domain = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const { data: website, error } = await db.from("website_connections").insert({
+      workspace_id: workspaceId,
+      name: data.name.trim(),
+      website_url: websiteUrl,
+      domain,
+      status: "pending",
+    }).select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").single();
+    const saved = check(website, error);
+    await recordAudit(db, workspaceId, "website.created", saved.id, { domain });
+    return { website: saved };
+  });
+
+export const setWebsiteConnectionStatus = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    websiteId: z.string().uuid(),
+    status: z.enum(["pending", "connected", "paused"]),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: website, error } = await db.from("website_connections")
+      .update({ status: data.status, updated_at: new Date().toISOString() })
+      .eq("id", data.websiteId).eq("workspace_id", workspaceId)
+      .select("id,status").single();
+    const saved = check(website, error);
+    await recordAudit(db, workspaceId, "website.status_changed", saved.id, { status: data.status });
+    return { website: saved };
+  });
+
+export const saveProductService = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    itemType: z.enum(["product", "service"]),
+    name: z.string().trim().min(2).max(160),
+    description: z.string().trim().max(3000).default(""),
+    priceText: z.string().trim().max(120).default(""),
+    createdFrom: z.enum(["manual", "customer_demand", "website_scan"]).default("manual"),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: product, error } = await db.from("products_services").insert({
+      workspace_id: workspaceId,
+      item_type: data.itemType,
+      name: data.name,
+      description: data.description,
+      price_text: data.priceText,
+      active: true,
+      created_from: data.createdFrom,
+    }).select("id,item_type,name,description,price_text,active,created_from,created_at").single();
+    const saved = check(product, error);
+    await recordAudit(db, workspaceId, "product_service.created", String(saved.id), { itemType: data.itemType, name: data.name });
+    return { product: saved };
+  });
+
+export const setProductServiceActive = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, id: z.number().int().positive(), active: z.boolean() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { error } = await db.from("products_services")
+      .update({ active: data.active, updated_at: new Date().toISOString() })
+      .eq("id", data.id).eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    await recordAudit(db, workspaceId, "product_service.status_changed", String(data.id), { active: data.active });
+    return { ok: true };
+  });
+
+export const updateHumanRequestStatus = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    id: z.number().int().positive(),
+    status: z.enum(["pending", "handled", "closed"]),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: request, error } = await db.from("human_requests")
+      .update({ status: data.status, handled_at: data.status === "pending" ? null : new Date().toISOString() })
+      .eq("id", data.id).eq("workspace_id", workspaceId)
+      .select("id,conversation_id,status").single();
+    const saved = check(request, error);
+    if (data.status === "closed") {
+      const { error: conversationError } = await db.from("conversations")
+        .update({ status: "Closed", updated_at: new Date().toISOString() })
+        .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
+      if (conversationError) throw new Error(conversationError.message);
+    } else if (data.status === "pending") {
+      const { error: conversationError } = await db.from("conversations")
+        .update({ status: "Needs you", updated_at: new Date().toISOString() })
+        .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
+      if (conversationError) throw new Error(conversationError.message);
+    }
+    await recordAudit(db, workspaceId, "human_request.status_changed", String(data.id), { status: data.status });
+    return { request: saved };
+  });
+
+export const markWorkspaceNotificationRead = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, id: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { error } = await db.from("workspace_notifications")
+      .update({ is_read: true }).eq("id", data.id).eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
