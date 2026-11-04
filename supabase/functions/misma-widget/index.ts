@@ -220,6 +220,16 @@ Deno.serve(async (request) => {
   }
   const conversationId = Number(conversation.id);
 
+  if (action === "history") {
+    const { data: savedMessages, error: historyError } = await db.from("messages")
+      .select("id,role,text,created_at").eq("conversation_id", conversationId).order("id", { ascending: true }).limit(100);
+    if (historyError) return response(500, { error: "Could not load this conversation." }, origin);
+    return response(200, {
+      ok: true, conversationId,
+      messages: (savedMessages || []).map((item: any) => ({ id: item.id, role: item.role, text: item.text, created_at: item.created_at })),
+    }, origin);
+  }
+
   if (action === "human") {
     const note = typeof input.reason === "string" ? input.reason.trim().slice(0, 500) : "Visitor requested a human agent.";
     const { data: existing } = await db.from("human_requests").select("id,status")
