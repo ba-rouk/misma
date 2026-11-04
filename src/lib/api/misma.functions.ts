@@ -118,7 +118,7 @@ export const getMismaData = createServerFn({ method: "POST" })
       if (unreadCountResult.error) throw new Error("Could not count unread visitor messages.");
       if (unreadRowsResult.error) throw new Error("Could not load unread visitor messages.");
       unreadVisitorCount = unreadCountResult.count ?? 0;
-      const conversationById = new Map(rawConversations.map((conversation: any) => [Number(conversation.id), conversation]));
+      const conversationById = new Map<number, any>(rawConversations.map((conversation: any) => [Number(conversation.id), conversation] as const));
       unreadVisitorMessages = (unreadRowsResult.data ?? []).map((message: any) => {
         const conversationId = Number(message.conversation_id);
         const conversation = conversationById.get(conversationId) as any;
