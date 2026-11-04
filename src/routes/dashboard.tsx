@@ -17,6 +17,7 @@ import {
   deleteKnowledge,
   updateOrderStatus,
   saveWorkspaceProfile,
+  markVisitorMessagesRead,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -25,7 +26,16 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "settings";
+type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "notifications" | "settings";
+
+type UnreadVisitorMessage = {
+  id: number;
+  conversationId: number;
+  text: string;
+  created_at: string;
+  channel: string;
+  conversationTitle: string;
+};
 
 type MismaAiSettings = {
   assistantMode: "Sales & customer support" | "Customer support" | "Sales assistant";
@@ -425,10 +435,28 @@ function MessageAttachmentViews({
   );
 }
 
-const SUGGESTIONS = [
-  "How many orders came in today?",
-  "Show me recent conversations",
-];
+function getLoginGreeting(): string {
+  const hour = new Date().getHours();
+  const choices = hour < 12
+    ? ["Good morning", "Morning", "Hey", "Hi there", "Welcome back", "Great to see you"]
+    : hour < 18
+      ? ["Good afternoon", "Hey there", "Hello", "Welcome back", "Great to see you", "Hi there"]
+      : ["Good evening", "Hey", "Hello there", "Welcome back", "Good to see you", "Hi there"];
+  let previous = "";
+  try {
+    previous = window.localStorage.getItem("misma_last_login_greeting") || "";
+  } catch {
+    // Use a fresh greeting for this session when storage is unavailable.
+  }
+  const candidates = choices.filter((choice) => choice !== previous);
+  const greeting = (candidates.length ? candidates : choices)[Math.floor(Math.random() * (candidates.length || choices.length))];
+  try {
+    window.localStorage.setItem("misma_last_login_greeting", greeting);
+  } catch {
+    // Ignore storage restrictions; the greeting remains available in component state.
+  }
+  return greeting;
+}
 
 // Helper to safely render basic markdown
 function MarkdownContent({ content }: { content: string }) {
@@ -553,10 +581,14 @@ function Dashboard() {
 
   // Active navigation tab (5 primary items)
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const [greeting, setGreeting] = useState("Welcome back");
+  const hasChosenGreetingRef = useRef(false);
 
   // Chats and tasks panel state
   const [chatsExpanded, setChatsExpanded] = useState(true);
   const [chatMenuOpenId, setChatMenuOpenId] = useState<number | null>(null);
+  const [chatGroupMenuOpen, setChatGroupMenuOpen] = useState(false);
+  const [chatGroupFilter, setChatGroupFilter] = useState("all");
   const [downloadingMediaUrl, setDownloadingMediaUrl] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ attachment: MessageAttachment; conversationId: number | null } | null>(null);
   const [cropAspect, setCropAspect] = useState<"original" | "square" | "portrait" | "landscape">("original");
@@ -570,6 +602,8 @@ function Dashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [unreadVisitorMessages, setUnreadVisitorMessages] = useState<UnreadVisitorMessage[]>([]);
+  const [unreadVisitorCount, setUnreadVisitorCount] = useState(0);
 
   // Profile
   const [profileName, setProfileName] = useState("Your account");
@@ -593,6 +627,8 @@ function Dashboard() {
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [voiceInputActive, setVoiceInputActive] = useState(false);
+  const [microphonePermissionOpen, setMicrophonePermissionOpen] = useState(false);
+  const [microphonePermissionError, setMicrophonePermissionError] = useState("");
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -712,6 +748,11 @@ function Dashboard() {
     .filter((item) => String(item.channel || "").trim().toLowerCase() === "dashboard")
     .map((item) => ({ ...item, name: cleanRecentChatTitle(item.name) || "New chat" }));
   const conversationGroups = Array.from(new Set(recentChats.map((item) => item.group_name).filter((value): value is string => Boolean(value))));
+  const filteredRecentChats = chatGroupFilter === "all"
+    ? recentChats
+    : chatGroupFilter === "__ungrouped__"
+      ? recentChats.filter((item) => !item.group_name)
+      : recentChats.filter((item) => item.group_name === chatGroupFilter);
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -782,6 +823,10 @@ function Dashboard() {
             (v): v is string => typeof v === "string" && v.trim().length > 0,
           );
           const resolvedName = displayName ?? s.user.email?.split("@")[0] ?? "Your account";
+          if (!hasChosenGreetingRef.current) {
+            setGreeting(getLoginGreeting());
+            hasChosenGreetingRef.current = true;
+          }
           setProfileName(resolvedName);
           setProfileNameDraft(resolvedName);
           const avatarPath = metadata.avatar_path;
@@ -862,6 +907,8 @@ function Dashboard() {
       .then((data) => {
         setWorkspace(data.workspace);
         setConversations(data.conversations ?? []);
+        setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
+        setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
         setOrders(data.orders ?? []);
         setKnowledgeList(data.knowledge ?? []);
         setCustomers(data.customers ?? []);
@@ -884,6 +931,12 @@ function Dashboard() {
   useEffect(() => {
     if (!authChecked || !token) return;
     loadData();
+  }, [authChecked, token]);
+
+  useEffect(() => {
+    if (!authChecked || !token) return;
+    const refreshId = window.setInterval(() => loadData(), 30000);
+    return () => window.clearInterval(refreshId);
   }, [authChecked, token]);
 
   // Autogrow textarea as user types
@@ -933,6 +986,16 @@ function Dashboard() {
         data: { token, conversationId: convId },
       });
       setMessages(res.messages);
+      const unreadForConversation = unreadVisitorMessages.filter((item) => item.conversationId === convId).length;
+      if (unreadForConversation > 0) {
+        try {
+          const readResult = await markVisitorMessagesRead({ data: { token, conversationId: convId } });
+          setUnreadVisitorMessages((items) => items.filter((item) => item.conversationId !== convId));
+          setUnreadVisitorCount((count) => Math.max(0, count - readResult.markedCount));
+        } catch (readError) {
+          console.warn("Could not update the visitor message read state:", readError);
+        }
+      }
     } catch (cause) {
       setChatError(
         cause instanceof Error ? cause.message : "Could not load messages.",
@@ -1057,12 +1120,7 @@ function Dashboard() {
 
 
 
-  const handleVoiceInput = () => {
-    if (voiceInputActive) {
-      speechRecognitionRef.current?.stop?.();
-      setVoiceInputActive(false);
-      return;
-    }
+  const startVoiceRecognition = () => {
     const browserWindow = window as typeof window & {
       SpeechRecognition?: new () => any;
       webkitSpeechRecognition?: new () => any;
@@ -1085,9 +1143,13 @@ function Dashboard() {
       if (transcript) setDraft((current) => [current.trim(), transcript].filter(Boolean).join(current.trim() ? " " : ""));
     };
     recognition.onerror = (event: any) => {
-      setChatError(event?.error === "not-allowed"
-        ? "Allow microphone access to use voice dictation."
-        : "Voice dictation stopped. Please try again.");
+      setVoiceInputActive(false);
+      if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
+        setMicrophonePermissionError("Microphone access was blocked. Allow it in your browser's site permissions, then try again.");
+        setMicrophonePermissionOpen(true);
+      } else {
+        setChatError("Voice dictation stopped. Please try again.");
+      }
     };
     recognition.onend = () => {
       setVoiceInputActive(false);
@@ -1101,7 +1163,48 @@ function Dashboard() {
     } catch {
       setVoiceInputActive(false);
       speechRecognitionRef.current = null;
-      setChatError("The microphone could not be started. Please try again.");
+      setMicrophonePermissionError("The microphone could not be started. Check this site's microphone permission and try again.");
+      setMicrophonePermissionOpen(true);
+    }
+  };
+
+  const handleVoiceInput = () => {
+    if (voiceInputActive) {
+      speechRecognitionRef.current?.stop?.();
+      setVoiceInputActive(false);
+      return;
+    }
+    const browserWindow = window as typeof window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    };
+    if (!(browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition)) {
+      setChatError("Voice dictation is not supported in this browser. Try a recent version of Chrome.");
+      return;
+    }
+    setMicrophonePermissionError("");
+    if (navigator.permissions?.query) {
+      void navigator.permissions.query({ name: "microphone" as PermissionName }).then((permission) => {
+        if (permission.state === "granted") startVoiceRecognition();
+        else setMicrophonePermissionOpen(true);
+      }).catch(() => setMicrophonePermissionOpen(true));
+    } else {
+      setMicrophonePermissionOpen(true);
+    }
+  };
+
+  const requestMicrophoneAccess = async () => {
+    setMicrophonePermissionError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("This browser does not support microphone permissions.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMicrophonePermissionOpen(false);
+      startVoiceRecognition();
+    } catch {
+      setMicrophonePermissionError("Microphone access is still blocked. Open your browser's site settings, set Microphone to Allow for Misma, then try again.");
     }
   };
 
@@ -2296,8 +2399,10 @@ function Dashboard() {
             <button
               type="button"
               className="aichat-chats-widget-filter"
-              title="Filter chats"
-              aria-label="Filter chats"
+              title="Group and filter recent chats"
+              aria-label="Group and filter recent chats"
+              aria-expanded={chatGroupMenuOpen}
+              onClick={() => setChatGroupMenuOpen((open) => !open)}
             >
               <svg
                 width="14"
@@ -2315,12 +2420,25 @@ function Dashboard() {
               </svg>
             </button>
           </div>
+          {chatGroupMenuOpen && (
+            <div className="aichat-chat-group-filter-menu" role="group" aria-label="Filter chats by group">
+              <button type="button" className={chatGroupFilter === "all" ? "active" : ""} onClick={() => { setChatGroupFilter("all"); setChatGroupMenuOpen(false); }}>All chats</button>
+              {conversationGroups.map((group) => (
+                <button key={group} type="button" className={chatGroupFilter === group ? "active" : ""} onClick={() => { setChatGroupFilter(group); setChatGroupMenuOpen(false); }}>
+                  {group}
+                </button>
+              ))}
+              <button type="button" className={chatGroupFilter === "__ungrouped__" ? "active" : ""} onClick={() => { setChatGroupFilter("__ungrouped__"); setChatGroupMenuOpen(false); }}>Ungrouped</button>
+            </div>
+          )}
           {chatsExpanded && (
             <div className="aichat-chats-widget-list">
               {recentChats.length === 0 ? (
                 <div className="aichat-chats-widget-empty">No chats yet.</div>
+              ) : filteredRecentChats.length === 0 ? (
+                <div className="aichat-chats-widget-empty">No chats in this group.</div>
               ) : (
-                recentChats.slice(0, 5).map((c) => (
+                filteredRecentChats.slice(0, 5).map((c) => (
                   <div className="aichat-chat-list-item" key={c.id}>
                   <button
                     type="button"
@@ -2454,6 +2572,19 @@ function Dashboard() {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
+          <button
+            type="button"
+            className={`aichat-notification-trigger${unreadVisitorCount > 0 ? " has-unread" : ""}`}
+            onClick={() => { setActiveTab("notifications"); setMobileMenuOpen(false); }}
+            aria-label={unreadVisitorCount > 0 ? `Notifications, ${unreadVisitorCount} unread visitor messages` : "Notifications"}
+            title="Website visitor notifications"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+              <path d="M10 21h4" />
+            </svg>
+            {unreadVisitorCount > 0 && <span className="aichat-notification-count">{unreadVisitorCount > 99 ? "99+" : unreadVisitorCount}</span>}
+          </button>
         </header>
 
         {loadError && (
@@ -2490,28 +2621,7 @@ function Dashboard() {
                     </svg>
                   </div>
                   <div className="aichat-greeting">
-                    <h1>
-                      Hi {profileName}.<em>How can I help you today?</em>
-                    </h1>
-                    <p>
-                      Ask anything about your business, incoming orders,
-                      customer conversations, or website operations.
-                    </p>
-                  </div>
-
-                  {/* Suggestion Chips */}
-                  <div className="aichat-suggestions">
-                    {SUGGESTIONS.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="aichat-chip"
-                        onClick={() => void handleSend(s)}
-                      >
-                        <span>{s}</span>
-                        <span className="aichat-chip-arrow">↑</span>
-                      </button>
-                    ))}
+                    <h1>{greeting}, {profileName}</h1>
                   </div>
                 </div>
               ) : (
@@ -2719,20 +2829,6 @@ function Dashboard() {
                       ))}
                     </div>
                   )}
-                  <div className="aichat-composer-input-row">
-                    <textarea
-                      ref={textareaRef}
-                      rows={1}
-                      className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handleComposerPaste}
-                      disabled={isSending}
-                      aria-label="Message Misma"
-                    />
-                  </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
@@ -2769,29 +2865,44 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <div className="aichat-composer-sendrow-spacer" />
+                    <textarea
+                      ref={textareaRef}
+                      rows={1}
+                      className="aichat-composer-textarea"
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handleComposerPaste}
+                      disabled={isSending}
+                      aria-label="Message Misma"
+                    />
                     <button
                       type="button"
-                      className={`aichat-composer-voice${voiceInputActive ? " is-listening" : ""}`}
-                      onClick={handleVoiceInput}
+                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
                       disabled={isSending || isGeneratingMedia}
-                      aria-label={voiceInputActive ? "Stop voice dictation" : "Start voice dictation"}
-                      title={voiceInputActive ? "Stop voice dictation" : "Use voice"}
+                      onClick={() => {
+                        if (voiceInputActive) {
+                          handleVoiceInput();
+                        } else if (draft.trim() || selectedFiles.length || createMode) {
+                          if (createMode) void handleCreateMedia();
+                          else void handleSend();
+                        } else {
+                          handleVoiceInput();
+                        }
+                      }}
+                      title={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Use voice"}
+                      aria-label={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice dictation"}
                     >
-                      {voiceInputActive ? (
+                      {isSending || isGeneratingMedia ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
+                      ) : draft.trim() || selectedFiles.length || createMode ? (
+                        createMode ? <span aria-hidden="true">✦</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
+                      ) : voiceInputActive ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
                       ) : (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
                       )}
-                    </button>
-                    <button
-                      type="submit"
-                      className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending ? " can-send" : ""}`}
-                      disabled={(!draft.trim() && !selectedFiles.length && !createMode) || isSending}
-                      title={createMode ? `Create ${createMode} with Agnes` : editingMessageId ? "Save edited message" : "Send message"}
-                      aria-label={createMode ? `Create ${createMode} with Agnes` : "Send message"}
-                    >
-                      {isGeneratingMedia ? "…" : createMode ? "✦" : "↑"}
                     </button>
                   </div>
                   <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
@@ -3602,6 +3713,62 @@ function Dashboard() {
             </div>
           </div>
         )}
+        {activeTab === "notifications" && (
+          <div className="aichat-tab-view">
+            <div className="aichat-tab-content">
+              <div className="aichat-tab-header">
+                <h2>Notifications {unreadVisitorCount > 0 ? `(${unreadVisitorCount} unread)` : ""}</h2>
+                <p>New messages sent by visitors through your website.</p>
+              </div>
+              <div className="aichat-card aichat-notifications-card">
+                {unreadVisitorMessages.length === 0 ? (
+                  <div className="aichat-notifications-empty">
+                    <span className="aichat-notifications-empty-icon" aria-hidden="true">✓</span>
+                    <h3>You're all caught up</h3>
+                    <p>New website visitor messages will appear here.</p>
+                  </div>
+                ) : (
+                  <>
+                    {unreadVisitorCount > unreadVisitorMessages.length && (
+                      <p className="aichat-notifications-overflow">Showing the latest {unreadVisitorMessages.length} unread messages.</p>
+                    )}
+                    <div className="aichat-notifications-list">
+                      {unreadVisitorMessages.map((item) => (
+                        <button key={item.id} type="button" className="aichat-notification-item" onClick={() => void selectConversation(item.conversationId)}>
+                          <span className="aichat-notification-item-icon" aria-hidden="true">●</span>
+                          <span className="aichat-notification-item-copy">
+                            <strong>{item.conversationTitle}</strong>
+                            <small>{item.channel} · {item.created_at ? new Date(item.created_at).toLocaleString() : "New message"}</small>
+                            <span>{item.text}</span>
+                          </span>
+                          <span className="aichat-notification-open">Open chat ↗</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {microphonePermissionOpen && (
+          <div className="aichat-mic-permission-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setMicrophonePermissionOpen(false); }}>
+            <section className="aichat-mic-permission-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-mic-permission-title">
+              <div className="aichat-mic-permission-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+              </div>
+              <h2 id="misma-mic-permission-title">Allow microphone access</h2>
+              <p>Misma uses your microphone for voice dictation. Your browser will ask for permission; only the recognized text is added to your message.</p>
+              {microphonePermissionError && <p className="aichat-mic-permission-error" role="alert">{microphonePermissionError}</p>}
+              <div className="aichat-mic-permission-actions">
+                <button type="button" className="aichat-action-btn secondary" onClick={() => setMicrophonePermissionOpen(false)}>Not now</button>
+                <button type="button" className="aichat-action-btn" onClick={() => void requestMicrophoneAccess()}>Allow microphone</button>
+              </div>
+            </section>
+          </div>
+        )}
+
         {cropTarget && (
           <div className="aichat-crop-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCropTarget(null); }}>
             <section className="aichat-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-crop-title">

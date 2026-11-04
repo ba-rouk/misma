@@ -5767,3 +5767,298 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   .aichat-composer-upload-state.is-uploading i { animation: none; }
 }
+
+
+
+/* Dashboard viewport sizing: keep the app inside the available device width. */
+html, body, #app-root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.aichat {
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+  overflow-x: clip;
+}
+.aichat-main {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+.aichat-scroll-area,
+.aichat-conversation-wrap,
+.aichat-tab-view,
+.aichat-tab-content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+@media (min-width: 768px) {
+  .aichat-topbar { display: flex !important; }
+  .aichat-header-toggle { display: none !important; }
+}
+@media (max-width: 767px) {
+  .aichat-main { width: 100%; max-width: 100vw; }
+  .aichat-topbar { display: flex; align-items: center; gap: 10px; }
+  .aichat-header-toggle { display: grid !important; }
+}
+
+/* The empty state contains one rotating, time-aware personalized greeting. */
+.aichat-greeting { margin: 0; }
+.aichat-greeting h1 {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 32px);
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+/* Top-left visitor notification bell and unread pulse. */
+.aichat-notification-trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  margin-left: 2px;
+  border: 1px solid #303b49;
+  border-radius: 12px;
+  background: #171e28;
+  color: #c9d4e2;
+  cursor: pointer;
+}
+.aichat-notification-trigger svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.aichat-notification-trigger.has-unread {
+  border-color: rgba(138,180,255,.75);
+  color: #dceaff;
+  box-shadow: 0 0 0 3px rgba(105,159,255,.12), 0 0 18px rgba(105,159,255,.20);
+  animation: misma-notification-glow 2s ease-in-out infinite;
+}
+.aichat-notification-count {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid #090a0c;
+  border-radius: 999px;
+  background: #e45d69;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+@keyframes misma-notification-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(105,159,255,.09), 0 0 10px rgba(105,159,255,.13); }
+  50% { box-shadow: 0 0 0 5px rgba(105,159,255,.16), 0 0 24px rgba(105,159,255,.3); }
+}
+
+/* Group selector opened by the three-line control beside Chats and tasks. */
+.aichat-chat-group-filter-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 5px 4px 8px;
+  padding: 6px;
+  border: 1px solid #303b4b;
+  border-radius: 11px;
+  background: #151c26;
+}
+.aichat-chat-group-filter-menu button {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #b9c5d5;
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+}
+.aichat-chat-group-filter-menu button:hover,
+.aichat-chat-group-filter-menu button.active {
+  background: #263346;
+  color: #fff;
+}
+
+/* Visitor notifications page. */
+.aichat-notifications-card { padding: 0; overflow: hidden; }
+.aichat-notifications-list { display: flex; flex-direction: column; }
+.aichat-notification-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 15px 17px;
+  border: 0;
+  border-bottom: 1px solid #293341;
+  background: transparent;
+  color: #e6edf6;
+  text-align: left;
+  cursor: pointer;
+}
+.aichat-notification-item:hover { background: rgba(124,165,226,.08); }
+.aichat-notification-item-icon { flex: none; color: #8ab4ff; font-size: 12px; }
+.aichat-notification-item-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.aichat-notification-item-copy strong { font-size: 13px; font-weight: 650; }
+.aichat-notification-item-copy small { color: #8190a4; font-size: 11px; }
+.aichat-notification-item-copy > span {
+  overflow: hidden;
+  color: #c4cfdd;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aichat-notification-open { flex: none; color: #8ab4ff; font-size: 11px; }
+.aichat-notifications-overflow { margin: 0; padding: 10px 16px; color: #93a2b6; font-size: 11px; }
+.aichat-notifications-empty { padding: 44px 20px; text-align: center; }
+.aichat-notifications-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 12px;
+  border: 1px solid #344456;
+  border-radius: 50%;
+  background: #182536;
+  color: #a6ceff;
+  font-size: 20px;
+}
+.aichat-notifications-empty h3 { margin: 0 0 5px; color: #edf3fb; font-size: 15px; }
+.aichat-notifications-empty p { margin: 0; color: #8d9bae; font-size: 12px; }
+
+/* Microphone permission prompt. */
+.aichat-mic-permission-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(3,7,12,.76);
+  backdrop-filter: blur(8px);
+}
+.aichat-mic-permission-dialog {
+  width: min(420px, 100%);
+  padding: 23px;
+  border: 1px solid #354254;
+  border-radius: 18px;
+  background: #111923;
+  color: #edf3fb;
+  box-shadow: 0 24px 90px rgba(0,0,0,.6);
+}
+.aichat-mic-permission-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 14px;
+  border: 1px solid #425a77;
+  border-radius: 13px;
+  background: #1d2c40;
+  color: #b8d5ff;
+}
+.aichat-mic-permission-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.aichat-mic-permission-dialog h2 { margin: 0 0 8px; font-size: 18px; }
+.aichat-mic-permission-dialog p { margin: 0 0 15px; color: #9baabd; font-size: 13px; line-height: 1.55; }
+.aichat-mic-permission-dialog .aichat-mic-permission-error { color: #ffaaa5; }
+.aichat-mic-permission-actions { display: flex; justify-content: flex-end; gap: 9px; flex-wrap: wrap; }
+.aichat-mic-permission-actions button { min-height: 38px; padding: 0 13px; }
+
+/* One-row adaptive composer: multiline text grows upward while controls stay aligned. */
+.aichat-composer-sendrow {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  min-width: 0;
+  gap: 9px;
+}
+.aichat-composer-sendrow .aichat-composer-textarea {
+  display: block;
+  flex: 1 1 auto;
+  align-self: flex-end;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  max-height: 190px;
+  margin: 0;
+  padding: 9px 3px 8px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow-y: auto;
+  background: transparent;
+  color: #f3f6fb;
+  font: 400 15px/1.45 var(--font-sans);
+  text-align: left;
+}
+.aichat-composer-sendrow .aichat-composer-textarea::placeholder { color: #9aa6b6; opacity: 1; }
+.aichat-composer-sendrow .aichat-composer-textarea:focus { outline: none; box-shadow: none; }
+.aichat-composer-sendrow .aichat-composer-plus-wrap { flex: none; align-self: flex-end; }
+.aichat-composer-sendrow .aichat-composer-plus {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+.aichat-composer-send-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #48586d;
+  border-radius: 50%;
+  background: #293646;
+  color: #d5e0ee;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, border-color .16s ease, transform .16s ease;
+}
+.aichat-composer-send-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.aichat-composer-send-btn.can-send { background: #eef4fb; border-color: #eef4fb; color: #111821; }
+.aichat-composer-send-btn.can-send:hover { background: #d8e8fa; }
+.aichat-composer-send-btn.is-listening { background: rgba(248,81,73,.18); border-color: rgba(248,121,113,.55); color: #ff9991; }
+.aichat-composer-send-btn.is-thinking { background: #394657; border-color: #586a80; color: #f1f6fd; cursor: progress; }
+.aichat-composer-send-btn:disabled { opacity: .9; }
+@media (max-width: 767px) {
+  .aichat-composer-card-tools { border-radius: 22px; }
+  .aichat-notification-item { align-items: flex-start; padding: 13px 12px; }
+  .aichat-notification-open { display: none; }
+  .aichat-mic-permission-actions { flex-direction: column-reverse; }
+  .aichat-mic-permission-actions button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aichat-notification-trigger.has-unread { animation: none; }
+}
+
+
+/* Do not reserve a blank toolbar row when no composer modes are active. */
+.aichat-composer-tools-row:empty {
+  display: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
