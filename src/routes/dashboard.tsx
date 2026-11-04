@@ -2335,7 +2335,7 @@ function Dashboard() {
   const websiteInstallSnippet = (website: any) => {
     const config = getSupabaseConfig();
     if (!config) return "Supabase is not configured for this dashboard.";
-    const endpoint = `${config.url.replace(/\\/$/, "")}/functions/v1/misma-chat`;
+    const endpoint = `${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`;
     return `<script src="https://misma.onrender.com/misma-widget.js" data-website-key="${website.public_key}" data-endpoint="${endpoint}" data-api-key="${config.publishableKey}" async></script>`;
   };
 
