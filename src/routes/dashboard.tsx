@@ -3340,14 +3340,14 @@ function Dashboard() {
                       value={draft}
                       onChange={(e) => {
                         const nextValue = e.target.value;
-                        const createMatch = nextValue.match(/^@create\\s+(image|video)(?=\\s|$)\\s*/i);
+                        const createMatch = nextValue.match(/^@create\s+(image|video)(?=\s|$)\s*/i);
                         if (createMatch) {
                           setCreateMode(createMatch[1].toLowerCase() as "image" | "video");
                           setThinkHarder(false);
                           setDraft(nextValue.slice(createMatch[0].length));
                           return;
                         }
-                        const thinkingMatch = nextValue.match(/^@thinking(?=\\s|$)\\s*/i);
+                        const thinkingMatch = nextValue.match(/^@thinking(?=\s|$)\s*/i);
                         if (thinkingMatch) {
                           setThinkHarder(true);
                           setCreateMode(null);
