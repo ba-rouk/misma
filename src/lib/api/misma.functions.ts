@@ -209,6 +209,35 @@ export const getMismaData = createServerFn({ method: "POST" })
     };
   });
 
+export const getWorkspaceLiveUpdates = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const [websitesResult, handoffsResult, notificationsResult, customersResult, conversationsResult, channelsResult] =
+      await Promise.all([
+        db.from("website_connections").select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at")
+          .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)")
+          .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at")
+          .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+        db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction")
+          .eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
+        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name")
+          .eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
+        db.from("channel_connections").select("id,channel,provider,display_name,external_id,phone_number,status,created_at")
+          .eq("workspace_id", workspaceId),
+      ]);
+    return {
+      websites: check(websitesResult.data, websitesResult.error),
+      handoffs: check(handoffsResult.data, handoffsResult.error),
+      notifications: check(notificationsResult.data, notificationsResult.error),
+      customers: check(customersResult.data, customersResult.error),
+      conversations: check(conversationsResult.data, conversationsResult.error),
+      channelConnections: check(channelsResult.data, channelsResult.error),
+    };
+  });
+
 export const getVisitorNotifications = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
