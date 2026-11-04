@@ -6646,3 +6646,150 @@ html, body, #app-root {
 
 /* The compact New chat shortcut belongs in the mobile drawer header only. */
 @media (min-width:768px) { .aichat-mobile-newchat { display:none; } }
+
+
+/* Image generation preview: a tall, quiet animated dot field like the ChatGPT sketching state. */
+.aichat-image-generation-loading {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-items: stretch;
+  width: min(100%, 420px);
+  min-height: clamp(360px, 64dvh, 560px);
+  aspect-ratio: 7 / 10;
+  box-sizing: border-box;
+  margin: 8px 0 12px;
+  padding: 18px 18px 20px;
+  overflow: hidden;
+  border: 1px solid rgba(77, 94, 133, .12);
+  border-radius: 16px;
+  background: #020305;
+}
+.aichat-image-generation-status {
+  position: relative;
+  z-index: 1;
+  padding: 0 0 10px;
+  color: #b6b8bf;
+  font: 400 14px/1.35 var(--font-sans);
+  letter-spacing: .005em;
+}
+.aichat-image-generation-grid {
+  position: absolute;
+  inset: 54px 0 0;
+  background-image: radial-gradient(circle, rgba(52, 86, 210, .78) 1.25px, transparent 1.8px);
+  background-size: 24px 24px;
+  background-position: 0 0;
+  opacity: .72;
+  mask-image: radial-gradient(ellipse at 50% 48%, #000 42%, transparent 88%);
+  animation: misma-image-grid-breathe 2.8s ease-in-out infinite alternate;
+}
+@keyframes misma-image-grid-breathe {
+  from { opacity: .48; background-position: 0 0; }
+  to { opacity: .82; background-position: 0 3px; }
+}
+.aichat-image-generation-loading .aichat-image-progress-badge {
+  z-index: 2;
+  right: 6%;
+  bottom: 7%;
+  min-width: 58px;
+  height: 42px;
+  padding: 0 13px;
+  border: 1px solid rgba(180, 184, 194, .13);
+  border-radius: 999px;
+  background: rgba(62, 64, 69, .88);
+  color: #e1e2e5;
+  font: 600 13px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  box-shadow: none;
+}
+.aichat-message-row:has(.aichat-image-generation-loading) .aichat-bubble {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Keep the generated-image overflow button anchored to the actual image edges. */
+.aichat-generated-media-wrap.is-image {
+  position: relative;
+  display: block;
+  flex: 0 1 auto;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: min(100%, 420px);
+  min-width: 0;
+  gap: 0;
+}
+.aichat-generated-media-wrap.is-image .aichat-attachment-image-link {
+  width: 100%;
+  max-width: 100%;
+}
+.aichat-generated-media-wrap.is-image .aichat-attachment-image {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(60dvh, 560px);
+  object-fit: contain;
+}
+.aichat-image-options {
+  z-index: 50;
+  pointer-events: auto;
+}
+.aichat-image-options-menu {
+  z-index: 51;
+  pointer-events: auto;
+}
+
+/* Colored, removable command tokens live inside the message composer. */
+.aichat-composer-input-row {
+  gap: 9px;
+}
+.aichat-mode-token {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  gap: 7px;
+  min-height: 30px;
+  margin: 0 0 0 1px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font: 600 12px/1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.aichat-mode-token > span {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  opacity: .8;
+}
+.aichat-mode-token.is-create {
+  border-color: rgba(80, 145, 255, .38);
+  background: rgba(51, 111, 220, .19);
+  color: #9ec6ff;
+}
+.aichat-mode-token.is-create:hover { background: rgba(51, 111, 220, .3); }
+.aichat-mode-token.is-thinking {
+  border-color: rgba(167, 139, 250, .38);
+  background: rgba(126, 87, 194, .2);
+  color: #cbb8ff;
+}
+.aichat-mode-token.is-thinking:hover { background: rgba(126, 87, 194, .32); }
+
+@media (max-width: 767px) {
+  .aichat-image-generation-loading {
+    width: min(100%, 420px);
+    min-height: min(66dvh, 560px);
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aichat-image-generation-grid { animation: none; }
+}
