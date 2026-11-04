@@ -2170,6 +2170,34 @@ function Dashboard() {
     }
   };
 
+  const handleKnowledgeFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!token || !file) return;
+    const supported = /\.(txt|md|csv|json|html|htm)$/i.test(file.name) || ["text/plain", "text/markdown", "text/csv", "application/json", "text/html"].includes(file.type);
+    if (!supported) {
+      setLoadError("Upload a text, Markdown, CSV, JSON, or HTML file. PDF and image extraction are not enabled in this knowledge uploader yet.");
+      return;
+    }
+    setSavingKnowledge(true);
+    try {
+      const text = (await file.text()).replace(/\u0000/g, "").trim();
+      if (!text) throw new Error("This file does not contain readable text.");
+      const chunks = text.match(/[\s\S]{1,3500}/g) || [];
+      for (let index = 0; index < chunks.length; index++) {
+        await addKnowledge({ data: {
+          token,
+          question: `Uploaded document: ${file.name}${chunks.length > 1 ? ` (part ${index + 1} of ${chunks.length})` : ""}`,
+          answer: chunks[index],
+        } });
+      }
+      await loadData();
+      setLoadError("");
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not import this document.");
+    } finally { setSavingKnowledge(false); }
+  };
+
   const handleDeleteKnowledge = async (id: number) => {
     if (
       !token ||
@@ -3299,7 +3327,7 @@ function Dashboard() {
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
-                <h2>Build AI Capabilities</h2>
+                <h2>Business Knowledge</h2>
                 <p>
                   Train Misma on your business knowledge, questions, and
                   customer answers.
@@ -3349,6 +3377,14 @@ function Dashboard() {
                     {savingKnowledge ? "Saving…" : "+ Add Knowledge Q&A"}
                   </button>
                 </form>
+              </div>
+
+              <div className="aichat-card">
+                <h3>Import knowledge from a file</h3>
+                <p>Upload a text-based business document. Misma extracts its text and stores it as approved Core.01 knowledge sources.</p>
+                <label className="aichat-action-btn secondary" htmlFor="misma-knowledge-file">＋ Choose a file</label>
+                <input id="misma-knowledge-file" type="file" hidden accept=".txt,.md,.csv,.json,.html,.htm,text/plain,text/markdown,text/csv,application/json,text/html" onChange={(event) => void handleKnowledgeFileUpload(event)} />
+                <p className="aichat-settings-hint">Supported: TXT, Markdown, CSV, JSON and HTML. PDF/image OCR is not enabled in this uploader.</p>
               </div>
 
               {/* Approved Knowledge Library Table */}
