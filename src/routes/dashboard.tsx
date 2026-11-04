@@ -1045,9 +1045,9 @@ function Dashboard() {
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.style.height = "38px";
+    textarea.style.height = "34px";
     const contentHeight = textarea.scrollHeight;
-    textarea.style.height = `${Math.max(38, Math.min(contentHeight, 180))}px`;
+    textarea.style.height = `${Math.max(34, Math.min(contentHeight, 180))}px`;
     textarea.style.overflowY = contentHeight > 180 ? "auto" : "hidden";
   }, [draft]);
 
@@ -2895,18 +2895,28 @@ function Dashboard() {
                       ref={textareaRef}
                       rows={1}
                       className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      placeholder={composerFocused ? "" : createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
                       value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        if (/^@thinking(?:\\s|$)/i.test(nextValue)) {
+                          setThinkHarder(true);
+                          setDraft(nextValue.replace(/^@thinking\\s*/i, ""));
+                        } else {
+                          setDraft(nextValue);
+                        }
+                      }}
                       onKeyDown={handleKeyDown}
                       onPaste={handleComposerPaste}
                       onFocus={() => {
+                        setComposerFocused(true);
                         if (window.innerWidth < 768) {
                           window.requestAnimationFrame(() => {
                             textareaRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
                           });
                         }
                       }}
+                      onBlur={() => setComposerFocused(false)}
                       disabled={isSending}
                       aria-label="Message Misma"
                     />
@@ -2926,6 +2936,12 @@ function Dashboard() {
                   )}
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
+                      {composerFocused && <div className="aichat-composer-focus-hint">
+                        <span>Message Misma</span>
+                        <button type="button" className={`aichat-composer-thinking-chip${thinkHarder ? " active" : ""}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { setThinkHarder((value) => !value); textareaRef.current?.focus(); }}>
+                          @Thinking{thinkHarder ? " ✓" : ""}
+                        </button>
+                      </div>}
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
                         {plusMenuOpen ? (
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
