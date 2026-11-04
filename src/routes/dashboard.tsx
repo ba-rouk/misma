@@ -3106,9 +3106,9 @@ function Dashboard() {
                       ref={textareaRef}
                       rows={1}
                       className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma… · @Thinking for deeper reasoning"}
                       value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
+                      onChange={(e) => handleComposerDraftChange(e.target.value)}
                       onKeyDown={handleKeyDown}
                       onPaste={handleComposerPaste}
                       onFocus={() => {
