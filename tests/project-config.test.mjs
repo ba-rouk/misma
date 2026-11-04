@@ -302,5 +302,7 @@ test("generated images and videos can be saved into Library and Library media op
   assert.match(dashboard, /aichat-library-media-viewer/);
   assert.match(dashboard, /<video[^>]*controls/);
   assert.match(dashboard, /Download \{mediaType\}/);
+  assert.match(dashboard, /const downloadExtension = blob\.type/);
+  assert.match(dashboard, /downloadBlob\(blob, downloadName\)/);
   assert.match(styles, /\.aichat-library-media-viewer/);
 });
