@@ -310,6 +310,74 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
   }
 }
 
+function ComposerAttachmentPreview({
+  file,
+  index,
+  isUploading,
+  onRemove,
+}: {
+  file: File;
+  index: number;
+  isUploading: boolean;
+  onRemove: (index: number) => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoaded, setPreviewLoaded] = useState(false);
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const previewPending = (isImage || isVideo) && !previewLoaded;
+  const extension = file.name.split(".").pop()?.slice(0, 5).toUpperCase() || "FILE";
+  const sizeLabel = file.size < 1024 * 1024
+    ? Math.max(1, Math.round(file.size / 1024)) + " KB"
+    : (file.size / (1024 * 1024)).toFixed(1) + " MB";
+
+  useEffect(() => {
+    setPreviewLoaded(false);
+    if (!isImage && !isVideo) {
+      setPreviewUrl(null);
+      setPreviewLoaded(true);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file, isImage, isVideo]);
+
+  return (
+    <div className="aichat-composer-attachment-card" title={file.name}>
+      <div className="aichat-composer-attachment-square">
+        {isImage && previewUrl ? (
+          <img src={previewUrl} alt={file.name} onLoad={() => setPreviewLoaded(true)} />
+        ) : isVideo && previewUrl ? (
+          <video src={previewUrl} muted playsInline preload="metadata" onLoadedData={() => setPreviewLoaded(true)} />
+        ) : (
+          <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
+            <span>{isPdf ? "PDF" : extension}</span>
+            <small>{isPdf ? "Document" : isVideo ? "Video" : "File"}</small>
+          </div>
+        )}
+        <button
+          type="button"
+          className="aichat-composer-attachment-remove"
+          aria-label={"Remove " + file.name}
+          onClick={() => onRemove(index)}
+        >×</button>
+        {isUploading || previewPending ? (
+          <div className="aichat-composer-upload-state is-uploading" role="status">
+            <i />
+            <span>{isUploading ? "Uploading" : "Loading"}</span>
+          </div>
+        ) : (
+          <span className="aichat-composer-upload-state is-ready"><i>✓</i></span>
+        )}
+      </div>
+      <span className="aichat-composer-attachment-name">{file.name}</span>
+      <span className="aichat-composer-attachment-size">{sizeLabel}</span>
+    </div>
+  );
+}
+
 function MessageAttachmentViews({
   attachments,
   onDownload,
@@ -616,6 +684,7 @@ function Dashboard() {
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [thinkHarder, setThinkHarder] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
@@ -1168,7 +1237,9 @@ function Dashboard() {
     videoFrameMode = false,
   ): Promise<MessageAttachment[]> => {
     if (!filesToUpload.length) return [];
-    if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
+    setUploadingAttachments(true);
+    try {
+      if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
     const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
     if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
 
@@ -1206,8 +1277,11 @@ function Dashboard() {
         await uploadOne(original, "file");
       }
     }
-    if (uploaded.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
-    return uploaded;
+      if (uploaded.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
+      return uploaded;
+    } finally {
+      setUploadingAttachments(false);
+    }
   };
 
   const postChatAction = async (body: Record<string, unknown>) => {
@@ -2633,16 +2707,32 @@ function Dashboard() {
                     {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
                   </div>
                   {selectedFiles.length > 0 && (
-                    <div className="aichat-composer-attachments">
+                    <div className="aichat-composer-attachments" aria-label="Attachments ready to send">
                       {selectedFiles.map((file, index) => (
-                        <div className="aichat-composer-attachment-chip" key={`${file.name}-${file.lastModified}-${index}`}>
-                          <span>{file.type.startsWith("image/") ? "▧" : file.type.startsWith("video/") ? "▶" : "📎"}</span>
-                          <span title={file.name}>{file.name}</span>
-                          <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== index))}>×</button>
-                        </div>
+                        <ComposerAttachmentPreview
+                          key={`${file.name}-${file.lastModified}-${index}`}
+                          file={file}
+                          index={index}
+                          isUploading={uploadingAttachments}
+                          onRemove={(removeIndex) => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== removeIndex))}
+                        />
                       ))}
                     </div>
                   )}
+                  <div className="aichat-composer-input-row">
+                    <textarea
+                      ref={textareaRef}
+                      rows={1}
+                      className="aichat-composer-textarea"
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handleComposerPaste}
+                      disabled={isSending}
+                      aria-label="Message Misma"
+                    />
+                  </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
@@ -2679,18 +2769,7 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <textarea
-                      ref={textareaRef}
-                      rows={1}
-                      className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handleComposerPaste}
-                      disabled={isSending}
-                      aria-label="Message Misma"
-                    />
+                    <div className="aichat-composer-sendrow-spacer" />
                     <button
                       type="button"
                       className={`aichat-composer-voice${voiceInputActive ? " is-listening" : ""}`}
@@ -2719,10 +2798,6 @@ function Dashboard() {
                   <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                 </form>
-                <p className="aichat-disclaimer-text">
-                  Misma can make mistakes. Verify important business details.{" "}
-                  <a href="#">Learn more</a>
-                </p>
               </div>
             </div>
           </div>

@@ -90,3 +90,20 @@ test("Misma does not ship the legacy website widget", async () => {
   assert.doesNotMatch(dashboard, /bizai-webchat|ozonvttkzvbchhjhsvre|3ada0fcfa47afc5fd17462f9399f79b2cc92/);
   await assert.rejects(access(new URL("../public/bizai-widget.js", import.meta.url)));
 });
+
+test("media generation has provider fallback and the composer shows ready attachment previews", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+
+  assert.match(edgeFunction, /async function isMismaMediaSafe/);
+  assert.match(edgeFunction, /MEDIA_SAFETY_UNAVAILABLE/);
+  assert.match(edgeFunction, /IMAGE_GENERATION_TIMEOUT/);
+  assert.doesNotMatch(edgeFunction, /async function isAgnesMediaSafe/);
+  assert.match(dashboard, /function ComposerAttachmentPreview/);
+  assert.match(dashboard, /setUploadingAttachments\(true\)/);
+  assert.match(dashboard, /aichat-composer-input-row/);
+  assert.doesNotMatch(dashboard, /Misma can make mistakes|aichat-disclaimer-text/);
+  assert.match(styles, /\.aichat-composer-attachment-square/);
+  assert.match(styles, /\.aichat-composer-upload-state\.is-ready/);
+});
