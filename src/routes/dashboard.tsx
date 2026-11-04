@@ -1742,6 +1742,22 @@ function Dashboard() {
     shouldAutoScrollRef.current = true;
 
     try {
+      const selectedConversation = conversations.find((item: any) => Number(item.id) === Number(currentConversationId));
+      if (currentConversationId && selectedConversation?.status === "Needs you" && selectedConversation?.channel !== "Dashboard" && !editId && !isRetry) {
+        if (selectedFiles.length) throw new Error("Send text-only replies during a customer handoff.");
+        const reply = await callWidgetFunction({
+          action: "send-human-reply",
+          workspaceId: workspace?.id,
+          conversationId: currentConversationId,
+          message: textToSend,
+        });
+        if (!reply.message) throw new Error("The human reply was not saved.");
+        setMessages((prev) => prev.map((item) => item.id === tempUserId ? reply.message : item));
+        setSelectedFiles([]);
+        setThinkHarder(false);
+        loadData();
+        return;
+      }
       const attachments = editId ? [] : await uploadSelectedAttachments();
       const res = await postChatAction({
         action: "chat",
