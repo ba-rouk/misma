@@ -701,7 +701,7 @@ async function isMismaMediaSafe(
       const bIndex = reviewerPreferences.indexOf(b.name);
       return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex);
     })
-    .slice(0, 3);
+    .slice(0, 4);
 
   if (!candidates.length) {
     throw new Error("No configured provider is available for media safety review.");
