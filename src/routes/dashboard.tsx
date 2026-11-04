@@ -3265,7 +3265,16 @@ function Dashboard() {
               {chatError && (
                 <div className="aichat-error-box" role="alert">
                   <span>{chatError}</span>
-                  {failedAction === "regenerate" ? (
+                  {failedMediaRetry ? (
+                    <button
+                      type="button"
+                      className="aichat-retry-btn"
+                      onClick={() => void handleCreateMedia(failedMediaRetry.mode, failedMediaRetry.prompt, undefined, failedMediaRetry)}
+                      disabled={isSending || isGeneratingMedia}
+                    >
+                      Try again
+                    </button>
+                  ) : failedAction === "regenerate" ? (
                     <button type="button" className="aichat-retry-btn" onClick={() => void handleRegenerate()} disabled={isSending}>
                       Try again
                     </button>
@@ -3296,29 +3305,41 @@ function Dashboard() {
                   }}
                 >
                   <div className="aichat-composer-tools-row">
-                    {thinkHarder && (
-                      <button type="button" className="aichat-composer-mode-pill" onClick={() => setThinkHarder(false)}>✧ Think harder <span>×</span></button>
-                    )}
-                    {createMode && (
-                      <button type="button" className="aichat-composer-mode-pill is-create" onClick={() => setCreateMode(null)}>✦ Create {createMode} <span>×</span></button>
-                    )}
                     {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
                   </div>
                   <div className="aichat-composer-input-row">
+                    {createMode ? (
+                      <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
+                        @create {createMode}<span aria-hidden="true">×</span>
+                      </button>
+                    ) : thinkHarder ? (
+                      <button type="button" className="aichat-mode-token is-thinking" onClick={() => setThinkHarder(false)} aria-label="Remove thinking mode">
+                        @thinking<span aria-hidden="true">×</span>
+                      </button>
+                    ) : null}
                     <textarea
                       ref={textareaRef}
                       rows={1}
                       className="aichat-composer-textarea"
-                      placeholder={composerFocused ? "" : createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      placeholder={composerFocused ? "" : createMode ? `Describe the ${createMode} you want Agnes to create…` : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
                       value={draft}
                       onChange={(e) => {
                         const nextValue = e.target.value;
-                        if (nextValue.toLowerCase().startsWith("@thinking") && (nextValue.length === 9 || /\s/.test(nextValue[9]))) {
-                          setThinkHarder(true);
-                          setDraft(nextValue.slice(9).trimStart());
-                        } else {
-                          setDraft(nextValue);
+                        const createMatch = nextValue.match(/^@create\\s+(image|video)(?=\\s|$)\\s*/i);
+                        if (createMatch) {
+                          setCreateMode(createMatch[1].toLowerCase() as "image" | "video");
+                          setThinkHarder(false);
+                          setDraft(nextValue.slice(createMatch[0].length));
+                          return;
                         }
+                        const thinkingMatch = nextValue.match(/^@thinking(?=\\s|$)\\s*/i);
+                        if (thinkingMatch) {
+                          setThinkHarder(true);
+                          setCreateMode(null);
+                          setDraft(nextValue.slice(thinkingMatch[0].length));
+                          return;
+                        }
+                        setDraft(nextValue);
                       }}
                       onKeyDown={handleKeyDown}
                       onPaste={handleComposerPaste}
@@ -3359,7 +3380,7 @@ function Dashboard() {
                       </button>
                       {plusMenuOpen && (
                         <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
-                          <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setPlusMenuOpen(false); }}>
+                          <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setCreateMode(null); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/></svg></span>
                             <span><strong>Think harder</strong></span>
                             <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
@@ -3377,7 +3398,11 @@ function Dashboard() {
                             <span><strong>Camera</strong></span>
                           </button>
                           <div className="aichat-plus-menu-divider" />
-                          <button type="button" role="menuitem" onClick={() => { setCreateMode("video"); setPlusMenuOpen(false); }}>
+                          <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("image"); setPlusMenuOpen(false); }}>
+                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                            <span><strong>Create image</strong></span>
+                          </button>
+                          <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("video"); setPlusMenuOpen(false); }}>
                             <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
                             <span><strong>Create video</strong></span>
                           </button>
@@ -3449,7 +3474,7 @@ function Dashboard() {
                 </div>
                 <button type="button" className="aichat-action-btn" onClick={() => {
                   setActiveTab("workspace");
-                  setCreateMode("image");
+                  setThinkHarder(false); setCreateMode("image");
                   setPlusMenuOpen(false);
                   setMobileMenuOpen(false);
                   window.setTimeout(() => textareaRef.current?.focus(), 0);
@@ -3462,7 +3487,7 @@ function Dashboard() {
                   <p>Generated images and image uploads from your chats will appear here.</p>
                   <button type="button" className="aichat-action-btn" onClick={() => {
                     setActiveTab("workspace");
-                    setCreateMode("image");
+                    setThinkHarder(false); setCreateMode("image");
                     window.setTimeout(() => textareaRef.current?.focus(), 0);
                   }}>Create your first image</button>
                 </div>
