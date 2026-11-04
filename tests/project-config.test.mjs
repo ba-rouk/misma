@@ -81,7 +81,8 @@ test("the Misma migration provisions only the dashboard's required RLS schema", 
   assert.match(migration, /is_workspace_member/);
   assert.doesNotMatch(migration, /businesses|business_members|website_sources|website_pages|agent_training_runs|storage\.buckets|DROP TABLE/i);
   assert.equal(oldMigration, false);
-  assert.match(edgeConfig, /verify_jwt = true/);
+  assert.match(edgeConfig, /verify_jwt = false/);
+  assert.match(await read("../supabase/functions/misma-chat/index.ts"), /handlePublicWidgetAction/);
 });
 
 test("Misma does not ship the legacy website widget", async () => {
