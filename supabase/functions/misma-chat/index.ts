@@ -172,7 +172,7 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
       const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(6_000),
         body: JSON.stringify({
           api_key: tavilyKey,
           query,
@@ -212,7 +212,7 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
       if (isNews) searchUrl.searchParams.set("freshness", "pm");
       const response = await fetch(searchUrl, {
         headers: { "Accept": "application/json", "X-Subscription-Token": braveKey },
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(6_000),
       });
       const payload: unknown = await response.json().catch(() => null);
       const resultBlock = isRecord(payload)
@@ -701,7 +701,7 @@ async function isMismaMediaSafe(
       const bIndex = reviewerPreferences.indexOf(b.name);
       return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex);
     })
-    .slice(0, 5);
+    .slice(0, 3);
 
   if (!candidates.length) {
     throw new Error("No configured provider is available for media safety review.");
@@ -722,7 +722,7 @@ async function isMismaMediaSafe(
         images,
         [],
         false,
-        10_000,
+        6_000,
       );
       const decision = answer.trim().match(/^(ALLOW|BLOCK)\b/i)?.[1]?.toUpperCase();
       if (decision === "ALLOW") return true;
@@ -1640,14 +1640,41 @@ Deno.serve(async (request) => {
     let answer = "";
     let selectedProvider = "";
     const providerFailures: string[] = [];
-    for (const provider of providers) {
-      try {
-        answer = await requestProvider(provider, systemPrompt, history, message, prepared.images, prepared.pdfs, thinkHarder);
-        selectedProvider = provider.name;
+    const providerBudgetMs = thinkHarder ? 32_000 : prepared.images.length ? 22_000 : 18_000;
+    const providerDeadline = Date.now() + providerBudgetMs;
+    for (let index = 0; index < providers.length; index += 1) {
+      const provider = providers[index];
+      const remainingMs = providerDeadline - Date.now();
+      if (remainingMs <= 0) {
+        providerFailures.push(provider.name + ":deadline-exceeded");
         break;
-      } catch {
+      }
+      const providerTimeoutMs = Math.min(
+        thinkHarder ? 12_000 : index === 0 ? 7_000 : 5_000,
+        remainingMs,
+      );
+      const providerStartedAt = Date.now();
+      try {
+        answer = await requestProvider(
+          provider, systemPrompt, history, message, prepared.images, prepared.pdfs,
+          thinkHarder, providerTimeoutMs,
+        );
+        selectedProvider = provider.name;
+        console.info("[misma-chat] Provider response completed.", {
+          provider: provider.name,
+          attempt: index + 1,
+          elapsedMs: Date.now() - providerStartedAt,
+        });
+        break;
+      } catch (providerError) {
+        const elapsedMs = Date.now() - providerStartedAt;
         providerFailures.push(provider.name);
-        // Provider errors are deliberately not returned to clients or logged with credentials.
+        console.warn("[misma-chat] Provider fallback triggered.", {
+          provider: provider.name,
+          attempt: index + 1,
+          elapsedMs,
+          reason: providerError instanceof Error ? providerError.name : "unknown",
+        });
       }
     }
     if (!answer) {
