@@ -134,7 +134,10 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(dashboard, /filteredRecentChats\.slice/);
   assert.match(api, /unreadVisitorCount/);
   assert.match(api, /markVisitorMessagesRead/);
+  assert.match(api, /getVisitorNotifications/);
   assert.match(api, /\.is\("read_at", null\)/);
+  assert.match(dashboard, /getVisitorNotifications\(\{ data: \{ token \} \}\)/);
+  assert.doesNotMatch(dashboard, /setInterval\(\(\) => loadData\(\)/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS read_at timestamptz/);
   assert.match(migration, /messages_unread_visitor_idx/);
   assert.match(styles, /\.aichat-notification-trigger\.has-unread/);
