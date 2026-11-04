@@ -432,7 +432,7 @@ export const getBusinessWorkspaceFeatures = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
-    const [websitesResult, productsResult, conversationsResult, handoffsResult] = await Promise.all([
+    const [websitesResult, productsResult, conversationsResult, handoffsResult, scansResult] = await Promise.all([
       db.from("workspace_websites")
         .select("id,name,website_url,domain,public_key,status,created_at")
         .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -447,11 +447,21 @@ export const getBusinessWorkspaceFeatures = createServerFn({ method: "POST" })
       db.from("human_handoff_requests")
         .select("id,website_id,conversation_id,visitor_name,visitor_email,request_note,status,read_at,created_at,resolved_at")
         .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+      db.from("website_scan_runs")
+        .select("id,website_id,status,pages_scanned,summary,error,started_at,completed_at")
+        .eq("workspace_id", workspaceId).order("started_at", { ascending: false }).limit(20),
     ]);
     const websites = check(websitesResult.data, websitesResult.error) as any[];
     const products = check(productsResult.data, productsResult.error);
     const conversations = check(conversationsResult.data, conversationsResult.error) as any[];
     const handoffs = check(handoffsResult.data, handoffsResult.error) as any[];
+    const scans = (check(scansResult.data, scansResult.error) as any[]).map((scan) => {
+      let result: any = null;
+      if (scan.summary) {
+        try { result = JSON.parse(String(scan.summary)); } catch { result = { summary: String(scan.summary) }; }
+      }
+      return { ...scan, result };
+    });
     const conversationIds = conversations.map((item) => Number(item.id));
     const messagesResult = conversationIds.length
       ? await db.from("messages")
@@ -520,6 +530,11 @@ export const getBusinessWorkspaceFeatures = createServerFn({ method: "POST" })
     return {
       websites: websiteStats,
       products,
+      scans,
+      latestScansByWebsite: Object.fromEntries(websiteStats.map((website) => [
+        String(website.id),
+        scans.find((scan: any) => String(scan.website_id) === String(website.id)) || null,
+      ])),
       handoffs: openHandoffs.map((request) => ({
         ...request,
         conversation: conversationById.get(Number(request.conversation_id)) || null,
