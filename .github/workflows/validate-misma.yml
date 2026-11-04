@@ -5,6 +5,7 @@ on:
     branches:
       - fix/misma-video-search-voice-settings
       - fix/media-generation-timeouts-composer-layout
+      - feat/mobile-message-actions-composer
   pull_request:
     branches:
       - main

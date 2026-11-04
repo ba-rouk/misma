@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent,
   type ClipboardEvent,
+  type MouseEvent,
 } from "react";
 import {
   getMismaData,
@@ -717,6 +718,7 @@ function Dashboard() {
   const [messageFeedback, setMessageFeedback] = useState<Record<string, "up" | "down" | undefined>>({});
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [thinkHarder, setThinkHarder] = useState(false);
@@ -758,6 +760,7 @@ function Dashboard() {
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mobileMessageActionTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -959,11 +962,39 @@ function Dashboard() {
     };
   }, [authChecked, token]);
 
+  useEffect(() => () => clearMobileMessageActionTimer(), []);
+
+  // Follow the visual viewport so the composer remains above the on-screen keyboard on phones.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const updateMobileViewport = () => {
+      if (window.innerWidth < 768) {
+        document.documentElement.style.setProperty(
+          "--misma-mobile-viewport-height",
+          `${Math.round(viewport.height)}px`,
+        );
+      } else {
+        document.documentElement.style.removeProperty("--misma-mobile-viewport-height");
+      }
+    };
+    updateMobileViewport();
+    viewport.addEventListener("resize", updateMobileViewport);
+    viewport.addEventListener("scroll", updateMobileViewport);
+    window.addEventListener("orientationchange", updateMobileViewport);
+    return () => {
+      viewport.removeEventListener("resize", updateMobileViewport);
+      viewport.removeEventListener("scroll", updateMobileViewport);
+      window.removeEventListener("orientationchange", updateMobileViewport);
+      document.documentElement.style.removeProperty("--misma-mobile-viewport-height");
+    };
+  }, []);
+
   // Autogrow textarea as user types
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      const newHeight = Math.min(textareaRef.current.scrollHeight, 180);
+      const newHeight = Math.min(textareaRef.current.scrollHeight, 220);
       textareaRef.current.style.height = `${Math.max(newHeight, 24)}px`;
     }
   }, [draft]);
@@ -1093,6 +1124,34 @@ function Dashboard() {
     window.setTimeout(() => {
       setCopiedMessageId((current) => current === messageId ? null : current);
     }, 1400);
+  };
+
+  const clearMobileMessageActionTimer = () => {
+    if (mobileMessageActionTimerRef.current !== null) {
+      window.clearTimeout(mobileMessageActionTimerRef.current);
+      mobileMessageActionTimerRef.current = null;
+    }
+  };
+
+  const startMobileMessageLongPress = (messageId: string) => {
+    if (!window.matchMedia("(hover: none)").matches && window.innerWidth >= 768) return;
+    clearMobileMessageActionTimer();
+    mobileMessageActionTimerRef.current = window.setTimeout(() => {
+      setMobileActionMessageId(messageId);
+      if ("vibrate" in navigator) navigator.vibrate?.(12);
+      mobileMessageActionTimerRef.current = null;
+    }, 520);
+  };
+
+  const cancelMobileMessageLongPress = () => {
+    clearMobileMessageActionTimer();
+  };
+
+  const openMobileMessageActionsFromContextMenu = (event: MouseEvent, messageId: string) => {
+    if (!window.matchMedia("(hover: none)").matches) return;
+    event.preventDefault();
+    clearMobileMessageActionTimer();
+    setMobileActionMessageId(messageId);
   };
 
   const handleCopyMessage = async (msg: Message) => {
@@ -2616,7 +2675,17 @@ function Dashboard() {
         {/* ── View 1: Workspace (ChatGPT-Style Interface) ── */}
         {activeTab === "workspace" && (
           <div className="aichat-scroll-area">
-            <div className="aichat-conversation-wrap" ref={scrollRef} onScroll={handleScroll}>
+            <div
+              className="aichat-conversation-wrap"
+              ref={scrollRef}
+              onScroll={handleScroll}
+              onTouchStart={(event) => {
+                const target = event.target;
+                if (target instanceof Element && !target.closest(".aichat-message-row.is-user") && !target.closest(".aichat-message-actions")) {
+                  setMobileActionMessageId(null);
+                }
+              }}
+            >
               {messages.length === 0 ? (
                 /* Empty State */
                 <div className="aichat-greeting-wrap">
@@ -2664,7 +2733,14 @@ function Dashboard() {
                         </div>
                       )}
                       <div className="aichat-message-content">
-                        <div className="aichat-bubble">
+                        <div
+                          className="aichat-bubble"
+                          onTouchStart={isUserMessage ? () => startMobileMessageLongPress(msg.id) : undefined}
+                          onTouchMove={isUserMessage ? cancelMobileMessageLongPress : undefined}
+                          onTouchEnd={isUserMessage ? cancelMobileMessageLongPress : undefined}
+                          onTouchCancel={isUserMessage ? cancelMobileMessageLongPress : undefined}
+                          onContextMenu={isUserMessage ? (event) => openMobileMessageActionsFromContextMenu(event, msg.id) : undefined}
+                        >
                           <MessageAttachmentViews
                             attachments={msg.attachments}
                             onDownload={(attachment) => void handleDownloadGeneratedMedia(attachment)}
@@ -2692,19 +2768,19 @@ function Dashboard() {
                         </div>
                         {!msg.pendingMedia && (
                         <div
-                          className="aichat-message-actions"
+                          className={`aichat-message-actions${isUserMessage && mobileActionMessageId === msg.id ? " is-mobile-open" : ""}`}
                           role="group"
                           aria-label={isUserMessage ? "Your message actions" : "Misma response actions"}
                         >
                           {isUserMessage ? (
                             <>
-                              <button type="button" className="aichat-message-action" title="Copy message" aria-label="Copy message" onClick={() => void handleCopyMessage(msg)}>
+                              <button type="button" className="aichat-message-action" title="Copy message" aria-label="Copy message" onClick={() => { void handleCopyMessage(msg); }}>
                                 <ActionIcon name="copy" />
                               </button>
-                              <button type="button" className="aichat-message-action" title="Share prompt" aria-label="Share prompt" onClick={() => void handleShareMessage(msg, "Misma prompt")}>
+                              <button type="button" className="aichat-message-action" title="Share prompt" aria-label="Share prompt" onClick={() => { setMobileActionMessageId(null); void handleShareMessage(msg, "Misma prompt"); }}>
                                 <ActionIcon name="share" />
                               </button>
-                              <button type="button" className="aichat-message-action" title="Edit message" aria-label="Edit message" disabled={isSending} onClick={() => handleEditMessage(msg)}>
+                              <button type="button" className="aichat-message-action" title="Edit message" aria-label="Edit message" disabled={isSending} onClick={() => { setMobileActionMessageId(null); handleEditMessage(msg); }}>
                                 <ActionIcon name="edit" />
                               </button>
                             </>
@@ -2836,6 +2912,27 @@ function Dashboard() {
                     )}
                     {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
                   </div>
+                  <div className="aichat-composer-input-row">
+                    <textarea
+                      ref={textareaRef}
+                      rows={1}
+                      className="aichat-composer-textarea"
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handleComposerPaste}
+                      onFocus={() => {
+                        if (window.innerWidth < 768) {
+                          window.requestAnimationFrame(() => {
+                            textareaRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                          });
+                        }
+                      }}
+                      disabled={isSending}
+                      aria-label="Message Misma"
+                    />
+                  </div>
                   {selectedFiles.length > 0 && (
                     <div className="aichat-composer-attachments" aria-label="Attachments ready to send">
                       {selectedFiles.map((file, index) => (
@@ -2885,18 +2982,7 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <textarea
-                      ref={textareaRef}
-                      rows={1}
-                      className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handleComposerPaste}
-                      disabled={isSending}
-                      aria-label="Message Misma"
-                    />
+
                     <button
                       type="button"
                       className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
