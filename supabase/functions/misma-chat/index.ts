@@ -1181,25 +1181,44 @@ Deno.serve(async (request) => {
 
       if (action === "create-image") {
         const imageModel = Deno.env.get("AGNES_IMAGE_MODEL") || "agnes-image-2.5-flash";
-        const createResponse = await fetch("https://apihub.agnes-ai.com/v1/images/generations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
-          signal: AbortSignal.timeout(90_000),
-          body: JSON.stringify({
-            model: imageModel,
-            prompt: safePrompt,
-            n: 1,
-            size: "1K",
-            ratio: typeof input.imageRatio === "string" && ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"].includes(input.imageRatio) ? input.imageRatio : "1:1",
-            ...(hasImageReferences ? {
-              extra_body: {
-                image: prepared.images.slice(0, 5).map((image) => image.dataUrl || image.url),
-                response_format: "url",
-              },
-            } : {}),
-          }),
-        });
-        const payload: unknown = await createResponse.json().catch(() => null);
+        let createResponse: Response;
+        let payload: unknown = null;
+        try {
+          createResponse = await fetch("https://apihub.agnes-ai.com/v1/images/generations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${agnesKey}` },
+            signal: AbortSignal.timeout(90_000),
+            body: JSON.stringify({
+              model: imageModel,
+              prompt: safePrompt,
+              n: 1,
+              size: "1K",
+              ratio: typeof input.imageRatio === "string" && ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"].includes(input.imageRatio) ? input.imageRatio : "1:1",
+              ...(hasImageReferences ? {
+                extra_body: {
+                  image: prepared.images.slice(0, 5).map((image) => image.dataUrl || image.url),
+                  response_format: "url",
+                },
+              } : {}),
+            }),
+          });
+          payload = await createResponse.json().catch(() => null);
+        } catch (error) {
+          const timedOut = error instanceof Error && /timeout|timed out|signal timed out/i.test(error.message);
+          console.error("[misma-chat] Agnes image generation request failed.", {
+            reason: error instanceof Error ? error.name : "unknown",
+            timedOut,
+          });
+          return jsonResponse(timedOut ? 504 : 502, {
+            error: timedOut
+              ? "Agnes is taking longer than expected to create this image. Your prompt is saved; please try again shortly."
+              : "Misma could not reach Agnes to create this image. Your prompt is saved; please try again shortly.",
+            code: timedOut ? "IMAGE_GENERATION_TIMEOUT" : "AGNES_IMAGE_UNAVAILABLE",
+            retryable: true,
+            conversationId: mediaSaved.conversationId,
+            ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}),
+          });
+        }
         if (!createResponse.ok || !isRecord(payload) || !Array.isArray(payload.data) || !isRecord(payload.data[0]) || typeof payload.data[0].url !== "string") {
           console.error("[misma-chat] Agnes image generation failed.", { status: createResponse.status });
           return jsonResponse(502, { error: "Agnes could not generate the image. Check image model access and try again.", conversationId: mediaSaved.conversationId, ...(mediaSaved.userMessage ? { userMessage: mediaSaved.userMessage } : {}) });
