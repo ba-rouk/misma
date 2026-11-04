@@ -20,6 +20,13 @@ import {
   updateOrderStatus,
   saveWorkspaceProfile,
   markVisitorMessagesRead,
+  getBusinessHubData,
+  createWebsiteConnection,
+  setWebsiteConnectionStatus,
+  saveProductService,
+  setProductServiceActive,
+  updateHumanRequestStatus,
+  markWorkspaceNotificationRead,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -28,7 +35,7 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "notifications" | "settings";
+type TabId = "workspace" | "website-statistics" | "websites" | "images" | "library" | "build" | "knowledge" | "products" | "connect" | "phone" | "whatsapp" | "manage" | "customers" | "recent" | "notifications" | "settings";
 
 type UnreadVisitorMessage = {
   id: number;
@@ -606,6 +613,28 @@ function Dashboard() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [unreadVisitorMessages, setUnreadVisitorMessages] = useState<UnreadVisitorMessage[]>([]);
   const [unreadVisitorCount, setUnreadVisitorCount] = useState(0);
+  const [websiteConnections, setWebsiteConnections] = useState<any[]>([]);
+  const [humanRequests, setHumanRequests] = useState<any[]>([]);
+  const [workspaceNotifications, setWorkspaceNotifications] = useState<any[]>([]);
+  const [productsServices, setProductsServices] = useState<any[]>([]);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [manageMenuOpen, setManageMenuOpen] = useState(false);
+  const [buildMenuOpen, setBuildMenuOpen] = useState(false);
+  const [connectMenuOpen, setConnectMenuOpen] = useState(false);
+  const [websiteNameDraft, setWebsiteNameDraft] = useState("");
+  const [websiteUrlDraft, setWebsiteUrlDraft] = useState("");
+  const [websiteCreating, setWebsiteCreating] = useState(false);
+  const [selectedWebsiteForSetup, setSelectedWebsiteForSetup] = useState<any>(null);
+  const [websiteScanStatus, setWebsiteScanStatus] = useState("");
+  const [websiteScanBusy, setWebsiteScanBusy] = useState(false);
+  const [productTypeDraft, setProductTypeDraft] = useState<"product" | "service">("product");
+  const [productNameDraft, setProductNameDraft] = useState("");
+  const [productDescriptionDraft, setProductDescriptionDraft] = useState("");
+  const [productPriceDraft, setProductPriceDraft] = useState("");
+  const [productSaving, setProductSaving] = useState(false);
+  const [productSuggestions, setProductSuggestions] = useState<any[]>([]);
+  const [productSuggestionBusy, setProductSuggestionBusy] = useState(false);
+  const [productAdviceMessage, setProductAdviceMessage] = useState("");
 
   // Profile
   const [profileName, setProfileName] = useState("Your account");
@@ -905,8 +934,15 @@ function Dashboard() {
   const loadData = () => {
     if (!token) return;
     setLoadError("");
-    getMismaData({ data: { token } })
-      .then((data) => {
+    Promise.all([
+      getMismaData({ data: { token } }),
+      getBusinessHubData({ data: { token } }),
+    ])
+      .then(([data, hub]) => {
+        setWebsiteConnections(hub.websites ?? []);
+        setHumanRequests(hub.handoffs ?? []);
+        setWorkspaceNotifications(hub.notifications ?? []);
+        setProductsServices(hub.products ?? []);
         setWorkspace(data.workspace);
         setConversations(data.conversations ?? []);
         setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
@@ -2150,6 +2186,157 @@ function Dashboard() {
     }
   };
 
+  const handleCreateWebsite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!token || websiteCreating) return;
+    setWebsiteCreating(true);
+    try {
+      const result = await createWebsiteConnection({ data: {
+        token, name: websiteNameDraft.trim() || new URL(websiteUrlDraft).hostname,
+        websiteUrl: websiteUrlDraft.trim(),
+      } });
+      setSelectedWebsiteForSetup(result.website);
+      setWebsiteNameDraft("");
+      setWebsiteUrlDraft("");
+      await loadData();
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not add this website.");
+    } finally {
+      setWebsiteCreating(false);
+    }
+  };
+
+  const widgetInstallScript = (website: any) => {
+    const config = getSupabaseConfig();
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://misma.onrender.com";
+    if (!config) return "";
+    return `<script src="${origin}/misma-widget.js" data-misma-key="${website.public_key}" data-endpoint="${config.url.replace(/\/$/, "")}/functions/v1/misma-widget" data-apikey="${config.publishableKey}" async></script>`;
+  };
+
+  const handleWebsiteDone = async (website: any) => {
+    if (!token) return;
+    try {
+      await setWebsiteConnectionStatus({ data: { token, websiteId: website.id, status: "connected" } });
+      setSelectedWebsiteForSetup({ ...website, status: "connected" });
+      await loadData();
+      window.open(website.website_url, "_blank", "noopener,noreferrer");
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not finish website setup.");
+    }
+  };
+
+  const callWebsiteTool = async (website: any, action: "scan" | "suggest-products") => {
+    const config = getSupabaseConfig();
+    if (!config || !token) throw new Error("Misma's website service is not configured.");
+    const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-widget`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.publishableKey,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action, siteKey: website.public_key, sessionId: crypto.randomUUID() }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Misma could not complete this website action.");
+    return result;
+  };
+
+  const handleScanWebsite = async (website: any) => {
+    setWebsiteScanBusy(true);
+    setWebsiteScanStatus("Misma is reviewing the website pages and adding business knowledge…");
+    try {
+      const result = await callWebsiteTool(website, "scan");
+      setWebsiteScanStatus(`Review complete: ${result.pagesScanned} pages scanned and ${result.knowledgeSources} knowledge sources added.`);
+      await loadData();
+    } catch (cause) {
+      setWebsiteScanStatus(cause instanceof Error ? cause.message : "Website review failed.");
+    } finally {
+      setWebsiteScanBusy(false);
+    }
+  };
+
+  const handleSaveProduct = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!token || productSaving || !productNameDraft.trim()) return;
+    setProductSaving(true);
+    try {
+      await saveProductService({ data: {
+        token, itemType: productTypeDraft, name: productNameDraft.trim(),
+        description: productDescriptionDraft.trim(), priceText: productPriceDraft.trim(),
+        createdFrom: "manual",
+      } });
+      setProductNameDraft(""); setProductDescriptionDraft(""); setProductPriceDraft("");
+      await loadData();
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not save this product or service.");
+    } finally { setProductSaving(false); }
+  };
+
+  const handleGetProductAdvice = async () => {
+    const website = websiteConnections.find((item) => item.status !== "paused");
+    if (!website) {
+      setProductAdviceMessage("Connect a website widget and collect visitor conversations before requesting demand-based suggestions.");
+      return;
+    }
+    setProductSuggestionBusy(true); setProductAdviceMessage("");
+    try {
+      const result = await callWebsiteTool(website, "suggest-products");
+      setProductSuggestions(result.suggestions ?? []);
+      setProductAdviceMessage(result.message || (result.suggestions?.length ? "Misma based these ideas on recent website visitor requests. Review before adding them." : "No suggestions are available yet."));
+    } catch (cause) {
+      setProductAdviceMessage(cause instanceof Error ? cause.message : "Misma could not prepare suggestions.");
+    } finally { setProductSuggestionBusy(false); }
+  };
+
+  const handleAddProductSuggestion = async (suggestion: any) => {
+    if (!token) return;
+    try {
+      await saveProductService({ data: {
+        token, itemType: suggestion.itemType, name: suggestion.name,
+        description: suggestion.description, priceText: suggestion.priceText || "",
+        createdFrom: "customer_demand",
+      } });
+      setProductSuggestions((items) => items.filter((item) => item.name !== suggestion.name));
+      await loadData();
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not save this suggestion.");
+    }
+  };
+
+  const handleToggleProduct = async (product: any) => {
+    if (!token) return;
+    try {
+      await setProductServiceActive({ data: { token, id: Number(product.id), active: !product.active } });
+      await loadData();
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not update this item.");
+    }
+  };
+
+  const handleCustomerRequestStatus = async (request: any, status: "pending" | "handled" | "closed") => {
+    if (!token) return;
+    try {
+      await updateHumanRequestStatus({ data: { token, id: Number(request.id), status } });
+      await loadData();
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not update the human request.");
+    }
+  };
+
+  const handleOpenWorkspaceNotification = async (item: any) => {
+    if (token && !item.is_read) {
+      try {
+        await markWorkspaceNotificationRead({ data: { token, id: Number(item.id) } });
+        setWorkspaceNotifications((current) => current.map((notice) => notice.id === item.id ? { ...notice, is_read: true } : notice));
+      } catch (cause) {
+        console.warn("Could not mark notification read.", cause);
+      }
+    }
+    if (item.conversation_id) void selectConversation(Number(item.conversation_id));
+    else if (item.website_connection_id) setActiveTab("websites");
+  };
+
   // Order status handler
   const handleUpdateOrderStatus = async (
     orderId: string,
@@ -2294,156 +2481,55 @@ function Dashboard() {
 
         {/* Main sidebar navigation */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
-          {/* 1. Workspace */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("workspace");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Workspace"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Workspace</span>
+          <div className="aichat-nav-group">
+            <button type="button" className={`aichat-nav-btn aichat-nav-group-trigger${["website-statistics","websites"].includes(activeTab) ? " active" : ""}`} onClick={() => setWorkspaceMenuOpen((open) => !open)} aria-expanded={workspaceMenuOpen} data-tooltip="Workspace">
+              <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg></span>
+              <span className="aichat-nav-label">Workspace</span><span className={`aichat-nav-chevron${workspaceMenuOpen ? " is-open" : ""}`}>⌄</span>
+            </button>
+            {workspaceMenuOpen && <div className="aichat-nav-submenu">
+              <button type="button" className={activeTab === "website-statistics" ? "active" : ""} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
+              <button type="button" className={activeTab === "websites" ? "active" : ""} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{websiteConnections.length}</span></button>
+              <button type="button" className={activeTab === "workspace" ? "active" : ""} onClick={() => { setActiveTab("workspace"); setMobileMenuOpen(false); }}>Chat workspace</button>
+            </div>}
+          </div>
+
+          <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span><span className="aichat-nav-label">Images</span>
+          </button>
+          <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
+            <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20"/></svg></span><span className="aichat-nav-label">Library</span>{workspaceAssets.length > 0 && <span className="aichat-nav-badge">{workspaceAssets.length}</span>}
           </button>
 
-          {/* Images */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`}
-            onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }}
-            data-tooltip="Images"
-          >
-            <span className="aichat-nav-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="3" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="m21 15-5-5L5 21" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Images</span>
-          </button>
+          <div className="aichat-nav-group">
+            <button type="button" className={`aichat-nav-btn aichat-nav-group-trigger${["products","knowledge"].includes(activeTab) ? " active" : ""}`} onClick={() => setBuildMenuOpen((open) => !open)} aria-expanded={buildMenuOpen} data-tooltip="Build">
+              <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m14 6 4 4M4 20l4-1 11-11-3-3L5 16z"/><path d="m14 6 4 4"/></svg></span><span className="aichat-nav-label">Build</span><span className={`aichat-nav-chevron${buildMenuOpen ? " is-open" : ""}`}>⌄</span>
+            </button>
+            {buildMenuOpen && <div className="aichat-nav-submenu">
+              <button type="button" className={activeTab === "products" ? "active" : ""} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services <span>{productsServices.length}</span></button>
+              <button type="button" className={activeTab === "knowledge" ? "active" : ""} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge <span>{knowledgeList.length}</span></button>
+            </div>}
+          </div>
 
-          {/* Library */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`}
-            onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }}
-            data-tooltip="Library"
-          >
-            <span className="aichat-nav-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z" />
-                <path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20" />
-                <path d="M8 6h8M8 9h8" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Library</span>
-            {workspaceAssets.length > 0 && <span className="aichat-nav-badge">{workspaceAssets.length}</span>}
-          </button>
+          <div className="aichat-nav-group">
+            <button type="button" className={`aichat-nav-btn aichat-nav-group-trigger${["phone","websites","whatsapp"].includes(activeTab) ? " active" : ""}`} onClick={() => setConnectMenuOpen((open) => !open)} aria-expanded={connectMenuOpen} data-tooltip="Connect">
+              <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span><span className="aichat-nav-label">Connect</span><span className={`aichat-nav-chevron${connectMenuOpen ? " is-open" : ""}`}>⌄</span>
+            </button>
+            {connectMenuOpen && <div className="aichat-nav-submenu">
+              <button type="button" className={activeTab === "phone" ? "active" : ""} onClick={() => { setActiveTab("phone"); setMobileMenuOpen(false); }}>Phone</button>
+              <button type="button" className={activeTab === "websites" ? "active" : ""} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Website</button>
+              <button type="button" className={activeTab === "whatsapp" ? "active" : ""} onClick={() => { setActiveTab("whatsapp"); setMobileMenuOpen(false); }}>WhatsApp</button>
+            </div>}
+          </div>
 
-          {/* Build */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "build" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("build");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Build"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Build</span>
-            {knowledgeList.length > 0 && (
-              <span className="aichat-nav-badge">{knowledgeList.length}</span>
-            )}
-          </button>
-
-          {/* 3. Connect */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "connect" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("connect");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Connect"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Connect</span>
-          </button>
-
-          {/* 4. Manage */}
-          <button
-            type="button"
-            className={`aichat-nav-btn${activeTab === "manage" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("manage");
-              setMobileMenuOpen(false);
-            }}
-            data-tooltip="Manage"
-          >
-            <span className="aichat-nav-icon">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </span>
-            <span className="aichat-nav-label">Manage</span>
-            {orders.length > 0 && (
-              <span className="aichat-nav-badge">{orders.length}</span>
-            )}
-          </button>
+          <div className="aichat-nav-group">
+            <button type="button" className={`aichat-nav-btn aichat-nav-group-trigger${["customers","notifications"].includes(activeTab) ? " active" : ""}`} onClick={() => setManageMenuOpen((open) => !open)} aria-expanded={manageMenuOpen} data-tooltip="Manage">
+              <span className="aichat-nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M17 11a3 3 0 1 0 0-6M18 14a5 5 0 0 1 3 5"/></svg></span><span className="aichat-nav-label">Manage</span><span className={`aichat-nav-chevron${manageMenuOpen ? " is-open" : ""}`}>⌄</span>{humanRequests.filter((item) => item.status === "pending").length > 0 && <span className="aichat-nav-badge">{humanRequests.filter((item) => item.status === "pending").length}</span>}
+            </button>
+            {manageMenuOpen && <div className="aichat-nav-submenu">
+              <button type="button" className={activeTab === "customers" ? "active" : ""} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers <span>{humanRequests.length}</span></button>
+              <button type="button" className={activeTab === "notifications" ? "active" : ""} onClick={() => { setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications <span>{workspaceNotifications.filter((item) => !item.is_read).length}</span></button>
+            </div>}
+          </div>
         </nav>
 
         {/* ── Chats and tasks widget (Cloud AI style) ── */}
@@ -2661,6 +2747,89 @@ function Dashboard() {
           <p className="aichat-error-box" role="alert">
             {loadError}
           </p>
+        )}
+
+        {activeTab === "website-statistics" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Website statistics</h2><p>See how your connected websites are engaging visitors through Misma.</p></div>
+            <div className="aichat-hub-stats">
+              <article className="aichat-card"><small>Connected websites</small><strong>{websiteConnections.filter((site) => site.status === "connected").length}</strong><span>{websiteConnections.length} configured</span></article>
+              <article className="aichat-card"><small>Website conversations</small><strong>{conversations.filter((item) => String(item.channel || "").toLowerCase() !== "dashboard").length}</strong><span>Visitor chat sessions recorded</span></article>
+              <article className="aichat-card"><small>Human requests</small><strong>{humanRequests.length}</strong><span>{humanRequests.filter((item) => item.status === "pending").length} waiting for your team</span></article>
+              <article className="aichat-card"><small>Unread notifications</small><strong>{workspaceNotifications.filter((item) => !item.is_read).length}</strong><span>New visitor activity</span></article>
+            </div>
+            <div className="aichat-card"><div className="aichat-hub-card-heading"><div><h3>Connected websites</h3><p>Open a website to manage its widget or review its pages.</p></div><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Manage websites</button></div>
+              {websiteConnections.length ? <div className="aichat-hub-list">{websiteConnections.map((site) => <div className="aichat-hub-list-row" key={site.id}><span><strong>{site.name}</strong><small>{site.domain} · {site.last_seen_at ? "Widget active" : "Waiting for widget"}</small></span><button type="button" className="aichat-action-btn secondary" onClick={() => { setSelectedWebsiteForSetup(site); setActiveTab("websites"); }}>Open</button></div>)}</div> : <p>No websites connected yet. Add your first website to start receiving visitor conversations.</p>}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "websites" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Websites</h2><p>Connect your website, install the Misma chat widget, and let Misma handle visitor questions.</p></div>
+            <div className="aichat-card"><h3>Add a website</h3><p>Enter the public website address. Misma will create a site-specific widget installation script.</p>
+              <form onSubmit={handleCreateWebsite}>
+                <div className="aichat-form-grid">
+                  <div className="aichat-input-group"><label htmlFor="misma-site-name">Website name</label><input id="misma-site-name" className="aichat-input" value={websiteNameDraft} onChange={(event) => setWebsiteNameDraft(event.target.value)} placeholder="My business website" /></div>
+                  <div className="aichat-input-group"><label htmlFor="misma-site-url">Website URL</label><input id="misma-site-url" className="aichat-input" type="url" required value={websiteUrlDraft} onChange={(event) => setWebsiteUrlDraft(event.target.value)} placeholder="https://example.com" /></div>
+                </div>
+                <button type="submit" className="aichat-action-btn" disabled={websiteCreating || !websiteUrlDraft.trim()}>{websiteCreating ? "Adding website…" : "+ Add website"}</button>
+              </form>
+            </div>
+            {selectedWebsiteForSetup && (
+              <div className="aichat-card">
+                <div className="aichat-hub-card-heading"><div><h3>Install Misma on {selectedWebsiteForSetup.name}</h3><p>Paste this script immediately before the closing &lt;/body&gt; tag on your website.</p></div><span className="aichat-header-badge">{selectedWebsiteForSetup.status}</span></div>
+                <pre className="aichat-embed-code">{widgetInstallScript(selectedWebsiteForSetup)}</pre>
+                <div className="aichat-hub-actions">
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => void navigator.clipboard.writeText(widgetInstallScript(selectedWebsiteForSetup))}>Copy installation script</button>
+                  <button type="button" className="aichat-action-btn" onClick={() => void handleWebsiteDone(selectedWebsiteForSetup)}>Done — open website</button>
+                </div>
+                <p className="aichat-settings-hint">After pasting and publishing the script, visitors will see the Misma launcher. The widget key is public and restricted to this website's registered domain.</p>
+                <div className="aichat-hub-actions">
+                  <button type="button" className="aichat-action-btn secondary" disabled={websiteScanBusy} onClick={() => void handleScanWebsite(selectedWebsiteForSetup)}>{websiteScanBusy ? "Reviewing website…" : "Review website with Misma"}</button>
+                  {websiteScanStatus && <span className="aichat-hub-status" role="status">{websiteScanStatus}</span>}
+                </div>
+              </div>
+            )}
+            <div className="aichat-card"><h3>All connected websites ({websiteConnections.length})</h3>
+              {websiteConnections.length ? <div className="aichat-hub-list">{websiteConnections.map((site) => <div className="aichat-hub-list-row" key={site.id}><span><strong>{site.name}</strong><small><a href={site.website_url} target="_blank" rel="noreferrer">{site.website_url}</a> · {site.last_seen_at ? "Widget seen" : "Waiting for installation"}</small></span><div className="aichat-hub-row-actions"><button type="button" className="aichat-action-btn secondary" onClick={() => setSelectedWebsiteForSetup(site)}>Install script</button><button type="button" className="aichat-action-btn secondary" onClick={() => void handleScanWebsite(site)}>Review</button></div></div>)}</div> : <p>Your connected websites will appear here.</p>}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "customers" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Customers requesting a human</h2><p>Visitors who asked to speak with your team. Open a request to review the full conversation.</p></div>
+            <div className="aichat-card"><h3>Human handoff requests ({humanRequests.length})</h3>
+              {humanRequests.length ? <div className="aichat-table-wrap"><table className="aichat-table"><thead><tr><th>Customer</th><th>Contact</th><th>Reason</th><th>Status</th><th>Requested</th><th>Conversation</th></tr></thead><tbody>
+                {humanRequests.map((item) => <tr key={item.id}><td><strong>{item.visitor_name || item.contact?.name || "Website visitor"}</strong></td><td>{item.visitor_email || item.contact?.email || item.visitor_phone || item.contact?.phone || "Not provided"}</td><td>{item.reason}</td><td>{item.status}</td><td>{new Date(item.created_at).toLocaleString()}</td><td><button type="button" className="aichat-action-btn secondary" onClick={() => { void selectConversation(Number(item.conversation_id)); }}>View conversation</button>{item.status === "pending" && <button type="button" className="aichat-action-btn" onClick={() => void handleCustomerRequestStatus(item,"handled")}>Take over</button>}{item.status !== "closed" && <button type="button" className="aichat-action-btn secondary" onClick={() => void handleCustomerRequestStatus(item,"closed")}>Close</button>}</td></tr>)}
+              </tbody></table></div> : <div className="aichat-notifications-empty"><h3>No human requests yet</h3><p>When a website visitor taps the person icon in the Misma widget, their request and conversation will appear here.</p></div>}
+            </div>
+          </div></div>
+        )}
+
+        {activeTab === "products" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Products &amp; services</h2><p>Create and maintain the offers Misma can confidently recommend to customers.</p></div>
+            <div className="aichat-card"><div className="aichat-hub-card-heading"><div><h3>Misma demand advice</h3><p>Use recent website visitor questions to identify products or services people are asking for.</p></div><button type="button" className="aichat-action-btn" disabled={productSuggestionBusy} onClick={() => void handleGetProductAdvice()}>{productSuggestionBusy ? "Analysing…" : "Suggest with Misma"}</button></div>
+              {productAdviceMessage && <p className="aichat-hub-status" role="status">{productAdviceMessage}</p>}
+              {productSuggestions.map((suggestion) => <div className="aichat-suggestion-row" key={suggestion.name}><div><strong>{suggestion.name}</strong><small>{suggestion.itemType} · {suggestion.description}</small></div><button type="button" className="aichat-action-btn secondary" onClick={() => void handleAddProductSuggestion(suggestion)}>Add to catalogue</button></div>)}
+            </div>
+            <div className="aichat-card"><h3>Add a product or service</h3><form onSubmit={handleSaveProduct}>
+              <div className="aichat-form-grid"><div className="aichat-input-group"><label htmlFor="misma-product-type">Type</label><select id="misma-product-type" className="aichat-select" value={productTypeDraft} onChange={(event) => setProductTypeDraft(event.target.value as "product" | "service")}><option value="product">Product</option><option value="service">Service</option></select></div><div className="aichat-input-group"><label htmlFor="misma-product-name">Name</label><input id="misma-product-name" className="aichat-input" required value={productNameDraft} onChange={(event) => setProductNameDraft(event.target.value)} placeholder="Name of product or service" /></div></div>
+              <div className="aichat-input-group"><label htmlFor="misma-product-description">Description</label><textarea id="misma-product-description" className="aichat-textarea" rows={3} value={productDescriptionDraft} onChange={(event) => setProductDescriptionDraft(event.target.value)} placeholder="Describe what customers receive and who it helps." /></div>
+              <div className="aichat-input-group"><label htmlFor="misma-product-price">Price (optional)</label><input id="misma-product-price" className="aichat-input" value={productPriceDraft} onChange={(event) => setProductPriceDraft(event.target.value)} placeholder="e.g. From 25,000 RWF" /></div>
+              <button type="submit" className="aichat-action-btn" disabled={productSaving || !productNameDraft.trim()}>{productSaving ? "Saving…" : "Save product or service"}</button>
+            </form></div>
+            <div className="aichat-card"><h3>Your catalogue ({productsServices.length})</h3>{productsServices.length ? <div className="aichat-hub-list">{productsServices.map((item) => <div className="aichat-hub-list-row" key={item.id}><span><strong>{item.name}</strong><small>{item.item_type} · {item.description} · {item.price_text || "Price not listed"}</small></span><button type="button" className="aichat-action-btn secondary" onClick={() => void handleToggleProduct(item)}>{item.active ? "Archive" : "Activate"}</button></div>)}</div> : <p>No products or services have been added yet.</p>}</div>
+          </div></div>
+        )}
+
+        {activeTab === "phone" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Connect a phone number</h2><p>Prepare a business phone channel for Misma voice and call handling.</p></div><div className="aichat-card"><h3>Phone integration setup</h3><p>Phone calling requires a telephony provider and a verified business number. Misma does not mark a number connected until a provider webhook and credentials are configured.</p><div className="aichat-input-group"><label htmlFor="misma-phone-number">Business phone number</label><input id="misma-phone-number" className="aichat-input" type="tel" placeholder="+250 7xx xxx xxx" /></div><div className="aichat-settings-info-row"><strong>Next step</strong><span>Choose a supported telephony provider (for example Twilio or a SIP carrier), configure its webhook to your Misma phone endpoint, then add the credentials as Supabase Edge Function secrets.</span></div><span className="aichat-header-badge">Not connected</span></div></div></div>
+        )}
+        {activeTab === "whatsapp" && (
+          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Connect WhatsApp</h2><p>Set up WhatsApp Business messaging through Meta's Cloud API.</p></div><div className="aichat-card"><h3>WhatsApp Business setup</h3><p>To connect securely, use a Meta WhatsApp Business account and configure a verified webhook. Access tokens must be stored as Supabase Edge Function secrets, never in browser code.</p><div className="aichat-settings-info-row"><strong>Required</strong><span>Meta Business account, WhatsApp Business phone number ID, permanent access token, and webhook verification token.</span></div><div className="aichat-settings-info-row"><strong>Webhook</strong><span>Webhook endpoint and verification instructions will be supplied when the Misma WhatsApp connector is enabled.</span></div><span className="aichat-header-badge">Not connected</span></div></div></div>
         )}
 
         {/* ── View 1: Workspace (ChatGPT-Style Interface) ── */}
@@ -3126,7 +3295,7 @@ function Dashboard() {
         )}
 
         {/* ── View 2: Build (AI Agent & Knowledge Base) ── */}
-        {activeTab === "build" && (
+        {activeTab === "knowledge" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
@@ -3826,42 +3995,17 @@ function Dashboard() {
           </div>
         )}
         {activeTab === "notifications" && (
-          <div className="aichat-tab-view">
-            <div className="aichat-tab-content">
-              <div className="aichat-tab-header">
-                <h2>Notifications {unreadVisitorCount > 0 ? `(${unreadVisitorCount} unread)` : ""}</h2>
-                <p>New messages sent by visitors through your website.</p>
-              </div>
-              <div className="aichat-card aichat-notifications-card">
-                {unreadVisitorMessages.length === 0 ? (
-                  <div className="aichat-notifications-empty">
-                    <span className="aichat-notifications-empty-icon" aria-hidden="true">✓</span>
-                    <h3>You're all caught up</h3>
-                    <p>New website visitor messages will appear here.</p>
-                  </div>
-                ) : (
-                  <>
-                    {unreadVisitorCount > unreadVisitorMessages.length && (
-                      <p className="aichat-notifications-overflow">Showing the latest {unreadVisitorMessages.length} unread messages.</p>
-                    )}
-                    <div className="aichat-notifications-list">
-                      {unreadVisitorMessages.map((item) => (
-                        <button key={item.id} type="button" className="aichat-notification-item" onClick={() => void selectConversation(item.conversationId)}>
-                          <span className="aichat-notification-item-icon" aria-hidden="true">●</span>
-                          <span className="aichat-notification-item-copy">
-                            <strong>{item.conversationTitle}</strong>
-                            <small>{item.channel} · {item.created_at ? new Date(item.created_at).toLocaleString() : "New message"}</small>
-                            <span>{item.text}</span>
-                          </span>
-                          <span className="aichat-notification-open">Open chat ↗</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+          <div className="aichat-tab-view"><div className="aichat-tab-content">
+            <div className="aichat-tab-header"><h2>Notifications</h2><p>All new and previous website activity, human handoff requests, and website review updates.</p></div>
+            <div className="aichat-card aichat-notifications-card">
+              {workspaceNotifications.length === 0 ? <div className="aichat-notifications-empty"><h3>No notifications yet</h3><p>New visitor messages and human requests will appear here.</p></div> :
+                <div className="aichat-notifications-list">{workspaceNotifications.map((item) => <button key={item.id} type="button" className={`aichat-notification-item${item.is_read ? " is-read" : ""}`} onClick={() => void handleOpenWorkspaceNotification(item)}>
+                  <span className="aichat-notification-item-icon" aria-hidden="true">{item.notification_type === "human_request" ? "♙" : item.notification_type === "website_scan_completed" ? "⌕" : "●"}</span>
+                  <span className="aichat-notification-item-copy"><strong>{item.title}</strong><small>{new Date(item.created_at).toLocaleString()} · {item.is_read ? "Read" : "New"}</small><span>{item.body}</span></span>
+                  <span className="aichat-notification-open">{item.conversation_id ? "Open chat ↗" : "View ↗"}</span>
+                </button>)}</div>}
             </div>
-          </div>
+          </div></div>
         )}
 
         {cropTarget && (
