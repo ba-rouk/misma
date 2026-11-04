@@ -49,7 +49,8 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   assert.match(dashboard, /signOut\(\{ scope: "local" \}\)/);
   assert.match(dashboard, /finally \{[\s\S]*navigate\(\{ to: "\/login", replace: true \}\)/);
   assert.doesNotMatch(server, /handleMismaChatRequest|\/api\/ai\/chat/);
-  assert.match(edgeFunction, /Deno\.env\.get\("GEMINI_API_KEY"\)/);
+  assert.match(edgeFunction, /Deno\.env\.get\(secret\)/);
+  assert.match(edgeFunction, /"GEMINI_API_KEY"/);
   assert.match(edgeFunction, /\.auth\.getUser\(accessToken\)/);
   assert.doesNotMatch(edgeFunction, /SERVICE_ROLE|service_role|NEXT_PUBLIC_/i);
 });
