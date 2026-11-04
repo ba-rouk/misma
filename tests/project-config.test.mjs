@@ -111,8 +111,11 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.equal(dashboard.includes("How can I help you today?"), false);
   assert.match(dashboard, /chatGroupFilter === "__ungrouped__"/);
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
-  assert.match(dashboard, /getUserMedia\(\{ audio: true \}\)/);
-  assert.match(dashboard, /browser\'s site controls/);
+  assert.match(dashboard, /recognition\.start\(\)/);
+  assert.match(dashboard, /webkitSpeechRecognition/);
+  assert.match(dashboard, /onstart = \(\) => setVoiceInputActive\(true\)/);
+  assert.match(dashboard, /audio-capture/);
+  assert.doesNotMatch(dashboard, /getUserMedia\(\{ audio: true \}\)/);
   assert.doesNotMatch(dashboard, /microphonePermissionOpen|requestMicrophoneAccess/);
   assert.match(dashboard, /aichat-notification-trigger/);
   assert.match(dashboard, /activeTab === "notifications"/);
@@ -176,4 +179,30 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
 
   assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
   assert.match(dashboard, /Start voice input/);
+});
+
+
+test("landing Get started opens the complete account creation form", async () => {
+  const landing = await read("../src/routes/index.tsx");
+  const login = await read("../src/routes/login.tsx");
+
+  assert.match(landing, /href="\/login\?mode=signup"/);
+  assert.match(login, /name="username"|autoComplete="username"/);
+  assert.match(login, /fullName/);
+  assert.match(login, /confirmPassword/);
+  assert.match(login, /password !== confirmPassword/);
+  assert.match(login, /full_name: normalizedName/);
+  assert.match(login, /username: normalizedUsername/);
+});
+
+test("image attachments receive visual analysis and show estimated generation progress", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+
+  assert.match(dashboard, /aichat-image-progress-track/);
+  assert.match(dashboard, /mediaProgressPercent/);
+  assert.match(dashboard, /Estimate only/);
+  assert.match(edgeFunction, /IMAGE INPUT:/);
+  assert.match(edgeFunction, /IMAGE UNDERSTANDING:/);
+  assert.match(edgeFunction, /prepared\.images\.length === 0 \|\| provider\.supportsImages/);
 });
