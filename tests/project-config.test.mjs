@@ -196,7 +196,7 @@ test("the business hub connects websites, stores human handoffs, and manages pro
   assert.match(dashboard, /data-misma-key=/);
   assert.match(dashboard, /Review website with Misma/);
   assert.match(dashboard, /Suggest with Misma/);
-  assert.match(dashboard, /Request a human/);
+  assert.match(embed, /Request a human/);
   assert.match(dashboard, /handleKnowledgeFileUpload/);
   assert.match(dashboard, /sendHumanReply/);
 
@@ -209,7 +209,7 @@ test("the business hub connects websites, stores human handoffs, and manages pro
   assert.match(widget, /suggest-products/);
   assert.match(widget, /website_scan_completed/);
   assert.match(embed, /Request a human/);
-  assert.match(embed, /functions\/v1\/misma-widget/);
+  assert.match(embed, /call\("human"/);
   assert.match(migration, /create table if not exists public\.website_connections/);
   assert.match(migration, /create table if not exists public\.human_requests/);
   assert.match(migration, /create table if not exists public\.products_services/);
