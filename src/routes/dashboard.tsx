@@ -2317,6 +2317,8 @@ function Dashboard() {
     setFailedAction(null);
     setIsSending(true);
     shouldAutoScrollRef.current = true;
+    const requestController = new AbortController();
+    chatAbortControllerRef.current = requestController;
 
     try {
       const config = getSupabaseConfig();
@@ -2331,6 +2333,7 @@ function Dashboard() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ conversationId: currentConversationId, regenerate: true }),
+        signal: requestController.signal,
       });
       const res = (await response.json()) as {
         error?: string;
@@ -2353,11 +2356,16 @@ function Dashboard() {
       setMessageFeedback({});
       loadData();
     } catch (cause) {
-      setChatError(cause instanceof Error ? cause.message : "Could not regenerate this response.");
-      setFailedAction("regenerate");
+      if (!requestController.signal.aborted) {
+        setChatError(cause instanceof Error ? cause.message : "Could not regenerate this response.");
+        setFailedAction("regenerate");
+      }
     } finally {
       regenerateInFlightRef.current = false;
-      setIsSending(false);
+      if (chatAbortControllerRef.current === requestController) {
+        chatAbortControllerRef.current = null;
+        setIsSending(false);
+      }
     }
   };
 
@@ -3240,9 +3248,10 @@ function Dashboard() {
                     <button
                       type="button"
                       className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
-                      disabled={isSending || isGeneratingMedia}
                       onClick={() => {
-                        if (voiceInputActive) {
+                        if (isSending || isGeneratingMedia) {
+                          stopMisma();
+                        } else if (voiceInputActive) {
                           handleVoiceInput();
                         } else if (draft.trim() || selectedFiles.length || createMode) {
                           if (createMode) void handleCreateMedia();
@@ -3251,8 +3260,8 @@ function Dashboard() {
                           handleVoiceInput();
                         }
                       }}
-                      title={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
-                      aria-label={isSending || isGeneratingMedia ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
+                      title={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
+                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
                     >
                       {isSending || isGeneratingMedia ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
@@ -4207,6 +4216,34 @@ function Dashboard() {
           </div>
         )}
 
+        {deleteChatTarget && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingChat) setDeleteChatTarget(null); }}>
+            <section className="aichat-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-chat-title">
+              <div className="aichat-confirm-icon is-danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-.8 13H6.8L6 7m3 3v7m6-7v7" /></svg></div>
+              <h2 id="misma-delete-chat-title">Delete chat?</h2>
+              <p><strong>{deleteChatTarget.name}</strong> and all messages in this conversation will be permanently deleted. This action cannot be undone.</p>
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-action-btn secondary" disabled={deletingChat} onClick={() => setDeleteChatTarget(null)}>Cancel</button>
+                <button type="button" className="aichat-confirm-danger" disabled={deletingChat} onClick={() => void handleDeleteConversation(deleteChatTarget.id)}>{deletingChat ? "Deleting…" : "Delete chat"}</button>
+              </div>
+            </section>
+          </div>
+        )}
+        {deleteAssetTarget && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingAsset) setDeleteAssetTarget(null); }}>
+            <section className="aichat-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-media-title">
+              <div className="aichat-confirm-icon is-danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-.8 13H6.8L6 7m3 3v7m6-7v7" /></svg></div>
+              <h2 id="misma-delete-media-title">{deleteAssetTarget.libraryFileId ? "Delete from Library?" : "Delete from chat?"}</h2>
+              <p>{deleteAssetTarget.libraryFileId
+                ? `“${deleteAssetTarget.name || "This file"}” will be removed from your Library and its stored file will be deleted.`
+                : `“${deleteAssetTarget.name || "This media"}” will be removed from its original conversation. Other chat messages will remain.`}</p>
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-action-btn secondary" disabled={deletingAsset} onClick={() => setDeleteAssetTarget(null)}>Cancel</button>
+                <button type="button" className="aichat-confirm-danger" disabled={deletingAsset} onClick={() => void handleDeleteLibraryAsset(deleteAssetTarget)}>{deletingAsset ? "Deleting…" : "Delete media"}</button>
+              </div>
+            </section>
+          </div>
+        )}
         {cropTarget && (
           <div className="aichat-crop-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCropTarget(null); }}>
             <section className="aichat-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-crop-title">
