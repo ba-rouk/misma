@@ -175,5 +175,5 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
   assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
-  assert.match(dashboard, /Start voice dictation/);
+  assert.match(dashboard, /Start voice input/);
 });
