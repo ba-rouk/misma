@@ -17,6 +17,7 @@ import {
   deleteKnowledge,
   updateOrderStatus,
   saveWorkspaceProfile,
+  markVisitorMessagesRead,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -25,7 +26,16 @@ const useIsomorphicLayoutEffect =
 
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
-type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "settings";
+type TabId = "workspace" | "images" | "library" | "build" | "connect" | "manage" | "recent" | "notifications" | "settings";
+
+type UnreadVisitorMessage = {
+  id: number;
+  conversationId: number;
+  text: string;
+  created_at: string;
+  channel: string;
+  conversationTitle: string;
+};
 
 type MismaAiSettings = {
   assistantMode: "Sales & customer support" | "Customer support" | "Sales assistant";
@@ -425,10 +435,28 @@ function MessageAttachmentViews({
   );
 }
 
-const SUGGESTIONS = [
-  "How many orders came in today?",
-  "Show me recent conversations",
-];
+function getLoginGreeting(): string {
+  const hour = new Date().getHours();
+  const choices = hour < 12
+    ? ["Good morning", "Morning", "Hey", "Hi there", "Welcome back", "Great to see you"]
+    : hour < 18
+      ? ["Good afternoon", "Hey there", "Hello", "Welcome back", "Great to see you", "Hi there"]
+      : ["Good evening", "Hey", "Hello there", "Welcome back", "Good to see you", "Hi there"];
+  let previous = "";
+  try {
+    previous = window.localStorage.getItem("misma_last_login_greeting") || "";
+  } catch {
+    // Use a fresh greeting for this session when storage is unavailable.
+  }
+  const candidates = choices.filter((choice) => choice !== previous);
+  const greeting = (candidates.length ? candidates : choices)[Math.floor(Math.random() * (candidates.length || choices.length))];
+  try {
+    window.localStorage.setItem("misma_last_login_greeting", greeting);
+  } catch {
+    // Ignore storage restrictions; the greeting remains available in component state.
+  }
+  return greeting;
+}
 
 // Helper to safely render basic markdown
 function MarkdownContent({ content }: { content: string }) {
@@ -553,10 +581,14 @@ function Dashboard() {
 
   // Active navigation tab (5 primary items)
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const [greeting, setGreeting] = useState("Welcome back");
+  const hasChosenGreetingRef = useRef(false);
 
   // Chats and tasks panel state
   const [chatsExpanded, setChatsExpanded] = useState(true);
   const [chatMenuOpenId, setChatMenuOpenId] = useState<number | null>(null);
+  const [chatGroupMenuOpen, setChatGroupMenuOpen] = useState(false);
+  const [chatGroupFilter, setChatGroupFilter] = useState("all");
   const [downloadingMediaUrl, setDownloadingMediaUrl] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ attachment: MessageAttachment; conversationId: number | null } | null>(null);
   const [cropAspect, setCropAspect] = useState<"original" | "square" | "portrait" | "landscape">("original");
@@ -570,6 +602,8 @@ function Dashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [unreadVisitorMessages, setUnreadVisitorMessages] = useState<UnreadVisitorMessage[]>([]);
+  const [unreadVisitorCount, setUnreadVisitorCount] = useState(0);
 
   // Profile
   const [profileName, setProfileName] = useState("Your account");
@@ -593,6 +627,8 @@ function Dashboard() {
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [voiceInputActive, setVoiceInputActive] = useState(false);
+  const [microphonePermissionOpen, setMicrophonePermissionOpen] = useState(false);
+  const [microphonePermissionError, setMicrophonePermissionError] = useState("");
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -712,6 +748,11 @@ function Dashboard() {
     .filter((item) => String(item.channel || "").trim().toLowerCase() === "dashboard")
     .map((item) => ({ ...item, name: cleanRecentChatTitle(item.name) || "New chat" }));
   const conversationGroups = Array.from(new Set(recentChats.map((item) => item.group_name).filter((value): value is string => Boolean(value))));
+  const filteredRecentChats = chatGroupFilter === "all"
+    ? recentChats
+    : chatGroupFilter === "__ungrouped__"
+      ? recentChats.filter((item) => !item.group_name)
+      : recentChats.filter((item) => item.group_name === chatGroupFilter);
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -782,6 +823,10 @@ function Dashboard() {
             (v): v is string => typeof v === "string" && v.trim().length > 0,
           );
           const resolvedName = displayName ?? s.user.email?.split("@")[0] ?? "Your account";
+          if (!hasChosenGreetingRef.current) {
+            setGreeting(getLoginGreeting());
+            hasChosenGreetingRef.current = true;
+          }
           setProfileName(resolvedName);
           setProfileNameDraft(resolvedName);
           const avatarPath = metadata.avatar_path;
@@ -862,6 +907,8 @@ function Dashboard() {
       .then((data) => {
         setWorkspace(data.workspace);
         setConversations(data.conversations ?? []);
+        setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
+        setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
         setOrders(data.orders ?? []);
         setKnowledgeList(data.knowledge ?? []);
         setCustomers(data.customers ?? []);
@@ -884,6 +931,12 @@ function Dashboard() {
   useEffect(() => {
     if (!authChecked || !token) return;
     loadData();
+  }, [authChecked, token]);
+
+  useEffect(() => {
+    if (!authChecked || !token) return;
+    const refreshId = window.setInterval(() => loadData(), 30000);
+    return () => window.clearInterval(refreshId);
   }, [authChecked, token]);
 
   // Autogrow textarea as user types
@@ -933,6 +986,16 @@ function Dashboard() {
         data: { token, conversationId: convId },
       });
       setMessages(res.messages);
+      const unreadForConversation = unreadVisitorMessages.filter((item) => item.conversationId === convId).length;
+      if (unreadForConversation > 0) {
+        try {
+          await markVisitorMessagesRead({ data: { token, conversationId: convId } });
+          setUnreadVisitorMessages((items) => items.filter((item) => item.conversationId !== convId));
+          setUnreadVisitorCount((count) => Math.max(0, count - unreadForConversation));
+        } catch (readError) {
+          console.warn("Could not update the visitor message read state:", readError);
+        }
+      }
     } catch (cause) {
       setChatError(
         cause instanceof Error ? cause.message : "Could not load messages.",
@@ -1057,12 +1120,7 @@ function Dashboard() {
 
 
 
-  const handleVoiceInput = () => {
-    if (voiceInputActive) {
-      speechRecognitionRef.current?.stop?.();
-      setVoiceInputActive(false);
-      return;
-    }
+  const startVoiceRecognition = () => {
     const browserWindow = window as typeof window & {
       SpeechRecognition?: new () => any;
       webkitSpeechRecognition?: new () => any;
@@ -1085,9 +1143,13 @@ function Dashboard() {
       if (transcript) setDraft((current) => [current.trim(), transcript].filter(Boolean).join(current.trim() ? " " : ""));
     };
     recognition.onerror = (event: any) => {
-      setChatError(event?.error === "not-allowed"
-        ? "Allow microphone access to use voice dictation."
-        : "Voice dictation stopped. Please try again.");
+      setVoiceInputActive(false);
+      if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
+        setMicrophonePermissionError("Microphone access was blocked. Allow it in your browser's site permissions, then try again.");
+        setMicrophonePermissionOpen(true);
+      } else {
+        setChatError("Voice dictation stopped. Please try again.");
+      }
     };
     recognition.onend = () => {
       setVoiceInputActive(false);
@@ -1101,7 +1163,48 @@ function Dashboard() {
     } catch {
       setVoiceInputActive(false);
       speechRecognitionRef.current = null;
-      setChatError("The microphone could not be started. Please try again.");
+      setMicrophonePermissionError("The microphone could not be started. Check this site's microphone permission and try again.");
+      setMicrophonePermissionOpen(true);
+    }
+  };
+
+  const handleVoiceInput = () => {
+    if (voiceInputActive) {
+      speechRecognitionRef.current?.stop?.();
+      setVoiceInputActive(false);
+      return;
+    }
+    const browserWindow = window as typeof window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    };
+    if (!(browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition)) {
+      setChatError("Voice dictation is not supported in this browser. Try a recent version of Chrome.");
+      return;
+    }
+    setMicrophonePermissionError("");
+    if (navigator.permissions?.query) {
+      void navigator.permissions.query({ name: "microphone" as PermissionName }).then((permission) => {
+        if (permission.state === "granted") startVoiceRecognition();
+        else setMicrophonePermissionOpen(true);
+      }).catch(() => setMicrophonePermissionOpen(true));
+    } else {
+      setMicrophonePermissionOpen(true);
+    }
+  };
+
+  const requestMicrophoneAccess = async () => {
+    setMicrophonePermissionError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("This browser does not support microphone permissions.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMicrophonePermissionOpen(false);
+      startVoiceRecognition();
+    } catch {
+      setMicrophonePermissionError("Microphone access is still blocked. Open your browser's site settings, set Microphone to Allow for Misma, then try again.");
     }
   };
 
