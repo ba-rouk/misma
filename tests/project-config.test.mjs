@@ -235,7 +235,7 @@ test("generated-image safety review has multiple provider fallbacks and reads th
 
   assert.match(edgeFunction, /prepareGeneratedImageForReview/);
   assert.match(edgeFunction, /dataUrl:\s*`data:\$\{mimeType\};base64,/);
-  assert.match(edgeFunction, /\.slice\(0, 5\)/);
+  assert.match(edgeFunction, /\.slice\(0, 3\)/);
   assert.match(edgeFunction, /dataUrl\?\.match/);
   assert.match(edgeFunction, /retryable:\s*true/);
 });
@@ -301,6 +301,6 @@ test("generated images and videos can be saved into Library and Library media op
   assert.match(dashboard, /aichat-library-media-preview/);
   assert.match(dashboard, /aichat-library-media-viewer/);
   assert.match(dashboard, /<video[^>]*controls/);
-  assert.match(dashboard, /Download image|Download video/);
+  assert.match(dashboard, /Download \{mediaType\}/);
   assert.match(styles, /\.aichat-library-media-viewer/);
 });
