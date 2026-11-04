@@ -621,6 +621,7 @@ function Dashboard() {
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
   const [knowledgeUploadBusy, setKnowledgeUploadBusy] = useState(false);
+  const [recommendationBusy, setRecommendationBusy] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [websiteDraftUrl, setWebsiteDraftUrl] = useState("");
   const [websiteDraftName, setWebsiteDraftName] = useState("");
@@ -3946,7 +3947,22 @@ function Dashboard() {
                 <button type="submit" className="aichat-action-btn" disabled={!productDraft.name.trim()}>Save product or service</button>
               </form>
             </div>
-            <div className="aichat-card"><h3>Catalog ({productsServices.length})</h3>{productsServices.length === 0 ? <p>No products or services have been added yet.</p> : productsServices.map((item) => <div className="aichat-hub-row" key={item.id}><div><strong>{item.name}</strong><small>{item.item_type} · {item.price_text || "Price not set"} · {item.created_from || "manual"}</small><p>{item.description}</p></div><div className="aichat-product-actions"><span className={`aichat-status-pill ${item.active ? "is-connected" : "is-pending"}`}>{item.active ? "Active" : item.created_from === "website" || item.created_from === "file_upload" ? "Review suggestion" : "Inactive"}</span>{!item.active && (item.created_from === "website" || item.created_from === "file_upload") && <button type="button" className="aichat-action-btn" onClick={async () => { if (!token) return; try { await updateProductServiceStatus({ data: { token, productId: Number(item.id), active: true } }); loadData(); } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not approve this suggestion."); } }}>Approve &amp; activate</button>}</div></div>)}</div>
+            <div className="aichat-card">
+              <h3>AI recommendations from visitor demand</h3>
+              <p>Misma reviews recent website, phone, and WhatsApp messages for repeated unmet needs and suggests new offerings. Suggestions stay inactive until you approve them.</p>
+              <button type="button" className="aichat-action-btn secondary" disabled={recommendationBusy} onClick={async () => {
+                if (!workspace?.id) return;
+                setRecommendationBusy(true);
+                try {
+                  const result = await callWidgetFunction({ action: "recommend-products", workspaceId: workspace.id });
+                  alert(`${result.productSuggestions || 0} product/service suggestions generated. ${result.summary || ""}`);
+                  loadData();
+                } catch (cause) {
+                  alert(cause instanceof Error ? cause.message : "Could not generate product recommendations.");
+                } finally { setRecommendationBusy(false); }
+              }}>{recommendationBusy ? "Analysing customer requests…" : "Generate recommendations"}</button>
+            </div>
+            <div className="aichat-card"><h3>Catalog ({productsServices.length})</h3>{productsServices.length === 0 ? <p>No products or services have been added yet.</p> : productsServices.map((item) => <div className="aichat-hub-row" key={item.id}><div><strong>{item.name}</strong><small>{item.item_type} · {item.price_text || "Price not set"} · {item.created_from || "manual"}</small><p>{item.description}</p></div><div className="aichat-product-actions"><span className={`aichat-status-pill ${item.active ? "is-connected" : "is-pending"}`}>{item.active ? "Active" : ["website", "file_upload", "visitor_requests"].includes(item.created_from) ? "Review suggestion" : "Inactive"}</span>{!item.active && ["website", "file_upload", "visitor_requests"].includes(item.created_from) && <button type="button" className="aichat-action-btn" onClick={async () => { if (!token) return; try { await updateProductServiceStatus({ data: { token, productId: Number(item.id), active: true } }); loadData(); } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not approve this suggestion."); } }}>Approve &amp; activate</button>}</div></div>)}</div>
           </div></div>
         )}
 
