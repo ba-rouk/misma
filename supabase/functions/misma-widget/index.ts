@@ -357,6 +357,53 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
   }
   return { knowledgeSaved: savedKnowledge, productSuggestions: savedProducts };
 }
+async function recommendOfferingsFromDemand(db: Db, workspaceId: string) {
+  const conversations = await db.from("conversations")
+    .select("id,channel,updated_at")
+    .eq("workspace_id", workspaceId)
+    .in("channel", ["Website", "WhatsApp", "Phone"])
+    .order("updated_at", { ascending: false })
+    .limit(100);
+  if (conversations.error) throw new Error("Could not load recent customer conversations.");
+  const ids = (conversations.data || []).map((row: AnyRecord) => Number(row.id)).filter((id: number) => Number.isSafeInteger(id));
+  if (!ids.length) return { summary: "No website, phone, or WhatsApp customer conversations are available yet.", knowledgeSaved: 0, productSuggestions: 0 };
+  const [messages, products, knowledge] = await Promise.all([
+    db.from("messages").select("conversation_id,role,text,created_at").in("conversation_id", ids)
+      .eq("role", "customer").order("created_at", { ascending: false }).limit(240),
+    db.from("products_services").select("item_type,name,description,price_text,active").eq("workspace_id", workspaceId).limit(80),
+    db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true).limit(40),
+  ]);
+  if (messages.error) throw new Error("Could not load visitor requests.");
+  const channelById = new Map((conversations.data || []).map((row: AnyRecord) => [Number(row.id), safeString(row.channel, 40)]));
+  const visitorText = (messages.data || [])
+    .map((row: AnyRecord) => "[" + (channelById.get(Number(row.conversation_id)) || "Customer") + "] " + safeString(row.text, 1600))
+    .filter((row: string) => row.length > 12)
+    .join("\n")
+    .slice(0, 65000);
+  if (visitorText.length < 30) return { summary: "There are not enough customer requests yet to identify demand patterns.", knowledgeSaved: 0, productSuggestions: 0 };
+  const system = [
+    "You are a product strategy assistant analysing customer questions for a business.",
+    "Identify unmet needs and repeated requests that could justify a new product or service.",
+    "Use only the customer messages as evidence of demand. Existing catalogue and approved knowledge are context, not a reason to repeat existing offerings.",
+    "Propose an item only when the messages show a clear request, repeated need, or strong buying intent. Do not invent a product as if it already exists.",
+    "Return only JSON with keys summary, faqs, and items. faqs must be an empty array.",
+    "items must contain up to 10 objects with type (product or service), name, description, and price. Leave price empty unless a price is explicitly quoted in the customer messages; never estimate it.",
+    "Descriptions must begin with 'Suggestion based on customer requests:' and briefly explain the supporting demand. No unsupported claims, stock, guarantees, or prices.",
+    "If no clear opportunity exists, return an empty items array and explain why in summary.",
+  ].join(" ");
+  const prompt = [
+    "CURRENT CATALOGUE: " + JSON.stringify(products.data || []),
+    "APPROVED KNOWLEDGE: " + JSON.stringify(knowledge.data || []),
+    "RECENT CUSTOMER REQUESTS:\n" + visitorText,
+  ].join("\n\n");
+  const extracted = parseJsonObject(await generateText(system, prompt));
+  const saved = await persistExtracted(db, workspaceId, "visitor_requests", "Demand analysis of recent customer conversations", extracted);
+  return {
+    summary: safeString(extracted.summary, 3000) || "Customer request analysis completed.",
+    ...saved,
+  };
+}
+
 async function twilioSignatureValid(requestUrl: string, params: URLSearchParams, signature: string, token: string) {
   if (!signature || !token) return false;
   let payload = requestUrl;
@@ -615,6 +662,10 @@ Deno.serve(async (request: Request) => {
       }
       await db.from("channel_connections").update({ status: "connected", updated_at: new Date().toISOString() }).eq("id", mapping.data.id);
       return respond(200, { ok: true, channel, verified: true, details: payload.incoming_phone_numbers[0] });
+    }
+    if (input.action === "recommend-products") {
+      const result = await recommendOfferingsFromDemand(db, workspaceId);
+      return respond(200, { ok: true, ...result });
     }
     if (input.action === "scan-website") {
       const websiteId = safeString(input.websiteId, 80);
