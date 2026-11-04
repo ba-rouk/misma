@@ -989,9 +989,9 @@ function Dashboard() {
       const unreadForConversation = unreadVisitorMessages.filter((item) => item.conversationId === convId).length;
       if (unreadForConversation > 0) {
         try {
-          await markVisitorMessagesRead({ data: { token, conversationId: convId } });
+          const readResult = await markVisitorMessagesRead({ data: { token, conversationId: convId } });
           setUnreadVisitorMessages((items) => items.filter((item) => item.conversationId !== convId));
-          setUnreadVisitorCount((count) => Math.max(0, count - unreadForConversation));
+          setUnreadVisitorCount((count) => Math.max(0, count - readResult.markedCount));
         } catch (readError) {
           console.warn("Could not update the visitor message read state:", readError);
         }
