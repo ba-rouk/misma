@@ -2112,6 +2112,15 @@ function Dashboard() {
     });
   };
 
+  const handleComposerDraftChange = (value: string) => {
+    if (/(?:^|\s)@Thinking\b/i.test(value)) {
+      setThinkHarder(true);
+      setDraft(value.replace(/(?:^|\s)@Thinking\b/ig, " ").replace(/[ \t]{2,}/g, " "));
+      return;
+    }
+    setDraft(value);
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
