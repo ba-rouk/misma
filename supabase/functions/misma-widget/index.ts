@@ -8,7 +8,7 @@ const cors = {
 };
 
 type AnyRecord = Record<string, any>;
-type Db = ReturnType<typeof createClient>;
+type Db = ReturnType<typeof createClient<any, "public", any>>;
 
 function respond(status: number, body: AnyRecord, headers: Record<string, string> = {}) {
   return Response.json(body, { status, headers: { ...cors, ...headers } });
@@ -68,7 +68,7 @@ async function requireWorkspace(token: string, requestedWorkspaceId: string): Pr
 }
 function providerList() {
   const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" | "cohere" }> = [];
-  const add = (name: string, keyName: string, modelName: string, model: string, endpoint: string, kind: "gemini" | "openai" = "openai") => {
+  const add = (name: string, keyName: string, modelName: string, model: string, endpoint: string, kind: "gemini" | "openai" | "cohere" = "openai") => {
     const key = getEnv(keyName);
     if (key) providers.push({ name, key, model: getEnv(modelName) || model, endpoint, kind });
   };
