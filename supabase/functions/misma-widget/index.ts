@@ -128,11 +128,12 @@ Deno.serve(async (request) => {
     const { data: membership } = await db.from("workspace_members").select("workspace_id")
       .eq("workspace_id", website.workspace_id).eq("user_id", userData.user.id).maybeSingle();
     if (!membership) return response(403, { error: "You do not have access to this workspace." }, origin);
-    const [workspaceResult, conversationsResult, productsResult] = await Promise.all([
+    const [workspaceResult, conversationsResult, productsResult, knowledgeResult] = await Promise.all([
       db.from("workspaces").select("name,description").eq("id", website.workspace_id).single(),
       db.from("conversations").select("id,latest_text").eq("workspace_id", website.workspace_id)
         .neq("channel", "Dashboard").order("updated_at", { ascending: false }).limit(40),
       db.from("products_services").select("item_type,name,description,price_text").eq("workspace_id", website.workspace_id).eq("active", true).limit(50),
+      db.from("knowledge_entries").select("question,answer").eq("workspace_id", website.workspace_id).eq("approved", true).order("id", { ascending: false }).limit(30),
     ]);
     const conversationIds = (conversationsResult.data || []).map((item: any) => Number(item.id));
     const messageResult = conversationIds.length
@@ -146,6 +147,7 @@ Deno.serve(async (request) => {
       "Do not invent exact prices, inventory, capabilities, or commitments. Focus on repeated unmet needs visible in visitor messages.",
       `Business: ${workspaceResult.data?.name || website.name}. Description: ${workspaceResult.data?.description || "Not supplied"}.`,
       "Current catalogue:\\n" + (productsResult.data || []).map((item: any) => `${item.item_type}: ${item.name} — ${item.description}`).join("\\n").slice(0, 5000),
+      "Business knowledge:\\n" + (knowledgeResult.data || []).map((item: any) => `Q: ${item.question}\\nA: ${item.answer}`).join("\\n").slice(0, 7000),
       "Recent visitor requests:\\n" + demand.join("\\n").slice(0, 10000),
     ].join("\\n\\n");
     try {
