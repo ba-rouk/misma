@@ -974,10 +974,17 @@ function Dashboard() {
 
   const refreshVisitorNotifications = () => {
     if (!token) return;
-    getVisitorNotifications({ data: { token } })
-      .then((data) => {
+    Promise.all([
+      getVisitorNotifications({ data: { token } }),
+      getBusinessHubData({ data: { token } }),
+    ])
+      .then(([data, hub]) => {
         setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
         setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
+        setWebsiteConnections(hub.websites ?? []);
+        setHumanRequests(hub.handoffs ?? []);
+        setWorkspaceNotifications(hub.notifications ?? []);
+        setProductsServices(hub.products ?? []);
       })
       .catch((cause) => {
         console.warn("Could not refresh visitor notifications:", cause);
