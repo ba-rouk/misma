@@ -730,8 +730,8 @@ Deno.serve(async (request) => {
   if (editMessageId !== null && (!Number.isSafeInteger(editMessageId) || Number(editMessageId) < 1)) {
     return jsonResponse(400, { error: "Invalid message to edit." });
   }
-  const conversationId = input.conversationId ?? null;
-  if (conversationId !== null && (!Number.isSafeInteger(conversationId) || Number(conversationId) < 1)) {
+  const conversationId = input.conversationId == null ? null : Number(input.conversationId);
+  if (conversationId !== null && (!Number.isSafeInteger(conversationId) || conversationId < 1)) {
     return jsonResponse(400, { error: "Invalid conversation." });
   }
   if ((regenerate || editMessageId !== null) && conversationId === null) {
