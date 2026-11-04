@@ -2829,20 +2829,6 @@ function Dashboard() {
                       ))}
                     </div>
                   )}
-                  <div className="aichat-composer-input-row">
-                    <textarea
-                      ref={textareaRef}
-                      rows={1}
-                      className="aichat-composer-textarea"
-                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handleComposerPaste}
-                      disabled={isSending}
-                      aria-label="Message Misma"
-                    />
-                  </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
@@ -2879,29 +2865,44 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <div className="aichat-composer-sendrow-spacer" />
+                    <textarea
+                      ref={textareaRef}
+                      rows={1}
+                      className="aichat-composer-textarea"
+                      placeholder={createMode ? `Describe the ${createMode} you want Agnes to create…` : "Message Misma…"}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handleComposerPaste}
+                      disabled={isSending}
+                      aria-label="Message Misma"
+                    />
                     <button
                       type="button"
-                      className={`aichat-composer-voice${voiceInputActive ? " is-listening" : ""}`}
-                      onClick={handleVoiceInput}
+                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending ? " can-send" : ""}${isSending ? " is-thinking" : ""}`}
                       disabled={isSending || isGeneratingMedia}
-                      aria-label={voiceInputActive ? "Stop voice dictation" : "Start voice dictation"}
-                      title={voiceInputActive ? "Stop voice dictation" : "Use voice"}
+                      onClick={() => {
+                        if (voiceInputActive) {
+                          handleVoiceInput();
+                        } else if (draft.trim() || selectedFiles.length || createMode) {
+                          if (createMode) void handleCreateMedia();
+                          else void handleSend();
+                        } else {
+                          handleVoiceInput();
+                        }
+                      }}
+                      title={isSending ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Use voice"}
+                      aria-label={isSending ? "Misma is thinking" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice dictation"}
                     >
-                      {voiceInputActive ? (
+                      {isSending ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
+                      ) : draft.trim() || selectedFiles.length || createMode ? (
+                        createMode ? <span aria-hidden="true">✦</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
+                      ) : voiceInputActive ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
                       ) : (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
                       )}
-                    </button>
-                    <button
-                      type="submit"
-                      className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending ? " can-send" : ""}`}
-                      disabled={(!draft.trim() && !selectedFiles.length && !createMode) || isSending}
-                      title={createMode ? `Create ${createMode} with Agnes` : editingMessageId ? "Save edited message" : "Send message"}
-                      aria-label={createMode ? `Create ${createMode} with Agnes` : "Send message"}
-                    >
-                      {isGeneratingMedia ? "…" : createMode ? "✦" : "↑"}
                     </button>
                   </div>
                   <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
