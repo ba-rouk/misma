@@ -365,9 +365,9 @@ function ComposerAttachmentPreview({
     <div className="aichat-composer-attachment-card" title={file.name}>
       <div className="aichat-composer-attachment-square">
         {isImage && previewUrl ? (
-          <img src={previewUrl} alt={file.name} onLoad={() => setPreviewLoaded(true)} />
+          <img src={previewUrl} alt={file.name} decoding="async" fetchPriority="high" onLoad={() => setPreviewLoaded(true)} onError={() => setPreviewLoaded(true)} />
         ) : isVideo && previewUrl ? (
-          <video src={previewUrl} muted playsInline preload="metadata" onLoadedData={() => setPreviewLoaded(true)} />
+          <video src={previewUrl} muted playsInline preload="metadata" onLoadedMetadata={() => setPreviewLoaded(true)} onError={() => setPreviewLoaded(true)} />
         ) : (
           <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
             <span>{isPdf ? "PDF" : extension}</span>
@@ -420,7 +420,7 @@ function MessageAttachmentViews({
           return (
             <div key={key} className="aichat-generated-media-wrap">
               <a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link">
-                <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="lazy" />
+                <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="eager" decoding="async" fetchPriority="high" />
               </a>
               {isGenerated && (
                 <div className="aichat-image-action-bar" role="group" aria-label="Generated image actions">
