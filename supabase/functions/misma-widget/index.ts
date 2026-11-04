@@ -97,7 +97,7 @@ async function askModel(system: string, history: Array<{ role: string; text: str
 
 Deno.serve(async (request) => {
   const origin = request.headers.get("origin");
-  if (request.method === "OPTIONS") return response(204, {}, origin);
+  if (request.method === "OPTIONS") return response(200, {}, origin);
   if (request.method !== "POST") return response(405, { error: "Method not allowed." }, origin);
   if (!supabaseUrl || !serviceKey) return response(500, { error: "Widget service is not configured." }, origin);
   let input: Json;
@@ -286,7 +286,7 @@ Deno.serve(async (request) => {
     const note = typeof input.reason === "string" ? input.reason.trim().slice(0, 500) : "Visitor requested a human agent.";
     const { data: existing } = await db.from("human_requests").select("id,status")
       .eq("conversation_id", conversationId).eq("workspace_id", website.workspace_id)
-      .in("status", ["pending", "handled"]).maybeSingle();
+      .eq("status", "pending").maybeSingle();
     if (!existing) {
       const { data: handoff, error } = await db.from("human_requests").insert({
         workspace_id: website.workspace_id, conversation_id: conversationId, contact_id: contactId,
