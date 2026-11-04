@@ -478,26 +478,28 @@ async function handlePhoneWebhook(request: Request, db: Db) {
     if (created.error || !created.data) return new Response("<Response><Say>Sorry, this line is temporarily unavailable.</Say><Hangup/></Response>", { headers: { "Content-Type": "text/xml" } });
     conv = created;
   }
+  const conversation = conv.data;
+  if (!conversation) return new Response("<Response><Say>Sorry, this line is temporarily unavailable.</Say><Hangup/></Response>", { headers: { "Content-Type": "text/xml" } });
   let spoken = "Hello. Thank you for calling. I am Misma, the business assistant. How can I help you today?";
   if (speech) {
-    await db.from("messages").insert({ conversation_id: conv.data.id, role: "customer", text: speech });
+    await db.from("messages").insert({ conversation_id: conversation.id, role: "customer", text: speech });
     try {
       spoken = await answerCustomer(db, workspaceId, speech);
-      await db.from("messages").insert({ conversation_id: conv.data.id, role: "ai", text: spoken });
-      await db.from("conversations").update({ latest_text: spoken.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conv.data.id);
+      await db.from("messages").insert({ conversation_id: conversation.id, role: "ai", text: spoken });
+      await db.from("conversations").update({ latest_text: spoken.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.id);
     } catch {
       spoken = "I am having trouble retrieving that information right now. Please try again or ask to speak with a team member.";
     }
     if (/\b(human|person|staff|agent|someone|representative)\b/i.test(speech)) {
       const request = await db.from("human_requests").insert({
-        workspace_id: workspaceId, conversation_id: conv.data.id, contact_id: conv.data.contact_id,
+        workspace_id: workspaceId, conversation_id: conversation.id, contact_id: conversation.contact_id,
         visitor_name: "Phone caller", visitor_phone: from, reason: speech, status: "pending",
       }).select("id").single();
-      await db.from("conversations").update({ status: "Needs you" }).eq("id", conv.data.id);
+      await db.from("conversations").update({ status: "Needs you" }).eq("id", conversation.id);
       if (request.data) await db.from("workspace_notifications").insert({
         workspace_id: workspaceId, notification_type: "human_request", title: "Phone caller requested a human",
-        body: "A caller asked to speak with your team at " + from, conversation_id: conv.data.id,
-        contact_id: conv.data.contact_id, human_request_id: request.data.id, is_read: false,
+        body: "A caller asked to speak with your team at " + from, conversation_id: conversation.id,
+        contact_id: conversation.contact_id, human_request_id: request.data.id, is_read: false,
       });
     }
   }
@@ -631,14 +633,40 @@ Deno.serve(async (request: Request) => {
       if (input.action === "heartbeat") return respond(200, { ok: true, connected: true });
       const visitorId = safeString(input.visitorId, 120) || crypto.randomUUID();
       const { conversation } = await ensureWebsiteConversation(db, site, visitorId, input.conversationId);
+      if (input.action === "history") {
+        const [historyResult, conversationResult] = await Promise.all([
+          db.from("messages").select("id,role,text,created_at").eq("conversation_id", conversation.id).order("id", { ascending: true }).limit(100),
+          db.from("conversations").select("status").eq("id", conversation.id).eq("workspace_id", site.workspace_id).single(),
+        ]);
+        if (historyResult.error || conversationResult.error) throw new Error("Could not load the website conversation history.");
+        return respond(200, {
+          ok: true, visitorId, conversationId: Number(conversation.id),
+          conversationStatus: conversationResult.data.status,
+          messages: (historyResult.data || []).map((item: AnyRecord) => ({
+            id: Number(item.id), role: safeString(item.role, 20), text: safeString(item.text, 4000), created_at: item.created_at,
+          })),
+        });
+      }
       if (input.action === "human-request") {
         const handoff = await saveHumanRequest(db, site, conversation, visitorId, input);
-        return respond(200, { ok: true, requestId: handoff.requestId, alreadyPending: handoff.alreadyPending });
+        return respond(200, {
+          ok: true, requestId: handoff.requestId, alreadyPending: handoff.alreadyPending,
+          visitorId, conversationId: Number(conversation.id),
+        });
       }
       const message = safeString(input.message, 2000);
       if (!message) return respond(400, { error: "Enter a message." });
       const userMessage = await db.from("messages").insert({ conversation_id: conversation.id, role: "customer", text: message }).select("id").single();
       if (userMessage.error) throw new Error("Could not save the visitor message.");
+      const conversationState = await db.from("conversations").select("status").eq("id", conversation.id).eq("workspace_id", site.workspace_id).single();
+      if (conversationState.error) throw new Error("Could not check the conversation status.");
+      if (conversationState.data.status === "Needs you") {
+        await db.from("conversations").update({ latest_text: message.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+        return respond(200, {
+          ok: true, visitorId, conversationId: Number(conversation.id), userMessageId: Number(userMessage.data?.id),
+          handoffPending: true, answer: "Your message has been sent to the business team. A person will reply in this conversation.",
+        });
+      }
       let answer = "";
       try { answer = await answerCustomer(db, site.workspace_id, message); }
       catch { answer = "I cannot access that business information right now. You can ask to speak with a member of the team."; }
@@ -666,6 +694,46 @@ Deno.serve(async (request: Request) => {
         phoneConfigured: Boolean(getEnv("TWILIO_ACCOUNT_SID") && getEnv("TWILIO_AUTH_TOKEN")),
       });
     }
+    if (input.action === "send-human-reply") {
+      const conversationId = Number(input.conversationId);
+      const message = safeString(input.message, 4000);
+      if (!Number.isSafeInteger(conversationId) || conversationId <= 0 || !message) throw new Error("A valid customer conversation and reply are required.");
+      const conversationResult = await db.from("conversations")
+        .select("id,channel,visitor_session_id,status")
+        .eq("id", conversationId).eq("workspace_id", workspaceId).single();
+      if (conversationResult.error || !conversationResult.data) throw new Error("Customer conversation not found.");
+      const conversation = conversationResult.data;
+      if (conversation.status !== "Needs you") throw new Error("Take over the conversation before sending a human reply.");
+      const channel = safeString(conversation.channel, 40).toLowerCase();
+      if (channel === "phone") throw new Error("This is a phone callback request. Call the customer using the number shown in the Customers page, then mark the request handled.");
+      if (channel === "whatsapp") {
+        const accessToken = getEnv("WHATSAPP_ACCESS_TOKEN");
+        const apiVersion = getEnv("META_GRAPH_API_VERSION") || "v26.0";
+        const recipient = safeString(conversation.visitor_session_id, 80);
+        const mapping = await db.from("channel_connections").select("external_id")
+          .eq("workspace_id", workspaceId).eq("channel", "whatsapp").eq("status", "connected").maybeSingle();
+        if (!accessToken || !mapping.data?.external_id || !recipient) throw new Error("WhatsApp is not fully connected for this workspace.");
+        const delivery = await fetch("https://graph.facebook.com/" + apiVersion + "/" + encodeURIComponent(mapping.data.external_id) + "/messages", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: recipient, type: "text", text: { preview_url: false, body: message } }),
+          signal: AbortSignal.timeout(12000),
+        });
+        if (!delivery.ok) {
+          const providerError = await delivery.json().catch(() => ({}));
+          throw new Error(safeString(providerError?.error?.message, 500) || "WhatsApp could not deliver this reply. The customer-service messaging window or provider credentials may need attention.");
+        }
+      } else if (channel !== "website") {
+        throw new Error("Human replies are supported for Website and WhatsApp conversations. Use the customer's contact details for this channel.");
+      }
+      const inserted = await db.from("messages").insert({ conversation_id: conversationId, role: "human", text: message })
+        .select("id,role,text,created_at").single();
+      if (inserted.error || !inserted.data) throw new Error("The reply could not be saved to the conversation.");
+      const updated = await db.from("conversations").update({ latest_text: message.slice(0, 200), status: "Needs you", updated_at: new Date().toISOString() })
+        .eq("id", conversationId).eq("workspace_id", workspaceId);
+      if (updated.error) throw new Error("The reply was delivered but the conversation could not be updated.");
+      return respond(200, { ok: true, message: { id: String(inserted.data.id), role: "human", text: inserted.data.text, created_at: inserted.data.created_at } });
+    }
     if (input.action === "test-channel") {
       const channel = input.channel === "phone" ? "phone" : "whatsapp";
       const mapping = await db.from("channel_connections").select("*")
@@ -677,7 +745,7 @@ Deno.serve(async (request: Request) => {
           throw new Error("Add WHATSAPP_ACCESS_TOKEN, WHATSAPP_VERIFY_TOKEN, and META_APP_SECRET to Supabase function secrets first.");
         }
         if (!mapping.data.external_id) throw new Error("Enter the WhatsApp Phone Number ID.");
-        const apiVersion = getEnv("META_GRAPH_API_VERSION") || "v23.0";
+        const apiVersion = getEnv("META_GRAPH_API_VERSION") || "v26.0";
         const check = await fetch("https://graph.facebook.com/" + apiVersion + "/" + encodeURIComponent(mapping.data.external_id) + "?fields=display_phone_number,verified_name", {
           headers: { Authorization: "Bearer " + accessToken }, signal: AbortSignal.timeout(12000),
         });
