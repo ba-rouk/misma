@@ -6189,3 +6189,43 @@ html, body, #app-root {
     line-height: 1.48;
   }
 }
+
+
+/* Final alignment refinements for the dashboard header and chat composer. */
+.aichat-notification-trigger { margin-left: auto; }
+.aichat-greeting-wrap {
+  margin: clamp(18px, 4vh, 46px) 0 auto;
+  padding-top: 22px;
+}
+.aichat-composer-sendrow { align-items: center; }
+.aichat-composer-sendrow-spacer { flex: 1 1 auto; min-width: 8px; }
+.aichat-composer-voice-btn {
+  display: grid; place-items: center; flex: none; width: 38px; height: 38px;
+  padding: 0; border: 1px solid #48586d; border-radius: 50%;
+  background: #202a38; color: #d5e0ee; cursor: pointer;
+  transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+.aichat-composer-voice-btn svg {
+  width: 19px; height: 19px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.aichat-composer-voice-btn:hover:not(:disabled) {
+  border-color: #8298b6; background: #2b394c; color: #fff;
+}
+.aichat-composer-voice-btn.is-listening {
+  color: #ff9991; border-color: rgba(248,121,113,.55); background: rgba(248,81,73,.18);
+}
+.aichat-composer-voice-btn:disabled { cursor: not-allowed; opacity: .55; }
+.aichat-composer-input-row .aichat-composer-textarea {
+  height: 38px; min-height: 38px; max-height: 180px;
+  overflow-y: hidden; box-sizing: border-box;
+  transition: height .16s ease; will-change: height;
+}
+@media (max-width: 767px) {
+  .aichat-message-row.is-ai > .aichat-msg-avatar.ai { display: none; }
+  .aichat-greeting-wrap { margin-top: clamp(14px, 3vh, 32px); padding-top: 14px; }
+  .aichat-composer-input-row .aichat-composer-textarea { max-height: min(180px, 34dvh); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aichat-composer-input-row .aichat-composer-textarea { transition: none; }
+}
