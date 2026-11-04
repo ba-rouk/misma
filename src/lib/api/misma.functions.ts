@@ -3,6 +3,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { ensureWorkspace } from "./workspace-context.server";
 
+type WorkspaceAsset = {
+  id: string;
+  messageId: number;
+  conversationId: number;
+  role: string;
+  text: string;
+  created_at: string;
+  kind: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  path: string;
+  url: string;
+};
+
 const auth = z.string().min(20);
 function check<T>(data: T | null, error: { message: string } | null): T {
   if (error) throw new Error(error.message);
@@ -75,7 +90,7 @@ export const getMismaData = createServerFn({ method: "POST" })
     }));
 
     // Collect recent chat attachments for the Images and Library views.
-    const assets: Array<Record<string, unknown>> = [];
+    const assets: WorkspaceAsset[] = [];
     if (conversationIds.length) {
       const { data: assetRows, error: assetRowsError } = await db.from("messages")
         .select("id,conversation_id,role,text,created_at,attachments")
@@ -84,7 +99,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         .limit(600);
       if (assetRowsError) throw new Error("Could not load your workspace media library.");
 
-      const assetJobs: Array<Promise<Record<string, unknown> | null>> = [];
+      const assetJobs: Array<Promise<WorkspaceAsset | null>> = [];
       for (const row of assetRows ?? []) {
         const attachments: unknown[] = Array.isArray(row.attachments) ? row.attachments : [];
         attachments.forEach((rawAttachment, index) => {
@@ -111,13 +126,13 @@ export const getMismaData = createServerFn({ method: "POST" })
               id: String(row.id) + "-" + index,
               messageId: Number(row.id),
               conversationId: Number(row.conversation_id),
-              role: row.role,
-              text: row.text,
-              created_at: row.created_at,
+              role: typeof row.role === "string" ? row.role : "",
+              text: typeof row.text === "string" ? row.text : "",
+              created_at: typeof row.created_at === "string" ? row.created_at : "",
               kind,
               name: typeof item.name === "string" ? item.name : "Workspace file",
               mimeType: typeof item.mimeType === "string" ? item.mimeType : "",
-              size: typeof item.size === "number" ? item.size : 0,
+              size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
               path,
               url,
             };
@@ -125,7 +140,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         });
       }
       assets.push(...(await Promise.all(assetJobs)).filter(
-        (asset): asset is Record<string, unknown> => asset !== null,
+        (asset): asset is WorkspaceAsset => asset !== null,
       ));
     }
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
