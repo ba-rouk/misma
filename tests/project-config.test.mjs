@@ -209,11 +209,13 @@ test("image attachments receive visual analysis and show estimated generation pr
 });
 
 
-test("image creation uses only animated dots with a compact progress badge and menu actions", async () => {
+test("image creation uses a screenshot-style dot-grid skeleton with a compact progress badge and menu actions", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const styles = await read("../src/styles.css");
 
   assert.match(dashboard, /aichat-image-generation-loading/);
+  assert.match(dashboard, /aichat-image-generation-grid/);
+  assert.match(dashboard, /Sketching it out/);
   assert.match(dashboard, /aichat-image-progress-badge/);
   assert.match(dashboard, /function GeneratedImageActions/);
   assert.match(dashboard, /aichat-image-options-menu/);
@@ -224,6 +226,43 @@ test("image creation uses only animated dots with a compact progress badge and m
   assert.match(dashboard, /Copy image/);
   assert.match(styles, /\.aichat-image-progress-badge/);
   assert.match(styles, /\.aichat-image-options-menu/);
+  assert.match(styles, /radial-gradient\(circle/);
+  assert.match(styles, /\.aichat-generated-media-wrap\.is-image/);
+});
+
+test("generated-image safety review has multiple provider fallbacks and reads the returned image bytes", async () => {
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+
+  assert.match(edgeFunction, /prepareGeneratedImageForReview/);
+  assert.match(edgeFunction, /dataUrl:\s*`data:\$\{mimeType\};base64,/);
+  assert.match(edgeFunction, /\.slice\(0, 5\)/);
+  assert.match(edgeFunction, /dataUrl\?\.match/);
+  assert.match(edgeFunction, /retryable:\s*true/);
+});
+
+test("saved media retries reuse the original prompt message instead of inserting a duplicate", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+
+  assert.match(dashboard, /failedMediaRetry/);
+  assert.match(dashboard, /retryMedia:\s*true/);
+  assert.match(dashboard, /activeSavedRetry\.sourceUserMessageId/);
+  assert.match(edgeFunction, /if \(retryMedia && retrySourceMessage\)/);
+  assert.match(edgeFunction, /const savedAttachments = Array\.isArray\(sourcePrompt\.attachments\)/);
+  assert.match(edgeFunction, /userMessage: null/);
+});
+
+test("composer media and reasoning modes are visible as distinct inline tokens", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /className="aichat-mode-token is-create"/);
+  assert.match(dashboard, /@create \{createMode\}/);
+  assert.match(dashboard, /className="aichat-mode-token is-thinking"/);
+  assert.match(dashboard, /@thinking/);
+  assert.match(dashboard, /Create image/);
+  assert.match(styles, /\.aichat-mode-token\.is-create/);
+  assert.match(styles, /\.aichat-mode-token\.is-thinking/);
 });
 
 test("mobile sidebar uses a hamburger, has a top-row new-chat control, and no Chat shortcut", async () => {
