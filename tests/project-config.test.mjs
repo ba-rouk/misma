@@ -220,7 +220,8 @@ test("business workspace navigation, website widget, handoff, scan and product w
   assert.match(widget, /Request a human/);
   assert.match(widget, /widget-chat/);
   assert.match(widget, /widget-handoff/);
-  assert.match(widget, /data-website-key/);
+  assert.match(dashboard, /data-website-key=/);
+  assert.match(widget, /dataset\.websiteKey/);
   assert.match(styles, /\.aichat-nav-submenu/);
   assert.match(styles, /\.aichat-stat-grid/);
   assert.match(styles, /\.aichat-website-card/);
