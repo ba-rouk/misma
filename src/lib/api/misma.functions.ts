@@ -584,3 +584,30 @@ export const markWorkspaceNotificationRead = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+
+export const sendHumanReply = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    conversationId: z.number().int().positive(),
+    text: z.string().trim().min(1).max(4000),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: conversation, error: conversationError } = await db.from("conversations")
+      .select("id,status,channel").eq("id", data.conversationId).eq("workspace_id", workspaceId).single();
+    if (conversationError || !conversation) throw new Error("Customer conversation not found.");
+    if (String(conversation.channel || "").toLowerCase() === "dashboard") {
+      throw new Error("Human replies are only available for customer-channel conversations.");
+    }
+    const { data: message, error } = await db.from("messages").insert({
+      conversation_id: data.conversationId, role: "human", text: data.text,
+    }).select("id,role,text,created_at").single();
+    const saved = check(message, error);
+    const { error: updateError } = await db.from("conversations").update({
+      latest_text: data.text, status: "Needs you", updated_at: new Date().toISOString(),
+    }).eq("id", data.conversationId).eq("workspace_id", workspaceId);
+    if (updateError) throw new Error(updateError.message);
+    await recordAudit(db, workspaceId, "conversation.human_reply", String(data.conversationId), { messageId: saved.id });
+    return { message: { id: String(saved.id), role: "human" as const, text: saved.text, created_at: saved.created_at } };
+  });
