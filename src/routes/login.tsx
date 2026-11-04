@@ -7,21 +7,11 @@ export const Route = createFileRoute("/login")({ component: Login });
 function Login() {
   const navigate = useNavigate();
   const [signup, setSignup] = useState(false);
-  const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("mode") === "signup") {
-      setSignup(true);
-    }
-  }, []);
 
   useEffect(() => {
     if (!getSupabaseConfig()) return;
@@ -115,28 +105,11 @@ function Login() {
         );
       }
       const supabase = getSupabaseClient();
-      const normalizedEmail = email.trim().toLowerCase();
       if (signup) {
-        const normalizedName = fullName.trim();
-        const normalizedUsername = username.trim().toLowerCase();
-        if (normalizedName.length < 2 || normalizedName.length > 80) {
-          throw new Error("Enter your name using 2 to 80 characters.");
-        }
-        if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(normalizedUsername)) {
-          throw new Error("Choose a username with 3–30 characters: letters, numbers, dots, underscores or hyphens.");
-        }
-        if (password !== confirmPassword) {
-          throw new Error("Your passwords do not match.");
-        }
         const { data, error: signupError } = await supabase.auth.signUp({
-          email: normalizedEmail,
+          email,
           password,
           options: {
-            data: {
-              full_name: normalizedName,
-              name: normalizedName,
-              username: normalizedUsername,
-            },
             emailRedirectTo: `${window.location.origin}/dashboard`,
           },
         });
@@ -152,7 +125,7 @@ function Login() {
         sessionStorage.setItem("misma_email", data.user?.email || email);
       } else {
         const { data, error: signinError } =
-          await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+          await supabase.auth.signInWithPassword({ email, password });
         if (signinError) throw signinError;
         if (!data.session)
           throw new Error(
@@ -214,38 +187,6 @@ function Login() {
               void submit();
             }}
           >
-            {signup && (
-              <>
-                <label className="login-field">
-                  Full name
-                  <input
-                    type="text"
-                    autoComplete="name"
-                    value={fullName}
-                    onChange={(event) => setFullName(event.target.value)}
-                    placeholder="Your name"
-                    minLength={2}
-                    maxLength={80}
-                    required
-                  />
-                </label>
-                <label className="login-field">
-                  Username
-                  <input
-                    type="text"
-                    autoComplete="username"
-                    value={username}
-                    onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/\s/g, ""))}
-                    placeholder="your.username"
-                    minLength={3}
-                    maxLength={30}
-                    pattern="[a-z0-9][a-z0-9._-]{2,29}"
-                    title="Use 3–30 lowercase letters, numbers, dots, underscores or hyphens."
-                    required
-                  />
-                </label>
-              </>
-            )}
             <label className="login-field">
               Email address
               <input
@@ -278,29 +219,6 @@ function Login() {
                 </button>
               </span>
             </label>
-            {signup && (
-              <label className="login-field">
-                Confirm password
-                <span className="login-password-wrap">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    minLength={6}
-                    placeholder="Enter your password again"
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="login-show-password"
-                    onClick={() => setShowConfirmPassword((value) => !value)}
-                  >
-                    {showConfirmPassword ? "Hide" : "Show"}
-                  </button>
-                </span>
-              </label>
-            )}
             {!signup && (
               <div className="login-options">
                 <span />{" "}
@@ -321,7 +239,7 @@ function Login() {
             <button
               type="submit"
               className="login-submit"
-              disabled={busy || !email.trim() || password.length < 6 || (signup && (!fullName.trim() || !/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username.trim().toLowerCase()) || password !== confirmPassword))}
+              disabled={busy || !email || password.length < 6}
             >
               <span>
                 {busy ? "Please wait…" : signup ? "Create account" : "Log in"}
@@ -346,8 +264,6 @@ function Login() {
             onClick={() => {
               setSignup(!signup);
               setError("");
-              setConfirmPassword("");
-              setShowConfirmPassword(false);
             }}
           >
             {signup ? (

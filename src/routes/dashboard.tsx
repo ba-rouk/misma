@@ -398,6 +398,57 @@ function ComposerAttachmentPreview({
   );
 }
 
+function GeneratedImageActions({
+  onDownload,
+  onShare,
+  onCrop,
+  onCopy,
+}: {
+  onDownload?: () => void;
+  onShare?: () => void;
+  onCrop?: () => void;
+  onCopy?: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const runAction = (action?: () => void) => {
+    setMenuOpen(false);
+    action?.();
+  };
+
+  return (
+    <div className="aichat-image-options" onKeyDown={(event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    }}>
+      <button
+        type="button"
+        className="aichat-image-more"
+        title="Image options"
+        aria-label="Image options"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={(event) => {
+          event.stopPropagation();
+          setMenuOpen((open) => !open);
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="5" r="1.6" />
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="12" cy="19" r="1.6" />
+        </svg>
+      </button>
+      {menuOpen && (
+        <div className="aichat-image-options-menu" role="menu" aria-label="Image actions">
+          {onDownload && <button type="button" role="menuitem" onClick={() => runAction(onDownload)}><ActionIcon name="download" />Download image</button>}
+          {onShare && <button type="button" role="menuitem" onClick={() => runAction(onShare)}><ActionIcon name="share" />Share image</button>}
+          {onCrop && <button type="button" role="menuitem" onClick={() => runAction(onCrop)}><ActionIcon name="crop" />Crop image</button>}
+          {onCopy && <button type="button" role="menuitem" onClick={() => runAction(onCopy)}><ActionIcon name="copy" />Copy image</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MessageAttachmentViews({
   attachments,
   onDownload,
@@ -426,12 +477,12 @@ function MessageAttachmentViews({
                 <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="eager" decoding="async" fetchPriority="high" />
               </a>
               {isGenerated && (
-                <div className="aichat-image-action-bar" role="group" aria-label="Generated image actions">
-                  {onDownload && <button type="button" title="Download image" aria-label="Download image" onClick={() => onDownload(item)}><ActionIcon name="download" /></button>}
-                  {onCrop && <button type="button" title="Crop image" aria-label="Crop image" onClick={() => onCrop(item)}><ActionIcon name="crop" /></button>}
-                  {onShare && <button type="button" title="Share image" aria-label="Share image" onClick={() => onShare(item)}><ActionIcon name="share" /></button>}
-                  {onCopy && <button type="button" title="Copy image" aria-label="Copy image" onClick={() => onCopy(item)}><ActionIcon name="copy" /></button>}
-                </div>
+                <GeneratedImageActions
+                  onDownload={onDownload ? () => onDownload(item) : undefined}
+                  onShare={onShare ? () => onShare(item) : undefined}
+                  onCrop={onCrop ? () => onCrop(item) : undefined}
+                  onCopy={onCopy ? () => onCopy(item) : undefined}
+                />
               )}
             </div>
           );
@@ -2672,6 +2723,20 @@ function Dashboard() {
               <line x1="9" y1="3" x2="9" y2="21" />
             </svg>
           </button>
+          <button
+            type="button"
+            className="aichat-mobile-newchat"
+            title="New chat"
+            aria-label="New chat"
+            onClick={handleNewChat}
+          >
+            <span className="aichat-newchat-plus">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </span>
+            <span>New chat</span>
+          </button>
         </div>
 
         {/* New Chat Button */}
@@ -2710,9 +2775,6 @@ function Dashboard() {
             <button type="button" className={`aichat-nav-subbtn${activeTab === "website-statistics" ? " active" : ""}`} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "websites" ? " active" : ""}`} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{connectedWebsites.length}</span></button>
           </div>}
-          <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => { setActiveTab("workspace"); setMobileMenuOpen(false); }} data-tooltip="Chat">
-            <span className="aichat-nav-icon">✧</span><span className="aichat-nav-label">Chat</span>
-          </button>
           <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
             <span className="aichat-nav-icon">▧</span><span className="aichat-nav-label">Images</span>
           </button>
@@ -2938,7 +3000,6 @@ function Dashboard() {
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
-            <span className="aichat-mobile-recents-label">Recents</span>
           </button>
           <button
             type="button"
@@ -3038,20 +3099,18 @@ function Dashboard() {
                             onCopy={(attachment) => void handleCopyImage(attachment)}
                           />
                           {msg.pendingMedia === "image" ? (
-                            <div className="aichat-media-skeleton is-image" role="status" aria-live="polite">
-                              <div className="aichat-media-skeleton-preview" aria-hidden="true">
-                                <span className="aichat-media-skeleton-shimmer" />
-                                <span className="aichat-media-skeleton-orbit"><i /><i /><i /></span>
+                            <div
+                              className="aichat-image-generation-loading"
+                              role="progressbar"
+                              aria-label="Estimated image creation progress"
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={mediaProgressPercent}
+                            >
+                              <div className="aichat-image-generation-dots" aria-hidden="true">
+                                <i /><i /><i />
                               </div>
-                              <div className="aichat-media-skeleton-copy">
-                                <strong>Creating your image</strong>
-                                <span>Agnes is rendering your image…</span>
-                                <div className="aichat-image-progress-track" role="progressbar" aria-label="Estimated image creation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={mediaProgressPercent}>
-                                  <i style={{ width: `${mediaProgressPercent}%` }} />
-                                </div>
-                                <div className="aichat-image-progress-label"><small>Estimated progress</small><strong>{mediaProgressPercent}%</strong></div>
-                                <small>Estimate only. Agnes does not currently report live image-generation percentages.</small>
-                              </div>
+                              <span className="aichat-image-progress-badge" aria-hidden="true">{mediaProgressPercent}%</span>
                             </div>
                           ) : msg.pendingMedia === "video" ? (
                             <div className="aichat-media-skeleton is-video" role="status" aria-live="polite">
@@ -3381,17 +3440,19 @@ function Dashboard() {
                     .filter((asset) => asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/"))
                     .map((asset) => (
                       <article className="aichat-asset-card" key={asset.id}>
-                        <a href={asset.url} target="_blank" rel="noreferrer" className="aichat-asset-image-link">
-                          <img src={asset.url} alt={asset.name || "Misma image"} loading="lazy" />
-                        </a>
+                        <div className="aichat-asset-image-wrap">
+                          <a href={asset.url} target="_blank" rel="noreferrer" className="aichat-asset-image-link">
+                            <img src={asset.url} alt={asset.name || "Misma image"} loading="lazy" />
+                          </a>
+                          <GeneratedImageActions
+                            onDownload={() => void handleDownloadGeneratedMedia(asset, asset.conversationId)}
+                            onShare={() => void handleShareImage(asset, asset.conversationId)}
+                            onCrop={() => handleOpenImageCrop(asset, asset.conversationId)}
+                            onCopy={() => void handleCopyImage(asset, asset.conversationId)}
+                          />
+                        </div>
                         <div className="aichat-asset-card-footer">
                           <span title={asset.name}>{asset.name || (asset.kind === "generated-image" ? "Generated image" : "Image")}</span>
-                          <div className="aichat-image-action-bar" role="group" aria-label="Image actions">
-                            <button type="button" title="Download image" aria-label="Download image" onClick={() => void handleDownloadGeneratedMedia(asset, asset.conversationId)}><ActionIcon name="download" /></button>
-                            <button type="button" title="Crop image" aria-label="Crop image" onClick={() => handleOpenImageCrop(asset, asset.conversationId)}><ActionIcon name="crop" /></button>
-                            <button type="button" title="Share image" aria-label="Share image" onClick={() => void handleShareImage(asset, asset.conversationId)}><ActionIcon name="share" /></button>
-                            <button type="button" title="Copy image" aria-label="Copy image" onClick={() => void handleCopyImage(asset, asset.conversationId)}><ActionIcon name="copy" /></button>
-                          </div>
                         </div>
                       </article>
                     ))}
