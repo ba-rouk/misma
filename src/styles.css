@@ -6642,3 +6642,7 @@ html, body, #app-root {
   .aichat-side-top { height:60px; }
   .aichat-mobile-newchat { min-height:35px; }
 }
+
+
+/* The compact New chat shortcut belongs in the mobile drawer header only. */
+.aichat-mobile-newchat { display:none; }

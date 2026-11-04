@@ -199,9 +199,10 @@ test("image attachments receive visual analysis and show estimated generation pr
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
 
-  assert.match(dashboard, /aichat-image-progress-track/);
+  assert.match(dashboard, /aichat-image-generation-loading/);
+  assert.match(dashboard, /aichat-image-progress-badge/);
   assert.match(dashboard, /mediaProgressPercent/);
-  assert.match(dashboard, /Estimate only/);
+  assert.doesNotMatch(dashboard, /Estimate only|aichat-image-progress-track/);
   assert.match(edgeFunction, /IMAGE INPUT:/);
   assert.match(edgeFunction, /IMAGE UNDERSTANDING:/);
   assert.match(edgeFunction, /prepared\.images\.length === 0 \|\| provider\.supportsImages/);
