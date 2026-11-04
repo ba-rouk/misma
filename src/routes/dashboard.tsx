@@ -594,8 +594,14 @@ function Dashboard() {
 
   // Chats and tasks panel state
   const [chatsExpanded, setChatsExpanded] = useState(true);
-  const [chatMenuOpenId, setChatMenuOpenId] = useState<number | null>(null);
+  const [chatActionMenuId, setChatActionMenuId] = useState<number | null>(null);
+  const [deleteChatTarget, setDeleteChatTarget] = useState<{ id: number; name: string } | null>(null);
+  const [deletingChat, setDeletingChat] = useState(false);
   const [chatGroupMenuOpen, setChatGroupMenuOpen] = useState(false);
+  const [libraryUploadBusy, setLibraryUploadBusy] = useState(false);
+  const [libraryAssetMenuId, setLibraryAssetMenuId] = useState<string | null>(null);
+  const [deleteAssetTarget, setDeleteAssetTarget] = useState<any>(null);
+  const [deletingAsset, setDeletingAsset] = useState(false);
   const [chatGroupFilter, setChatGroupFilter] = useState("all");
   const [downloadingMediaUrl, setDownloadingMediaUrl] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ attachment: MessageAttachment; conversationId: number | null } | null>(null);
@@ -788,12 +794,19 @@ function Dashboard() {
   const mobileMessageActionTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const knowledgeFileInputRef = useRef<HTMLInputElement>(null);
+  const libraryFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
   const shouldAutoScrollRef = useRef(true);
   const regenerateInFlightRef = useRef(false);
+  const chatLongPressTimerRef = useRef<number | null>(null);
+  const chatLongPressTriggeredRef = useRef(false);
+  const chatViewVersionRef = useRef(0);
+  const activeConversationIdRef = useRef<number | null>(null);
+  const chatAbortControllerRef = useRef<AbortController | null>(null);
+  const mediaAbortControllerRef = useRef<AbortController | null>(null);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -1092,6 +1105,9 @@ function Dashboard() {
   // Load messages when selecting a conversation
   const selectConversation = async (convId: number) => {
     if (!token) return;
+    chatViewVersionRef.current += 1;
+    activeConversationIdRef.current = convId;
+    setChatActionMenuId(null);
     setCurrentConversationId(convId);
     setActiveTab("workspace");
     setMobileMenuOpen(false);
@@ -1139,6 +1155,9 @@ function Dashboard() {
 
   // Start a fresh new chat
   const handleNewChat = () => {
+    chatViewVersionRef.current += 1;
+    activeConversationIdRef.current = null;
+    setChatActionMenuId(null);
     setCurrentConversationId(null);
     setMessages([]);
     setDraft("");
@@ -1178,27 +1197,107 @@ function Dashboard() {
     setChatMenuOpenId(null);
   };
 
-  // Delete conversation with confirmation
+  const startChatLongPress = (conversationId: number) => {
+    if (chatLongPressTimerRef.current !== null) window.clearTimeout(chatLongPressTimerRef.current);
+    chatLongPressTriggeredRef.current = false;
+    chatLongPressTimerRef.current = window.setTimeout(() => {
+      chatLongPressTriggeredRef.current = true;
+      setChatActionMenuId(conversationId);
+    }, 520);
+  };
+
+  const cancelChatLongPress = () => {
+    if (chatLongPressTimerRef.current !== null) {
+      window.clearTimeout(chatLongPressTimerRef.current);
+      chatLongPressTimerRef.current = null;
+    }
+  };
+
   const handleDeleteConversation = async (convId: number) => {
-    if (!token) return;
-    if (
-      !confirm(
-        "Are you sure you want to delete this conversation? This action cannot be undone.",
-      )
-    )
-      return;
+    if (!token || deletingChat) return;
+    setDeletingChat(true);
     try {
       await deleteConversation({ data: { token, conversationId: convId } });
-      if (currentConversationId === convId) {
-        handleNewChat();
+      if (activeConversationIdRef.current === convId) handleNewChat();
+      setDeleteChatTarget(null);
+      setChatActionMenuId(null);
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not delete conversation.");
+    } finally {
+      setDeletingChat(false);
+    }
+  };
+
+  const handleDeleteLibraryAsset = async (asset: any) => {
+    if (!token || deletingAsset) return;
+    setDeletingAsset(true);
+    try {
+      if (asset.libraryFileId) {
+        await deleteWorkspaceLibraryFile({ data: { token, id: String(asset.libraryFileId) } });
+      } else {
+        await deleteChatAttachment({
+          data: {
+            token,
+            conversationId: Number(asset.conversationId),
+            messageId: Number(asset.messageId),
+            ...(asset.path ? { path: asset.path } : { url: asset.url }),
+          },
+        });
+        setMessages((current) => current.map((message) => Number(message.id) === Number(asset.messageId)
+          ? { ...message, attachments: (message.attachments || []).filter((attachment) => asset.path ? attachment.path !== asset.path : attachment.url !== asset.url) }
+          : message));
+      }
+      setDeleteAssetTarget(null);
+      setLibraryAssetMenuId(null);
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not delete this library item.");
+    } finally {
+      setDeletingAsset(false);
+    }
+  };
+
+  const handleLibraryUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length || !token || !workspace?.id || libraryUploadBusy) return;
+    const oversized = files.find((file) => file.size > 25 * 1024 * 1024);
+    if (oversized) {
+      alert(oversized.name + " is larger than 25 MB.");
+      return;
+    }
+    setLibraryUploadBusy(true);
+    try {
+      const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
+      if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
+      const client = getSupabaseClient();
+      const uploadOne = async (file: File) => {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
+        const path = `${workspace.id}/${userData.user.id}/library-${crypto.randomUUID()}-${safeName}`;
+        const { error } = await client.storage.from("misma-media").upload(path, file, {
+          upsert: false,
+          cacheControl: "3600",
+          contentType: file.type || "application/octet-stream",
+        });
+        if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+        try {
+          await createWorkspaceLibraryFile({ data: {
+            token, path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size,
+          } });
+        } catch (cause) {
+          await client.storage.from("misma-media").remove([path]);
+          throw cause;
+        }
+      };
+      for (let index = 0; index < files.length; index += 3) {
+        await Promise.all(files.slice(index, index + 3).map(uploadOne));
       }
       loadData();
     } catch (cause) {
-      alert(
-        cause instanceof Error
-          ? cause.message
-          : "Could not delete conversation.",
-      );
+      alert(cause instanceof Error ? cause.message : "Could not upload files to Library.");
+    } finally {
+      setLibraryUploadBusy(false);
     }
   };
 
