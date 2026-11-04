@@ -318,6 +318,14 @@ Deno.serve(async (request) => {
     conversation_id: conversationId, contact_id: contactId, website_connection_id: website.id,
   });
 
+  if (conversation.status === "Needs you") {
+    return response(200, {
+      ok: true, conversationId,
+      answer: "Your conversation is with the team now. A team member will reply here as soon as possible.",
+      waitingForHuman: true,
+    }, origin);
+  }
+
   const [workspaceResult, knowledgeResult, productsResult, historyResult] = await Promise.all([
     db.from("workspaces").select("name,description,location,opening_hours,primary_language").eq("id", website.workspace_id).single(),
     db.from("knowledge_entries").select("question,answer").eq("workspace_id", website.workspace_id).eq("approved", true).order("id", { ascending: false }).limit(40),
