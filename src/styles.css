@@ -6229,3 +6229,69 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .aichat-composer-input-row .aichat-composer-textarea { transition: none; }
 }
+
+
+/* Business workspace navigation groups and connected-channel hub pages. */
+.aichat-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.aichat-nav-group-trigger { width: 100%; }
+.aichat-nav-chevron {
+  margin-left: auto; color: #718096; font-size: 15px; line-height: 1;
+  transition: transform .16s ease;
+}
+.aichat-nav-chevron.is-open { transform: rotate(180deg); }
+.aichat-nav-submenu {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 0 0 5px 34px; padding: 3px 0 3px 10px;
+  border-left: 1px solid rgba(132,151,177,.2);
+}
+.aichat-nav-submenu button {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 32px; width: 100%; padding: 6px 9px;
+  border: 0; border-radius: 7px; background: transparent;
+  color: #96a4b8; text-align: left; font: inherit; font-size: 12px; cursor: pointer;
+}
+.aichat-nav-submenu button:hover,
+.aichat-nav-submenu button.active { color: #edf4ff; background: rgba(138,180,255,.1); }
+.aichat-nav-submenu button span { color: #8192a8; font-size: 10px; }
+.aichat-hub-stats {
+  display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px;
+}
+.aichat-hub-stats .aichat-card { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.aichat-hub-stats small { color: #8d9bae; font-size: 12px; }
+.aichat-hub-stats strong { color: #f2f6fc; font-size: 27px; font-weight: 700; }
+.aichat-hub-stats span { color: #8d9bae; font-size: 11px; }
+.aichat-hub-card-heading {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+}
+.aichat-hub-card-heading h3 { margin-bottom: 5px; }
+.aichat-hub-list { display: flex; flex-direction: column; }
+.aichat-hub-list-row,.aichat-suggestion-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 13px 0; border-top: 1px solid #252d39;
+}
+.aichat-hub-list-row > span,.aichat-suggestion-row > div { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.aichat-hub-list-row strong,.aichat-suggestion-row strong { color: #e6edf7; font-size: 13px; }
+.aichat-hub-list-row small,.aichat-suggestion-row small { color: #8d9bae; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.aichat-hub-list-row small a { color: #8ab4ff; }
+.aichat-hub-row-actions,.aichat-hub-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 12px; }
+.aichat-embed-code {
+  max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  padding: 14px; border: 1px solid #303a49; border-radius: 10px;
+  background: #0b1018; color: #c4d7f2; font: 11px/1.6 var(--font-mono);
+}
+.aichat-hub-status { color: #8ab4ff !important; font-size: 12px !important; line-height: 1.5; }
+.aichat-notification-item.is-read { opacity: .68; }
+.aichat-notification-item.is-read .aichat-notification-item-icon { color: #65748a; }
+.aichat-hub-stats + .aichat-card { margin-top: 18px; }
+@media (max-width: 900px) {
+  .aichat-hub-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 767px) {
+  .aichat-nav-submenu { margin-left: 31px; }
+  .aichat-hub-stats { gap: 8px; }
+  .aichat-hub-stats .aichat-card { padding: 14px; }
+  .aichat-hub-stats strong { font-size: 23px; }
+  .aichat-hub-list-row,.aichat-suggestion-row { align-items: flex-start; flex-direction: column; }
+  .aichat-hub-row-actions { width: 100%; }
+  .aichat-hub-row-actions .aichat-action-btn { flex: 1; }
+}
