@@ -2700,13 +2700,15 @@ function Dashboard() {
                     {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
                   </div>
                   {selectedFiles.length > 0 && (
-                    <div className="aichat-composer-attachments">
+                    <div className="aichat-composer-attachments" aria-label="Attachments ready to send">
                       {selectedFiles.map((file, index) => (
-                        <div className="aichat-composer-attachment-chip" key={`${file.name}-${file.lastModified}-${index}`}>
-                          <span>{file.type.startsWith("image/") ? "▧" : file.type.startsWith("video/") ? "▶" : "📎"}</span>
-                          <span title={file.name}>{file.name}</span>
-                          <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== index))}>×</button>
-                        </div>
+                        <ComposerAttachmentPreview
+                          key={`${file.name}-${file.lastModified}-${index}`}
+                          file={file}
+                          index={index}
+                          isUploading={uploadingAttachments}
+                          onRemove={(removeIndex) => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== removeIndex))}
+                        />
                       ))}
                     </div>
                   )}
