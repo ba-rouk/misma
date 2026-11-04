@@ -1,0 +1,41 @@
+name: Validate Misma
+
+on:
+  push:
+    branches:
+      - fix/misma-video-search-voice-settings
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.8
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck and production build
+        run: bun run build
+
+      - name: Run tests
+        run: bun test
+
+      - name: Check Supabase Edge Function
+        run: deno check supabase/functions/misma-chat/index.ts
