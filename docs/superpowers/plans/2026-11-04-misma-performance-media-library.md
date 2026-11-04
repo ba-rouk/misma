@@ -37,12 +37,12 @@
 - Bound ordinary chat provider iteration by a total deadline; pass remaining time as `timeoutMs`.
 - Bound safety reviewer candidates and each reviewer request; retain ALLOW/BLOCK-only semantics.
 
-- [ ] Add static regression assertions for bounded provider attempts, request timing diagnostics, and safety-review fail-closed behavior.
-- [ ] Verify the regression test fails before implementation.
-- [ ] Implement a bounded failover deadline and per-provider elapsed timing; do not log credentials or full prompts.
-- [ ] Use a small configured safety-review fallback list with explicit per-reviewer timeout. If no reviewer returns ALLOW or BLOCK, keep throwing `MEDIA_SAFETY_UNAVAILABLE`.
-- [ ] Bound Tavily/Brave search network waits so a live search cannot hold a chat request indefinitely.
-- [ ] Run Bun tests, Deno check, typecheck, and production build.
+- [x] Add static regression assertions for bounded provider attempts, request timing diagnostics, and safety-review fail-closed behavior.
+- [x] Verify the regression test fails before implementation.
+- [x] Implement a bounded failover deadline and per-provider elapsed timing; do not log credentials or full prompts.
+- [x] Use a small configured safety-review fallback list with explicit per-reviewer timeout. If no reviewer returns ALLOW or BLOCK, keep throwing `MEDIA_SAFETY_UNAVAILABLE`.
+- [x] Bound Tavily/Brave search network waits so a live search cannot hold a chat request indefinitely.
+- [x] Run Bun tests, Deno check, typecheck, and production build.
 
 ### Task 2: Generated media download and Save to Library
 
@@ -55,11 +55,11 @@
 - Reuse `fetchAttachmentBlob`, `createWorkspaceLibraryFile`, the current `misma-media` bucket, and existing workspace/user path convention.
 - Extend generated-image and generated-video action menus with Save to Library; retain Download.
 
-- [ ] Add regression assertions for Save to Library action, secure proxy retrieval, workspace-scoped upload, and video actions.
-- [ ] Verify the regression test fails before implementation.
-- [ ] Implement Save to Library with safe filename handling, explicit success/error state, and cleanup if library metadata creation fails.
-- [ ] Ensure generated videos also expose both Download and Save to Library.
-- [ ] Run Bun tests, typecheck, and production build.
+- [x] Add regression assertions for Save to Library action, secure proxy retrieval, workspace-scoped upload, and video actions.
+- [x] Verify the regression test fails before implementation.
+- [x] Implement Save to Library with safe filename handling, explicit success/error state, and cleanup if library metadata creation fails.
+- [x] Ensure generated videos also expose both Download and Save to Library.
+- [x] Run Bun tests, typecheck, and production build.
 
 ### Task 3: Library media preview
 
@@ -73,11 +73,11 @@
 - Images render in an image viewer; videos render with native controls.
 - A dedicated download control remains separate from the preview-click target; delete menu keeps its current behavior.
 
-- [ ] Add regression assertions for clickable media preview, video controls, accessible close controls, and preserved download/delete actions.
-- [ ] Verify the regression test fails before implementation.
-- [ ] Implement the viewer and responsive styles.
-- [ ] Run the full test suite, typecheck, build, and Deno check.
+- [x] Add regression assertions for clickable media preview, video controls, accessible close controls, and preserved download/delete actions.
+- [x] Verify the regression test fails before implementation.
+- [x] Implement the viewer and responsive styles.
+- [x] Run the full test suite, typecheck, build, and Deno check.
 
 ### Final review
-- Inspect the complete branch diff for security, stale state, retry duplication, and mobile interaction regressions.
-- Confirm all workflow checks pass before merging.
+- [x] Inspect the complete branch diff for security, stale state, retry duplication, and mobile interaction regressions (self-review; no reviewer subagent tool is available in this session).
+- [x] Confirm all workflow checks pass before merging (GitHub Actions run 41911825922: typecheck, Bun tests, build, and both Deno checks).
