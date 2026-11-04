@@ -682,7 +682,7 @@ function Dashboard() {
   const [chatGroupFilter, setChatGroupFilter] = useState("all");
   const [downloadingMediaUrl, setDownloadingMediaUrl] = useState<string | null>(null);
   const [savingLibraryAssetId, setSavingLibraryAssetId] = useState<string | null>(null);
-  const [cropTarget, setCropTarget = useState<{ attachment: MessageAttachment; conversationId: number | null } | null>(null);
+  const [cropTarget, setCropTarget] = useState<{ attachment: MessageAttachment; conversationId: number | null } | null>(null);
   const [cropAspect, setCropAspect] = useState<"original" | "square" | "portrait" | "landscape">("original");
   const [mediaActionStatus, setMediaActionStatus] = useState("");
 
