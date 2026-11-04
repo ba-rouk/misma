@@ -2205,7 +2205,8 @@ function Dashboard() {
     event.target.value = "";
     if (!file || !workspace?.id || !token || knowledgeUploadBusy) return;
     if (file.size > 2 * 1024 * 1024) { alert("Choose a text-based file under 2 MB."); return; }
-    if (!/\\.(txt|md|csv|json|html?|xml)$/i.test(file.name)) { alert("Supported knowledge files: TXT, Markdown, CSV, JSON, HTML, and XML. PDF text extraction is not enabled yet."); return; }
+    const extension = file.name.toLowerCase().split(".").pop() || "";
+    if (!["txt", "md", "csv", "json", "html", "htm", "xml"].includes(extension)) { alert("Supported knowledge files: TXT, Markdown, CSV, JSON, HTML, and XML. PDF text extraction is not enabled yet."); return; }
     setKnowledgeUploadBusy(true);
     try {
       const content = await file.text();
