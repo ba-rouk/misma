@@ -45,16 +45,24 @@ export const getMismaData = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
-    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult] =
+    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
+        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("knowledge_entries").select("id,question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
-        db.from("contacts").select("id,name,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("lifetime_value_rwf", { ascending: false }),
+        db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
+        db.from("website_connections").select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+        db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
       ]);
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const rawConversations = check(conversationsResult.data, conversationsResult.error);
+    const websites = check(websitesResult.data, websitesResult.error);
+    const handoffs = check(handoffsResult.data, handoffsResult.error);
+    const notifications = check(notificationsResult.data, notificationsResult.error);
+    const products = check(productsResult.data, productsResult.error);
     const conversationIds = rawConversations.map((conversation: any) => conversation.id);
     const promptTitles = new Map<number, string>();
     if (conversationIds.length) {
@@ -193,7 +201,10 @@ export const getMismaData = createServerFn({ method: "POST" })
     }));
     const knowledge = check(knowledgeResult.data, knowledgeResult.error);
     const customers = check(customersResult.data, customersResult.error);
-    return { workspace, conversations, orders, knowledge, customers, assets, unreadVisitorMessages, unreadVisitorCount };
+    return {
+      workspace, conversations, orders, knowledge, customers, assets,
+      unreadVisitorMessages, unreadVisitorCount, websites, handoffs, notifications, products,
+    };
   });
 
 export const getVisitorNotifications = createServerFn({ method: "POST" })
