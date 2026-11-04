@@ -22,6 +22,8 @@ import {
   markVisitorMessagesRead,
   createWebsiteConnection,
   createProductService,
+  updateHumanRequestStatus,
+  updateProductServiceStatus,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -611,6 +613,15 @@ function Dashboard() {
   const [humanHandoffs, setHumanHandoffs] = useState<any[]>([]);
   const [allNotifications, setAllNotifications] = useState<any[]>([]);
   const [productsServices, setProductsServices] = useState<any[]>([]);
+  const [channelConnections, setChannelConnections] = useState<any[]>([]);
+  const [channelEnvironment, setChannelEnvironment] = useState({ whatsappConfigured: false, phoneConfigured: false });
+  const [twilioPhoneNumber, setTwilioPhoneNumber] = useState("");
+  const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState("");
+  const [whatsappPhoneNumber, setWhatsappPhoneNumber] = useState("");
+  const [channelBusy, setChannelBusy] = useState<string | null>(null);
+  const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
+  const [knowledgeUploadBusy, setKnowledgeUploadBusy] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
   const [websiteDraftUrl, setWebsiteDraftUrl] = useState("");
   const [websiteDraftName, setWebsiteDraftName] = useState("");
   const [productDraft, setProductDraft] = useState({ kind: "product", name: "", description: "", price: "" });
@@ -770,6 +781,7 @@ function Dashboard() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mobileMessageActionTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const knowledgeFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -911,6 +923,24 @@ function Dashboard() {
     };
   }, [isAuthenticated, navigate]);
 
+  // All calls to the public widget function use a real signed-in workspace token.
+  const callWidgetFunction = async (payload: Record<string, unknown>) => {
+    const config = getSupabaseConfig();
+    if (!token || !config) throw new Error("Your Misma workspace session or Supabase configuration is unavailable.");
+    const response = await fetch(`${config.url.replace(/\\/$/, "")}/functions/v1/misma-widget`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.publishableKey,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ ...payload, workspaceId: workspace?.id || payload.workspaceId }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.error) throw new Error(result.error || `Misma integration request failed (${response.status}).`);
+    return result;
+  };
+
   // Load workspace and dashboard data
   const loadData = () => {
     if (!token) return;
@@ -928,6 +958,15 @@ function Dashboard() {
         setHumanHandoffs(data.handoffs ?? []);
         setAllNotifications(data.notifications ?? []);
         setProductsServices(data.products ?? []);
+        setChannelConnections(data.channelConnections ?? []);
+        if (data.workspace?.id) {
+          void callWidgetFunction({ action: "connection-status", workspaceId: data.workspace.id })
+            .then((status) => setChannelEnvironment({
+              whatsappConfigured: Boolean(status.whatsappConfigured),
+              phoneConfigured: Boolean(status.phoneConfigured),
+            }))
+            .catch((cause) => console.warn("Could not read channel configuration status:", cause));
+        }
         setWorkspaceAssets(data.assets ?? []);
         if (data.workspace) {
           setProfileForm({
@@ -2124,6 +2163,52 @@ function Dashboard() {
       sessionStorage.removeItem("misma_email");
       navigate({ to: "/login", replace: true });
     }
+  };
+
+  const handleSaveChannel = async (channel: "phone" | "whatsapp") => {
+    if (!token || !workspace?.id || channelBusy) return;
+    setChannelBusy(channel);
+    try {
+      const result = channel === "phone"
+        ? await callWidgetFunction({ action: "save-channel", channel, workspaceId: workspace.id, phoneNumber: twilioPhoneNumber.trim(), displayName: "Twilio Phone" })
+        : await callWidgetFunction({ action: "save-channel", channel, workspaceId: workspace.id, externalId: whatsappPhoneNumberId.trim(), phoneNumber: whatsappPhoneNumber.trim(), displayName: "WhatsApp Business" });
+      setChannelConnections((items) => [...items.filter((item) => item.channel !== channel), result.connection]);
+      alert("Connection details saved. Use Verify connection after adding the provider secrets.");
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not save this channel.");
+    } finally { setChannelBusy(null); }
+  };
+
+  const handleTestChannel = async (channel: "phone" | "whatsapp") => {
+    if (!token || !workspace?.id || channelBusy) return;
+    setChannelBusy(channel + "-test");
+    try {
+      const result = await callWidgetFunction({ action: "test-channel", channel, workspaceId: workspace.id });
+      setChannelConnections((items) => items.map((item) => item.channel === channel ? { ...item, status: "connected" } : item));
+      alert(`${channel === "phone" ? "Twilio" : "WhatsApp"} verified successfully.`);
+      if (result.details?.display_phone_number) setWhatsappPhoneNumber(result.details.display_phone_number);
+      if (channel === "phone") setChannelEnvironment((v) => ({ ...v, phoneConfigured: true }));
+      else setChannelEnvironment((v) => ({ ...v, whatsappConfigured: true }));
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not verify this channel.");
+    } finally { setChannelBusy(null); }
+  };
+
+  const handleExtractKnowledgeFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !workspace?.id || !token || knowledgeUploadBusy) return;
+    if (file.size > 2 * 1024 * 1024) { alert("Choose a text-based file under 2 MB."); return; }
+    if (!/\\.(txt|md|csv|json|html?|xml)$/i.test(file.name)) { alert("Supported knowledge files: TXT, Markdown, CSV, JSON, HTML, and XML. PDF text extraction is not enabled yet."); return; }
+    setKnowledgeUploadBusy(true);
+    try {
+      const content = await file.text();
+      const result = await callWidgetFunction({ action: "extract-knowledge", workspaceId: workspace.id, fileName: file.name, content });
+      alert(`Knowledge extraction complete. Saved ${result.knowledgeSaved || 0} FAQs and ${result.productSuggestions || 0} product/service suggestions for review.`);
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not extract knowledge from this file.");
+    } finally { setKnowledgeUploadBusy(false); }
   };
 
   // Knowledge handlers
