@@ -677,6 +677,7 @@ function Dashboard() {
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [thinkHarder, setThinkHarder] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
@@ -1229,7 +1230,9 @@ function Dashboard() {
     videoFrameMode = false,
   ): Promise<MessageAttachment[]> => {
     if (!filesToUpload.length) return [];
-    if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
+    setUploadingAttachments(true);
+    try {
+      if (!workspace?.id) throw new Error("Your workspace is still loading. Please try again.");
     const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
     if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
 
@@ -1267,8 +1270,11 @@ function Dashboard() {
         await uploadOne(original, "file");
       }
     }
-    if (uploaded.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
-    return uploaded;
+      if (uploaded.length > 8) throw new Error("This upload created too many attachments. Please send fewer files.");
+      return uploaded;
+    } finally {
+      setUploadingAttachments(false);
+    }
   };
 
   const postChatAction = async (body: Record<string, unknown>) => {
