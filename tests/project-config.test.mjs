@@ -285,3 +285,45 @@ test("collapsing the desktop sidebar closes nav groups and hides submenu content
   assert.match(dashboard, /if \(!next\) \{\s*setExpandedNavGroups\(\{\s*workspace: false,\s*manage: false,\s*build: false,\s*connect: false/);
   assert.match(styles, /@media \(min-width: 768px\)\s*\{[\s\S]*?\.aichat-side\.is-collapsed \.aichat-nav-submenu,[\s\S]*?\.aichat-side\.is-collapsed \.aichat-nav-caret\s*\{\s*display: none !important;/);
 });
+
+
+test("Library navigation has no file-count badge", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+
+  assert.doesNotMatch(dashboard, /workspaceAssets\.length > 0 && <span className="aichat-nav-badge">/);
+  assert.ok(dashboard.includes('data-tooltip="Library"'));
+  assert.ok(dashboard.includes('<span className="aichat-nav-label">Library</span>'));
+});
+
+test("Ask Misma launcher uses the Misma mark, sits at the bottom-left, and is icon-only on mobile", async () => {
+  const landingWidget = await read("../src/components/landing-chat-widget.tsx");
+  const styles = await read("../src/styles.css");
+  const embed = await read("../public/assets/misma-widget.js");
+
+  assert.match(landingWidget, /<MismaIcon size=\{28\} className="misma-guest-launcher-logo" \/>/);
+  assert.match(landingWidget, /<span className="misma-guest-launcher-label">Ask Misma<\/span>/);
+  assert.match(styles, /\.misma-guest-widget\s*\{[^}]*left:\s*24px !important/);
+  assert.match(styles, /@media \(max-width: 600px\)\s*\{[\s\S]*?\.misma-guest-widget\s*\{[^}]*left:\s*14px !important/);
+  assert.match(styles, /\.misma-guest-launcher-label\s*\{\s*display:\s*none/);
+  assert.match(embed, /position:fixed;left:20px;bottom:20px/);
+  assert.match(embed, /class="launch-logo"/);
+  assert.match(embed, /Ask Misma/);
+  assert.match(embed, /@media\(max-width:520px\)\{\.launch\{/);
+  assert.match(embed, /\.launch-label\{display:none\}/);
+});
+
+test("website connections can be created before publication with a general script for preview hosts", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+
+  assert.match(dashboard, /unpublished draft, staging, or preview URL before launch/);
+  assert.match(dashboard, /Connect a published website or register an unpublished preview/);
+  assert.match(dashboard, /Install the general Misma script/);
+  assert.match(dashboard, /Website or preview URL/);
+  assert.match(dashboard, /You do not need to publish the website first/);
+  assert.match(dashboard, /General website installation script/);
+  assert.match(dashboard, /data-site-key=/);
+  assert.match(dashboard, /registered live, preview, or staging hostname/);
+  assert.match(api, /status:\s*"pending"/);
+  assert.match(api, /website_url:\s*websiteUrl/);
+});
