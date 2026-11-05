@@ -355,6 +355,7 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(hook, /getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
   assert.match(hook, /addEventListener\("ended"/);
   assert.match(hook, /visibilitychange/);
+  assert.match(hook, /const handleVisibilityChange = \(\) => \{\s*if \(document\.visibilityState !== "hidden"\) return;\s*stopResources\(\);/);
   assert.match(hook, /pagehide/);
   assert.match(hook, /devicechange/);
   assert.match(hook, /createMediaStreamSource/);
