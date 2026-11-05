@@ -6998,3 +6998,36 @@ html, body, #app-root {
     display: none !important;
   }
 }
+
+
+/* Ask Misma launcher positioning: keep the brand widget at the lower-left edge. */
+.misma-guest-widget {
+  left: 24px !important;
+  right: auto !important;
+  bottom: 24px;
+}
+.misma-guest-panel {
+  left: 0 !important;
+  right: auto !important;
+}
+@media (max-width: 600px) {
+  .misma-guest-widget {
+    left: 14px !important;
+    right: auto !important;
+    bottom: 14px;
+  }
+  .misma-guest-panel {
+    left: -2px !important;
+    right: auto !important;
+  }
+}
+.aichat-website-setup-note {
+  margin: 2px 0 0;
+  color: #8998aa;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.aichat-website-setup-note code {
+  color: #d4e3f8;
+  font-size: 11px;
+}
