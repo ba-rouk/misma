@@ -989,13 +989,20 @@ function Dashboard() {
     shouldAutoScrollRef.current = scrollHeight - scrollTop - clientHeight < 120;
   };
 
-  // Save desktop sidebar preference
+  // Save desktop sidebar preference and close all flyout groups when collapsing.
   const toggleDesktopSidebar = () => {
-    setSidebarOpen((prev) => {
-      const next = !prev;
-      localStorage.setItem("misma_sidebar_open", String(next));
-      return next;
-    });
+    const next = !sidebarOpen;
+    setSidebarOpen(next);
+    localStorage.setItem("misma_sidebar_open", String(next));
+
+    if (!next) {
+      setExpandedNavGroups({
+        workspace: false,
+        manage: false,
+        build: false,
+        connect: false,
+      });
+    }
   };
 
   // Prevent background scroll when mobile sidebar is open
