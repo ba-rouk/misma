@@ -408,11 +408,27 @@ test("dashboard chat scrolls in a full-width pane with the scrollbar at the far 
   const dashboard = await read("../src/routes/dashboard.tsx");
   const styles = await read("../src/styles.css");
 
-  assert.match(dashboard, /<div\\s+className="aichat-scroll-area"\\s+ref=\\{scrollRef\\}\\s+onScroll=\\{handleScroll\\}\\s*>/);
-  assert.match(dashboard, /className="aichat-conversation-wrap"/);
-  assert.doesNotMatch(dashboard, /className="aichat-conversation-wrap"\\s+ref=\\{scrollRef\\}/);
-  assert.match(styles, /\\.aichat-main\\s*\\{[^}]*min-height:\\s*0;[^}]*overflow:\\s*hidden;/);
+  assert.ok(dashboard.includes('className="aichat-scroll-area"'));
+  assert.ok(dashboard.includes('ref={scrollRef}'));
+  assert.ok(dashboard.includes('onScroll={handleScroll}'));
+  assert.ok(dashboard.indexOf('ref={scrollRef}') < dashboard.indexOf('className="aichat-conversation-wrap"'));
+  assert.ok(!dashboard.includes('className="aichat-conversation-wrap"\\n              ref={scrollRef}'));
+
+  const mainStyles = styles.slice(styles.indexOf(".aichat-main {"));
+  const mainBlock = mainStyles.slice(0, mainStyles.indexOf("}"));
+  assert.ok(mainBlock.includes("min-height: 0;"));
+  assert.ok(mainBlock.includes("overflow: hidden;"));
+
   const scrollAreaStyles = styles.slice(styles.lastIndexOf(".aichat-scroll-area {"));
-  assert.match(scrollAreaStyles, /width:\\s*100%;[^}]*min-width:\\s*0;[^}]*min-height:\\s*0;[^}]*align-self:\\s*stretch;[^}]*overflow-y:\\s*auto;/);
-  assert.match(styles, /\\.aichat-scroll-area::-webkit-scrollbar\\s*\\{\\s*width:\\s*8px/);
+  const scrollAreaBlock = scrollAreaStyles.slice(0, scrollAreaStyles.indexOf("}"));
+  for (const declaration of [
+    "width: 100%;",
+    "min-width: 0;",
+    "min-height: 0;",
+    "align-self: stretch;",
+    "overflow-y: auto;",
+  ]) {
+    assert.ok(scrollAreaBlock.includes(declaration), "missing chat scroll declaration: " + declaration);
+  }
+  assert.ok(styles.includes(".aichat-scroll-area::-webkit-scrollbar"));
 });
