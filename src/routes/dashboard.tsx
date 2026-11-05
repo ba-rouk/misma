@@ -3440,11 +3440,13 @@ function Dashboard() {
 
         {/* ── View 1: Workspace (ChatGPT-Style Interface) ── */}
         {activeTab === "workspace" && (
-          <div className="aichat-scroll-area">
+          <div
+            className="aichat-scroll-area"
+            ref={scrollRef}
+            onScroll={handleScroll}
+          >
             <div
               className="aichat-conversation-wrap"
-              ref={scrollRef}
-              onScroll={handleScroll}
               onTouchStart={(event) => {
                 const target = event.target;
                 if (target instanceof Element && !target.closest(".aichat-message-row.is-user") && !target.closest(".aichat-message-actions")) {
