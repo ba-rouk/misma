@@ -303,7 +303,7 @@ function cleanHtml(html: string): string {
     .replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n")
     .trim().slice(0, 18000);
 }
-async function crawlWebsite(startUrl: string): Promise<Array<{ url: string; title: string; text: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 25): Promise<Array<{ url: string; title: string; text: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
@@ -332,7 +332,7 @@ async function crawlWebsite(startUrl: string): Promise<Array<{ url: string; titl
   } catch {
     // A missing or inaccessible sitemap does not prevent normal same-domain link discovery.
   }
-  while (queue.length && pages.length < 25) {
+  while (queue.length && pages.length < maxPages) {
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
     if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href)) continue;
@@ -454,7 +454,7 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
     : { error: null };
   if (knowledgeInsertResult.error) throw new Error("Could not save refreshed website knowledge.");
   const knowledgeUpdateResults = await Promise.all(knowledgeUpdates.map((item) =>
-    db.from("knowledge_entries").update({ answer: item.answer, approved: true })
+    db.from("knowledge_entries").update({ answer: item.answer })
       .eq("id", item.id).eq("workspace_id", workspaceId)
   ));
   const knowledgeUpdateError = knowledgeUpdateResults.find((result) => result.error)?.error;
@@ -575,9 +575,9 @@ async function createWebsiteScanRun(db: Db, website: AnyRecord, automatic: boole
   return String(created.data.id);
 }
 
-async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string) {
+async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 25) {
   try {
-    const pages = await crawlWebsite(website.website_url);
+    const pages = await crawlWebsite(website.website_url, maxPages);
     if (!pages.length) throw new Error("No readable public HTML pages were found.");
     const sourceText = pages
       .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
@@ -620,7 +620,7 @@ async function autoRefreshWebsiteKnowledge(db: Db, website: AnyRecord) {
     if (website.status === "paused") return;
     const scanId = await createWebsiteScanRun(db, website, true);
     if (!scanId) return;
-    const result = await performWebsiteScan(db, website, scanId);
+    const result = await performWebsiteScan(db, website, scanId, 12);
     console.info("[misma-widget] Automatic website knowledge refresh completed:", {
       websiteId: website.id,
       pagesScanned: result.pagesScanned,
