@@ -262,6 +262,33 @@ function ActionIcon({ name }: { name: ActionIconName }) {
   );
 }
 
+function normalizeComposerAttachment(file: File): File {
+  const extension = file.name.toLowerCase().split(".").pop() || "";
+  const inferredTypes: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    avif: "image/avif",
+    heic: "image/heic",
+    heif: "image/heif",
+    svg: "image/svg+xml",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    m4v: "video/x-m4v",
+    webm: "video/webm",
+    mkv: "video/x-matroska",
+    pdf: "application/pdf",
+  };
+  const inferredType = inferredTypes[extension];
+  const currentType = file.type.toLowerCase();
+  const shouldInfer = !currentType || currentType === "application/octet-stream";
+  if (!shouldInfer || !inferredType || inferredType === currentType) return file;
+  return new File([file], file.name, { type: inferredType, lastModified: file.lastModified });
+}
+
 async function compressImageForUpload(file: File): Promise<File> {
   const supportedOriginal = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
   if (!file.type.startsWith("image/")) return file;
@@ -357,7 +384,8 @@ function ComposerAttachmentPreview({
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
-  const isImage = file.type.startsWith("image/");
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i.test(file.name);
   const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   const previewPending = (isImage || isVideo) && !previewLoaded;
@@ -367,10 +395,10 @@ function ComposerAttachmentPreview({
     : (file.size / (1024 * 1024)).toFixed(1) + " MB";
 
   useEffect(() => {
-    setPreviewLoaded(false);
+    setPreviewLoaded(!isImage && !isVideo);
+    setPreviewFailed(false);
     if (!isImage && !isVideo) {
       setPreviewUrl(null);
-      setPreviewLoaded(true);
       return;
     }
     const url = URL.createObjectURL(file);
@@ -381,14 +409,29 @@ function ComposerAttachmentPreview({
   return (
     <div className="aichat-composer-attachment-card" title={file.name}>
       <div className="aichat-composer-attachment-square">
-        {isImage && previewUrl ? (
-          <img src={previewUrl} alt={file.name} decoding="async" fetchPriority="high" onLoad={() => setPreviewLoaded(true)} onError={() => setPreviewLoaded(true)} />
-        ) : isVideo && previewUrl ? (
-          <video src={previewUrl} muted playsInline preload="metadata" onLoadedMetadata={() => setPreviewLoaded(true)} onError={() => setPreviewLoaded(true)} />
+        {isImage && previewUrl && !previewFailed ? (
+          <img
+            src={previewUrl}
+            alt={file.name}
+            decoding="async"
+            loading="eager"
+            fetchPriority="high"
+            onLoad={() => setPreviewLoaded(true)}
+            onError={() => { setPreviewLoaded(true); setPreviewFailed(true); }}
+          />
+        ) : isVideo && previewUrl && !previewFailed ? (
+          <video
+            src={previewUrl}
+            muted
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={() => setPreviewLoaded(true)}
+            onError={() => { setPreviewLoaded(true); setPreviewFailed(true); }}
+          />
         ) : (
           <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
-            <span>{isPdf ? "PDF" : extension}</span>
-            <small>{isPdf ? "Document" : isVideo ? "Video" : "File"}</small>
+            <span>{isPdf ? "PDF" : isImage ? "IMAGE" : isVideo ? "VIDEO" : extension}</span>
+            <small>{isPdf ? "Document" : isImage ? (previewFailed ? "Preview unavailable" : "Image") : isVideo ? (previewFailed ? "Preview unavailable" : "Video") : "File"}</small>
           </div>
         )}
         <button
@@ -1695,7 +1738,23 @@ function Dashboard() {
         if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
         uploadedPaths.push(path);
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
-        return { path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, kind };
+        let url: string | undefined;
+        if (kind !== "video-frame") {
+          const { data: signed, error: signedError } = await getSupabaseClient()
+            .storage.from("misma-media").createSignedUrl(path, 3600);
+          if (signedError || !signed?.signedUrl) {
+            throw new Error(`Could not prepare ${file.name} for the chat preview.`);
+          }
+          url = signed.signedUrl;
+        }
+        return {
+          path,
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          kind,
+          ...(url ? { url } : {}),
+        };
       };
       const uploadFrames = async (frames: File[]) => {
         const result: MessageAttachment[] = [];
@@ -1979,6 +2038,7 @@ function Dashboard() {
     const isRetry = options.retry === true;
     const editId = editingMessageId;
     const tempUserId = isRetry ? failedMessageId : `user-${Date.now()}`;
+    const filesToSend = editId ? [] : [...selectedFiles];
 
     if (!editId && !isRetry) {
       const tempUserMsg: Message = {
@@ -2016,7 +2076,14 @@ function Dashboard() {
         loadData();
         return;
       }
-      const attachments = editId ? [] : await uploadSelectedAttachments(selectedFiles, false, requestController.signal);
+      const attachments = editId ? [] : await uploadSelectedAttachments(filesToSend, false, requestController.signal);
+      if (!editId && filesToSend.length && tempUserId) {
+        setMessages((prev) => prev.map((item) =>
+          item.id === tempUserId ? { ...item, attachments } : item
+        ));
+        // Move uploaded files into the outgoing message while Misma prepares its response.
+        setSelectedFiles([]);
+      }
       const res = await postChatAction({
         action: "chat",
         message: textToSend,
@@ -2068,6 +2135,7 @@ function Dashboard() {
       setFailedPrompt(textToSend);
       setFailedAction(editId ? "edit" : "send");
       setFailedMessageId(tempUserId);
+      if (filesToSend.length) setSelectedFiles(filesToSend);
       setDraft(textToSend);
     } finally {
       if (chatAbortControllerRef.current === requestController) {
@@ -2123,6 +2191,7 @@ function Dashboard() {
     let targetConversationId: number | null = activeSavedRetry?.conversationId ?? (currentConversationId ? Number(currentConversationId) : null);
     let savedPromptMessageId: number | null = activeSavedRetry?.sourceUserMessageId ?? (reuse?.sourceUserMessageId ?? null);
     const isTargetOpen = () => targetConversationId !== null && activeConversationIdRef.current === targetConversationId;
+    const filesToSend = activeSavedRetry || reuse ? [] : [...selectedFiles];
     const updateTargetMessages = (updater: (current: Message[]) => Message[]) => {
       if (!isTargetOpen()) return;
       setMessages((current) => isTargetOpen() ? updater(current) : current);
@@ -2212,8 +2281,14 @@ function Dashboard() {
               size: item.size || 0,
               kind: item.kind,
             }))
-          : await uploadSelectedAttachments(selectedFiles, false, controller.signal);
+          : await uploadSelectedAttachments(filesToSend, false, controller.signal);
       if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+      if (!activeSavedRetry && !reuse && filesToSend.length) {
+        updateTargetMessages((current) => current.map((item) =>
+          item.id === tempUserId ? { ...item, attachments } : item
+        ));
+        if (isTargetOpen()) setSelectedFiles([]);
+      }
 
       const result = await postChatAction({
         action: mode === "image" ? "create-image" : "create-video",
@@ -2381,6 +2456,7 @@ function Dashboard() {
         ? (cause as Error & { responseData?: Record<string, any> }).responseData
         : undefined;
       if (isTargetOpen()) {
+        if (filesToSend.length) setSelectedFiles(filesToSend);
         if (responseData?.userMessage && tempUserId) {
           const savedId = Number(responseData.userMessage.id);
           if (Number.isSafeInteger(savedId) && savedId > 0) savedPromptMessageId = savedId;
@@ -2414,7 +2490,7 @@ function Dashboard() {
 
   const addSelectedFiles = (files: FileList | File[] | null) => {
     if (!files?.length) return;
-    const additions = Array.from(files);
+    const additions = Array.from(files).map(normalizeComposerAttachment);
     const next = [...selectedFiles, ...additions];
     if (next.length > 4) {
       setChatError("Attach up to four files per message.");
@@ -3338,6 +3414,19 @@ function Dashboard() {
                   <div className="aichat-composer-tools-row">
                     {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
                   </div>
+                  {selectedFiles.length > 0 && (
+                    <div className="aichat-composer-attachments" aria-label="Attachments ready to send">
+                      {selectedFiles.map((file, index) => (
+                        <ComposerAttachmentPreview
+                          key={`${file.name}-${file.lastModified}-${index}`}
+                          file={file}
+                          index={index}
+                          isUploading={uploadingAttachments}
+                          onRemove={(removeIndex) => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== removeIndex))}
+                        />
+                      ))}
+                    </div>
+                  )}
                   <div className="aichat-composer-input-row">
                     {createMode ? (
                       <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
@@ -3352,7 +3441,7 @@ function Dashboard() {
                       ref={textareaRef}
                       rows={1}
                       className="aichat-composer-textarea"
-                      placeholder={composerFocused ? "" : createMode ? `Describe the ${createMode} you want Agnes to create…` : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
+                      placeholder={composerFocused ? "" : selectedFiles.length ? "Add a message about the attached file…" : createMode ? `Describe the ${createMode} you want Agnes to create…` : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
                       value={draft}
                       onChange={(e) => {
                         const nextValue = e.target.value;
@@ -3387,19 +3476,6 @@ function Dashboard() {
                       aria-label="Message Misma"
                     />
                   </div>
-                  {selectedFiles.length > 0 && (
-                    <div className="aichat-composer-attachments" aria-label="Attachments ready to send">
-                      {selectedFiles.map((file, index) => (
-                        <ComposerAttachmentPreview
-                          key={`${file.name}-${file.lastModified}-${index}`}
-                          file={file}
-                          index={index}
-                          isUploading={uploadingAttachments}
-                          onRemove={(removeIndex) => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== removeIndex))}
-                        />
-                      ))}
-                    </div>
-                  )}
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
