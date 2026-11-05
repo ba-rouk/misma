@@ -901,7 +901,49 @@ function Dashboard() {
   const [currentConversationId, setCurrentConversationId] = useState<
     number | null
   >(null);
+  const [viewStateRestored, setViewStateRestored] = useState(false);
+  const [pendingRestoreConversationId, setPendingRestoreConversationId] = useState<number | null>(null);
+  const [dashboardDataLoaded, setDashboardDataLoaded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+
+  // Restore the last dashboard section and selected chat after a full browser refresh.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("misma_dashboard_view_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved) as { activeTab?: unknown; conversationId?: unknown };
+        const validTabs: TabId[] = [
+          "workspace", "website-statistics", "websites", "customers", "notifications",
+          "products", "build", "knowledge", "connect", "phone", "website-connect",
+          "whatsapp", "images", "library", "manage", "settings",
+        ];
+        if (typeof parsed.activeTab === "string" && validTabs.includes(parsed.activeTab as TabId)) {
+          setActiveTab(parsed.activeTab as TabId);
+        }
+        const conversationId = Number(parsed.conversationId);
+        if (Number.isSafeInteger(conversationId) && conversationId > 0) {
+          setCurrentConversationId(conversationId);
+          setPendingRestoreConversationId(conversationId);
+        }
+      }
+    } catch {
+      // Ignore malformed or unavailable browser storage and use the default dashboard view.
+    } finally {
+      setViewStateRestored(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!viewStateRestored) return;
+    try {
+      localStorage.setItem("misma_dashboard_view_v1", JSON.stringify({
+        activeTab,
+        conversationId: currentConversationId,
+      }));
+    } catch {
+      // Keep the current view for this session when browser storage is unavailable.
+    }
+  }, [activeTab, currentConversationId, viewStateRestored]);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState("");
@@ -1169,6 +1211,7 @@ function Dashboard() {
   // Load workspace and dashboard data
   const loadData = () => {
     if (!token) return;
+    setDashboardDataLoaded(false);
     setLoadError("");
     getMismaData({ data: { token } })
       .then((data) => {
@@ -1202,9 +1245,11 @@ function Dashboard() {
             primaryLanguage: data.workspace.primary_language || "English",
           });
         }
+        setDashboardDataLoaded(true);
       })
       .catch((cause) => {
         setLoadError(cause instanceof Error ? cause.message : "Could not load your Misma workspace.");
+        setDashboardDataLoaded(true);
       });
   };
 
@@ -1318,13 +1363,17 @@ function Dashboard() {
   }, [messages, isSending]);
 
   // Load messages when selecting a conversation
-  const selectConversation = async (convId: number) => {
+  const selectConversation = async (
+    convId: number,
+    options: { activateWorkspace?: boolean; isRestore?: boolean } = {},
+  ) => {
     if (!token) return;
+    if (!options.isRestore) setPendingRestoreConversationId(null);
     chatViewVersionRef.current += 1;
     activeConversationIdRef.current = convId;
     setChatActionMenuId(null);
     setCurrentConversationId(convId);
-    setActiveTab("workspace");
+    if (options.activateWorkspace !== false) setActiveTab("workspace");
     setMobileMenuOpen(false);
     setChatError("");
     setFailedPrompt("");
@@ -1367,6 +1416,40 @@ function Dashboard() {
       );
     }
   };
+
+  // Reload the previously selected conversation only after workspace data is available.
+  useEffect(() => {
+    if (
+      !viewStateRestored ||
+      !authChecked ||
+      !token ||
+      !dashboardDataLoaded ||
+      pendingRestoreConversationId === null
+    ) return;
+
+    const savedConversationExists = conversations.some(
+      (conversation: any) => Number(conversation.id) === pendingRestoreConversationId,
+    );
+
+    if (savedConversationExists) {
+      void selectConversation(pendingRestoreConversationId, {
+        activateWorkspace: false,
+        isRestore: true,
+      });
+    } else {
+      setCurrentConversationId(null);
+      activeConversationIdRef.current = null;
+      setMessages([]);
+    }
+    setPendingRestoreConversationId(null);
+  }, [
+    viewStateRestored,
+    authChecked,
+    token,
+    dashboardDataLoaded,
+    pendingRestoreConversationId,
+    conversations,
+  ]);
 
   // Start a fresh new chat
   const handleNewChat = () => {
