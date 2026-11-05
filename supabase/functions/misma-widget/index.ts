@@ -465,8 +465,8 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
     const key = safeString(row.name, 160).toLocaleLowerCase();
     if (!key) continue;
     const existing = productsByName.get(key);
-    const matchesCurrentSource = row.created_from === createdFrom;
-    const existingMatchesCurrentSource = existing?.created_from === createdFrom;
+    const matchesCurrentSource = sourceType === "website" && row.created_from === "website_scan";
+    const existingMatchesCurrentSource = sourceType === "website" && existing?.created_from === "website_scan";
     if (!existing || (matchesCurrentSource && !existingMatchesCurrentSource)) productsByName.set(key, row);
   }
 
@@ -487,7 +487,7 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
     const existing = productsByName.get(productKey);
     if (existing) {
       // Website suggestions remain inactive until approved; refresh their source facts in place.
-      if (existing.created_from === createdFrom) {
+      if (sourceType === "website" && existing.created_from === "website_scan") {
         const update = {
           id: Number(existing.id),
           item_type: kind,
