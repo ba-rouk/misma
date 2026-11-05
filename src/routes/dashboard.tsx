@@ -4251,7 +4251,7 @@ function Dashboard() {
                   }}>{websiteActionId === site.id ? "Scanning…" : "Scan website"}</button>
                 </div>
                 <small>Last verified: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
-                <small>Paste this snippet before the closing &lt;/body&gt; tag. Keep the site key unchanged. Only pages on this registered host are accepted.</small>
+                <small>Add this snippet to each public page before the closing &lt;/body&gt; tag. When a page loads or is refreshed, Misma checks the connected site in the background (at most once every 30 minutes per site). Keep the site key unchanged.</small>
               </article>)}
             </div>
           </div></div>
