@@ -5,7 +5,7 @@
 ALTER TABLE public.website_scan_runs
   DROP CONSTRAINT IF EXISTS website_scan_runs_website_id_fkey;
 
-DO $
+DO $migr$
 BEGIN
   IF to_regclass('public.website_connections') IS NULL
      OR to_regclass('public.website_scan_runs') IS NULL THEN
@@ -38,7 +38,7 @@ BEGIN
     RAISE EXCEPTION 'Some website scan history cannot be mapped to website_connections. Resolve those rows before applying this migration.';
   END IF;
 END;
-$$;
+$migr$;
 
 ALTER TABLE public.website_scan_runs
   ADD CONSTRAINT website_scan_runs_website_id_fkey
