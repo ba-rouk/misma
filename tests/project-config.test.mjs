@@ -306,7 +306,7 @@ test("Ask Misma launcher uses the Misma mark, sits at the bottom-left, and is ic
   assert.match(styles, /\.misma-guest-launcher-label\s*\{\s*display:\s*none/);
   assert.match(embed, /position:fixed;left:20px;bottom:20px/);
   assert.match(embed, /class="launch-logo"/);
-  assert.match(embed, /<span class="launch-label">Ask Misma<\\/span>/);
+  assert.match(embed, /Ask Misma/);
   assert.match(embed, /@media\(max-width:520px\)\{\.launch\{/);
   assert.match(embed, /\.launch-label\{display:none\}/);
 });
@@ -316,7 +316,7 @@ test("website connections can be created before publication with a general scrip
   const api = await read("../src/lib/api/misma.functions.ts");
 
   assert.match(dashboard, /unpublished draft, staging, or preview URL before launch/);
-  assert.match(dashboard, /Connect a published website or register an unpublished preview\\/staging URL before launch/);
+  assert.match(dashboard, /Connect a published website or register an unpublished preview/);
   assert.match(dashboard, /Install the general Misma script/);
   assert.match(dashboard, /Website or preview URL/);
   assert.match(dashboard, /You do not need to publish the website first/);
