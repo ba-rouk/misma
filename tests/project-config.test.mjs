@@ -403,3 +403,15 @@ test("dashboard restores the last visited section and selected conversation afte
   assert.match(dashboard, /options\.activateWorkspace !== false/);
   assert.match(dashboard, /selectConversation\(pendingRestoreConversationId,\s*\{\s*activateWorkspace:\s*false,\s*isRestore:\s*true/);
 });
+
+test("dashboard chat scrolls in a full-width pane with the scrollbar at the far right edge", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /<div\\s+className="aichat-scroll-area"\\s+ref=\\{scrollRef\\}\\s+onScroll=\\{handleScroll\\}/);
+  assert.match(dashboard, /className="aichat-conversation-wrap"/);
+  assert.doesNotMatch(dashboard, /className="aichat-conversation-wrap"\\s+ref=\\{scrollRef\\}/);
+  assert.match(styles, /\\.aichat-main\\s*\\{[^}]*min-height:\\s*0;[^}]*overflow:\\s*hidden;/);
+  assert.match(styles, /\\.aichat-scroll-area\\s*\\{[^}]*width:\\s*100%;[^}]*min-width:\\s*0;[^}]*min-height:\\s*0;[^}]*align-self:\\s*stretch;[^}]*overflow-y:\\s*auto;/);
+  assert.match(styles, /\\.aichat-scroll-area::-webkit-scrollbar\\s*\\{\\s*width:\\s*8px/);
+});
