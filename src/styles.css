@@ -3196,6 +3196,36 @@ footer {
 .aichat-side.is-collapsed .aichat-side-top {
   justify-content: center;
   padding: 12px 0;
+  position: relative;
+}
+.aichat-side.is-collapsed .aichat-side-top .aichat-brand-link {
+  position: relative;
+  z-index: 1;
+}
+.aichat-side.is-collapsed .aichat-side-top .aichat-collapse-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  background: #171b22;
+}
+.aichat-side.is-collapsed .aichat-side-top:hover .aichat-brand-link,
+.aichat-side.is-collapsed .aichat-side-top:focus-within .aichat-brand-link {
+  opacity: 0;
+}
+.aichat-side.is-collapsed .aichat-side-top:hover .aichat-collapse-btn,
+.aichat-side.is-collapsed .aichat-side-top:focus-within .aichat-collapse-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+.aichat-side.is-collapsed .aichat-side-top .aichat-brand-link {
+  transition: opacity 0.12s ease;
+}
+.aichat-side.is-collapsed .aichat-side-top .aichat-collapse-btn {
+  transition: opacity 0.12s ease, background 0.15s, color 0.15s;
 }
 .aichat-side.is-collapsed .aichat-side-user {
   justify-content: center;
