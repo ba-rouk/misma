@@ -323,6 +323,7 @@ export function useMicrophone() {
       setPermissionState("granted");
       await updateDevices();
     } catch (error) {
+      stopResources();
       if (pendingAudioContext && pendingAudioContext.state !== "closed") {
         void pendingAudioContext.close().catch(() => undefined);
       }
@@ -341,7 +342,7 @@ export function useMicrophone() {
       return;
     }
 
-    const currentPermission = await refreshPermission();
+    const currentPermission = permissionRef.current;
     if (currentPermission === "denied") {
       setErrorMessage("Microphone access is blocked for this website. Follow the browser steps below to allow it, then check permission again.");
       setState("denied");
@@ -350,6 +351,7 @@ export function useMicrophone() {
     }
 
     if (currentPermission === "granted") {
+      // Use the click's transient activation directly; do not await a permission query before getUserMedia.
       setSoftPromptOpen(false);
       await requestStream(selectedDeviceId || undefined);
       return;
@@ -357,7 +359,7 @@ export function useMicrophone() {
 
     setErrorMessage("");
     setSoftPromptOpen(true);
-  }, [refreshPermission, requestStream, selectedDeviceId, setState]);
+  }, [requestStream, selectedDeviceId, setState]);
 
   const continueStart = useCallback(async () => {
     setSoftPromptOpen(false);
