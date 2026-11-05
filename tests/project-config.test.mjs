@@ -344,6 +344,14 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(hook, /echoCancellation:\s*true/);
   assert.match(hook, /noiseSuppression:\s*true/);
   assert.match(hook, /autoGainControl:\s*true/);
+  assert.match(hook, /name === "NotAllowedError"/);
+  assert.match(hook, /name === "NotFoundError"/);
+  assert.match(hook, /name === "NotReadableError"/);
+  assert.match(hook, /name === "OverconstrainedError"/);
+  assert.match(hook, /name === "SecurityError"/);
+  assert.match(hook, /name === "TypeError"/);
+  assert.match(hook, /window\.isSecureContext/);
+  assert.match(hook, /navigator\.mediaDevices/);
   assert.match(hook, /getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
   assert.match(hook, /addEventListener\("ended"/);
   assert.match(hook, /visibilitychange/);
