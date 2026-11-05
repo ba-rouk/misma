@@ -358,7 +358,7 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(panel, /aria-live="polite"/);
   assert.match(panel, /Continue/);
   assert.match(panel, /Cancel/);
-  assert.match(panel, /Not recorded, transcribed, or uploaded/);
+  assert.match(panel, /not recorded, transcribed, or uploaded/i);
   assert.match(dashboard, /import \{ MicrophoneAccessPanel \}/);
   assert.match(dashboard, /<MicrophoneAccessPanel \/>/);
   assert.match(docs, /Permissions-Policy: microphone=\(self\)/);
