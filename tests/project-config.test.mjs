@@ -348,6 +348,7 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   const panel = await read("../src/components/microphone-access-panel.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
   const docs = await read("../docs/microphone-access.md");
+  const securityHeaders = await read("../src/lib/security-headers.server.ts");
 
   assert.match(hook, /navigator\.permissions\.query/);
   assert.match(hook, /name:\s*"microphone"/);
@@ -384,6 +385,8 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(panel, /not recorded, transcribed, or uploaded/i);
   assert.match(dashboard, /import \{ MicrophoneAccessPanel \}/);
   assert.match(dashboard, /<MicrophoneAccessPanel \/>/);
+  assert.match(securityHeaders, /Permissions-Policy.*microphone=\(self\)/);
+  assert.doesNotMatch(securityHeaders, /microphone=\(\)/);
   assert.match(docs, /Permissions-Policy: microphone=\(self\)/);
   assert.match(docs, /allow="microphone"/);
 });
