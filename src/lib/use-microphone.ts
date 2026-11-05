@@ -414,8 +414,9 @@ export function useMicrophone() {
     });
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && streamRef.current) {
-        stopResources();
+      if (document.visibilityState !== "hidden") return;
+      stopResources();
+      if (stateRef.current === "active" || stateRef.current === "requesting") {
         setState("idle");
         setErrorMessage("Microphone stopped because this page became hidden.");
       }
