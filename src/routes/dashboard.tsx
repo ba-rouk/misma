@@ -455,6 +455,58 @@ function ComposerAttachmentPreview({
   );
 }
 
+function LibraryFilePreview({
+  asset,
+  onClose,
+}: {
+  asset: any;
+  onClose: () => void;
+}) {
+  const mimeType = String(asset.mimeType || "").toLowerCase();
+  const fileName = String(asset.name || "Workspace file");
+  const extension = fileName.toLowerCase().split(".").pop() || "";
+  const isImage = mimeType.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif)$/i.test(fileName);
+  const isVideo = mimeType.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(fileName);
+  const isAudio = mimeType.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(fileName);
+  const isPdf = mimeType === "application/pdf" || extension === "pdf";
+  const isText = mimeType.startsWith("text/") || ["json", "csv", "xml", "md", "log"].includes(extension);
+  const size = Number(asset.size || 0);
+  return (
+    <div className="aichat-library-preview-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="aichat-library-preview-dialog" role="dialog" aria-modal="true" aria-label={"Preview " + fileName}>
+        <header className="aichat-library-preview-header">
+          <div className="aichat-library-preview-title">
+            <strong title={fileName}>{fileName}</strong>
+            <small>{mimeType || asset.kind || "File"} · {size ? (size / (1024 * 1024)).toFixed(2) + " MB" : "Saved item"}</small>
+          </div>
+          <div className="aichat-library-preview-actions">
+            <a href={asset.url} target="_blank" rel="noreferrer" download={fileName}>Download</a>
+            <button type="button" aria-label="Close file preview" onClick={onClose}>×</button>
+          </div>
+        </header>
+        <div className="aichat-library-preview-body">
+          {isImage ? (
+            <img src={asset.url} alt={fileName} />
+          ) : isVideo ? (
+            <video src={asset.url} controls playsInline preload="metadata" />
+          ) : isAudio ? (
+            <audio src={asset.url} controls preload="metadata" />
+          ) : isPdf || isText ? (
+            <iframe src={asset.url} title={"Preview of " + fileName} sandbox={isPdf ? undefined : ""} />
+          ) : (
+            <div className="aichat-library-preview-unavailable">
+              <span>▤</span>
+              <strong>Preview is not available for this file type</strong>
+              <p>Download the file to open it with a compatible app.</p>
+              <a href={asset.url} target="_blank" rel="noreferrer" download={fileName}>Download {fileName}</a>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function GeneratedImageActions({
   onDownload,
   onShare,
@@ -711,6 +763,7 @@ function Dashboard() {
   const [chatGroupMenuOpen, setChatGroupMenuOpen] = useState(false);
   const [libraryUploadBusy, setLibraryUploadBusy] = useState(false);
   const [libraryAssetMenuId, setLibraryAssetMenuId] = useState<string | null>(null);
+  const [libraryPreviewAsset, setLibraryPreviewAsset] = useState<any>(null);
   const [deleteAssetTarget, setDeleteAssetTarget] = useState<any>(null);
   const [deletingAsset, setDeletingAsset] = useState(false);
   const [chatGroupFilter, setChatGroupFilter] = useState("all");
@@ -863,6 +916,9 @@ function Dashboard() {
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [thinkHarder, setThinkHarder] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const selectedComposerFilesRef = useRef<File[]>([]);
+  const uploadedComposerAttachmentsRef = useRef<Map<File, MessageAttachment[]>>(new Map());
+  const attachmentUploadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
@@ -1708,6 +1764,10 @@ function Dashboard() {
     setFailedAction(null);
   };
 
+  useEffect(() => {
+    selectedComposerFilesRef.current = selectedFiles;
+  }, [selectedFiles]);
+
   // Sending, retrying, or editing a user message.
   const uploadSelectedAttachments = async (
     filesToUpload: File[] = selectedFiles,
@@ -1812,6 +1872,34 @@ function Dashboard() {
     } finally {
       setUploadingAttachments(false);
     }
+  };
+
+  // Upload selected files immediately, then reuse these objects when sending.
+  const queueComposerAttachmentUpload = (files: File[]) => {
+    const task = attachmentUploadQueueRef.current.then(async () => {
+      for (const file of files) {
+        if (uploadedComposerAttachmentsRef.current.has(file)) continue;
+        const uploaded = await uploadSelectedAttachments([file]);
+        if (!selectedComposerFilesRef.current.includes(file)) {
+          const paths = uploaded.map((item) => item.path).filter((path): path is string => Boolean(path));
+          if (paths.length) await getSupabaseClient().storage.from("misma-media").remove(paths).catch(() => undefined);
+          continue;
+        }
+        uploadedComposerAttachmentsRef.current.set(file, uploaded);
+      }
+    });
+    attachmentUploadQueueRef.current = task.then(() => undefined, () => undefined);
+    return task;
+  };
+
+  const ensureComposerAttachmentsUploaded = async (files: File[]): Promise<MessageAttachment[]> => {
+    await attachmentUploadQueueRef.current;
+    for (const file of files) {
+      if (!uploadedComposerAttachmentsRef.current.has(file)) await queueComposerAttachmentUpload([file]);
+    }
+    const missing = files.filter((file) => !uploadedComposerAttachmentsRef.current.has(file));
+    if (missing.length) throw new Error("One or more attachments could not be uploaded. Please remove and attach them again.");
+    return files.flatMap((file) => uploadedComposerAttachmentsRef.current.get(file) || []);
   };
 
   const postChatAction = async (body: Record<string, unknown>, signal?: AbortSignal) => {
@@ -2076,13 +2164,14 @@ function Dashboard() {
         loadData();
         return;
       }
-      const attachments = editId ? [] : await uploadSelectedAttachments(filesToSend, false, requestController.signal);
+      const attachments = editId ? [] : await ensureComposerAttachmentsUploaded(filesToSend);
       if (!editId && filesToSend.length && tempUserId) {
         setMessages((prev) => prev.map((item) =>
           item.id === tempUserId ? { ...item, attachments } : item
         ));
         // Move uploaded files into the outgoing message while Misma prepares its response.
         setSelectedFiles([]);
+        selectedComposerFilesRef.current = [];
       }
       const res = await postChatAction({
         action: "chat",
@@ -2123,6 +2212,8 @@ function Dashboard() {
       }
 
       setSelectedFiles([]);
+      selectedComposerFilesRef.current = [];
+      uploadedComposerAttachmentsRef.current.clear();
       setThinkHarder(false);
       setFailedMessageId(null);
       setFailedAction(null);
@@ -2135,7 +2226,10 @@ function Dashboard() {
       setFailedPrompt(textToSend);
       setFailedAction(editId ? "edit" : "send");
       setFailedMessageId(tempUserId);
-      if (filesToSend.length) setSelectedFiles(filesToSend);
+      if (filesToSend.length) {
+        selectedComposerFilesRef.current = filesToSend;
+        setSelectedFiles(filesToSend);
+      }
       setDraft(textToSend);
     } finally {
       if (chatAbortControllerRef.current === requestController) {
@@ -2281,13 +2375,16 @@ function Dashboard() {
               size: item.size || 0,
               kind: item.kind,
             }))
-          : await uploadSelectedAttachments(filesToSend, false, controller.signal);
+          : await ensureComposerAttachmentsUploaded(filesToSend);
       if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
       if (!activeSavedRetry && !reuse && filesToSend.length) {
         updateTargetMessages((current) => current.map((item) =>
           item.id === tempUserId ? { ...item, attachments } : item
         ));
-        if (isTargetOpen()) setSelectedFiles([]);
+        if (isTargetOpen()) {
+          setSelectedFiles([]);
+          selectedComposerFilesRef.current = [];
+        }
       }
 
       const result = await postChatAction({
@@ -2330,6 +2427,8 @@ function Dashboard() {
         });
         if (isTargetOpen()) setMediaProgress("");
         setFailedMediaRetry(null);
+        uploadedComposerAttachmentsRef.current.clear();
+        selectedComposerFilesRef.current = [];
         loadData();
         return;
       }
@@ -2450,13 +2549,18 @@ function Dashboard() {
         window.setTimeout(() => setMediaProgress(""), 3500);
       }
       setFailedMediaRetry(null);
+      uploadedComposerAttachmentsRef.current.clear();
+      selectedComposerFilesRef.current = [];
       loadData();
     } catch (cause) {
       const responseData = cause instanceof Error
         ? (cause as Error & { responseData?: Record<string, any> }).responseData
         : undefined;
       if (isTargetOpen()) {
-        if (filesToSend.length) setSelectedFiles(filesToSend);
+        if (filesToSend.length) {
+          selectedComposerFilesRef.current = filesToSend;
+          setSelectedFiles(filesToSend);
+        }
         if (responseData?.userMessage && tempUserId) {
           const savedId = Number(responseData.userMessage.id);
           if (Number.isSafeInteger(savedId) && savedId > 0) savedPromptMessageId = savedId;
@@ -2464,6 +2568,7 @@ function Dashboard() {
             ? current.map((item) => item.id === tempUserId ? responseData.userMessage : item)
             : [...current, responseData.userMessage]);
           setSelectedFiles([]);
+          selectedComposerFilesRef.current = [];
         }
         updateTargetMessages((current) => current.filter((item) => item.id !== pendingMediaId));
         if (controller.signal.aborted) {
@@ -2515,7 +2620,23 @@ function Dashboard() {
       return;
     }
     setChatError("");
+    selectedComposerFilesRef.current = next;
     setSelectedFiles(next);
+    void queueComposerAttachmentUpload(additions).catch((cause) => {
+      setChatError(cause instanceof Error ? cause.message : "Could not upload the selected attachment.");
+    });
+  };
+
+  const removeSelectedComposerFile = (index: number) => {
+    const removed = selectedComposerFilesRef.current[index];
+    if (!removed) return;
+    const next = selectedComposerFilesRef.current.filter((_, itemIndex) => itemIndex !== index);
+    selectedComposerFilesRef.current = next;
+    setSelectedFiles(next);
+    const uploaded = uploadedComposerAttachmentsRef.current.get(removed);
+    uploadedComposerAttachmentsRef.current.delete(removed);
+    const paths = (uploaded || []).map((item) => item.path).filter((path): path is string => Boolean(path));
+    if (paths.length) void getSupabaseClient().storage.from("misma-media").remove(paths).catch(() => undefined);
   };
 
   const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -3422,7 +3543,7 @@ function Dashboard() {
                           file={file}
                           index={index}
                           isUploading={uploadingAttachments}
-                          onRemove={(removeIndex) => setSelectedFiles((items) => items.filter((_, itemIndex) => itemIndex !== removeIndex))}
+                          onRemove={removeSelectedComposerFile}
                         />
                       ))}
                     </div>
@@ -3663,11 +3784,18 @@ function Dashboard() {
                         const isVideo = asset.kind === "video" || asset.kind === "generated-video" || String(asset.mimeType || "").startsWith("video/");
                         return (
                           <article className="aichat-library-item" key={asset.id}>
-                            {isImage ? <img src={asset.url} alt={asset.name || "Library image"} loading="lazy" decoding="async" /> : <span className="aichat-library-file-icon">{isVideo ? "▶" : "▤"}</span>}
-                            <div className="aichat-library-item-copy">
-                              <strong title={asset.name}>{asset.name || "Workspace file"}</strong>
-                              <small>{asset.mimeType || asset.kind} · {asset.created_at ? new Date(asset.created_at).toLocaleDateString() : "Saved item"}</small>
-                            </div>
+                            <button
+                              type="button"
+                              className="aichat-library-item-main"
+                              onClick={() => setLibraryPreviewAsset(asset)}
+                              aria-label={"Open " + (asset.name || "workspace file")}
+                            >
+                              {isImage ? <img src={asset.url} alt={asset.name || "Library image"} loading="lazy" decoding="async" /> : <span className="aichat-library-file-icon">{isVideo ? "▶" : "▤"}</span>}
+                              <span className="aichat-library-item-copy">
+                                <strong title={asset.name}>{asset.name || "Workspace file"}</strong>
+                                <small>{asset.mimeType || asset.kind} · {asset.created_at ? new Date(asset.created_at).toLocaleDateString() : "Saved item"}</small>
+                              </span>
+                            </button>
                             <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Download ${asset.name || "file"}`} title="Download file"><ActionIcon name="download" /></a>
                             <div className="aichat-library-item-menu">
                               <button type="button" className="aichat-library-more" aria-label={`More actions for ${asset.name || "file"}`} aria-expanded={libraryAssetMenuId === asset.id} onClick={() => setLibraryAssetMenuId((current) => current === asset.id ? null : asset.id)}>⋯</button>
@@ -4181,6 +4309,7 @@ function Dashboard() {
                 <div className="aichat-accent-options">
                   {[
                     { label: "Blue", value: "#8ab4ff" },
+                    { label: "Dark blue", value: "#1e3a8a" },
                     { label: "Violet", value: "#b39bff" },
                     { label: "Green", value: "#72cba4" },
                     { label: "Rose", value: "#f18ca8" },
@@ -4517,6 +4646,9 @@ function Dashboard() {
               </div>
             </section>
           </div>
+        )}
+        {libraryPreviewAsset && (
+          <LibraryFilePreview asset={libraryPreviewAsset} onClose={() => setLibraryPreviewAsset(null)} />
         )}
         {deleteAssetTarget && (
           <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingAsset) setDeleteAssetTarget(null); }}>

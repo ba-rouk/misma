@@ -5356,8 +5356,22 @@ footer {
   padding: 11px 2px;
   border-bottom: 1px solid #283240;
 }
-.aichat-library-item > img,
-.aichat-library-file-icon {
+.aichat-library-item-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.aichat-library-item-main:hover .aichat-library-item-copy strong { color: #a9c9f5; }
+.aichat-library-item-main > img,
+.aichat-library-item-main > .aichat-library-file-icon {
   display: grid;
   place-items: center;
   flex: none;
@@ -5393,6 +5407,86 @@ footer {
   background: #1a2431;
 }
 .aichat-library-open:hover { background: #27364a; color: #fff; }
+
+/* Workspace Library file preview modal. */
+.aichat-library-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(2, 6, 12, .82);
+  backdrop-filter: blur(10px);
+}
+.aichat-library-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 100%);
+  height: min(820px, 92dvh);
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid #354254;
+  border-radius: 16px;
+  background: #101821;
+  box-shadow: 0 26px 90px rgba(0,0,0,.58);
+}
+.aichat-library-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 14px 10px 18px;
+  border-bottom: 1px solid #283443;
+}
+.aichat-library-preview-title { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.aichat-library-preview-title strong { overflow: hidden; color: #e5edf7; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.aichat-library-preview-title small { color: #8fa0b4; font-size: 10px; }
+.aichat-library-preview-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.aichat-library-preview-actions a,
+.aichat-library-preview-actions button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 38px;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid #354254;
+  border-radius: 9px;
+  background: #1b2634;
+  color: #dbe7f6;
+  font: 500 12px/1 var(--font-sans);
+  text-decoration: none;
+}
+.aichat-library-preview-actions button { font-size: 20px; cursor: pointer; }
+.aichat-library-preview-body {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  place-items: center;
+  padding: 12px;
+  overflow: auto;
+  background: #080d14;
+}
+.aichat-library-preview-body > img,
+.aichat-library-preview-body > video {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.aichat-library-preview-body > audio { width: min(520px, 100%); }
+.aichat-library-preview-body > iframe { width: 100%; height: 100%; min-height: 280px; border: 0; border-radius: 8px; background: #fff; }
+.aichat-library-preview-unavailable { display: grid; justify-items: center; gap: 10px; max-width: 420px; text-align: center; color: #d9e4f2; }
+.aichat-library-preview-unavailable > span { color: #8fb7ec; font-size: 42px; }
+.aichat-library-preview-unavailable p { margin: 0; color: #96a6b9; font-size: 12px; line-height: 1.5; }
+.aichat-library-preview-unavailable a { color: #a9c9f5; font-size: 12px; }
+@media (max-width: 640px) {
+  .aichat-library-preview-overlay { padding: 8px; }
+  .aichat-library-preview-dialog { height: 94dvh; border-radius: 12px; }
+  .aichat-library-preview-header { padding: 9px 10px; }
+  .aichat-library-preview-actions a { padding: 0 8px; }
+}
 
 /* Generated image actions */
 .aichat-image-action-bar {
