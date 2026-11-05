@@ -975,6 +975,8 @@ function Dashboard() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
+  const composerMicrophoneStreamRef = useRef<MediaStream | null>(null);
+  const microphonePermissionRequestRef = useRef(false);
   const shouldAutoScrollRef = useRef(true);
   const regenerateInFlightRef = useRef(false);
   const chatLongPressTimerRef = useRef<number | null>(null);
@@ -1575,22 +1577,28 @@ function Dashboard() {
 
 
 
-  const startVoiceRecognition = () => {
+  const stopComposerMicrophoneStream = (expectedStream?: MediaStream) => {
+    const stream = composerMicrophoneStreamRef.current;
+    if (!stream || (expectedStream && stream !== expectedStream)) return;
+    composerMicrophoneStreamRef.current = null;
+    stream.getTracks().forEach((track) => track.stop());
+  };
+
+  const startVoiceRecognition = (audioTrack?: MediaStreamTrack) => {
     const browserWindow = window as typeof window & {
       SpeechRecognition?: new () => any;
       webkitSpeechRecognition?: new () => any;
     };
     const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
     if (!Recognition) {
+      stopComposerMicrophoneStream();
       setChatError("Voice dictation is not supported in this browser. Try the latest Chrome browser.");
       return;
     }
 
-    // Start recognition directly from the microphone button's click handler.
-    // Pre-opening and immediately closing getUserMedia can consume mobile browser
-    // user activation and cause the subsequent recognition.start() to be rejected.
     try { speechRecognitionRef.current?.abort?.(); } catch { /* Previous session already ended. */ }
     const recognition = new Recognition();
+    const recognitionStream = composerMicrophoneStreamRef.current;
     recognition.lang = navigator.language || "en-US";
     recognition.interimResults = true;
     recognition.continuous = false;
@@ -1605,7 +1613,8 @@ function Dashboard() {
     };
     recognition.onerror = (event: any) => {
       setVoiceInputActive(false);
-      speechRecognitionRef.current = null;
+      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
+      stopComposerMicrophoneStream(recognitionStream || undefined);
       const errorName = String(event?.error || "");
       if (errorName === "not-allowed" || errorName === "service-not-allowed") {
         setChatError("Microphone permission is blocked. Allow microphone access for Misma in your browser settings, then try again.");
@@ -1622,14 +1631,19 @@ function Dashboard() {
     recognition.onend = () => {
       setVoiceInputActive(false);
       if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
+      stopComposerMicrophoneStream(recognitionStream || undefined);
     };
     speechRecognitionRef.current = recognition;
     setChatError("");
     try {
-      recognition.start();
+      // Chrome 135+ accepts the granted MediaStreamTrack directly, avoiding a second
+      // microphone capture request. Other Web Speech implementations ignore this argument.
+      if (audioTrack) recognition.start(audioTrack);
+      else recognition.start();
     } catch (cause) {
       setVoiceInputActive(false);
-      speechRecognitionRef.current = null;
+      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
+      stopComposerMicrophoneStream(recognitionStream || undefined);
       const name = cause instanceof Error ? cause.name : "";
       setChatError(name === "InvalidStateError"
         ? "Voice input is already running. Tap the microphone again when it is ready."
@@ -1637,13 +1651,58 @@ function Dashboard() {
     }
   };
 
-  const handleVoiceInput = () => {
+  const handleVoiceInput = async () => {
     if (voiceInputActive) {
       try { speechRecognitionRef.current?.stop?.(); } catch { /* Recognition may already be stopped. */ }
       setVoiceInputActive(false);
       return;
     }
-    startVoiceRecognition();
+    if (microphonePermissionRequestRef.current) return;
+
+    // getUserMedia is called directly from the microphone click. This is what invokes
+    // the browser's native site-permission prompt when the site's permission is Ask.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setChatError("This browser cannot access a microphone. Use a supported browser over HTTPS.");
+      return;
+    }
+
+    microphonePermissionRequestRef.current = true;
+    setChatError("");
+    try {
+      stopComposerMicrophoneStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      const audioTrack = stream.getAudioTracks()[0];
+      if (!audioTrack) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error("NotFoundError");
+      }
+      composerMicrophoneStreamRef.current = stream;
+      startVoiceRecognition(audioTrack);
+    } catch (cause) {
+      stopComposerMicrophoneStream();
+      setVoiceInputActive(false);
+      const name = cause instanceof Error ? cause.name : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        setChatError("Microphone permission was not granted. Allow microphone access for Misma in your browser's site settings, then click the microphone again.");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        setChatError("No microphone was found. Connect or enable a microphone, then try again.");
+      } else if (name === "NotReadableError" || name === "AbortError") {
+        setChatError("The microphone could not be opened. It may be in use by another application or browser tab.");
+      } else if (name === "SecurityError" || name === "TypeError") {
+        setChatError("Microphone access requires HTTPS and permission for this website.");
+      } else {
+        setChatError("Misma could not access the microphone. Check your browser permission and input device, then try again.");
+      }
+    } finally {
+      microphonePermissionRequestRef.current = false;
+    }
   };
 
   const testSelectedVoice = () => {
