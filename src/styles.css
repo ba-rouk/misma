@@ -6989,3 +6989,12 @@ html, body, #app-root {
     margin-right: auto;
   }
 }
+
+
+/* A collapsed desktop sidebar is an icon rail, never a flyout menu. */
+@media (min-width: 768px) {
+  .aichat-side.is-collapsed .aichat-nav-submenu,
+  .aichat-side.is-collapsed .aichat-nav-caret {
+    display: none !important;
+  }
+}
