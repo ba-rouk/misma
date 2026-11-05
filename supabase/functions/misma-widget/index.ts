@@ -407,18 +407,26 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
   const knowledgeByQuestion = new Map<string, AnyRecord>();
   for (const row of knowledgeResult.data || []) {
     const key = safeString(row.question, 500).toLocaleLowerCase();
-    if (key && !knowledgeByQuestion.has(key)) knowledgeByQuestion.set(key, row);
+    if (!key) continue;
+    const existing = knowledgeByQuestion.get(key);
+    const matchesCurrentSource = row.source_type === sourceType && row.source_ref === normalizedSourceRef;
+    const existingMatchesCurrentSource = existing?.source_type === sourceType && existing?.source_ref === normalizedSourceRef;
+    if (!existing || (matchesCurrentSource && !existingMatchesCurrentSource)) knowledgeByQuestion.set(key, row);
   }
 
   const knowledgeInserts: AnyRecord[] = [];
   const knowledgeUpdates: Array<{ id: number; answer: string }> = [];
+  const seenIncomingQuestions = new Set<string>();
   for (const raw of faqs) {
     if (!isRecord(raw)) continue;
     const question = safeString(raw.question, 500);
     const answer = safeString(raw.answer, 4000);
     if (question.length < 5 || answer.length < 10) continue;
+    const questionKey = question.toLocaleLowerCase();
+    if (seenIncomingQuestions.has(questionKey)) continue;
+    seenIncomingQuestions.add(questionKey);
 
-    const existing = knowledgeByQuestion.get(question.toLocaleLowerCase());
+    const existing = knowledgeByQuestion.get(questionKey);
     if (existing) {
       const sameWebsiteSource = existing.source_type === sourceType && existing.source_ref === normalizedSourceRef;
       if (sameWebsiteSource && existing.answer !== answer) {
@@ -455,11 +463,16 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
   const productsByName = new Map<string, AnyRecord>();
   for (const row of productsResult.data || []) {
     const key = safeString(row.name, 160).toLocaleLowerCase();
-    if (key && !productsByName.has(key)) productsByName.set(key, row);
+    if (!key) continue;
+    const existing = productsByName.get(key);
+    const matchesCurrentSource = row.created_from === createdFrom;
+    const existingMatchesCurrentSource = existing?.created_from === createdFrom;
+    if (!existing || (matchesCurrentSource && !existingMatchesCurrentSource)) productsByName.set(key, row);
   }
 
   const productInserts: AnyRecord[] = [];
   const productUpdates: Array<{ id: number; item_type: string; description: string; price_text: string }> = [];
+  const seenIncomingProducts = new Set<string>();
   for (const raw of items) {
     if (!isRecord(raw)) continue;
     const name = safeString(raw.name, 160);
@@ -467,8 +480,11 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
     const kind = raw.type === "service" ? "service" : "product";
     const price = safeString(raw.price, 120);
     if (name.length < 2) continue;
+    const productKey = name.toLocaleLowerCase();
+    if (seenIncomingProducts.has(productKey)) continue;
+    seenIncomingProducts.add(productKey);
 
-    const existing = productsByName.get(name.toLocaleLowerCase());
+    const existing = productsByName.get(productKey);
     if (existing) {
       // Website suggestions remain inactive until approved; refresh their source facts in place.
       if (existing.created_from === createdFrom) {
