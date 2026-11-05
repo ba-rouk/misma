@@ -30,6 +30,7 @@ import {
   deleteChatAttachment,
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
+import { MicrophoneAccessPanel } from "../components/microphone-access-panel";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -4344,8 +4345,9 @@ function Dashboard() {
               <section id="settings-voice" className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">♫</span>
-                  <span><h3>Voice</h3><p>Choose the browser voice Misma uses when reading answers aloud. Voice availability depends on your device.</p></span>
+                  <span><h3>Voice</h3><p>Choose your reply voice and test microphone access on this device.</p></span>
                 </div>
+                <MicrophoneAccessPanel />
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-voice-choice">Reply voice</label>
@@ -4367,7 +4369,8 @@ function Dashboard() {
                 </div>
                 <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
                 <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
-                <div className="aichat-settings-info-row"><strong>Voice dictation</strong><span>Audio capture is handled by the browser speech-recognition feature; only the resulting transcript is added to your draft.</span></div>
+                <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Live input is analysed locally for the level meter only. Misma does not record or upload microphone audio.</span></div>
+                <div className="aichat-settings-info-row"><strong>Voice dictation</strong><span>When you use dictation, the browser speech-recognition feature converts speech to text and inserts only the transcript into your draft.</span></div>
               </section>
 
               <section id="settings-history" className="aichat-card aichat-settings-card">
