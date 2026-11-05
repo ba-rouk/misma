@@ -2,7 +2,10 @@
 -- The dashboard and widget authenticate against public.website_connections;
 -- the old foreign key still pointed at the legacy public.workspace_websites table.
 
-DO $$
+ALTER TABLE public.website_scan_runs
+  DROP CONSTRAINT IF EXISTS website_scan_runs_website_id_fkey;
+
+DO $
 BEGIN
   IF to_regclass('public.website_connections') IS NULL
      OR to_regclass('public.website_scan_runs') IS NULL THEN
@@ -36,9 +39,6 @@ BEGIN
   END IF;
 END;
 $$;
-
-ALTER TABLE public.website_scan_runs
-  DROP CONSTRAINT IF EXISTS website_scan_runs_website_id_fkey;
 
 ALTER TABLE public.website_scan_runs
   ADD CONSTRAINT website_scan_runs_website_id_fkey
