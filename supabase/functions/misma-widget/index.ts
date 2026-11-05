@@ -389,6 +389,7 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
   const faqs = Array.isArray(extracted.faqs) ? extracted.faqs.slice(0, 25) : [];
   const items = Array.isArray(extracted.items) ? extracted.items.slice(0, 20) : [];
   const normalizedSourceRef = sourceRef.slice(0, 1500);
+  const createdFrom = sourceType === "website" ? "website_scan" : "manual";
 
   const [knowledgeResult, productsResult] = await Promise.all([
     db.from("knowledge_entries")
@@ -470,7 +471,7 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
     const existing = productsByName.get(name.toLocaleLowerCase());
     if (existing) {
       // Website suggestions remain inactive until approved; refresh their source facts in place.
-      if (existing.created_from === "website_scan") {
+      if (existing.created_from === createdFrom) {
         const update = {
           id: Number(existing.id),
           item_type: kind,
@@ -489,7 +490,7 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
       description,
       price_text: price,
       active: false,
-      created_from: "website_scan",
+      created_from: createdFrom,
     });
     productsByName.set(name.toLocaleLowerCase(), { id: null, name, created_from: "website_scan" });
   }
