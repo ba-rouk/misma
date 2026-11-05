@@ -390,3 +390,16 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(docs, /Permissions-Policy: microphone=\(self\)/);
   assert.match(docs, /allow="microphone"/);
 });
+
+test("dashboard restores the last visited section and selected conversation after refresh", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+
+  assert.match(dashboard, /misma_dashboard_view_v1/);
+  assert.match(dashboard, /validTabs\.includes\(parsed\.activeTab as TabId\)/);
+  assert.match(dashboard, /setCurrentConversationId\(conversationId\)/);
+  assert.match(dashboard, /setPendingRestoreConversationId\(conversationId\)/);
+  assert.match(dashboard, /conversationId:\s*currentConversationId/);
+  assert.match(dashboard, /setDashboardDataLoaded\(true\)/);
+  assert.match(dashboard, /options\.activateWorkspace !== false/);
+  assert.match(dashboard, /selectConversation\(pendingRestoreConversationId,\s*\{\s*activateWorkspace:\s*false,\s*isRestore:\s*true/);
+});
