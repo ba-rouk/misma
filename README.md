@@ -126,3 +126,10 @@ Video creation uses the current Agnes Video 2.5 Flash schema: `mode` (`text` or 
 ### Agnes moderation and downloads
 
 Agnes 3.0 Flash screens media prompts and supplied reference images before generation. Generated images are screened again before they are stored. Image and video outputs are downloadable through a workspace- and conversation-validated endpoint. Video prompts are safety-constrained before generation; the current integration does not decode and classify every generated video frame, so this is a preventive safeguard rather than an absolute guarantee about every output frame.
+
+
+## General website widget script (published or unpublished sites)
+
+From **Dashboard → Connect → Website**, register the website's real domain or its preview/staging URL. You can create the connection and copy its general HTML script before publishing the site; publication is not required to issue the site key. Paste the generated snippet into each page before the closing `</body>` tag.
+
+The widget becomes verified when a page loads the script from the registered hostname. Use the exact hostname you registered (for example, a preview subdomain). HTTPS is required for hosted preview/staging pages; local development is supported on `http://localhost:PORT`. The site key is restricted to that registered hostname and should not be shared across unrelated websites. A website content scan still requires the page to be reachable by Misma's scanner; the chat widget can be installed and tested separately on a browser-accessible preview page.
