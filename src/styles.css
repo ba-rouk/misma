@@ -30,7 +30,7 @@ body,
   margin: 0;
 }
 html {
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 body {
   font-family: var(--font-sans);
@@ -3656,6 +3656,31 @@ footer {
   min-width: 0;
   background: #090a0c;
   position: relative;
+}
+
+/* Keep the dashboard's outer viewport edge dark; the chat panes own scrolling. */
+html:has(.aichat-main) {
+  scrollbar-gutter: auto;
+  scrollbar-color: #303947 #090a0c;
+  background: #090a0c;
+}
+body:has(.aichat-main) {
+  background: #090a0c;
+  overflow-x: hidden;
+}
+.aichat-scroll-area {
+  scrollbar-color: #303947 #090a0c;
+  scrollbar-width: thin;
+}
+.aichat-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+.aichat-scroll-area::-webkit-scrollbar-track {
+  background: #090a0c;
+}
+.aichat-scroll-area::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #303947;
 }
 @media (min-width: 768px) {
   .aichat-main.sidebar-open {
