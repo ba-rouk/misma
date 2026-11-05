@@ -118,6 +118,8 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /navigator\.mediaDevices\?\.getUserMedia/);
   assert.match(dashboard, /recognition\.start\(audioTrack\)/);
   assert.match(dashboard, /stopComposerMicrophoneStream/);
+  assert.match(dashboard, /composerMicrophoneMountedRef\.current = false/);
+  assert.match(dashboard, /stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
   assert.match(dashboard, /Microphone permission was not granted/);
   assert.doesNotMatch(dashboard, /microphonePermissionOpen|requestMicrophoneAccess/);
   assert.match(dashboard, /aichat-notification-trigger/);
