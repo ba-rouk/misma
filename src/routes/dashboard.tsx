@@ -82,11 +82,14 @@ const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
 };
 
 function getUserMessageTextColor(hex: string): string {
-  const channels = [1, 3, 5].map((start) => {
-    const value = Number.parseInt(hex.slice(start, start + 2), 16) / 255;
+  const toLinear = (channel: string) => {
+    const value = Number.parseInt(channel, 16) / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const luminance =
+    0.2126 * toLinear(hex.slice(1, 3)) +
+    0.7152 * toLinear(hex.slice(3, 5)) +
+    0.0722 * toLinear(hex.slice(5, 7));
   const contrastWithDark = (luminance + 0.05) / 0.0584; // #111827
   const contrastWithWhite = 1.05 / (luminance + 0.05);
   return contrastWithDark >= contrastWithWhite ? "#111827" : "#ffffff";
