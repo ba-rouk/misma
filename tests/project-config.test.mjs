@@ -327,3 +327,49 @@ test("website connections can be created before publication with a general scrip
   assert.match(api, /status:\s*"pending"/);
   assert.match(api, /website_url:\s*websiteUrl/);
 });
+
+
+test("microphone access is user initiated, permission aware, accessible, and never records or uploads audio", async () => {
+  const hook = await read("../src/lib/use-microphone.ts");
+  const panel = await read("../src/components/microphone-access-panel.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const docs = await read("../docs/microphone-access.md");
+
+  assert.match(hook, /navigator\.permissions\.query/);
+  assert.match(hook, /name:\s*"microphone"/);
+  assert.match(hook, /permissionStatus\.addEventListener\("change"/);
+  assert.match(hook, /currentPermission === "granted"/);
+  assert.match(hook, /setSoftPromptOpen\(true\)/);
+  assert.match(hook, /getUserMedia\(\{ audio, video: false \}\)/);
+  assert.match(hook, /echoCancellation:\s*true/);
+  assert.match(hook, /noiseSuppression:\s*true/);
+  assert.match(hook, /autoGainControl:\s*true/);
+  assert.match(hook, /name === "NotAllowedError"/);
+  assert.match(hook, /name === "NotFoundError"/);
+  assert.match(hook, /name === "NotReadableError"/);
+  assert.match(hook, /name === "OverconstrainedError"/);
+  assert.match(hook, /name === "SecurityError"/);
+  assert.match(hook, /name === "TypeError"/);
+  assert.match(hook, /window\.isSecureContext/);
+  assert.match(hook, /navigator\.mediaDevices/);
+  assert.match(hook, /getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
+  assert.match(hook, /addEventListener\("ended"/);
+  assert.match(hook, /visibilitychange/);
+  assert.match(hook, /const handleVisibilityChange = \(\) => \{\s*if \(document\.visibilityState !== "hidden"\) return;\s*stopResources\(\);/);
+  assert.match(hook, /pagehide/);
+  assert.match(hook, /devicechange/);
+  assert.match(hook, /createMediaStreamSource/);
+  assert.match(hook, /createAnalyser/);
+  assert.doesNotMatch(hook, /MediaRecorder|fetch\s*\(/);
+
+  assert.match(panel, /role="dialog"/);
+  assert.match(panel, /aria-modal="true"/);
+  assert.match(panel, /aria-live="polite"/);
+  assert.match(panel, /Continue/);
+  assert.match(panel, /Cancel/);
+  assert.match(panel, /not recorded, transcribed, or uploaded/i);
+  assert.match(dashboard, /import \{ MicrophoneAccessPanel \}/);
+  assert.match(dashboard, /<MicrophoneAccessPanel \/>/);
+  assert.match(docs, /Permissions-Policy: microphone=\(self\)/);
+  assert.match(docs, /allow="microphone"/);
+});

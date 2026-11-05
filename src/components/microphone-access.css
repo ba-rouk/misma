@@ -1,0 +1,256 @@
+.misma-mic-panel {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--aichat-border, #e5e9f0);
+  border-radius: 14px;
+  background: var(--aichat-surface, #fff);
+  color: var(--aichat-text, #182232);
+}
+
+.misma-mic-heading,
+.misma-mic-meter-label,
+.misma-mic-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.misma-mic-heading h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.misma-mic-heading p,
+.misma-mic-privacy,
+.misma-mic-inline-note,
+.misma-mic-meter-help,
+.misma-mic-footnote {
+  margin: 4px 0 0;
+  color: var(--aichat-muted, #687386);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.misma-mic-privacy {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--aichat-soft, #f5f7fa);
+}
+
+.misma-mic-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--aichat-soft, #f5f7fa);
+  color: var(--aichat-muted, #687386);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.misma-mic-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.misma-mic-status.is-active {
+  color: #087f55;
+  background: #e8f7f0;
+}
+
+.misma-mic-status.is-requesting {
+  color: #8a5a00;
+  background: #fff5df;
+}
+
+.misma-mic-status.is-denied,
+.misma-mic-status.is-error,
+.misma-mic-status.is-unavailable {
+  color: #a43b36;
+  background: #fff0ef;
+}
+
+.misma-mic-device {
+  display: grid;
+  gap: 7px;
+}
+
+.misma-mic-device label,
+.misma-mic-meter-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.misma-mic-meter-wrap {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--aichat-border, #e5e9f0);
+  border-radius: 11px;
+}
+
+.misma-mic-meter {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--aichat-soft, #e9edf3);
+}
+
+.misma-mic-meter > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1d9b70, #6bc78d);
+  transition: width 90ms linear;
+}
+
+.misma-mic-meter-help {
+  margin: 0;
+}
+
+.misma-mic-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.misma-mic-inline-note {
+  margin: 0;
+}
+
+.misma-mic-feedback {
+  margin: 0;
+  padding: 12px;
+  border-radius: 11px;
+  background: var(--aichat-soft, #f5f7fa);
+  color: var(--aichat-text, #182232);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.misma-mic-feedback > strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.misma-mic-feedback > p {
+  margin: 0;
+}
+
+.misma-mic-feedback.is-denied,
+.misma-mic-feedback.is-error,
+.misma-mic-feedback.is-unavailable {
+  border: 1px solid #f0d5d2;
+  background: #fff8f7;
+}
+
+.misma-mic-recovery {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.misma-mic-recovery > p {
+  margin: 0;
+}
+
+.misma-mic-recovery details {
+  padding: 9px 10px;
+  border: 1px solid var(--aichat-border, #e5e9f0);
+  border-radius: 9px;
+  background: var(--aichat-surface, #fff);
+}
+
+.misma-mic-recovery summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.misma-mic-recovery ol {
+  display: grid;
+  gap: 5px;
+  margin: 9px 0 2px;
+  padding-left: 20px;
+}
+
+.misma-mic-footnote {
+  margin: 0;
+}
+
+.misma-mic-dialog-backdrop {
+  position: fixed;
+  z-index: 2147483001;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(12 18 30 / 48%);
+}
+
+.misma-mic-dialog {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid var(--aichat-border, #e5e9f0);
+  border-radius: 16px;
+  background: var(--aichat-surface, #fff);
+  color: var(--aichat-text, #182232);
+  box-shadow: 0 22px 70px rgb(0 0 0 / 25%);
+}
+
+.misma-mic-dialog-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  margin-bottom: 12px;
+  border-radius: 11px;
+  background: var(--aichat-soft, #f2f5f9);
+  font-size: 18px;
+}
+
+.misma-mic-dialog h4 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.misma-mic-dialog p {
+  margin: 0 0 18px;
+  color: var(--aichat-muted, #687386);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.misma-mic-dialog .misma-mic-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+  .misma-mic-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .misma-mic-status {
+    white-space: normal;
+  }
+
+  .misma-mic-actions > button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .misma-mic-meter > span {
+    transition: none;
+  }
+}
