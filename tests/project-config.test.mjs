@@ -25,6 +25,7 @@ test("the project uses Bun and the Vite-exposed Misma Supabase variables", async
 test("auth and dashboard calls use Misma Supabase and the authenticated chat function", async () => {
   const login = await read("../src/routes/login.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
+  const microphone = await read("../src/lib/microphone.ts");
   const server = await read("../src/server.ts");
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
   const callback = await read("../src/routes/auth/callback.tsx");
@@ -115,12 +116,17 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /webkitSpeechRecognition/);
   assert.match(dashboard, /onstart = \(\) => setVoiceInputActive\(true\)/);
   assert.match(dashboard, /audio-capture/);
-  assert.match(dashboard, /navigator\.mediaDevices\?\.getUserMedia/);
+  assert.match(dashboard, /requestMicStream\(/);
+  assert.doesNotMatch(dashboard, /navigator\.mediaDevices\?\.getUserMedia/);
+  assert.match(microphone, /navigator\.mediaDevices\.getUserMedia/);
+  assert.match(microphone, /window\.isSecureContext/);
+  assert.match(microphone, /getMicPermission/);
   assert.match(dashboard, /recognition\.start\(audioTrack\)/);
   assert.match(dashboard, /stopComposerMicrophoneStream/);
   assert.match(dashboard, /composerMicrophoneMountedRef\.current = false/);
   assert.match(dashboard, /stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
-  assert.match(dashboard, /Microphone permission was not granted/);
+  assert.match(dashboard, /toMicError\(cause\)/);
+  assert.match(dashboard, /setChatError\(micError\.message\)/);
   assert.doesNotMatch(dashboard, /microphonePermissionOpen|requestMicrophoneAccess/);
   assert.match(dashboard, /aichat-notification-trigger/);
   assert.match(dashboard, /activeTab === "notifications"/);
