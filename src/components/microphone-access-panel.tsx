@@ -24,7 +24,7 @@ export function MicrophoneAccessPanel() {
           <h4>Microphone access</h4>
           <p>Test your input device and check its live audio level.</p>
         </div>
-        <span className={\`misma-mic-status is-\${microphone.state}\`} aria-live="polite">
+        <span className={"misma-mic-status is-" + microphone.state} aria-live="polite">
           <span className="misma-mic-status-dot" aria-hidden="true" />
           {STATE_LABELS[microphone.state]}
         </span>
@@ -47,7 +47,7 @@ export function MicrophoneAccessPanel() {
                 aria-label="Select microphone input device"
               >
                 {microphone.devices.map((device, index) => (
-                  <option key={device.deviceId || \`microphone-\${index}\`} value={device.deviceId}>
+                  <option key={device.deviceId || "microphone-" + index} value={device.deviceId}>
                     {device.label}
                   </option>
                 ))}
@@ -68,7 +68,7 @@ export function MicrophoneAccessPanel() {
               aria-valuemax={100}
               aria-valuenow={Math.round(microphone.level * 100)}
             >
-              <span style={{ width: \`\${Math.round(microphone.level * 100)}%\` }} />
+              <span style={{ width: Math.round(microphone.level * 100) + "%" }} />
             </div>
             <p className="misma-mic-meter-help">Speak near the microphone to see the level move. Nothing is saved.</p>
           </div>
@@ -105,7 +105,7 @@ export function MicrophoneAccessPanel() {
       )}
 
       {(isDenied || isUnavailable || isError) && (
-        <div className={\`misma-mic-feedback is-\${microphone.state}\`} role="alert" aria-live="assertive">
+        <div className={"misma-mic-feedback is-" + microphone.state} role="alert" aria-live="assertive">
           <strong>{isDenied ? "Allow microphone access" : isUnavailable ? "Microphone unavailable" : "Check your microphone"}</strong>
           <p>{microphone.errorMessage}</p>
 
