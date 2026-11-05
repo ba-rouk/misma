@@ -25,7 +25,6 @@ test("the project uses Bun and the Vite-exposed Misma Supabase variables", async
 test("auth and dashboard calls use Misma Supabase and the authenticated chat function", async () => {
   const login = await read("../src/routes/login.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  const microphone = await read("../src/lib/microphone.ts");
   const server = await read("../src/server.ts");
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
   const callback = await read("../src/routes/auth/callback.tsx");
@@ -94,6 +93,7 @@ test("Misma does not ship the legacy website widget", async () => {
 
 test("media generation has provider fallback and the composer shows ready attachment previews", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
+  const microphone = await read("../src/lib/microphone.ts");
   const styles = await read("../src/styles.css");
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
 
