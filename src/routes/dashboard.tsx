@@ -977,6 +977,7 @@ function Dashboard() {
   const speechRecognitionRef = useRef<any>(null);
   const composerMicrophoneStreamRef = useRef<MediaStream | null>(null);
   const microphonePermissionRequestRef = useRef(false);
+  const composerMicrophoneMountedRef = useRef(true);
   const shouldAutoScrollRef = useRef(true);
   const regenerateInFlightRef = useRef(false);
   const chatLongPressTimerRef = useRef<number | null>(null);
@@ -985,6 +986,23 @@ function Dashboard() {
   const activeConversationIdRef = useRef<number | null>(null);
   const chatAbortControllerRef = useRef<AbortController | null>(null);
   const mediaAbortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    composerMicrophoneMountedRef.current = true;
+    return () => {
+      composerMicrophoneMountedRef.current = false;
+      const recognition = speechRecognitionRef.current;
+      speechRecognitionRef.current = null;
+      if (recognition) {
+        recognition.onend = null;
+        recognition.onerror = null;
+        try { recognition.abort?.(); } catch { /* Recognition has already stopped. */ }
+      }
+      const stream = composerMicrophoneStreamRef.current;
+      composerMicrophoneStreamRef.current = null;
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -1678,6 +1696,10 @@ function Dashboard() {
         },
         video: false,
       });
+      if (!composerMicrophoneMountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const audioTrack = stream.getAudioTracks()[0];
       if (!audioTrack) {
         stream.getTracks().forEach((track) => track.stop());
