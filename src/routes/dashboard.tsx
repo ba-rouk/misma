@@ -4567,7 +4567,7 @@ function Dashboard() {
           </div></div>
         )}
         {activeTab === "website-connect" && (
-          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Website connection</h2><p>Manage website chat installation from the Websites page.</p></div><div className="aichat-card"><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open Websites</button></div></div></div>
+          <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Website connection</h2><p>Connect a published website or register an unpublished preview/staging URL before launch. Misma provides a general HTML script, so a live production site or CMS-specific plugin is not required.</p></div><div className="aichat-card"><h3>Install the general Misma script</h3><p>Register the exact domain or preview hostname, copy its generated script from Website connections, and paste it before the closing &lt;/body&gt; tag. The widget verifies the connection when that page first loads.</p><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open Website connections</button></div></div></div>
         )}
         {activeTab === "whatsapp" && (
           <div className="aichat-tab-view"><div className="aichat-tab-content">
