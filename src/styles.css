@@ -6793,3 +6793,69 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .aichat-image-generation-grid { animation: none; }
 }
+
+
+/* Attachment previews sit above the message description in the composer. */
+.aichat-composer-attachments {
+  order: 1;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 1px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #46566b transparent;
+}
+.aichat-composer-attachment-card {
+  flex: 0 0 116px;
+  width: 116px;
+  gap: 5px;
+}
+.aichat-composer-attachment-square {
+  width: 116px;
+  height: 92px;
+  border-radius: 12px;
+  background: #111a27;
+}
+.aichat-composer-attachment-square > img,
+.aichat-composer-attachment-square > video {
+  object-fit: contain;
+  background: #111a27;
+}
+.aichat-composer-attachment-name {
+  min-height: 0;
+  color: #d6e1ef;
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+}
+.aichat-composer-attachment-size {
+  font-size: 10px;
+}
+.aichat-composer-input-row {
+  order: 2;
+}
+.aichat-composer-sendrow {
+  order: 3;
+}
+@media (max-width: 767px) {
+  .aichat-composer-attachments {
+    gap: 9px;
+    padding-bottom: 7px;
+  }
+  .aichat-composer-attachment-card {
+    flex-basis: 104px;
+    width: 104px;
+  }
+  .aichat-composer-attachment-square {
+    width: 104px;
+    height: 84px;
+    border-radius: 11px;
+  }
+}
