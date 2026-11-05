@@ -6953,3 +6953,39 @@ html, body, #app-root {
     border-radius: 11px;
   }
 }
+
+
+/* Desktop chat uses one centered reading column for messages and composer. */
+@media (min-width: 768px) {
+  .aichat-main .aichat-scroll-area {
+    align-items: center;
+  }
+
+  .aichat-main .aichat-conversation-wrap {
+    width: min(100%, 768px);
+    max-width: 768px;
+    align-self: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .aichat-main .aichat-message-row {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .aichat-main .aichat-message-row.is-user {
+    justify-content: flex-end;
+  }
+
+  .aichat-main .aichat-message-row.is-ai {
+    justify-content: flex-start;
+  }
+
+  .aichat-main .aichat-composer-inner {
+    width: min(100%, 768px);
+    max-width: 768px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
