@@ -492,7 +492,7 @@ function LibraryFilePreview({
           ) : isAudio ? (
             <audio src={asset.url} controls preload="metadata" />
           ) : isPdf || isText ? (
-            <iframe src={asset.url} title={"Preview of " + fileName} />
+            <iframe src={asset.url} title={"Preview of " + fileName} sandbox={isPdf ? undefined : ""} />
           ) : (
             <div className="aichat-library-preview-unavailable">
               <span>▤</span>
@@ -2549,13 +2549,18 @@ function Dashboard() {
         window.setTimeout(() => setMediaProgress(""), 3500);
       }
       setFailedMediaRetry(null);
+      uploadedComposerAttachmentsRef.current.clear();
+      selectedComposerFilesRef.current = [];
       loadData();
     } catch (cause) {
       const responseData = cause instanceof Error
         ? (cause as Error & { responseData?: Record<string, any> }).responseData
         : undefined;
       if (isTargetOpen()) {
-        if (filesToSend.length) setSelectedFiles(filesToSend);
+        if (filesToSend.length) {
+          selectedComposerFilesRef.current = filesToSend;
+          setSelectedFiles(filesToSend);
+        }
         if (responseData?.userMessage && tempUserId) {
           const savedId = Number(responseData.userMessage.id);
           if (Number.isSafeInteger(savedId) && savedId > 0) savedPromptMessageId = savedId;
@@ -2563,6 +2568,7 @@ function Dashboard() {
             ? current.map((item) => item.id === tempUserId ? responseData.userMessage : item)
             : [...current, responseData.userMessage]);
           setSelectedFiles([]);
+          selectedComposerFilesRef.current = [];
         }
         updateTargetMessages((current) => current.filter((item) => item.id !== pendingMediaId));
         if (controller.signal.aborted) {
@@ -2630,7 +2636,7 @@ function Dashboard() {
     const uploaded = uploadedComposerAttachmentsRef.current.get(removed);
     uploadedComposerAttachmentsRef.current.delete(removed);
     const paths = (uploaded || []).map((item) => item.path).filter((path): path is string => Boolean(path));
-    if (paths.length) void getSupabaseClient().storage.from("misma-media").remove(paths);
+    if (paths.length) void getSupabaseClient().storage.from("misma-media").remove(paths).catch(() => undefined);
   };
 
   const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
