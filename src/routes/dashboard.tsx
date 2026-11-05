@@ -3047,7 +3047,7 @@ function Dashboard() {
             <span className="aichat-nav-icon">▧</span><span className="aichat-nav-label">Images</span>
           </button>
           <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
-            <span className="aichat-nav-icon">▤</span><span className="aichat-nav-label">Library</span>{workspaceAssets.length > 0 && <span className="aichat-nav-badge">{workspaceAssets.length}</span>}
+            <span className="aichat-nav-icon">▤</span><span className="aichat-nav-label">Library</span>
           </button>
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)} data-tooltip="Manage">
             <span className="aichat-nav-icon">◉</span><span className="aichat-nav-label">Manage</span><span className="aichat-nav-caret">{expandedNavGroups.manage ? "⌄" : "›"}</span>
@@ -4433,9 +4433,9 @@ function Dashboard() {
 
         {activeTab === "websites" && (
           <div className="aichat-tab-view"><div className="aichat-tab-content">
-            <div className="aichat-tab-header"><h2>Websites</h2><p>Add your website, install Misma's visitor chat, and manage each connection.</p></div>
+            <div className="aichat-tab-header"><h2>Websites</h2><p>Connect a published website or register an unpublished draft, staging, or preview URL before launch.</p></div>
             <div className="aichat-card">
-              <h3>Add a website</h3>
+              <h3>Register a website or preview URL</h3>
               <form className="aichat-hub-form" onSubmit={async (event) => {
                 event.preventDefault();
                 if (!workspace?.id || !websiteDraftUrl.trim()) return;
@@ -4450,20 +4450,21 @@ function Dashboard() {
                 } catch (error) { alert(error instanceof Error ? error.message : "Could not add this website."); return; }
                 setWebsiteDraftUrl(""); setWebsiteDraftName("");
               }}>
-                <label>Website URL<input className="aichat-input" type="url" placeholder="https://example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
+                <label>Website or preview URL<input className="aichat-input" type="url" placeholder="https://preview.example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
                 <label>Website name (optional)<input className="aichat-input" placeholder="My business website" value={websiteDraftName} onChange={(event) => setWebsiteDraftName(event.target.value)} /></label>
-                <button type="submit" className="aichat-action-btn" disabled={!websiteDraftUrl.trim()}>Add website</button>
+                <p className="aichat-website-setup-note">You do not need to publish the website first. Register its final domain or a preview/staging URL, then copy the general script below. For local testing, use <code>http://localhost:PORT</code>.</p>
+                <button type="submit" className="aichat-action-btn" disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
               </form>
             </div>
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
               {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className="aichat-website-card" key={site.id}>
                 <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>
-                <p>Install this script on the registered domain. Misma will verify the live connection automatically when the widget loads and calls home.</p>
-                <label className="aichat-widget-script-label">Website installation script</label>
-                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
+                <label className="aichat-widget-script-label">General website installation script</label>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261105-ask-misma" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261105-ask-misma" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
@@ -4479,7 +4480,7 @@ function Dashboard() {
                   }}>{websiteActionId === site.id ? "Scanning…" : "Scan website"}</button>
                 </div>
                 <small>Last verified: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
-                <small>Add this snippet to each public page before the closing &lt;/body&gt; tag. When a page loads or is refreshed, Misma checks the connected site in the background (at most once every 30 minutes per site). Keep the site key unchanged.</small>
+                <small>Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
               </article>)}
             </div>
           </div></div>
