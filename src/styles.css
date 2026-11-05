@@ -3897,8 +3897,8 @@ footer {
   padding: 12px 18px;
 }
 .aichat-message-row.is-user .aichat-bubble {
-  background: #222730;
-  color: #f0f3f8;
+  background: var(--misma-user-message-bg, #222730);
+  color: var(--misma-user-message-text, #f0f3f8);
   border: 1px solid #2e3543;
   border-top-right-radius: 4px;
 }

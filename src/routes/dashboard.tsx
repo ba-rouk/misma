@@ -81,6 +81,20 @@ const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
   protectSensitiveData: true,
 };
 
+function getUserMessageTextColor(hex: string): string {
+  const toLinear = (channel: string) => {
+    const value = Number.parseInt(channel, 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance =
+    0.2126 * toLinear(hex.slice(1, 3)) +
+    0.7152 * toLinear(hex.slice(3, 5)) +
+    0.0722 * toLinear(hex.slice(5, 7));
+  const contrastWithDark = (luminance + 0.05) / 0.0584; // #111827
+  const contrastWithWhite = 1.05 / (luminance + 0.05);
+  return contrastWithDark >= contrastWithWhite ? "#111827" : "#ffffff";
+}
+
 function SettingsNavIcon({ kind }: { kind: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -760,7 +774,9 @@ function Dashboard() {
 
   useEffect(() => {
     if (!appearanceLoaded) return;
-    document.documentElement.style.setProperty("--misma-accent", accentColor);
+    // Accent Color is scoped exclusively to the background of the user's chat bubbles.
+    document.documentElement.style.setProperty("--misma-user-message-bg", accentColor);
+    document.documentElement.style.setProperty("--misma-user-message-text", getUserMessageTextColor(accentColor));
     try {
       localStorage.setItem("misma_accent_color", accentColor);
       localStorage.setItem("misma_notification_preferences", JSON.stringify(notificationPreferences));
@@ -4084,7 +4100,7 @@ function Dashboard() {
               <section id="settings-accent" className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">◐</span>
-                  <span><h3>Accent color</h3><p>Choose the highlight color used for active controls and selection states.</p></span>
+                  <span><h3>Accent color</h3><p>Choose the background color of your sent messages in chat.</p></span>
                 </div>
                 <div className="aichat-accent-options">
                   {[
