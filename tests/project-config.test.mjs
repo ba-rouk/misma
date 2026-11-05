@@ -276,3 +276,12 @@ test("mobile sidebar uses a hamburger, has a top-row new-chat control, and no Ch
   assert.match(styles, /\.aichat-mobile-newchat/);
   assert.match(styles, /\.aichat-newchat-wrap\s*\{\s*display:\s*none/);
 });
+
+
+test("collapsing the desktop sidebar closes nav groups and hides submenu content and carets", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /if \(!next\) \{\s*setExpandedNavGroups\(\{\s*workspace: false,\s*manage: false,\s*build: false,\s*connect: false/);
+  assert.match(styles, /@media \(min-width: 768px\)\s*\{[\s\S]*?\.aichat-side\.is-collapsed \.aichat-nav-submenu,[\s\S]*?\.aichat-side\.is-collapsed \.aichat-nav-caret\s*\{\s*display: none !important;/);
+});
