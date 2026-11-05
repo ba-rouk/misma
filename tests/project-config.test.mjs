@@ -403,3 +403,36 @@ test("dashboard restores the last visited section and selected conversation afte
   assert.match(dashboard, /options\.activateWorkspace !== false/);
   assert.match(dashboard, /selectConversation\(pendingRestoreConversationId,\s*\{\s*activateWorkspace:\s*false,\s*isRestore:\s*true/);
 });
+
+test("dashboard chat scrolls in a full-width pane with the scrollbar at the far right edge", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  const scrollAreaStart = dashboard.indexOf('className="aichat-scroll-area"');
+  const scrollAreaTag = dashboard.slice(scrollAreaStart, dashboard.indexOf(">", scrollAreaStart));
+  assert.ok(scrollAreaStart >= 0);
+  assert.ok(scrollAreaTag.includes("ref={scrollRef}"));
+  assert.ok(scrollAreaTag.includes("onScroll={handleScroll}"));
+
+  const conversationStart = dashboard.indexOf('className="aichat-conversation-wrap"');
+  const conversationTag = dashboard.slice(conversationStart, dashboard.indexOf(">", conversationStart));
+  assert.ok(!conversationTag.includes("ref={scrollRef}"));
+
+  const mainStart = styles.indexOf(".aichat-main {");
+  const mainBlock = styles.slice(mainStart, styles.indexOf("}", mainStart));
+  assert.ok(mainBlock.includes("min-height: 0;"));
+  assert.ok(mainBlock.includes("overflow: hidden;"));
+
+  const scrollStart = styles.indexOf("flex: 1 1 auto;");
+  const scrollBlock = styles.slice(scrollStart, styles.indexOf("}", scrollStart));
+  for (const declaration of [
+    "width: 100%;",
+    "min-width: 0;",
+    "min-height: 0;",
+    "align-self: stretch;",
+    "overflow-y: auto;",
+  ]) {
+    assert.ok(scrollBlock.includes(declaration), "missing chat scroll declaration: " + declaration);
+  }
+  assert.ok(styles.includes(".aichat-scroll-area::-webkit-scrollbar"));
+});

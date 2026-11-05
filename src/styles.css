@@ -3649,13 +3649,16 @@ footer {
 
 /* ── Main Layout & Chat Header ── */
 .aichat-main {
-  flex: 1;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100dvh;
   min-width: 0;
+  min-height: 0;
   background: #090a0c;
   position: relative;
+  overflow: hidden;
 }
 
 /* Keep the dashboard's outer viewport edge dark; the chat panes own scrolling. */
@@ -3771,7 +3774,12 @@ body:has(.aichat-main) {
 
 /* ── Conversation Area ── */
 .aichat-scroll-area {
-  flex: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
