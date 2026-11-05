@@ -166,7 +166,7 @@ async function answerCustomer(db: Db, workspaceId: string, message: string): Pro
 async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRecord> {
   if (!key) throw new Error("This website widget has no site key.");
   const result = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,status")
+    .select("id,workspace_id,name,website_url,domain,public_key,status,last_scanned_at")
     .eq("public_key", key)
     .maybeSingle();
   if (result.error || !result.data) throw new Error("This Misma website key is not valid.");
@@ -303,7 +303,7 @@ function cleanHtml(html: string): string {
     .replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n")
     .trim().slice(0, 18000);
 }
-async function crawlWebsite(startUrl: string): Promise<Array<{ url: string; title: string; text: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 25): Promise<Array<{ url: string; title: string; text: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
@@ -332,7 +332,7 @@ async function crawlWebsite(startUrl: string): Promise<Array<{ url: string; titl
   } catch {
     // A missing or inaccessible sitemap does not prevent normal same-domain link discovery.
   }
-  while (queue.length && pages.length < 25) {
+  while (queue.length && pages.length < maxPages) {
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
     if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href)) continue;
@@ -388,20 +388,91 @@ async function extractBusinessData(inputText: string, sourceName: string) {
 async function persistExtracted(db: Db, workspaceId: string, sourceType: string, sourceRef: string, extracted: AnyRecord) {
   const faqs = Array.isArray(extracted.faqs) ? extracted.faqs.slice(0, 25) : [];
   const items = Array.isArray(extracted.items) ? extracted.items.slice(0, 20) : [];
-  let savedKnowledge = 0;
-  let savedProducts = 0;
+  const normalizedSourceRef = sourceRef.slice(0, 1500);
+  const createdFrom = sourceType === "website" ? "website_scan" : "manual";
+
+  const [knowledgeResult, productsResult] = await Promise.all([
+    db.from("knowledge_entries")
+      .select("id,question,answer,source_type,source_ref")
+      .eq("workspace_id", workspaceId)
+      .limit(1000),
+    db.from("products_services")
+      .select("id,name,item_type,description,price_text,created_from")
+      .eq("workspace_id", workspaceId)
+      .limit(1000),
+  ]);
+  if (knowledgeResult.error) throw new Error("Could not load existing website knowledge.");
+  if (productsResult.error) throw new Error("Could not load existing products and services.");
+
+  const knowledgeByQuestion = new Map<string, AnyRecord>();
+  for (const row of knowledgeResult.data || []) {
+    const key = safeString(row.question, 500).toLocaleLowerCase();
+    if (!key) continue;
+    const existing = knowledgeByQuestion.get(key);
+    const matchesCurrentSource = row.source_type === sourceType && row.source_ref === normalizedSourceRef;
+    const existingMatchesCurrentSource = existing?.source_type === sourceType && existing?.source_ref === normalizedSourceRef;
+    if (!existing || (matchesCurrentSource && !existingMatchesCurrentSource)) knowledgeByQuestion.set(key, row);
+  }
+
+  const knowledgeInserts: AnyRecord[] = [];
+  const knowledgeUpdates: Array<{ id: number; answer: string }> = [];
+  const seenIncomingQuestions = new Set<string>();
   for (const raw of faqs) {
     if (!isRecord(raw)) continue;
     const question = safeString(raw.question, 500);
     const answer = safeString(raw.answer, 4000);
     if (question.length < 5 || answer.length < 10) continue;
-    const existing = await db.from("knowledge_entries").select("id").eq("workspace_id", workspaceId).eq("question", question).limit(1).maybeSingle();
-    if (existing.data) continue;
-    const result = await db.from("knowledge_entries").insert({
-      workspace_id: workspaceId, question, answer, approved: true, source_type: sourceType, source_ref: sourceRef.slice(0, 1500),
+    const questionKey = question.toLocaleLowerCase();
+    if (seenIncomingQuestions.has(questionKey)) continue;
+    seenIncomingQuestions.add(questionKey);
+
+    const existing = knowledgeByQuestion.get(questionKey);
+    if (existing) {
+      const sameWebsiteSource = existing.source_type === sourceType && existing.source_ref === normalizedSourceRef;
+      if (sameWebsiteSource && existing.answer !== answer) {
+        knowledgeUpdates.push({ id: Number(existing.id), answer });
+      }
+      // Never overwrite facts manually entered or learned from another source.
+      continue;
+    }
+
+    knowledgeInserts.push({
+      workspace_id: workspaceId,
+      question,
+      answer,
+      approved: true,
+      source_type: sourceType,
+      source_ref: normalizedSourceRef,
     });
-    if (!result.error) savedKnowledge++;
+    knowledgeByQuestion.set(question.toLocaleLowerCase(), {
+      id: null, question, answer, source_type: sourceType, source_ref: normalizedSourceRef,
+    });
   }
+
+  const knowledgeInsertResult = knowledgeInserts.length
+    ? await db.from("knowledge_entries").insert(knowledgeInserts)
+    : { error: null };
+  if (knowledgeInsertResult.error) throw new Error("Could not save refreshed website knowledge.");
+  const knowledgeUpdateResults = await Promise.all(knowledgeUpdates.map((item) =>
+    db.from("knowledge_entries").update({ answer: item.answer })
+      .eq("id", item.id).eq("workspace_id", workspaceId)
+  ));
+  const knowledgeUpdateError = knowledgeUpdateResults.find((result) => result.error)?.error;
+  if (knowledgeUpdateError) throw new Error("Could not update existing website knowledge.");
+
+  const productsByName = new Map<string, AnyRecord>();
+  for (const row of productsResult.data || []) {
+    const key = safeString(row.name, 160).toLocaleLowerCase();
+    if (!key) continue;
+    const existing = productsByName.get(key);
+    const matchesCurrentSource = sourceType === "website" && row.created_from === "website_scan";
+    const existingMatchesCurrentSource = sourceType === "website" && existing?.created_from === "website_scan";
+    if (!existing || (matchesCurrentSource && !existingMatchesCurrentSource)) productsByName.set(key, row);
+  }
+
+  const productInserts: AnyRecord[] = [];
+  const productUpdates: Array<{ id: number; item_type: string; description: string; price_text: string }> = [];
+  const seenIncomingProducts = new Set<string>();
   for (const raw of items) {
     if (!isRecord(raw)) continue;
     const name = safeString(raw.name, 160);
@@ -409,15 +480,158 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
     const kind = raw.type === "service" ? "service" : "product";
     const price = safeString(raw.price, 120);
     if (name.length < 2) continue;
-    const existing = await db.from("products_services").select("id").eq("workspace_id", workspaceId).eq("name", name).limit(1).maybeSingle();
-    if (existing.data) continue;
-    const result = await db.from("products_services").insert({
-      workspace_id: workspaceId, item_type: kind, name, description, price_text: price, active: false, created_from: sourceType,
+    const productKey = name.toLocaleLowerCase();
+    if (seenIncomingProducts.has(productKey)) continue;
+    seenIncomingProducts.add(productKey);
+
+    const existing = productsByName.get(productKey);
+    if (existing) {
+      // Website suggestions remain inactive until approved; refresh their source facts in place.
+      if (sourceType === "website" && existing.created_from === "website_scan") {
+        const update = {
+          id: Number(existing.id),
+          item_type: kind,
+          description,
+          price_text: price,
+        };
+        productUpdates.push(update);
+      }
+      continue;
+    }
+
+    productInserts.push({
+      workspace_id: workspaceId,
+      item_type: kind,
+      name,
+      description,
+      price_text: price,
+      active: false,
+      created_from: createdFrom,
     });
-    if (!result.error) savedProducts++;
+    productsByName.set(name.toLocaleLowerCase(), { id: null, name, created_from: "website_scan" });
   }
-  return { knowledgeSaved: savedKnowledge, productSuggestions: savedProducts };
+
+  const productInsertResult = productInserts.length
+    ? await db.from("products_services").insert(productInserts)
+    : { error: null };
+  if (productInsertResult.error) throw new Error("Could not save refreshed website product suggestions.");
+  const productUpdateResults = await Promise.all(productUpdates.map((item) =>
+    db.from("products_services").update({
+      item_type: item.item_type,
+      description: item.description,
+      price_text: item.price_text,
+    }).eq("id", item.id).eq("workspace_id", workspaceId)
+  ));
+  const productUpdateError = productUpdateResults.find((result) => result.error)?.error;
+  if (productUpdateError) throw new Error("Could not update existing website product suggestions.");
+
+  return {
+    knowledgeSaved: knowledgeInserts.length + knowledgeUpdates.length,
+    productSuggestions: productInserts.length + productUpdates.length,
+  };
 }
+
+const WEBSITE_AUTO_REFRESH_COOLDOWN_MS = 30 * 60 * 1000;
+
+async function createWebsiteScanRun(db: Db, website: AnyRecord, automatic: boolean): Promise<string | null> {
+  const now = Date.now();
+  if (automatic) {
+    const lastScannedAt = Date.parse(String(website.last_scanned_at || ""));
+    if (Number.isFinite(lastScannedAt) && now - lastScannedAt < WEBSITE_AUTO_REFRESH_COOLDOWN_MS) return null;
+
+    const latestRun = await db.from("website_scan_runs")
+      .select("status,started_at")
+      .eq("website_id", website.id)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestRun.error) throw new Error("Could not check the previous website scan.");
+    const lastStartedAt = Date.parse(String(latestRun.data?.started_at || ""));
+    if (Number.isFinite(lastStartedAt) && now - lastStartedAt < WEBSITE_AUTO_REFRESH_COOLDOWN_MS) return null;
+  } else {
+    const activeRun = await db.from("website_scan_runs")
+      .select("id")
+      .eq("website_id", website.id)
+      .in("status", ["queued", "scanning"])
+      .limit(1)
+      .maybeSingle();
+    if (activeRun.error) throw new Error("Could not check whether a website scan is already running.");
+    if (activeRun.data) throw new Error("A scan is already running for this website. Try again when it finishes.");
+  }
+
+  const created = await db.from("website_scan_runs").insert({
+    workspace_id: website.workspace_id,
+    website_id: website.id,
+    status: "scanning",
+    pages_scanned: 0,
+  }).select("id").single();
+
+  if (created.error) {
+    if (created.error.code === "23505" && automatic) return null;
+    if (created.error.code === "23505") throw new Error("A scan is already running for this website. Try again when it finishes.");
+    throw new Error("Could not start the website scan.");
+  }
+  if (!created.data?.id) throw new Error("Could not start the website scan.");
+  return String(created.data.id);
+}
+
+async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 25) {
+  try {
+    const pages = await crawlWebsite(website.website_url, maxPages);
+    if (!pages.length) throw new Error("No readable public HTML pages were found.");
+    const sourceText = pages
+      .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
+      .join("\n\n")
+      .slice(0, 90000);
+    const extracted = await extractBusinessData(sourceText, website.website_url);
+    const saved = await persistExtracted(db, website.workspace_id, "website", website.website_url, extracted);
+    const summary = safeString(extracted.summary, 3000) || "Scanned " + pages.length + " public pages.";
+
+    const [runUpdate, websiteUpdate] = await Promise.all([
+      db.from("website_scan_runs").update({
+        status: "completed",
+        pages_scanned: pages.length,
+        summary,
+        error: null,
+        completed_at: new Date().toISOString(),
+      }).eq("id", scanId),
+      db.from("website_connections").update({
+        last_scanned_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+      }).eq("id", website.id).eq("workspace_id", website.workspace_id),
+    ]);
+    if (runUpdate.error || websiteUpdate.error) {
+      throw new Error("Website knowledge was extracted, but the scan status could not be finalized.");
+    }
+    return { pagesScanned: pages.length, summary, ...saved };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Website scanning failed.";
+    await db.from("website_scan_runs").update({
+      status: "failed",
+      error: message.slice(0, 1000),
+      completed_at: new Date().toISOString(),
+    }).eq("id", scanId);
+    throw error;
+  }
+}
+
+async function autoRefreshWebsiteKnowledge(db: Db, website: AnyRecord) {
+  try {
+    if (website.status === "paused") return;
+    const scanId = await createWebsiteScanRun(db, website, true);
+    if (!scanId) return;
+    const result = await performWebsiteScan(db, website, scanId, 12);
+    console.info("[misma-widget] Automatic website knowledge refresh completed:", {
+      websiteId: website.id,
+      pagesScanned: result.pagesScanned,
+      knowledgeUpdatedOrAdded: result.knowledgeSaved,
+      productSuggestionsUpdatedOrAdded: result.productSuggestions,
+    });
+  } catch (error) {
+    console.warn("[misma-widget] Automatic website knowledge refresh failed:", error instanceof Error ? error.name : "unknown");
+  }
+}
+
 async function recommendOfferingsFromDemand(db: Db, workspaceId: string) {
   const conversations = await db.from("conversations")
     .select("id,channel,updated_at")
@@ -667,11 +881,21 @@ Deno.serve(async (request: Request) => {
   if (!isRecord(input)) return respond(400, { error: "Invalid request." });
 
   try {
-    if (input.action === "heartbeat" || input.action === "history" || input.action === "chat" || input.action === "human-request") {
+    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       await db.from("website_connections").update({
         status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq("id", site.id);
+      if (input.action === "page-view") {
+        const refreshTask = autoRefreshWebsiteKnowledge(db, site);
+        const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
+        if (runtime && typeof runtime.waitUntil === "function") {
+          runtime.waitUntil(refreshTask);
+        } else {
+          await refreshTask;
+        }
+        return respond(200, { ok: true, connected: true, knowledgeRefreshQueued: true });
+      }
       if (input.action === "heartbeat") return respond(200, { ok: true, connected: true });
       const visitorId = safeString(input.visitorId, 120) || crypto.randomUUID();
       const { conversation } = await ensureWebsiteConversation(db, site, visitorId, input.conversationId);
@@ -817,34 +1041,16 @@ Deno.serve(async (request: Request) => {
     }
     if (input.action === "scan-website") {
       const websiteId = safeString(input.websiteId, 80);
-      const websiteResult = await db.from("website_connections").select("id,workspace_id,website_url,domain")
-        .eq("id", websiteId).eq("workspace_id", workspaceId).single();
+      const websiteResult = await db.from("website_connections")
+        .select("id,workspace_id,website_url,domain,last_scanned_at,status")
+        .eq("id", websiteId)
+        .eq("workspace_id", workspaceId)
+        .single();
       if (websiteResult.error || !websiteResult.data) throw new Error("Website not found in the selected workspace.");
-      const scan = await db.from("website_scan_runs").insert({
-        workspace_id: workspaceId, website_id: websiteId, status: "running", pages_scanned: 0,
-      }).select("id").single();
-      if (scan.error || !scan.data) throw new Error("Could not start the website scan.");
-      try {
-        const pages = await crawlWebsite(websiteResult.data.website_url);
-        if (!pages.length) throw new Error("No readable public HTML pages were found.");
-        const sourceText = pages.map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text).join("\n\n").slice(0, 90000);
-        const extracted = await extractBusinessData(sourceText, websiteResult.data.website_url);
-        const saved = await persistExtracted(db, workspaceId, "website", websiteResult.data.website_url, extracted);
-        const summary = safeString(extracted.summary, 3000) || "Scanned " + pages.length + " public pages.";
-        await db.from("website_scan_runs").update({
-          status: "completed", pages_scanned: pages.length, summary, completed_at: new Date().toISOString(),
-        }).eq("id", scan.data.id);
-        await db.from("website_connections").update({
-          last_scanned_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
-        }).eq("id", websiteId);
-        return respond(200, { ok: true, pagesScanned: pages.length, summary, ...saved });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Website scanning failed.";
-        await db.from("website_scan_runs").update({
-          status: "failed", error: message.slice(0, 1000), completed_at: new Date().toISOString(),
-        }).eq("id", scan.data.id);
-        throw error;
-      }
+      const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
+      if (!scanId) throw new Error("Could not start the website scan.");
+      const result = await performWebsiteScan(db, websiteResult.data, scanId);
+      return respond(200, { ok: true, ...result });
     }
     if (input.action === "extract-knowledge") {
       const fileName = safeString(input.fileName, 180) || "Uploaded business document";
