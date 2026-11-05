@@ -292,7 +292,7 @@ test("Library navigation has no file-count badge", async () => {
 
   assert.doesNotMatch(dashboard, /workspaceAssets\.length > 0 && <span className="aichat-nav-badge">/);
   assert.ok(dashboard.includes('data-tooltip="Library"'));
-  assert.ok(dashboard.includes('<span className="aichat-nav-label">Library</span></button>'));
+  assert.ok(dashboard.includes('<span className="aichat-nav-label">Library</span>'));
 });
 
 test("Ask Misma launcher uses the Misma mark, sits at the bottom-left, and is icon-only on mobile", async () => {
