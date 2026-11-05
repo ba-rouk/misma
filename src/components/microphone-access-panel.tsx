@@ -88,9 +88,9 @@ export function MicrophoneAccessPanel() {
             type="button"
             className="aichat-action-btn"
             onClick={() => void microphone.start()}
-            disabled={microphone.state === "requesting"}
+            disabled={microphone.state === "requesting" || !microphone.permissionKnown}
           >
-            {microphone.state === "requesting" ? "Requesting…" : "Enable microphone"}
+            {microphone.state === "requesting" ? "Requesting…" : !microphone.permissionKnown ? "Checking permission…" : "Enable microphone"}
           </button>
           {microphone.state === "idle" && microphone.permission === "granted" && (
             <span className="misma-mic-inline-note">Permission is already allowed. Your microphone is not live until you start it.</span>
