@@ -31,6 +31,7 @@ import {
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 import { MicrophoneAccessPanel } from "../components/microphone-access-panel";
+import { MicError, requestMicStream, toMicError } from "../lib/microphone";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -1677,24 +1678,16 @@ function Dashboard() {
     }
     if (microphonePermissionRequestRef.current) return;
 
-    // getUserMedia is called directly from the microphone click. This is what invokes
-    // the browser's native site-permission prompt when the site's permission is Ask.
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setChatError("This browser cannot access a microphone. Use a supported browser over HTTPS.");
-      return;
-    }
-
+    // Request access immediately from the click flow. When site permission is
+    // still set to Ask, the browser displays its native microphone permission prompt.
     microphonePermissionRequestRef.current = true;
     setChatError("");
     try {
       stopComposerMicrophoneStream();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false,
+      const stream = await requestMicStream({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
       });
       if (!composerMicrophoneMountedRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -1703,25 +1696,15 @@ function Dashboard() {
       const audioTrack = stream.getAudioTracks()[0];
       if (!audioTrack) {
         stream.getTracks().forEach((track) => track.stop());
-        throw new Error("NotFoundError");
+        throw new MicError("no-device", "No microphone audio track was returned.");
       }
       composerMicrophoneStreamRef.current = stream;
       startVoiceRecognition(audioTrack);
     } catch (cause) {
       stopComposerMicrophoneStream();
       setVoiceInputActive(false);
-      const name = cause instanceof Error ? cause.name : "";
-      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-        setChatError("Microphone permission was not granted. Allow microphone access for Misma in your browser's site settings, then click the microphone again.");
-      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-        setChatError("No microphone was found. Connect or enable a microphone, then try again.");
-      } else if (name === "NotReadableError" || name === "AbortError") {
-        setChatError("The microphone could not be opened. It may be in use by another application or browser tab.");
-      } else if (name === "SecurityError" || name === "TypeError") {
-        setChatError("Microphone access requires HTTPS and permission for this website.");
-      } else {
-        setChatError("Misma could not access the microphone. Check your browser permission and input device, then try again.");
-      }
+      const micError = toMicError(cause);
+      setChatError(micError.message);
     } finally {
       microphonePermissionRequestRef.current = false;
     }
