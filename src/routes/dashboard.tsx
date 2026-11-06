@@ -1792,7 +1792,7 @@ function Dashboard() {
         .map((result: any) => String(result?.[0]?.transcript || "").trim())
         .filter(Boolean)
         .join(" ")
-        .replace(/\\s+/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
       const base = voiceInputBaseDraftRef.current.trim();
       setDraft([base, transcript].filter(Boolean).join(base && transcript ? " " : ""));
@@ -1937,7 +1937,7 @@ function Dashboard() {
           highPass.frequency.value = 85;
 
           const inputGain = pendingAudioContext.createGain();
-          inputGain.gain.value = 2.0;
+          inputGain.gain.value = 2.5;
 
           const compressor = pendingAudioContext.createDynamicsCompressor();
           compressor.threshold.value = -30;
