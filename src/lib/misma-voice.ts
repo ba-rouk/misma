@@ -451,7 +451,7 @@ export function createVoiceMode({
 
   const speak = (rawText: string) => new Promise<void>((resolve) => {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
-    const chunks = synth ? toSpeechChunks(cleanForSpeech(rawText)) : [];
+    const chunks = synth ? toSpeechChunks(shortenForSpeech(cleanForSpeech(rawText), 320)) : [];
     if (!synth || !chunks.length) {
       resolve();
       return;
