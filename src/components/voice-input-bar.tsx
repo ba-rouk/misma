@@ -11,6 +11,7 @@ import "./voice-input.css";
 type VoiceInputBarProps = {
   inputValue: string;
   hasAttachments?: boolean;
+  hasCreateMode?: boolean;
   disabled?: boolean;
   lang?: string;
   onTranscript: (text: string) => void;
@@ -47,6 +48,7 @@ type VoiceModeController = ReturnType<typeof createVoiceMode>;
 export function VoiceInputBar({
   inputValue,
   hasAttachments = false,
+  hasCreateMode = false,
   disabled = false,
   lang,
   onTranscript,
@@ -56,6 +58,7 @@ export function VoiceInputBar({
 }: VoiceInputBarProps) {
   const [dictationState, setDictationState] = useState<DictationState>("idle");
   const [dictationRequesting, setDictationRequesting] = useState(false);
+  const dictationStateRef = useRef<DictationState>("idle");
   const [voiceState, setVoiceState] = useState<VoiceModeState>("idle");
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
@@ -108,6 +111,7 @@ export function VoiceInputBar({
         if (AUTO_SEND_ON_DICTATION && transcript) window.setTimeout(() => callbacksRef.current.onSend(transcript, new AbortController().signal, true), 0);
       },
       onState: (state) => {
+        dictationStateRef.current = state;
         setDictationState(state);
         if (state === "idle") setDictationRequesting(false);
       },
@@ -209,7 +213,7 @@ export function VoiceInputBar({
     baseDraftRef.current = inputValueRef.current.trim();
     setDictationRequesting(true);
     startTimeoutRef.current = window.setTimeout(() => {
-      if (dictationRef.current?.active && dictationState !== "listening") {
+      if (dictationRef.current?.active && dictationStateRef.current !== "listening") {
         dictation.cancel();
         setDictationRequesting(false);
         stopMeter();
@@ -307,7 +311,7 @@ export function VoiceInputBar({
           </>
         )}
 
-        {!isDictating && !inputValue.trim() && !hasAttachments && !overlayVisible && <button
+        {!isDictating && !inputValue.trim() && !hasAttachments && !hasCreateMode && !overlayVisible && <button
           type="button"
           className="misma-voice-mode-trigger"
           aria-label="Start hands-free voice conversation"
