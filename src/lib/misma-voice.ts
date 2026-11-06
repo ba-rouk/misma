@@ -404,6 +404,7 @@ export function createDictation({
     /** Finish dictation and deliver the final transcript. */
     stop(): void {
       if (!active && !recognition && !stream) return;
+      generation += 1;
       active = false;
       clearTimers();
       const current = recognition;
