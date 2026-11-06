@@ -402,7 +402,8 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /current\.continuous = false/);
   assert.match(voice, /restartTimer = window\.setTimeout/);
   assert.match(voice, /navigator\.mediaDevices\.getUserMedia\(\{ audio: true \}\)/);
-  assert.match(voice, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
+  assert.match(voice, /function stopTracks\(stream: MediaStream \| null\)/);
+  assert.match(voice, /stopTracks\(stream\)/);
   assert.match(voice, /createVoiceMode/);
   assert.match(voice, /send\(text, request\.signal, true\)/);
   assert.match(voice, /new SpeechSynthesisUtterance/);
