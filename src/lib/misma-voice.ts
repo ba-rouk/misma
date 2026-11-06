@@ -14,13 +14,14 @@ type SpeechRecognitionLike = {
   onresult: ((event: RecognitionEvent) => void) | null;
   onerror: ((event: RecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
+  onspeechstart?: (() => void) | null;
+  onspeechend?: (() => void) | null;
   start(): void;
   stop(): void;
   abort(): void;
 };
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-type AudioContextConstructor = new () => AudioContext;
 
 export const VOICE_START_TIMEOUT_MS = 8000;
 
@@ -39,11 +40,6 @@ export const voiceSupport = {
   },
   get tts(): boolean {
     return typeof window !== "undefined" && "speechSynthesis" in window;
-  },
-  get audioMeter(): boolean {
-    return typeof window !== "undefined" && Boolean(
-      window.AudioContext || (window as Window & { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext,
-    );
   },
 };
 
@@ -132,15 +128,27 @@ export async function ensureMicPermission(): Promise<void> {
 /** Remove markdown and formatting that should not be spoken by text-to-speech. */
 export function cleanForSpeech(text = ""): string {
   return String(text)
-    .replace(/\u0060{3}[\s\S]*?\u0060{3}/g, " (code omitted) ")
+    .replace(/\u0060{3}[\s\S]*?\u0060{3}/g, " ")
     .replace(/\u0060([^\u0060]+)\u0060/g, "$1")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\p{Extended_Pictographic}|\uFE0F|\u200D/gu, "")
     .replace(/^\s*[-•*]\s+/gm, "")
     .replace(/^\s*#{1,6}\s*/gm, "")
-    .replace(/[*_~>]+/g, "")
+    .replace(/[*_~>|]+/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Keep spoken replies phone-call short and split them into sentence-sized Android-safe chunks. */
+export function shortenForSpeech(text: string, max = 320): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  if (stop > max * 0.45) return cut.slice(0, stop + 1);
+  const space = cut.lastIndexOf(" ");
+  return (space > 0 ? cut.slice(0, space) : cut) + ".";
 }
 
 /** Sentence-sized chunks prevent long Android Chrome utterances from being cut off. */
@@ -162,72 +170,6 @@ export function toSpeechChunks(text: string, max = 200): string[] {
   return output;
 }
 
-function startAudioMeter(stream: MediaStream, onAmplitude: (level: number) => void): () => void {
-  const browserWindow = window as Window & {
-    webkitAudioContext?: AudioContextConstructor;
-  };
-  const Context = window.AudioContext || browserWindow.webkitAudioContext;
-  if (!Context) return () => onAmplitude(0);
-
-  let context: AudioContext | null = null;
-  let source: MediaStreamAudioSourceNode | null = null;
-  let analyser: AnalyserNode | null = null;
-  let frameId = 0;
-  let active = true;
-  let smoothed = 0;
-  let lastUpdate = 0;
-
-  try {
-    context = new Context();
-    source = context.createMediaStreamSource(stream);
-    analyser = context.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.82;
-    source.connect(analyser);
-    const samples = new Uint8Array(analyser.fftSize);
-
-    void context.resume().catch(() => undefined);
-
-    const sample = (time: number) => {
-      if (!active || !analyser) return;
-      analyser.getByteTimeDomainData(samples);
-      let sum = 0;
-      for (let index = 0; index < samples.length; index += 1) {
-        const value = (samples[index] - 128) / 128;
-        sum += value * value;
-      }
-      const rms = Math.sqrt(sum / samples.length);
-      const normalized = Math.max(0, Math.min(1, (rms - 0.012) * 4.2));
-      smoothed = smoothed * 0.72 + normalized * 0.28;
-
-      if (time - lastUpdate >= 32) {
-        onAmplitude(smoothed < 0.035 ? 0 : smoothed);
-        lastUpdate = time;
-      }
-      frameId = window.requestAnimationFrame(sample);
-    };
-
-    frameId = window.requestAnimationFrame(sample);
-  } catch {
-    if (context) void context.close().catch(() => undefined);
-    return () => onAmplitude(0);
-  }
-
-  return () => {
-    if (!active) return;
-    active = false;
-    window.cancelAnimationFrame(frameId);
-    try {
-      source?.disconnect();
-      analyser?.disconnect();
-    } catch {
-      // Audio nodes may already be disconnected.
-    }
-    if (context && context.state !== "closed") void context.close().catch(() => undefined);
-    onAmplitude(0);
-  };
-}
-
 type DictationOptions = {
   lang?: string;
   onText?: (transcript: string) => void;
@@ -237,7 +179,8 @@ type DictationOptions = {
   onError?: (code: string) => void;
 };
 
-/** Live browser dictation plus a local Web Audio level meter. No audio file is created. */
+/** Browser-native text dictation. It briefly requests mic permission, releases the stream,
+ * then lets SpeechRecognition own the microphone. No analyser, recording, or audio upload. */
 export function createDictation({
   lang = typeof navigator === "undefined" ? "en-US" : navigator.language || "en-US",
   onText,
@@ -250,8 +193,6 @@ export function createDictation({
   let active = false;
   let finalText = "";
   let interimText = "";
-  let stream: MediaStream | null = null;
-  let stopMeter: (() => void) | null = null;
   let restartTimer: number | null = null;
   let finishTimer: number | null = null;
   let generation = 0;
@@ -263,14 +204,6 @@ export function createDictation({
     finishTimer = null;
   };
 
-  const releaseAudio = () => {
-    stopMeter?.();
-    stopMeter = null;
-    stopTracks(stream);
-    stream = null;
-    onAmplitude?.(0);
-  };
-
   const finishResources = (notifyDone: boolean) => {
     clearTimers();
     const current = recognition;
@@ -279,14 +212,12 @@ export function createDictation({
       current.onresult = null;
       current.onerror = null;
       current.onend = null;
-      try {
-        current.abort();
-      } catch {
-        // Recognition may already have stopped.
-      }
+      current.onspeechstart = null;
+      current.onspeechend = null;
+      try { current.abort(); } catch { /* Recognition may already have stopped. */ }
     }
     active = false;
-    releaseAudio();
+    onAmplitude?.(0);
     onState?.("idle");
     if (notifyDone) onDone?.(finalText.trim());
   };
@@ -299,16 +230,16 @@ export function createDictation({
   const beginRecognition = () => {
     const Recognition = getSpeechRecognition();
     if (!Recognition || !active) return;
-
     const current = new Recognition();
     recognition = current;
     current.lang = lang;
     current.interimResults = true;
     current.continuous = false;
     current.maxAlternatives = 1;
-    let hadError = false;
-
+    current.onspeechstart = () => { if (recognition === current) onAmplitude?.(0.72); };
+    current.onspeechend = () => { if (recognition === current) onAmplitude?.(0.035); };
     current.onresult = (event) => {
+      if (recognition !== current) return;
       let nextFinal = "";
       let nextInterim = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -318,49 +249,34 @@ export function createDictation({
         if (result.isFinal) nextFinal = [nextFinal, spoken].filter(Boolean).join(" ").trim();
         else nextInterim = [nextInterim, spoken].filter(Boolean).join(" ").trim();
       }
-      if (nextFinal) {
-        finalText = [finalText, nextFinal].filter(Boolean).join(" ").trim();
-        interimText = nextInterim;
-      } else {
-        interimText = nextInterim;
-      }
+      if (nextFinal) finalText = [finalText, nextFinal].filter(Boolean).join(" ").trim();
+      interimText = nextInterim;
       const transcript = [finalText, interimText].filter(Boolean).join(" ").trim();
-      if (transcript) onText?.(transcript);
+      if (transcript) {
+        onAmplitude?.(0.72);
+        onText?.(transcript);
+      }
     };
-
     current.onerror = (event) => {
       if (event.error === "aborted" && !active) return;
-      hadError = true;
       const code = recognitionErrorCode(event.error);
-      if (code === "aborted") return;
-      fail(code);
+      if (code !== "aborted") fail(code);
     };
-
     current.onend = () => {
       if (recognition !== current) return;
       recognition = null;
-
+      onAmplitude?.(0);
       if (!active) {
         finishResources(true);
         return;
       }
-      if (hadError) {
-        fail("recognition");
-        return;
-      }
-
       restartTimer = window.setTimeout(() => {
         restartTimer = null;
         if (active) {
-          try {
-            beginRecognition();
-          } catch {
-            fail("recognition");
-          }
+          try { beginRecognition(); } catch { fail("recognition"); }
         }
       }, 160);
     };
-
     current.start();
   };
 
@@ -371,7 +287,6 @@ export function createDictation({
         onError?.("unsupported");
         return false;
       }
-
       active = true;
       generation += 1;
       const startGeneration = generation;
@@ -379,15 +294,9 @@ export function createDictation({
       interimText = "";
       clearTimers();
       onState?.("requesting");
-
       try {
-        const acquiredStream = await requestMicrophoneStream();
-        if (!active || startGeneration !== generation) {
-          stopTracks(acquiredStream);
-          return false;
-        }
-        stream = acquiredStream;
-        stopMeter = startAudioMeter(acquiredStream, (level) => onAmplitude?.(level));
+        await ensureMicPermission();
+        if (!active || startGeneration !== generation) return false;
         onState?.("listening");
         beginRecognition();
         return true;
@@ -401,9 +310,8 @@ export function createDictation({
       }
     },
 
-    /** Finish dictation and deliver the final transcript. */
     stop(): void {
-      if (!active && !recognition && !stream) return;
+      if (!active && !recognition) return;
       generation += 1;
       active = false;
       clearTimers();
@@ -412,26 +320,24 @@ export function createDictation({
         finishResources(true);
         return;
       }
-
       try {
         current.stop();
-        finishTimer = window.setTimeout(() => finishResources(true), 900);
+        finishTimer = window.setTimeout(() => finishResources(true), 1200);
       } catch {
         finishResources(true);
       }
     },
 
-    /** Cancel dictation and discard every unconfirmed word. */
     cancel(): void {
       generation += 1;
+      finalText = "";
+      interimText = "";
       finishResources(false);
     },
 
-    get active(): boolean {
-      return active;
-    },
+    get active(): boolean { return active; },
   };
-}
+};
 
 type VoiceModeOptions = {
   send: (text: string, signal: AbortSignal) => Promise<string | null | undefined>;
