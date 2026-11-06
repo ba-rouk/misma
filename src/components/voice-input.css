@@ -467,3 +467,11 @@
     scroll-behavior: auto !important;
   }
 }
+
+.misma-voice-dictation-btn.is-send {
+  color: var(--mv-send-fg);
+  background: var(--mv-send);
+}
+.misma-voice-dictation-btn.is-send:hover {
+  filter: brightness(1.08);
+}
