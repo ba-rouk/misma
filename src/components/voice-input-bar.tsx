@@ -261,7 +261,6 @@ export function VoiceInputBar({
     setWaveLevel(0);
     overlayOpenRef.current = true;
     setVoiceOverlayOpen(true);
-    setVoiceTranscript("");
     setMuted(false);
 
     try {
