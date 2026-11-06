@@ -391,7 +391,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
 
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend\(transcript, \{ signal \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>\s*handleSend\(transcript, \{ signal, voice: options\?\.voice === true \}\)/);
   assert.match(dashboard, /return typeof res\.aiMessage\.text === "string" \? res\.aiMessage\.text : ""/);
   assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
