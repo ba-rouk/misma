@@ -179,7 +179,7 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.match(styles, /scrollbar-width: none/);
   assert.match(styles, /\.aichat-composer-input-row \.aichat-composer-textarea::-webkit-scrollbar/);
 
-  const inputRow = dashboard.indexOf('className={`aichat-composer-input-row');
+  const inputRow = dashboard.indexOf('className="aichat-composer-input-row"');
   const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
@@ -408,7 +408,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(component, /aria-label="Start hands-free voice conversation"/);
   assert.match(component, /Interrupt Misma and listen/);
   assert.match(component, /"Mute"/);
-  assert.match(component, /"End"/);
+  assert.match(component, />\s*End\s*</);
   assert.match(styles, /\.misma-voice-overlay/);
   assert.match(styles, /\.misma-voice-orb\[data-state="speaking"\]/);
 });
