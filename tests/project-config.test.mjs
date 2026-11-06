@@ -167,7 +167,7 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(styles, /\.aichat-message-row\.is-ai > \.aichat-msg-avatar\.ai/);
   assert.match(styles, /transition:\s*height\s*\.16s ease/);
   assert.match(dashboard, /aichat-composer-voice-btn/);
-  assert.match(dashboard, /Start voice chat/);
+  assert.match(dashboard, /Start voice input/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
 });
@@ -195,7 +195,7 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
-  assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
+  assert.match(dashboard, /\{!\s*draft\.trim\(\) && !selectedFiles\.length && !createMode/);
   assert.match(dashboard, /Start voice input/);
 });
 
@@ -427,6 +427,7 @@ test("dictation switches the composer from microphone to Send and preserves edit
   assert.match(dashboard, /voiceInputManualEditRef\.current = true/);
   assert.match(dashboard, /if \(voiceInputManualEditRef\.current\) return/);
   assert.match(dashboard, /if \(voiceInputActive \|\| voiceRecognitionWantedRef\.current\) stopVoiceDictation\(true\)/);
+  assert.match(dashboard, /!composerMicrophoneMountedRef\.current \|\| !voiceRecognitionWantedRef\.current/);
   assert.doesNotMatch(dashboard, /readOnly=\{voiceInputActive\}/);
 
   const sendButton = dashboard.slice(sendCondition, dashboard.indexOf("</button>", sendCondition));
