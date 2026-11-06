@@ -9,6 +9,7 @@ type SpeechRecognitionLike = {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
+  onstart: (() => void) | null;
   onresult: ((event: RecognitionEvent) => void) | null;
   onerror: ((event: RecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
@@ -117,12 +118,15 @@ export function createDictation({
   let silentRuns = 0;
   let restartTimer: number | null = null;
   let discardResult = false;
+  let startTimer: number | null = null;
 
   const clearRestart = () => {
     if (restartTimer !== null && typeof window !== "undefined") {
       window.clearTimeout(restartTimer);
     }
     restartTimer = null;
+    if (startTimer !== null) window.clearTimeout(startTimer);
+    startTimer = null;
   };
 
   const finish = () => {
@@ -143,6 +147,22 @@ export function createDictation({
     current.interimResults = true;
     current.continuous = false;
     let gotSpeech = false;
+    let recognitionStarted = false;
+    current.onstart = () => {
+      recognitionStarted = true;
+      if (startTimer !== null) window.clearTimeout(startTimer);
+      startTimer = null;
+    };
+    startTimer = window.setTimeout(() => {
+      if (active && recognition === current && !recognitionStarted) {
+        active = false;
+        try { current.abort(); } catch { /* already ended */ }
+        recognition = null;
+        clearRestart();
+        onState?.("idle");
+        onError?.("start-timeout");
+      }
+    }, 8000);
 
     current.onresult = (event) => {
       let interim = "";
@@ -173,6 +193,8 @@ export function createDictation({
     };
 
     current.onend = () => {
+      if (startTimer !== null) window.clearTimeout(startTimer);
+      startTimer = null;
       if (recognition !== current) return;
       recognition = null;
 
