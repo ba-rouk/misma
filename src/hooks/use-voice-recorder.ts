@@ -39,6 +39,7 @@ export function useVoiceRecorder({
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef(0);
   const activeRef = useRef(false);
+  const transcribingRef = useRef(false);
   const startAttemptRef = useRef(0);
   const mountedRef = useRef(true);
   const transcriptionControllerRef = useRef<AbortController | null>(null);
@@ -287,7 +288,8 @@ export function useVoiceRecorder({
   }, [cleanupCapture]);
 
   const transcribe = useCallback(async (mode: "insert" | "send") => {
-    if (!activeRef.current || !recorderRef.current || !mountedRef.current) return;
+    if (!activeRef.current || !recorderRef.current || !mountedRef.current || transcribingRef.current) return;
+    transcribingRef.current = true;
 
     try {
       setPhase("transcribing");
@@ -349,6 +351,7 @@ export function useVoiceRecorder({
     } finally {
       transcriptionControllerRef.current = null;
       activeRef.current = false;
+      transcribingRef.current = false;
       if (mountedRef.current) {
         setPhase("idle");
         setWaveform(EMPTY_WAVEFORM);
