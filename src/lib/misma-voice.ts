@@ -100,6 +100,7 @@ type DictationOptions = {
   onText?: (transcript: string) => void;
   onDone?: (finalTranscript: string) => void;
   onState?: (state: DictationState) => void;
+  onWaveform?: (levels: number[]) => void;
   onError?: (code: string) => void;
 };
 
@@ -109,6 +110,7 @@ export function createDictation({
   onText,
   onDone,
   onState,
+  onWaveform,
   onError,
 }: DictationOptions = {}) {
   let recognition: SpeechRecognitionLike | null = null;
@@ -116,6 +118,7 @@ export function createDictation({
   let finalText = "";
   let silentRuns = 0;
   let restartTimer: number | null = null;
+  let discardResult = false;
 
   const clearRestart = () => {
     if (restartTimer !== null && typeof window !== "undefined") {
@@ -129,7 +132,7 @@ export function createDictation({
     recognition = null;
     active = false;
     onState?.("idle");
-    onDone?.(finalText.trim());
+    if (!discardResult) onDone?.(finalText.trim());
   };
 
   const begin = () => {
@@ -207,6 +210,7 @@ export function createDictation({
 
       active = true;
       finalText = "";
+      discardResult = false;
       silentRuns = 0;
       clearRestart();
 
@@ -233,6 +237,12 @@ export function createDictation({
       }
     },
 
+    cancel() {
+      discardResult = true;
+      finalText = "";
+      this.stop();
+    },
+
     stop() {
       if (!active && !recognition) return;
       active = false;
@@ -256,7 +266,7 @@ export function createDictation({
 }
 
 type VoiceModeOptions = {
-  send: (text: string, signal: AbortSignal) => Promise<string | null | undefined>;
+  send: (text: string, signal: AbortSignal, voice: true) => Promise<string | null | undefined>;
   lang?: string;
   onState?: (state: VoiceModeState) => void;
   onUser?: (text: string, isFinal: boolean) => void;
@@ -415,7 +425,7 @@ export function createVoiceMode({
     controller = requestController;
 
     try {
-      const reply = await send(text, requestController.signal);
+      const reply = await send(text, requestController.signal, true);
       if (!on || myTurn !== turn || requestController.signal.aborted) return;
       if (reply) {
         onReply?.(reply);
