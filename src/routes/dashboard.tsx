@@ -1865,6 +1865,16 @@ function Dashboard() {
       return;
     }
 
+    const browserWindow = window as typeof window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    };
+    if (!(browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition)) {
+      setChatError("English voice dictation is not supported by this browser. Please use the latest Chrome or Edge.");
+      return;
+    }
+
+    stopComposerMicrophoneStream();
     voiceRecognitionWantedRef.current = true;
     setChatError("");
     setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
