@@ -114,7 +114,8 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>/);
+  assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(microphone, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
@@ -154,7 +155,8 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(styles, /\.aichat-message-row\.is-ai > \.aichat-msg-avatar\.ai/);
   assert.match(styles, /transition:\s*height\s*\.16s ease/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>/);
+  assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
 });
@@ -391,7 +393,8 @@ test("browser-native dictation and hands-free voice mode send text only", async 
 
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>/);
+  assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(dashboard, /return typeof res\.aiMessage\.text === "string" \? res\.aiMessage\.text : ""/);
   assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
@@ -399,20 +402,25 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /current\.continuous = false/);
   assert.match(voice, /restartTimer = window\.setTimeout/);
   assert.match(voice, /navigator\.mediaDevices\.getUserMedia\(\{ audio: true \}\)/);
-  assert.match(voice, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
+  assert.match(voice, /function stopTracks\(stream: MediaStream \| null\)/);
+  assert.match(voice, /stopTracks\(stream\)/);
   assert.match(voice, /createVoiceMode/);
-  assert.match(voice, /send\(text, request\.signal, true\)/);
+  assert.match(component, /onSend\(text, signal, \{ voice: true \}\)/);
   assert.match(voice, /new SpeechSynthesisUtterance/);
+  assert.match(voice, /shortenForSpeech\(cleanForSpeech\(rawText\), 320\)/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
-  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
-  assert.match(component, /aria-label=\{dictating \? "Dictation is active" : "Start voice dictation"\}/);
+  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
+  assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
+  assert.match(component, /Stop dictation and send transcript/);
+  assert.match(component, /finishDictation\(true\)/);
+  assert.match(component, /aria-label=\{isDictating \? "Finish voice dictation" : "Start voice dictation"\}/);
   assert.match(component, /Start voice mode/);
   assert.match(component, /AUTO_SEND_ON_DICTATION = false/);
-  assert.match(component, /misma-dictation-cancel/);
-  assert.match(component, /misma-dictation-finish/);
+  assert.match(component, /misma-voice-dictation-btn is-cancel/);
+  assert.match(component, /misma-voice-dictation-btn is-finish/);
   assert.match(component, /No internet connection/);
   assert.match(component, /Interrupt Misma and listen/);
-  assert.match(component, /Push-to-talk/);
+  assert.match(component, /Push to talk/);
   assert.match(component, /Hands-free/);
   assert.match(component, /"Mute"/);
   assert.match(component, />\s*End\s*</);
@@ -475,4 +483,16 @@ test("voice integration has no audio recording or transcription endpoint", async
   assert.ok(component.includes("VoiceInputBar"));
   await assert.rejects(read("../src/routes/api.transcribe.ts"));
   await assert.rejects(read("../supabase/functions/misma-transcribe/index.ts"));
+});
+
+
+test("voice chat requests receive concise spoken replies and never upload recorded audio", async () => {
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const voice = await read("../src/lib/misma-voice.ts");
+  assert.match(dashboard, /voice: options\?\.voice === true/);
+  assert.match(edgeFunction, /const voice = input\.voice === true/);
+  assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
+  assert.doesNotMatch(edgeFunction, /transcribeAudioAttachment|audio\/transcriptions|VOICE NOTE:/);
+  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
 });

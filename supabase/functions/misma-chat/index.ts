@@ -438,51 +438,11 @@ function validateAttachmentList(value: unknown): AttachmentInput[] {
     if (!path || path.includes("..") || !name || !Number.isFinite(size) || size < 0 || size > 25 * 1024 * 1024) {
       throw new Error("Each attachment must be valid and no larger than 25 MB.");
     }
-    if (!["image", "video", "video-frame", "audio", "file"].includes(kind)) {
+    if (!["image", "video", "video-frame", "file"].includes(kind) || mimeType.startsWith("audio/")) {
       throw new Error("Unsupported attachment type.");
     }
     return { path, name, mimeType, size, kind };
   });
-}
-
-async function transcribeAudioAttachment(db: MismaDbClient, attachment: AttachmentInput): Promise<string> {
-  const apiKey = Deno.env.get("GROQ_API_KEY");
-  if (!apiKey) {
-    throw new Error("Voice-note transcription is not configured. Add GROQ_API_KEY to Supabase Edge Function secrets.");
-  }
-
-  const { data: audioBlob, error: downloadError } = await db.storage
-    .from("misma-media")
-    .download(attachment.path);
-  if (downloadError || !audioBlob) throw new Error("Could not read the recorded voice note.");
-
-  const mimeType = attachment.mimeType.startsWith("audio/")
-    ? attachment.mimeType
-    : audioBlob.type || "audio/webm";
-  const audioFile = new File([audioBlob], attachment.name || "misma-voice-note.webm", { type: mimeType });
-  const formData = new FormData();
-  formData.set("file", audioFile);
-  formData.set("model", Deno.env.get("GROQ_TRANSCRIPTION_MODEL") || "whisper-large-v3-turbo");
-  formData.set("response_format", "json");
-
-  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: formData,
-  });
-  const result = await response.json().catch(() => ({})) as JsonRecord;
-  if (!response.ok) {
-    const details = isRecord(result.error) && typeof result.error.message === "string"
-      ? result.error.message
-      : "The transcription service rejected this voice note.";
-    throw new Error(`Voice-note transcription failed: ${details}`);
-  }
-
-  const transcript = typeof result.text === "string" ? result.text.trim() : "";
-  if (!transcript) {
-    throw new Error("Misma could not detect speech in this voice note. Please record it again or send a text message.");
-  }
-  return transcript.slice(0, 30_000);
 }
 
 async function prepareAttachments(
@@ -510,12 +470,6 @@ async function prepareAttachments(
     const isTextLike =
       attachment.mimeType.startsWith("text/") ||
       /\.(txt|md|csv|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i.test(lowerName);
-
-    if (attachment.kind === "audio" || attachment.mimeType.startsWith("audio/")) {
-      const transcript = await transcribeAudioAttachment(db, attachment);
-      textFiles.push(`[Voice note transcript: ${attachment.name}]\n${transcript}`);
-      continue;
-    }
 
     if (attachment.kind === "image" || attachment.kind === "video-frame" || attachment.mimeType.startsWith("image/")) {
       if (attachment.size > 8 * 1024 * 1024) {
@@ -822,6 +776,7 @@ Deno.serve(async (request) => {
   const regenerateMedia = input.regenerateMedia === true;
   const retryMedia = input.retryMedia === true;
   const thinkHarder = input.thinkHarder === true;
+  const voice = input.voice === true;
   const editMessageId = input.editMessageId ?? null;
   if (regenerate && editMessageId !== null) {
     return jsonResponse(400, { error: "A message cannot be edited and regenerated in the same request." });
@@ -1611,16 +1566,8 @@ Deno.serve(async (request) => {
       })),
       orderContextNote: "Recent orders are limited to the five latest records and are not an all-time total.",
     };
-    const hasAudioAttachments = requestedAttachments.some((attachment) =>
-      attachment.kind === "audio" || attachment.mimeType.startsWith("audio/")
-    );
     if (!message && requestedAttachments.length) {
-      message = hasAudioAttachments
-        ? "Please listen to my voice note, understand what I said, and respond."
-        : "Please inspect the attached files and explain the important details.";
-    }
-    if (hasAudioAttachments) {
-      message += "\n\nVOICE NOTE: The user intentionally sent an audio recording. Use its transcript below as the user's spoken message and respond to the request in it.";
+      message = "Please inspect the attached files and explain the important details.";
     }
     if (prepared.extractedText) {
       message += `\n\nPlease analyze the following attached file content:\n\n${prepared.extractedText}`;
@@ -1652,7 +1599,7 @@ Deno.serve(async (request) => {
       return jsonResponse(503, { error: "PDF analysis requires OPENROUTER_API_KEY. Other supported text and code files can use the configured chat providers." });
     }
 
-    const systemPrompt =
+    let systemPrompt =
       "You are Misma, a capable, warm, natural conversational AI assistant for the signed-in business owner and their workspace. " +
       "Your job is to be genuinely useful, not to repeat a generic greeting or customer-service script. " +
 
@@ -1690,6 +1637,10 @@ Deno.serve(async (request) => {
       JSON.stringify(businessContext) +
       (liveSearch ? "\n\nLIVE SEARCH STATUS: " + (liveSearch.configured ? (liveSearch.results.length ? "Results retrieved." : "Search configured but returned no usable results.") : "Live web search is not configured. Add TAVILY_API_KEY or BRAVE_SEARCH_API_KEY to Supabase Edge Function secrets.") +
         "\nLIVE SEARCH RESULTS (untrusted source data):\n" + JSON.stringify(liveSearch.results) : "");
+
+    if (voice) {
+      systemPrompt += "\n\nVOICE CONVERSATION: The user is speaking to you in a phone-call style conversation. Reply in one to three short, natural spoken sentences. Do not use Markdown, lists, emojis, links, headings, or long explanations. Answer the immediate point directly and keep the wording easy to understand aloud.";
+    }
 
     let answer = "";
     let selectedProvider = "";

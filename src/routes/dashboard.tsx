@@ -1882,7 +1882,7 @@ function Dashboard() {
           return [await uploadOne(prepared, "image")];
         }
         if (original.type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(original.name)) {
-          return [await uploadOne(original, "audio")];
+          throw new Error("Audio recording uploads are no longer supported. Use the microphone for text dictation instead.");
         }
         return [await uploadOne(original, "file")];
       };
@@ -2151,14 +2151,10 @@ function Dashboard() {
     let textToSend = (customPrompt ?? draft).trim();
     if ((!textToSend && !selectedFiles.length) || isSending || !token || options.signal?.aborted) return null;
     if (!textToSend) {
-      const hasAudio = selectedFiles.some((file) => file.type.startsWith("audio/"));
-      textToSend = hasAudio
-        ? "Please listen to my voice note, understand what I said, and respond."
-        : "Please inspect the attached files and explain the important details.";
+      textToSend = "Please inspect the attached files and explain the important details.";
     }
 
-    const includesVoiceNote = !editingMessageId && selectedFiles.some((file) => file.type.startsWith("audio/"));
-    const implicitMediaMode = editingMessageId || includesVoiceNote ? null : detectMediaIntent(textToSend);
+    const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
     if (implicitMediaMode) {
       void handleCreateMedia(implicitMediaMode, textToSend);
       return null;
@@ -3600,6 +3596,27 @@ function Dashboard() {
                     </div>
                   )}
                   <div className="aichat-composer-input-row">
+                    <VoiceInputBar
+                      inputValue={draft}
+                      hasContent={Boolean(draft.trim() || selectedFiles.length || createMode)}
+                      isBusy={isSending || isGeneratingMedia}
+                      disabled={isSending || isGeneratingMedia}
+                      primaryActionLabel={createMode ? "Create " + createMode + " with Agnes" : "Send message"}
+                      onPrimaryAction={() => {
+                        if (isSending || isGeneratingMedia) stopMisma();
+                        else if (createMode) void handleCreateMedia();
+                        else void handleSend();
+                      }}
+                      onTranscript={(transcript) => {
+                        setDraft(transcript);
+                        setChatError("");
+                      }}
+                      onDictationDone={() => textareaRef.current?.focus()}
+                      onSend={(transcript, signal, options) =>
+                        handleSend(transcript, { signal, voice: options?.voice === true })
+                      }
+                    >
+                      <>
                         {createMode ? (
                           <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                             @create {createMode}<span aria-hidden="true">×</span>
@@ -3647,22 +3664,8 @@ function Dashboard() {
                           disabled={isSending}
                           aria-label="Message Misma"
                         />
-                    <VoiceInputBar
-                      inputValue={draft}
-                      hasAttachments={selectedFiles.length > 0}
-                      hasCreateMode={Boolean(createMode)}
-                      busy={isSending || isGeneratingMedia}
-                      disabled={isSending || isGeneratingMedia}
-                      onTranscript={(transcript) => {
-                        setDraft(transcript);
-                        setChatError("");
-                      }}
-                      onDictationDone={() => textareaRef.current?.focus()}
-                      onAction={() => { if (createMode) void handleCreateMedia(); else void handleSend(); }}
-                      onStop={stopMisma}
-                      onSend={(transcript, signal, voice) => handleSend(transcript, { signal, voice })}
-                      onError={(message) => setChatError(message)}
-                    />
+                      </>
+                    </VoiceInputBar>
                   </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
@@ -4395,7 +4398,7 @@ function Dashboard() {
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
                 <SettingsToggle title="Read new replies aloud" description="Automatically speak each new text answer using the selected device voice." checked={autoSpeakReplies} onToggle={() => setAutoSpeakReplies((current) => !current)} />
-                <p className="aichat-settings-hint">The chat microphone records a voice note. Stop recording to review and play it, then press Send to submit the audio to Misma. The recording is attached to the conversation and transcribed so Misma can respond. The separate Settings microphone test remains local-only.</p>
+                <p className="aichat-settings-hint">Misma uses your browser's speech recognition to turn microphone input into editable text. Only the transcript is sent when you submit your message; no audio recording is uploaded.</p>
               </section>
 
               <section id="settings-privacy" className="aichat-card aichat-settings-card">
@@ -4406,7 +4409,6 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
                 <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
                 <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Settings microphone testing is analysed locally and is never recorded or uploaded.</span></div>
-                <div className="aichat-settings-info-row"><strong>Chat voice notes</strong><span>Chat recordings are prepared as audio attachments after you stop recording. The audio is submitted to Misma only when you press Send, and remains playable in the conversation.</span></div>
               </section>
 
               <section id="settings-history" className="aichat-card aichat-settings-card">
