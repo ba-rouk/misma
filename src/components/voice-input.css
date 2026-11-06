@@ -1,7 +1,7 @@
 .misma-voice-input{position:absolute;z-index:6;right:12px;bottom:7px;display:inline-flex;align-items:center;gap:4px}
 .misma-voice-trigger,.misma-voice-mode-trigger,.misma-dictation-cancel,.misma-dictation-finish{display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:0;border-radius:50%;color:#aeb8c7;background:transparent;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:background 150ms ease,transform 150ms ease}
 .misma-voice-trigger svg,.misma-dictation-cancel svg,.misma-dictation-finish svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.misma-voice-mode-trigger svg{width:22px;height:22px;fill:currentColor;stroke:none}
+.misma-voice-mode-trigger svg{width:22px;height:22px;fill:currentColor;stroke:none}.misma-voice-mode-trigger.is-hidden{opacity:0;transform:scale(.72);pointer-events:none}
 .misma-voice-trigger:hover,.misma-voice-mode-trigger:hover,.misma-dictation-cancel:hover,.misma-dictation-finish:hover{background:rgba(255,255,255,.08);color:#f5f7fb}
 .misma-voice-trigger:disabled,.misma-voice-mode-trigger:disabled{opacity:.38;cursor:not-allowed}
 .misma-voice-trigger.is-recording{color:#a8c7f4;background:rgba(116,151,214,.16)}
