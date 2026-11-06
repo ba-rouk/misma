@@ -282,6 +282,12 @@ function normalizeComposerAttachment(file: File): File {
     m4v: "video/x-m4v",
     webm: "video/webm",
     mkv: "video/x-matroska",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    flac: "audio/flac",
     pdf: "application/pdf",
   };
   const inferredType = inferredTypes[extension];
@@ -389,6 +395,7 @@ function ComposerAttachmentPreview({
   const [previewFailed, setPreviewFailed] = useState(false);
   const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i.test(file.name);
   const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
+  const isAudio = file.type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name);
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   const previewPending = (isImage || isVideo) && !previewLoaded;
   const extension = file.name.split(".").pop()?.slice(0, 5).toUpperCase() || "FILE";
@@ -399,18 +406,18 @@ function ComposerAttachmentPreview({
   useEffect(() => {
     setPreviewLoaded(!isImage && !isVideo);
     setPreviewFailed(false);
-    if (!isImage && !isVideo) {
+    if (!isImage && !isVideo && !isAudio) {
       setPreviewUrl(null);
       return;
     }
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [file, isImage, isVideo]);
+  }, [file, isImage, isVideo, isAudio]);
 
   return (
-    <div className="aichat-composer-attachment-card" title={file.name}>
-      <div className="aichat-composer-attachment-square">
+    <div className={"aichat-composer-attachment-card" + (isAudio ? " is-audio" : "")} title={file.name}>
+      <div className={"aichat-composer-attachment-square" + (isAudio ? " is-audio" : "")}>
         {isImage && previewUrl && !previewFailed ? (
           <img
             src={previewUrl}
@@ -430,10 +437,12 @@ function ComposerAttachmentPreview({
             onLoadedMetadata={() => setPreviewLoaded(true)}
             onError={() => { setPreviewLoaded(true); setPreviewFailed(true); }}
           />
+        ) : isAudio && previewUrl ? (
+          <audio className="aichat-composer-audio-player" src={previewUrl} controls preload="metadata" aria-label={"Play " + file.name} />
         ) : (
           <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
-            <span>{isPdf ? "PDF" : isImage ? "IMAGE" : isVideo ? "VIDEO" : extension}</span>
-            <small>{isPdf ? "Document" : isImage ? (previewFailed ? "Preview unavailable" : "Image") : isVideo ? (previewFailed ? "Preview unavailable" : "Video") : "File"}</small>
+            <span>{isPdf ? "PDF" : isImage ? "IMAGE" : isVideo ? "VIDEO" : isAudio ? "AUDIO" : extension}</span>
+            <small>{isPdf ? "Document" : isImage ? (previewFailed ? "Preview unavailable" : "Image") : isVideo ? (previewFailed ? "Preview unavailable" : "Video") : isAudio ? "Voice note" : "File"}</small>
           </div>
         )}
         <button
@@ -597,6 +606,9 @@ function MessageAttachmentViews({
               )}
             </div>
           );
+        }
+        if (item.kind === "audio" || item.mimeType?.startsWith("audio/")) {
+          return <div key={key} className="aichat-generated-media-wrap aichat-attachment-audio"><audio src={item.url} controls preload="metadata" aria-label={"Play " + item.name} /><span>{item.name}</span></div>;
         }
         if (item.kind === "video" || item.kind === "generated-video" || item.mimeType?.startsWith("video/")) {
           return <div key={key} className="aichat-generated-media-wrap"><video className="aichat-attachment-video" src={item.url} controls preload="metadata" />{item.kind === "generated-video" && onDownload && <button type="button" className="aichat-media-download" onClick={() => onDownload(item)}><ActionIcon name="download" /> Download video</button>}</div>;
@@ -824,6 +836,7 @@ function Dashboard() {
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [voiceInputActive, setVoiceInputActive] = useState(false);
+  const [voiceRecordingPending, setVoiceRecordingPending] = useState(false);
   const [voiceInputWaveform, setVoiceInputWaveform] = useState<number[]>(Array.from({ length: 30 }, () => 0.07));
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -1019,6 +1032,8 @@ function Dashboard() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceRecordingChunksRef = useRef<Blob[]>([]);
   const composerMicrophoneStreamRef = useRef<MediaStream | null>(null);
   const voiceRecognitionWantedRef = useRef(false);
   const voiceInputBaseDraftRef = useRef("");
@@ -1044,6 +1059,14 @@ function Dashboard() {
     composerMicrophoneMountedRef.current = true;
     return () => {
       composerMicrophoneMountedRef.current = false;
+      const recorder = voiceRecorderRef.current;
+      voiceRecorderRef.current = null;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        try { recorder.stop(); } catch { /* The component is already unmounting. */ }
+      }
+      voiceRecordingChunksRef.current = [];
       const recognition = speechRecognitionRef.current;
       speechRecognitionRef.current = null;
       if (recognition) {
@@ -1703,6 +1726,11 @@ function Dashboard() {
     if (expectedStream && stream !== expectedStream) return;
 
     composerMicrophoneStreamRef.current = null;
+    const recorder = voiceRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      setVoiceRecordingPending(true);
+      try { recorder.stop(); } catch { setVoiceRecordingPending(false); }
+    }
     if (voiceMeterFrameRef.current !== null) cancelAnimationFrame(voiceMeterFrameRef.current);
     voiceMeterFrameRef.current = null;
     voiceAnalyserRef.current = null;
@@ -1715,6 +1743,55 @@ function Dashboard() {
 
     stream?.getTracks().forEach((track) => track.stop());
     setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
+  };
+
+  const startComposerVoiceRecording = (stream: MediaStream) => {
+    if (typeof MediaRecorder === "undefined") {
+      throw new Error("Audio recording is not supported in this browser. Please use the latest Chrome or Edge.");
+    }
+    const preferredMimeType = [
+      "audio/webm;codecs=opus",
+      "audio/mp4",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+    ].find((type) => MediaRecorder.isTypeSupported(type));
+    const recorder = new MediaRecorder(stream, preferredMimeType ? { mimeType: preferredMimeType } : undefined);
+    const chunks: Blob[] = [];
+    voiceRecordingChunksRef.current = chunks;
+    voiceRecorderRef.current = recorder;
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+    recorder.onerror = () => {
+      setVoiceRecordingPending(false);
+      setVoiceInputActive(false);
+      setChatError("The voice note could not be recorded. Please try again.");
+    };
+    recorder.onstop = () => {
+      if (voiceRecorderRef.current === recorder) voiceRecorderRef.current = null;
+      voiceRecordingChunksRef.current = [];
+      setVoiceInputActive(false);
+      setVoiceRecordingPending(false);
+      if (!composerMicrophoneMountedRef.current) return;
+      const mimeType = recorder.mimeType || chunks.find((chunk) => chunk.type)?.type || "audio/webm";
+      const blob = new Blob(chunks, { type: mimeType });
+      if (!blob.size) {
+        setChatError("No audio was captured. Check your microphone and try again.");
+        return;
+      }
+      if (blob.size > 25 * 1024 * 1024) {
+        setChatError("This voice note is larger than 25 MB. Record a shorter message and try again.");
+        return;
+      }
+      const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+      const file = new File([blob], "misma-voice-note-" + Date.now() + "." + extension, {
+        type: mimeType,
+        lastModified: Date.now(),
+      });
+      setChatError("");
+      addSelectedFiles([file]);
+    };
+    recorder.start(250);
   };
 
   const startComposerVoiceMeter = (analyser: AnalyserNode) => {
@@ -1884,45 +1961,35 @@ function Dashboard() {
   };
 
   const handleVoiceInput = async () => {
-    if (microphonePermissionRequestRef.current) return;
+    if (microphonePermissionRequestRef.current || voiceRecordingPending) return;
 
-    if (voiceInputActive || voiceRecognitionWantedRef.current) {
-      voiceRecognitionWantedRef.current = false;
-      try { speechRecognitionRef.current?.stop?.(); } catch { /* Recognition may already be stopped. */ }
+    if (voiceInputActive) {
       setVoiceInputActive(false);
-      if (!speechRecognitionRef.current) stopComposerMicrophoneStream();
+      setVoiceRecordingPending(true);
+      stopComposerMicrophoneStream();
       return;
     }
 
-    const browserWindow = window as typeof window & {
-      SpeechRecognition?: new () => any;
-      webkitSpeechRecognition?: new () => any;
-    };
-    if (!(browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition)) {
-      setChatError("English voice dictation is not supported by this browser. Please use the latest Chrome or Edge.");
+    if (typeof MediaRecorder === "undefined") {
+      setChatError("Audio recording is not supported in this browser. Please use the latest Chrome or Edge.");
       return;
     }
 
     stopComposerMicrophoneStream();
-    voiceRecognitionWantedRef.current = true;
-    voiceInputHasAudioRef.current = false;
-    voiceInputReceivedResultRef.current = false;
-    voiceInputFallbackAttemptedRef.current = false;
     setChatError("");
     setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
     microphonePermissionRequestRef.current = true;
-
     let pendingAudioContext: AudioContext | null = null;
+
     try {
       const AudioContextConstructor =
         window.AudioContext ||
         (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
       if (AudioContextConstructor) {
         try {
           pendingAudioContext = new AudioContextConstructor();
           voiceAudioContextRef.current = pendingAudioContext;
-          void pendingAudioContext.resume().catch(() => undefined);
+          if (pendingAudioContext.state === "suspended") await pendingAudioContext.resume();
         } catch {
           pendingAudioContext = null;
         }
@@ -1947,76 +2014,53 @@ function Dashboard() {
         stream.getTracks().forEach((track) => track.stop());
         throw new MicError("no-device", "No microphone audio track was returned.");
       }
-      composerMicrophoneStreamRef.current = stream;
 
+      composerMicrophoneStreamRef.current = stream;
+      startComposerVoiceRecording(stream);
+      setVoiceInputActive(true);
       microphoneTrack.addEventListener("ended", () => {
         if (composerMicrophoneStreamRef.current !== stream) return;
-        voiceRecognitionWantedRef.current = false;
-        try { speechRecognitionRef.current?.abort?.(); } catch { /* The track has already ended. */ }
         setVoiceInputActive(false);
         stopComposerMicrophoneStream(stream);
-        setChatError("The microphone disconnected. Reconnect it and start voice input again.");
+        setChatError("The microphone disconnected. Your captured audio is being prepared.");
       }, { once: true });
 
-      let recognitionTrack = microphoneTrack;
       if (pendingAudioContext) {
         try {
-          if (pendingAudioContext.state === "suspended") await pendingAudioContext.resume();
-
           const source = pendingAudioContext.createMediaStreamSource(stream);
           const highPass = pendingAudioContext.createBiquadFilter();
           highPass.type = "highpass";
           highPass.frequency.value = 70;
-
           const inputGain = pendingAudioContext.createGain();
           inputGain.gain.value = 3.2;
-
           const compressor = pendingAudioContext.createDynamicsCompressor();
           compressor.threshold.value = -38;
           compressor.knee.value = 18;
           compressor.ratio.value = 4.5;
           compressor.attack.value = 0.004;
           compressor.release.value = 0.24;
-
           const analyser = pendingAudioContext.createAnalyser();
           analyser.fftSize = 512;
           analyser.smoothingTimeConstant = 0.68;
-
-          const destination = pendingAudioContext.createMediaStreamDestination();
           source.connect(highPass);
           highPass.connect(inputGain);
           inputGain.connect(compressor);
           compressor.connect(analyser);
-          compressor.connect(destination);
-
-          const processedTrack = destination.stream.getAudioTracks()[0];
-          if (processedTrack) {
-            voiceProcessedTrackRef.current = processedTrack;
-            recognitionTrack = processedTrack;
-          }
           startComposerVoiceMeter(analyser);
         } catch {
-          // Keep native microphone recognition available if Web Audio processing is unavailable.
           voiceAnalyserRef.current = null;
         }
       }
-
-      if (!composerMicrophoneMountedRef.current) {
-        stopComposerMicrophoneStream(stream);
-        return;
-      }
-      startVoiceRecognition(recognitionTrack);
     } catch (cause) {
-      voiceRecognitionWantedRef.current = false;
       setVoiceInputActive(false);
       stopComposerMicrophoneStream();
+      if (pendingAudioContext && pendingAudioContext.state !== "closed") void pendingAudioContext.close().catch(() => undefined);
       const micError = toMicError(cause);
       setChatError(micError.message);
     } finally {
       microphonePermissionRequestRef.current = false;
     }
   };
-
   const testSelectedVoice = () => {
     if (!("speechSynthesis" in window)) {
       setChatError("Voice playback is not supported by this browser.");
@@ -2161,7 +2205,7 @@ function Dashboard() {
       const { data: userData, error: userError } = await getSupabaseClient().auth.getUser();
       if (userError || !userData.user) throw new Error("Your sign-in session expired. Please sign in again.");
 
-      const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "file"): Promise<MessageAttachment> => {
+      const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "audio" | "file"): Promise<MessageAttachment> => {
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
         if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
@@ -2227,6 +2271,9 @@ function Dashboard() {
           const prepared = await compressImageForUpload(original);
           if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
           return [await uploadOne(prepared, "image")];
+        }
+        if (original.type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(original.name)) {
+          return [await uploadOne(original, "audio")];
         }
         return [await uploadOne(original, "file")];
       };
@@ -2494,9 +2541,15 @@ function Dashboard() {
   ) => {
     let textToSend = (customPrompt ?? draft).trim();
     if ((!textToSend && !selectedFiles.length) || isSending || !token) return;
-    if (!textToSend) textToSend = "Please inspect the attached files and explain the important details.";
+    if (!textToSend) {
+      const hasAudio = selectedFiles.some((file) => file.type.startsWith("audio/"));
+      textToSend = hasAudio
+        ? "Please listen to my voice note, understand what I said, and respond."
+        : "Please inspect the attached files and explain the important details.";
+    }
 
-    const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
+    const includesVoiceNote = !editingMessageId && selectedFiles.some((file) => file.type.startsWith("audio/"));
+    const implicitMediaMode = editingMessageId || includesVoiceNote ? null : detectMediaIntent(textToSend);
     if (implicitMediaMode) {
       void handleCreateMedia(implicitMediaMode, textToSend);
       return;
@@ -3979,8 +4032,8 @@ function Dashboard() {
                       readOnly={voiceInputActive}
                     />
                     {voiceInputActive && (
-                      <div className="aichat-composer-voice-wave" role="status" aria-live="polite" aria-label="Listening in English. Speak normally.">
-                        <span className="aichat-composer-voice-wave-label">Listening</span>
+                      <div className="aichat-composer-voice-wave" role="status" aria-live="polite" aria-label="Recording your voice note. Speak normally.">
+                        <span className="aichat-composer-voice-wave-label">Recording</span>
                         <div className="aichat-composer-voice-wave-bars" aria-hidden="true">
                           {voiceInputWaveform.map((height, index) => (
                             <i key={index} style={{ height: Math.round(3 + height * 21) + "px" }} />
@@ -4031,10 +4084,10 @@ function Dashboard() {
                       )}
                     </div>
                     <div className="aichat-composer-sendrow-spacer" />
-                    {!draft.trim() && (
+                    {!voiceInputActive && !voiceRecordingPending && !draft.trim() && !selectedFiles.length && (
                       <button
                         type="button"
-                        className={`aichat-composer-voice-btn${voiceInputActive ? " is-listening" : ""}`}
+                        className="aichat-composer-voice-btn"
                         disabled={isSending || isGeneratingMedia}
                         onClick={() => void handleVoiceInput()}
                         title={voiceInputActive ? "Stop voice input" : "Voice input"}
@@ -4050,23 +4103,27 @@ function Dashboard() {
 
                     <button
                       type="button"
-                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
+                      disabled={isSending || isGeneratingMedia || voiceRecordingPending}
+                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !voiceInputActive && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia || voiceRecordingPending ? " is-thinking" : ""}`}
                       onClick={() => {
                         if (isSending || isGeneratingMedia) {
                           stopMisma();
+                        } else if (voiceInputActive) {
+                          void handleVoiceInput();
                         } else if (draft.trim() || selectedFiles.length || createMode) {
-                          if (voiceInputActive) handleVoiceInput();
                           if (createMode) void handleCreateMedia();
                           else void handleSend();
                         } else {
-                          handleVoiceInput();
+                          void handleVoiceInput();
                         }
                       }}
-                      title={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
-                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
+                      title={isSending || isGeneratingMedia ? "Stop Misma" : voiceRecordingPending ? "Preparing voice note…" : voiceInputActive ? "Stop recording" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice note"}
+                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : voiceRecordingPending ? "Preparing voice note" : voiceInputActive ? "Stop recording" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice note"}
                     >
-                      {isSending || isGeneratingMedia ? (
+                      {isSending || isGeneratingMedia || voiceInputActive ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
+                      ) : voiceRecordingPending ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" fill="none" /><path d="M12 7v5l3 2" /></svg>
                       ) : draft.trim() || selectedFiles.length || createMode ? (
                         createMode ? <span aria-hidden="true">✦</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
                       ) : voiceInputActive ? (
@@ -4745,7 +4802,7 @@ function Dashboard() {
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
                 <SettingsToggle title="Read new replies aloud" description="Automatically speak each new text answer using the selected device voice." checked={autoSpeakReplies} onToggle={() => setAutoSpeakReplies((current) => !current)} />
-                <p className="aichat-settings-hint">Voice dictation uses your browser's speech recognition and inserts a transcript into the message box. Misma does not upload microphone audio as a recording.</p>
+                <p className="aichat-settings-hint">The chat microphone records a voice note. Stop recording to review and play it, then press Send to submit the audio to Misma. The recording is attached to the conversation and transcribed so Misma can respond. The separate Settings microphone test remains local-only.</p>
               </section>
 
               <section id="settings-privacy" className="aichat-card aichat-settings-card">
@@ -4755,8 +4812,8 @@ function Dashboard() {
                 </div>
                 <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
                 <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
-                <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Live input is analysed locally for the level meter only. Misma does not record or upload microphone audio.</span></div>
-                <div className="aichat-settings-info-row"><strong>Voice dictation</strong><span>When you use dictation, the browser speech-recognition feature converts speech to text and inserts only the transcript into your draft.</span></div>
+                <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Settings microphone testing is analysed locally and is never recorded or uploaded.</span></div>
+                <div className="aichat-settings-info-row"><strong>Chat voice notes</strong><span>Chat recordings are prepared as audio attachments after you stop recording. The audio is submitted to Misma only when you press Send, and remains playable in the conversation.</span></div>
               </section>
 
               <section id="settings-history" className="aichat-card aichat-settings-card">
