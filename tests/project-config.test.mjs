@@ -155,7 +155,8 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(styles, /\.aichat-message-row\.is-ai > \.aichat-msg-avatar\.ai/);
   assert.match(styles, /transition:\s*height\s*\.16s ease/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>/);
+  assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
 });
@@ -392,7 +393,8 @@ test("browser-native dictation and hands-free voice mode send text only", async 
 
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>/);
+  assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(dashboard, /return typeof res\.aiMessage\.text === "string" \? res\.aiMessage\.text : ""/);
   assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
