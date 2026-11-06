@@ -3592,7 +3592,7 @@ function Dashboard() {
                       ))}
                     </div>
                   )}
-                  <div className={"aichat-composer-input-row" + (voiceBarActive ? " is-voice-recording" : "")}>
+                  <div className={`aichat-composer-input-row${voiceBarActive ? " is-voice-recording" : ""}`}>
                     {!voiceBarActive && (
                       <>
                         {createMode ? (
