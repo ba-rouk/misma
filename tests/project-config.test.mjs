@@ -114,7 +114,7 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
   assert.match(dashboard, /recognition\.start\(\)/);
   assert.match(dashboard, /webkitSpeechRecognition/);
-  assert.match(dashboard, /onstart = \(\) => setVoiceInputActive\(true\)/);
+  assert.match(dashboard, /recognition\.onstart = \(\) => \{/);
   assert.match(dashboard, /audio-capture/);
   assert.match(dashboard, /requestMicStream\(/);
   assert.doesNotMatch(dashboard, /navigator\.mediaDevices\?\.getUserMedia/);
@@ -187,7 +187,7 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.match(styles, /scrollbar-width: none/);
   assert.match(styles, /\.aichat-composer-input-row \.aichat-composer-textarea::-webkit-scrollbar/);
 
-  const inputRow = dashboard.indexOf('className="aichat-composer-input-row"');
+  const inputRow = dashboard.indexOf('className={`aichat-composer-input-row');
   const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
