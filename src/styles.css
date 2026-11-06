@@ -7142,3 +7142,13 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .aichat-composer-voice-wave-bars i { transition: none; }
 }
+
+
+/* Claude-style composer voice action placement and dictation waveform. */
+.aichat-composer-card-tools { position: relative; padding-bottom: 58px; }
+.aichat-composer-card-tools .aichat-composer-input-row { position: static; }
+.aichat-composer-card-tools .aichat-composer-input-row .aichat-composer-textarea { padding-right: 4px; }
+.aichat-composer-card-tools:has(.misma-voice-mode-trigger) .aichat-composer-send-btn,
+.aichat-composer-card-tools:has(.misma-voice-trigger.is-recording) .aichat-composer-send-btn { display: none !important; }
+.aichat-composer-card-tools:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
+.aichat-composer-card-tools .aichat-composer-sendrow { min-height: 44px; }
