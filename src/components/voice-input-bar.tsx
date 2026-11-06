@@ -279,7 +279,7 @@ export function VoiceInputBar({
         </div>
         {voiceMode === "push-to-talk" && <button type="button" className="misma-voice-overlay-btn misma-push-to-talk"
           disabled={muted || voiceState === "thinking" || voiceState === "speaking"}
-          onPointerDown={(event) => { event.preventDefault(); voiceRef.current?.pushToTalkStart(); }}
+          onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); voiceRef.current?.pushToTalkStart(); }}
           onPointerUp={() => voiceRef.current?.pushToTalkStop()}
           onPointerCancel={() => voiceRef.current?.pushToTalkStop()}
           onLostPointerCapture={() => voiceRef.current?.pushToTalkStop()}
