@@ -1022,6 +1022,7 @@ function Dashboard() {
   const composerMicrophoneStreamRef = useRef<MediaStream | null>(null);
   const voiceRecognitionWantedRef = useRef(false);
   const voiceInputBaseDraftRef = useRef("");
+  const voiceInputManualEditRef = useRef(false);
   const voiceAudioContextRef = useRef<AudioContext | null>(null);
   const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
   const voiceProcessedTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -1801,6 +1802,7 @@ function Dashboard() {
     };
     recognition.onresult = (event: any) => {
       voiceInputReceivedResultRef.current = true;
+      if (voiceInputManualEditRef.current) return;
       const transcript = Array.from(event.results as ArrayLike<any>)
         .map((result: any) => String(result?.[0]?.transcript || "").trim())
         .filter(Boolean)
@@ -1883,14 +1885,23 @@ function Dashboard() {
     }
   };
 
+  const stopVoiceDictation = (ignoreLateResults = false) => {
+    voiceRecognitionWantedRef.current = false;
+    if (ignoreLateResults) voiceInputManualEditRef.current = true;
+    const recognition = speechRecognitionRef.current;
+    if (recognition) {
+      try { recognition.stop?.(); } catch { /* Recognition may already be stopped. */ }
+    } else {
+      stopComposerMicrophoneStream();
+    }
+    setVoiceInputActive(false);
+  };
+
   const handleVoiceInput = async () => {
     if (microphonePermissionRequestRef.current) return;
 
     if (voiceInputActive || voiceRecognitionWantedRef.current) {
-      voiceRecognitionWantedRef.current = false;
-      try { speechRecognitionRef.current?.stop?.(); } catch { /* Recognition may already be stopped. */ }
-      setVoiceInputActive(false);
-      if (!speechRecognitionRef.current) stopComposerMicrophoneStream();
+      stopVoiceDictation();
       return;
     }
 
@@ -1908,6 +1919,7 @@ function Dashboard() {
     voiceInputHasAudioRef.current = false;
     voiceInputReceivedResultRef.current = false;
     voiceInputFallbackAttemptedRef.current = false;
+    voiceInputManualEditRef.current = false;
     setChatError("");
     setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
     microphonePermissionRequestRef.current = true;
@@ -2494,6 +2506,7 @@ function Dashboard() {
   ) => {
     let textToSend = (customPrompt ?? draft).trim();
     if ((!textToSend && !selectedFiles.length) || isSending || !token) return;
+    if (voiceInputActive || voiceRecognitionWantedRef.current) stopVoiceDictation(true);
     if (!textToSend) textToSend = "Please inspect the attached files and explain the important details.";
 
     const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
@@ -2649,6 +2662,7 @@ function Dashboard() {
   ) => {
     const mode = requestedMode ?? retrySaved?.mode ?? createMode;
     if (!mode || !token || isSending || isGeneratingMedia) return;
+    if (voiceInputActive || voiceRecognitionWantedRef.current) stopVoiceDictation(true);
     const typedPrompt = promptOverride?.trim() || draft.trim();
     const activeSavedRetry = retrySaved ?? (
       failedMediaRetry && failedMediaRetry.mode === mode && failedMediaRetry.prompt === typedPrompt
@@ -3946,6 +3960,7 @@ function Dashboard() {
                       placeholder={composerFocused ? "" : selectedFiles.length ? "Add a message about the attached file…" : createMode ? `Describe the ${createMode} you want Agnes to create…` : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
                       value={draft}
                       onChange={(e) => {
+                        if (voiceInputActive || voiceRecognitionWantedRef.current) stopVoiceDictation(true);
                         const nextValue = e.target.value;
                         const createMatch = nextValue.match(/^@create\s+(image|video)(?=\s|$)\s*/i);
                         if (createMatch) {
@@ -3976,7 +3991,6 @@ function Dashboard() {
                       onBlur={() => setComposerFocused(false)}
                       disabled={isSending}
                       aria-label="Message Misma"
-                      readOnly={voiceInputActive}
                     />
                     {voiceInputActive && (
                       <div className="aichat-composer-voice-wave" role="status" aria-live="polite" aria-label="Listening in English. Speak normally.">
@@ -4031,49 +4045,46 @@ function Dashboard() {
                       )}
                     </div>
                     <div className="aichat-composer-sendrow-spacer" />
-                    <button
-                      type="button"
-                      className={`aichat-composer-voice-btn${voiceInputActive ? " is-listening" : ""}`}
-                      disabled={isSending || isGeneratingMedia}
-                      onClick={() => void handleVoiceInput()}
-                      title={voiceInputActive ? "Stop voice input" : "Voice input"}
-                      aria-label={voiceInputActive ? "Stop voice input" : "Start voice input"}
-                    >
-                      {voiceInputActive ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
-                      )}
-                    </button>
+                    {!draft.trim() && !selectedFiles.length && !createMode && !isSending && !isGeneratingMedia && (
+                      <button
+                        type="button"
+                        className={`aichat-composer-voice-btn${voiceInputActive ? " is-listening" : ""}`}
+                        onClick={() => void handleVoiceInput()}
+                        title={voiceInputActive ? "Stop voice input" : "Voice input"}
+                        aria-label={voiceInputActive ? "Stop voice input" : "Start voice input"}
+                      >
+                        {voiceInputActive ? (
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+                        )}
+                      </button>
+                    )}
 
-                    <button
-                      type="button"
-                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
-                      onClick={() => {
-                        if (isSending || isGeneratingMedia) {
-                          stopMisma();
-                        } else if (voiceInputActive) {
-                          handleVoiceInput();
-                        } else if (draft.trim() || selectedFiles.length || createMode) {
-                          if (createMode) void handleCreateMedia();
-                          else void handleSend();
-                        } else {
-                          handleVoiceInput();
-                        }
-                      }}
-                      title={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
-                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice chat"}
-                    >
-                      {isSending || isGeneratingMedia ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : draft.trim() || selectedFiles.length || createMode ? (
-                        createMode ? <span aria-hidden="true">✦</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
-                      ) : voiceInputActive ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 10v4M22 11v2" /></svg>
-                      )}
-                    </button>
+                    {(draft.trim() || selectedFiles.length || createMode || isSending || isGeneratingMedia) && (
+                      <button
+                        type="button"
+                        className={`aichat-composer-send-btn${(draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia ? " is-thinking" : ""}`}
+                        onClick={() => {
+                          if (isSending || isGeneratingMedia) {
+                            stopMisma();
+                          } else if (draft.trim() || selectedFiles.length || createMode) {
+                            if (createMode) void handleCreateMedia();
+                            else void handleSend();
+                          }
+                        }}
+                        title={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? `Create ${createMode} with Agnes` : "Send message"}
+                        aria-label={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? `Create ${createMode} with Agnes` : "Send message"}
+                      >
+                        {isSending || isGeneratingMedia ? (
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
+                        ) : createMode ? (
+                          <span aria-hidden="true">✦</span>
+                        ) : (
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
+                        )}
+                      </button>
+                    )}
                   </div>
                   <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
