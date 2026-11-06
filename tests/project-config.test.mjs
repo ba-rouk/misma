@@ -114,7 +114,7 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onPhaseChange=\{\(phase\) => setVoiceBarActive/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend\(transcript, \{ signal \}\)\}/);
   assert.match(microphone, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
@@ -154,7 +154,7 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(styles, /\.aichat-message-row\.is-ai > \.aichat-msg-avatar\.ai/);
   assert.match(styles, /transition:\s*height\s*\.16s ease/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{async \(transcript\) => \{/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
 });
@@ -383,39 +383,34 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(docs, /allow="microphone"/);
 });
 
-test("composer records Claude-style voice input, transcribes on Stop, and sends transcript on Send", async () => {
+test("browser-native dictation and hands-free voice mode send text only", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
-  const recorder = await read("../src/hooks/use-voice-recorder.ts");
+  const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
   const styles = await read("../src/components/voice-input.css");
-  const api = await read("../src/routes/api.transcribe.ts");
-  const edge = await read("../supabase/functions/misma-transcribe/index.ts");
 
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /await handleSend\(transcript\)/);
-  assert.match(dashboard, /onTranscript=\{\(transcript\)/);
-  assert.match(recorder, /new MediaRecorder\(stream/);
-  assert.match(recorder, /audio\/mp4/);
-  assert.match(recorder, /createAnalyser\(\)/);
-  assert.match(recorder, /requestAnimationFrame/);
-  assert.match(recorder, /cancelAnimationFrame/);
-  assert.match(recorder, /capture\.durationMs < 500/);
-  assert.match(recorder, /fetch\("\/api\/transcribe"/);
-  assert.match(recorder, /callbacksRef\.current\.onSend\(transcript\)/);
-  assert.match(recorder, /getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
-  assert.match(component, /waveform\.map/);
-  assert.match(component, /misma-voice-recording-pill/);
-  assert.match(component, /aria-label="Cancel voice recording"/);
-  assert.match(component, /aria-label="Stop recording and insert transcript"/);
-  assert.match(component, /aria-label="Transcribe and send voice input"/);
-  assert.match(styles, /\.misma-voice-recording-pill/);
-  assert.match(styles, /background: #d97757/i);
-  assert.match(api, /createFileRoute\("\/api\/transcribe"\)/);
-  assert.match(api, /functions\/v1\/misma-transcribe/);
-  assert.match(edge, /GROQ_API_KEY/);
-  assert.match(edge, /whisper-large-v3-turbo/);
-  assert.match(edge, /auth\.getUser/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend\(transcript, \{ signal \}\)\}/);
+  assert.match(dashboard, /return typeof res\.aiMessage\.text === "string" \? res\.aiMessage\.text : ""/);
+  assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
+  assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
+  assert.match(voice, /current\.interimResults = true/);
+  assert.match(voice, /current\.continuous = false/);
+  assert.match(voice, /silentRuns < 3/);
+  assert.match(voice, /navigator\.mediaDevices\.getUserMedia\(\{ audio: true \}\)/);
+  assert.match(voice, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
+  assert.match(voice, /createVoiceMode/);
+  assert.match(voice, /new SpeechSynthesisUtterance/);
+  assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
+  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
+  assert.match(component, /aria-label=\{isDictating \? "Stop voice dictation" : "Start voice dictation"\}/);
+  assert.match(component, /aria-label="Start hands-free voice conversation"/);
+  assert.match(component, /aria-label="Interrupt Misma and listen"/);
+  assert.match(component, /"Mute"/);
+  assert.match(component, /"End"/);
+  assert.match(styles, /\.misma-voice-overlay/);
+  assert.match(styles, /\.misma-voice-orb\[data-state="speaking"\]/);
 });
 
 test("dashboard restores the last visited section and selected conversation after refresh", async () => {
@@ -465,10 +460,12 @@ test("dashboard chat scrolls in a full-width pane with the scrollbar at the far 
 });
 
 
-test("voice input is implemented in its dedicated recorder and protected transcription function", async () => {
-  const recorder = await read("../src/hooks/use-voice-recorder.ts");
-  const edge = await read("../supabase/functions/misma-transcribe/index.ts");
-  assert.ok(recorder.includes("new MediaRecorder(stream"));
-  assert.ok(recorder.includes('fetch("/api/transcribe"'));
-  assert.ok(edge.includes("GROQ_API_KEY"));
+test("voice integration has no audio recording or transcription endpoint", async () => {
+  const voice = await read("../src/lib/misma-voice.ts");
+  const component = await read("../src/components/voice-input-bar.tsx");
+  assert.ok(voice.includes("createDictation"));
+  assert.ok(voice.includes("createVoiceMode"));
+  assert.ok(component.includes("VoiceInputBar"));
+  await assert.rejects(read("../src/routes/api.transcribe.ts"));
+  await assert.rejects(read("../supabase/functions/misma-transcribe/index.ts"));
 });
