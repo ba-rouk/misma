@@ -114,7 +114,7 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
   assert.match(dashboard, /recognition\.start\(\)/);
   assert.match(dashboard, /webkitSpeechRecognition/);
-  assert.match(dashboard, /onstart = \(\) => setVoiceInputActive\(true\)/);
+  assert.match(dashboard, /recognition\.onstart = \(\) => \{/);
   assert.match(dashboard, /audio-capture/);
   assert.match(dashboard, /requestMicStream\(/);
   assert.doesNotMatch(dashboard, /navigator\.mediaDevices\?\.getUserMedia/);
@@ -122,6 +122,10 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
   assert.match(dashboard, /recognition\.start\(audioTrack\)/);
+  assert.match(dashboard, /voiceInputHasAudioRef/);
+  assert.match(dashboard, /voiceInputFallbackAttemptedRef/);
+  assert.match(dashboard, /startVoiceRecognition\(\);\s*\}, 140\)/);
+  assert.match(dashboard, /Math\.min\(1, rms \* 30\)/);
   assert.match(dashboard, /stopComposerMicrophoneStream/);
   assert.match(dashboard, /composerMicrophoneMountedRef\.current = false/);
   assert.match(dashboard, /stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
@@ -187,7 +191,7 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.match(styles, /scrollbar-width: none/);
   assert.match(styles, /\.aichat-composer-input-row \.aichat-composer-textarea::-webkit-scrollbar/);
 
-  const inputRow = dashboard.indexOf('className="aichat-composer-input-row"');
+  const inputRow = dashboard.indexOf('className={`aichat-composer-input-row');
   const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
@@ -389,6 +393,27 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.doesNotMatch(securityHeaders, /microphone=\(\)/);
   assert.match(docs, /Permissions-Policy: microphone=\(self\)/);
   assert.match(docs, /allow="microphone"/);
+});
+
+test("composer dictation is English-only, continuous, gain-assisted, and renders a live waveform", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /recognition\.lang = "en-US"/);
+  assert.match(dashboard, /recognition\.continuous = true/);
+  assert.match(dashboard, /recognition\.interimResults = true/);
+  assert.match(dashboard, /autoGainControl: true/);
+  assert.match(dashboard, /channelCount: \{ ideal: 1 \}/);
+  assert.match(dashboard, /inputGain\.gain\.value = 3\.2/);
+  assert.match(dashboard, /createDynamicsCompressor\(\)/);
+  assert.match(dashboard, /createMediaStreamDestination\(\)/);
+  assert.match(dashboard, /recognition\.start\(audioTrack\)/);
+  assert.match(dashboard, /voiceInputBaseDraftRef/);
+  assert.match(dashboard, /voiceInputWaveform\.map/);
+  assert.match(dashboard, /aichat-composer-voice-wave-bars/);
+  assert.match(styles, /\.aichat-composer-input-row\.is-listening/);
+  assert.match(styles, /\.aichat-composer-voice-wave-bars i/);
+  assert.match(styles, /prefers-reduced-motion: reduce/);
 });
 
 test("dashboard restores the last visited section and selected conversation after refresh", async () => {

@@ -55,3 +55,10 @@ The microphone stream is held by `src/lib/use-microphone.ts`. It is used only to
 - **Safari on iPhone/iPad:** Settings → Apps → Safari → Microphone, allow access, then return to Safari and reload the page. The browser may also require a fresh user tap before opening the microphone.
 
 Browser and operating-system menu names can vary by version and device.
+
+
+## Composer English dictation
+
+The dashboard message-bar microphone uses the browser's Web Speech recognition service. It is fixed to English (United States), accepts continuous speech, and places interim and final recognized words into the editable message field. The live waveform is calculated from the microphone signal locally through Web Audio; a high-pass filter, automatic gain control, modest software gain, and a dynamics compressor help make quieter speech easier to recognize. The processed audio is passed directly to the browser speech-recognition API and is not played through the speakers.
+
+Misma does not create or store an audio recording. Browser speech recognition is not universally available and may use a remote recognition service; for example, Chrome can send speech audio to its browser speech service for transcription. Only the resulting editable text is sent to Misma when the user presses **Send**. Browser/network availability and the selected microphone still affect recognition quality.
