@@ -61,7 +61,6 @@ export function VoiceInputBar({
   const dictationRef = useRef<DictationController | null>(null);
   const voiceRef = useRef<VoiceController | null>(null);
   const overlayOpenRef = useRef(false);
-  const dictationStartTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handleOffline = () => {
@@ -105,6 +104,7 @@ export function VoiceInputBar({
         setDictationRequesting(false);
         setDictationState("idle");
         setWaveform(QUIET);
+        callbacksRef.current.onTranscript(baseDraftRef.current);
         callbacksRef.current.onError(ERRORS[code] || "Voice input stopped. Please try again.");
       },
     });
@@ -133,7 +133,6 @@ export function VoiceInputBar({
     return () => {
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
-      if (dictationStartTimerRef.current !== null) window.clearTimeout(dictationStartTimerRef.current);
       dictation.cancel();
       voice.stop();
       dictationRef.current = null;
@@ -153,25 +152,12 @@ export function VoiceInputBar({
     if (!voiceSupport.stt) { callbacksRef.current.onError(ERRORS.unsupported); return; }
     baseDraftRef.current = inputValueRef.current.trim();
     setDictationRequesting(true);
-    dictationStartTimerRef.current = window.setTimeout(() => {
-      if (dictationRef.current?.active && dictationState !== "listening") {
-        dictation.cancel();
-        setDictationRequesting(false);
-        setDictationState("idle");
-        setWaveform(QUIET);
-        callbacksRef.current.onError(ERRORS["start-timeout"]);
-      }
-    }, 8000);
     await dictation.start();
-    if (dictationStartTimerRef.current !== null) window.clearTimeout(dictationStartTimerRef.current);
-    dictationStartTimerRef.current = null;
     if (!dictation.active) setDictationRequesting(false);
   };
 
   const cancelDictation = () => {
     dictationRef.current?.cancel();
-    if (dictationStartTimerRef.current !== null) window.clearTimeout(dictationStartTimerRef.current);
-    dictationStartTimerRef.current = null;
     setDictationState("idle");
     setDictationRequesting(false);
     setWaveform(QUIET);
