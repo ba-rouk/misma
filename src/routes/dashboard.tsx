@@ -2146,8 +2146,6 @@ function Dashboard() {
 
   const handleSend = async (
     customPrompt?: string,
-    opt  const handleSend = async (
-    customPrompt?: string,
     options: { retry?: boolean; signal?: AbortSignal } = {},
   ): Promise<string | null> => {
     let textToSend = (customPrompt ?? draft).trim();
