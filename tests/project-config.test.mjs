@@ -184,7 +184,7 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
   assert.match(dashboard, /draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode/);
-  assert.match(voiceComponent, /aria-label="Start voice input"/);
+  assert.match(voiceComponent, /Start voice dictation/);
 });
 
 
@@ -406,7 +406,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
   assert.match(component, /aria-label=\{isDictating \? "Stop voice dictation" : "Start voice dictation"\}/);
   assert.match(component, /aria-label="Start hands-free voice conversation"/);
-  assert.match(component, /aria-label="Interrupt Misma and listen"/);
+  assert.match(component, /Interrupt Misma and listen/);
   assert.match(component, /"Mute"/);
   assert.match(component, /"End"/);
   assert.match(styles, /\.misma-voice-overlay/);
