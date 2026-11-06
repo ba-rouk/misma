@@ -1948,7 +1948,7 @@ function Dashboard() {
         sampleRate: { ideal: 48000 },
       });
 
-      if (!composerMicrophoneMountedRef.current) {
+      if (!composerMicrophoneMountedRef.current || !voiceRecognitionWantedRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         if (pendingAudioContext && pendingAudioContext.state !== "closed") void pendingAudioContext.close().catch(() => undefined);
         return;
