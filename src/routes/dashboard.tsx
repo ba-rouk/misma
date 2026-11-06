@@ -4031,20 +4031,22 @@ function Dashboard() {
                       )}
                     </div>
                     <div className="aichat-composer-sendrow-spacer" />
-                    <button
-                      type="button"
-                      className={`aichat-composer-voice-btn${voiceInputActive ? " is-listening" : ""}`}
-                      disabled={isSending || isGeneratingMedia}
-                      onClick={() => void handleVoiceInput()}
-                      title={voiceInputActive ? "Stop voice input" : "Voice input"}
-                      aria-label={voiceInputActive ? "Stop voice input" : "Start voice input"}
-                    >
-                      {voiceInputActive ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
-                      )}
-                    </button>
+                    {!draft.trim() && (
+                      <button
+                        type="button"
+                        className={`aichat-composer-voice-btn${voiceInputActive ? " is-listening" : ""}`}
+                        disabled={isSending || isGeneratingMedia}
+                        onClick={() => void handleVoiceInput()}
+                        title={voiceInputActive ? "Stop voice input" : "Voice input"}
+                        aria-label={voiceInputActive ? "Stop voice input" : "Start voice input"}
+                      >
+                        {voiceInputActive ? (
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
+                        )}
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -4052,9 +4054,8 @@ function Dashboard() {
                       onClick={() => {
                         if (isSending || isGeneratingMedia) {
                           stopMisma();
-                        } else if (voiceInputActive) {
-                          handleVoiceInput();
                         } else if (draft.trim() || selectedFiles.length || createMode) {
+                          if (voiceInputActive) handleVoiceInput();
                           if (createMode) void handleCreateMedia();
                           else void handleSend();
                         } else {
