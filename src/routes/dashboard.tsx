@@ -3651,12 +3651,16 @@ function Dashboard() {
                       inputValue={draft}
                       hasAttachments={selectedFiles.length > 0}
                       hasCreateMode={Boolean(createMode)}
+                      busy={isSending || isGeneratingMedia}
+                      hasCreateMode={Boolean(createMode)}
                       disabled={isSending || isGeneratingMedia}
                       onTranscript={(transcript) => {
                         setDraft(transcript);
                         setChatError("");
                       }}
                       onDictationDone={() => textareaRef.current?.focus()}
+                      onAction={() => { if (createMode) void handleCreateMedia(); else void handleSend(); }}
+                      onStop={stopMisma}
                       onSend={(transcript, signal, voice) => handleSend(transcript, { signal, voice })}
                       onError={(message) => setChatError(message)}
                     />
