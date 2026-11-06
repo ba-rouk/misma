@@ -120,9 +120,11 @@ export function VoiceInputBar({
       },
       onDone: (transcript) => {
         const nextValue = appendTranscript(baseDraftRef.current, transcript);
-        writeNativeInputValue(nextValue);
         callbacksRef.current.onTranscript(nextValue);
-        callbacksRef.current.onDictationDone?.();
+        window.requestAnimationFrame(() => {
+          writeNativeInputValue(nextValue);
+          callbacksRef.current.onDictationDone?.();
+        });
 
         if (AUTO_SEND_ON_DICTATION && nextValue.trim()) {
           void callbacksRef.current.onSend(nextValue, new AbortController().signal, { voice: false });
@@ -135,9 +137,11 @@ export function VoiceInputBar({
       onAmplitude: (level) => setWaveLevel(level),
       onError: (code) => {
         const base = baseDraftRef.current;
-        writeNativeInputValue(base);
         callbacksRef.current.onTranscript(base);
-        callbacksRef.current.onDictationDone?.();
+        window.requestAnimationFrame(() => {
+          writeNativeInputValue(base);
+          callbacksRef.current.onDictationDone?.();
+        });
         showToastRef.current(ERROR_MESSAGES[code] || ERROR_MESSAGES.recognition);
       },
     });
@@ -183,7 +187,10 @@ export function VoiceInputBar({
       const base = baseDraftRef.current;
       dictationRef.current?.cancel();
       callbacksRef.current.onTranscript(base);
-      callbacksRef.current.onDictationDone?.();
+      window.requestAnimationFrame(() => {
+        writeNativeInputValue(base);
+        callbacksRef.current.onDictationDone?.();
+      });
       voiceRef.current?.stop();
       overlayOpenRef.current = false;
       setVoiceOverlayOpen(false);
@@ -207,11 +214,13 @@ export function VoiceInputBar({
   const cancelDictation = () => {
     dictationRef.current?.cancel();
     const base = baseDraftRef.current;
-    writeNativeInputValue(base);
     callbacksRef.current.onTranscript(base);
-    callbacksRef.current.onDictationDone?.();
     setDictationState("idle");
     setWaveLevel(0);
+    window.requestAnimationFrame(() => {
+      writeNativeInputValue(base);
+      callbacksRef.current.onDictationDone?.();
+    });
   };
 
   const toggleDictation = async () => {
@@ -252,6 +261,7 @@ export function VoiceInputBar({
     }
 
     dictationRef.current?.cancel();
+    callbacksRef.current.onTranscript(baseDraftRef.current);
     setDictationState("idle");
     setWaveLevel(0);
     overlayOpenRef.current = true;
