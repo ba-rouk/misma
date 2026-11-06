@@ -80,7 +80,7 @@ export function VoiceInputBar({
   const overlayOpenRef = useRef(false);
 
   useEffect(() => {
-    const offlineHandler = () => { setOffline(true); callbacksRef.current.onError(ERROR_MESSAGES.offline); };
+    const offlineHandler = () => { setOffline(true); dictationRef.current?.cancel(); voiceRef.current?.stop(); callbacksRef.current.onError(ERROR_MESSAGES.offline); };
     const onlineHandler = () => setOffline(false);
     window.addEventListener("offline", offlineHandler);
     window.addEventListener("online", onlineHandler);
@@ -313,10 +313,12 @@ export function VoiceInputBar({
 
         {!isDictating && !inputValue.trim() && !hasAttachments && !hasCreateMode && !overlayVisible && <button
           type="button"
-          className="misma-voice-mode-trigger"
+          className={"misma-voice-mode-trigger" + (inputValue.trim() || hasAttachments || hasCreateMode || busy ? " is-hidden" : "")}
+          aria-hidden={Boolean(inputValue.trim() || hasAttachments || hasCreateMode || busy)}
+          tabIndex={inputValue.trim() || hasAttachments || hasCreateMode || busy ? -1 : 0}
           aria-label="Start hands-free voice conversation"
           title="Voice mode"
-          disabled={disabled || offline}
+          disabled={disabled || offline || Boolean(inputValue.trim() || hasAttachments || hasCreateMode || busy)}
           onClick={() => void openVoiceMode()}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
