@@ -122,6 +122,10 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
   assert.match(dashboard, /recognition\.start\(audioTrack\)/);
+  assert.match(dashboard, /voiceInputHasAudioRef/);
+  assert.match(dashboard, /voiceInputFallbackAttemptedRef/);
+  assert.match(dashboard, /startVoiceRecognition\(\);\s*\}, 140\)/);
+  assert.match(dashboard, /Math\.min\(1, rms \* 30\)/);
   assert.match(dashboard, /stopComposerMicrophoneStream/);
   assert.match(dashboard, /composerMicrophoneMountedRef\.current = false/);
   assert.match(dashboard, /stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
@@ -400,7 +404,7 @@ test("composer dictation is English-only, continuous, gain-assisted, and renders
   assert.match(dashboard, /recognition\.interimResults = true/);
   assert.match(dashboard, /autoGainControl: true/);
   assert.match(dashboard, /channelCount: \{ ideal: 1 \}/);
-  assert.match(dashboard, /inputGain\.gain\.value = 2\.5/);
+  assert.match(dashboard, /inputGain\.gain\.value = 3\.2/);
   assert.match(dashboard, /createDynamicsCompressor\(\)/);
   assert.match(dashboard, /createMediaStreamDestination\(\)/);
   assert.match(dashboard, /recognition\.start\(audioTrack\)/);
