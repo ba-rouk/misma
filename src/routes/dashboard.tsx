@@ -2146,7 +2146,7 @@ function Dashboard() {
 
   const handleSend = async (
     customPrompt?: string,
-    options: { retry?: boolean; signal?: AbortSignal } = {},
+    options: { retry?: boolean; signal?: AbortSignal; voice?: boolean } = {},
   ): Promise<string | null> => {
     let textToSend = (customPrompt ?? draft).trim();
     if ((!textToSend && !selectedFiles.length) || isSending || !token || options.signal?.aborted) return null;
@@ -2225,6 +2225,7 @@ function Dashboard() {
         workspaceId: workspace?.id,
         attachments,
         thinkHarder,
+        ...(options.voice ? { voice: true } : {}),
         ...(editId ? { editMessageId: Number(editId) } : {}),
       }, requestController.signal);
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
@@ -3599,6 +3600,27 @@ function Dashboard() {
                     </div>
                   )}
                   <div className="aichat-composer-input-row">
+                    <VoiceInputBar
+                      inputValue={draft}
+                      hasContent={Boolean(draft.trim() || selectedFiles.length || createMode)}
+                      isBusy={isSending || isGeneratingMedia}
+                      disabled={isSending || isGeneratingMedia}
+                      primaryActionLabel={createMode ? "Create " + createMode + " with Agnes" : "Send message"}
+                      onPrimaryAction={() => {
+                        if (isSending || isGeneratingMedia) stopMisma();
+                        else if (createMode) void handleCreateMedia();
+                        else void handleSend();
+                      }}
+                      onTranscript={(transcript) => {
+                        setDraft(transcript);
+                        setChatError("");
+                      }}
+                      onDictationDone={() => textareaRef.current?.focus()}
+                      onSend={(transcript, signal, options) =>
+                        handleSend(transcript, { signal, voice: options?.voice === true })
+                      }
+                    >
+                      <>
                         {createMode ? (
                           <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                             @create {createMode}<span aria-hidden="true">×</span>
@@ -3646,17 +3668,8 @@ function Dashboard() {
                           disabled={isSending}
                           aria-label="Message Misma"
                         />
-                    <VoiceInputBar
-                      inputValue={draft}
-                      disabled={isSending || isGeneratingMedia}
-                      onTranscript={(transcript) => {
-                        setDraft(transcript);
-                        setChatError("");
-                      }}
-                      onDictationDone={() => textareaRef.current?.focus()}
-                      onSend={(transcript, signal) => handleSend(transcript, { signal })}
-                      onError={(message) => setChatError(message)}
-                    />
+                      </>
+                    </VoiceInputBar>
                   </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
@@ -3698,27 +3711,6 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <div className="aichat-composer-sendrow-spacer" />
-                    <button
-                      type="button"
-                      disabled={!isSending && !isGeneratingMedia && !draft.trim() && !selectedFiles.length && !createMode}
-                      className={"aichat-composer-send-btn" + ((draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : "") + (isSending || isGeneratingMedia ? " is-thinking" : "")}
-                      onClick={() => {
-                        if (isSending || isGeneratingMedia) stopMisma();
-                        else if (createMode) void handleCreateMedia();
-                        else void handleSend();
-                      }}
-                      title={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
-                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
-                    >
-                      {isSending || isGeneratingMedia ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : createMode ? (
-                        <span aria-hidden="true">✦</span>
-                      ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
-                      )}
-                    </button>
                   </div>
                   <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
