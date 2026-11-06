@@ -1599,7 +1599,7 @@ Deno.serve(async (request) => {
       return jsonResponse(503, { error: "PDF analysis requires OPENROUTER_API_KEY. Other supported text and code files can use the configured chat providers." });
     }
 
-    const systemPrompt =
+    let systemPrompt =
       "You are Misma, a capable, warm, natural conversational AI assistant for the signed-in business owner and their workspace. " +
       "Your job is to be genuinely useful, not to repeat a generic greeting or customer-service script. " +
 
