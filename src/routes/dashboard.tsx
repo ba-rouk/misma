@@ -2042,10 +2042,13 @@ function Dashboard() {
           const analyser = pendingAudioContext.createAnalyser();
           analyser.fftSize = 512;
           analyser.smoothingTimeConstant = 0.68;
+          const meterOutput = pendingAudioContext.createMediaStreamDestination();
+          voiceProcessedTrackRef.current = meterOutput.stream.getAudioTracks()[0] || null;
           source.connect(highPass);
           highPass.connect(inputGain);
           inputGain.connect(compressor);
           compressor.connect(analyser);
+          compressor.connect(meterOutput);
           startComposerVoiceMeter(analyser);
         } catch {
           voiceAnalyserRef.current = null;
