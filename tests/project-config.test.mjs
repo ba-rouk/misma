@@ -463,3 +463,9 @@ test("dashboard chat scrolls in a full-width pane with the scrollbar at the far 
   }
   assert.ok(styles.includes(".aichat-scroll-area::-webkit-scrollbar"));
 });
+
+
+test("voice note implementation is present", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.ok(dashboard.includes("startComposerVoiceRecording"));
+});
