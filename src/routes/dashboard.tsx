@@ -2146,7 +2146,7 @@ function Dashboard() {
 
   const handleSend = async (
     customPrompt?: string,
-    options: { retry?: boolean; signal?: AbortSignal } = {},
+    options: { retry?: boolean; signal?: AbortSignal; voice?: boolean } = {},
   ): Promise<string | null> => {
     let textToSend = (customPrompt ?? draft).trim();
     if ((!textToSend && !selectedFiles.length) || isSending || !token || options.signal?.aborted) return null;
@@ -2225,6 +2225,7 @@ function Dashboard() {
         workspaceId: workspace?.id,
         attachments,
         thinkHarder,
+        ...(options.voice ? { voice: true } : {}),
         ...(editId ? { editMessageId: Number(editId) } : {}),
       }, requestController.signal);
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
@@ -3648,13 +3649,14 @@ function Dashboard() {
                         />
                     <VoiceInputBar
                       inputValue={draft}
+                      hasAttachments={selectedFiles.length > 0}
                       disabled={isSending || isGeneratingMedia}
                       onTranscript={(transcript) => {
                         setDraft(transcript);
                         setChatError("");
                       }}
                       onDictationDone={() => textareaRef.current?.focus()}
-                      onSend={(transcript, signal) => handleSend(transcript, { signal })}
+                      onSend={(transcript, signal, voice) => handleSend(transcript, { signal, voice })}
                       onError={(message) => setChatError(message)}
                     />
                   </div>
