@@ -105,7 +105,8 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /setUploadingAttachments\(true\)/);
   assert.match(dashboard, /aichat-composer-sendrow/);
   assert.match(dashboard, /aichat-composer-input-row/);
-  assert.match(dashboard, /misma-voice-primary/);
+  const voiceComponent = await read("../src/components/voice-input-bar.tsx");
+  assert.match(voiceComponent, /misma-voice-primary/);
   assert.match(dashboard, /getLoginGreeting/);
   assert.equal(dashboard.includes("How many orders came in today?"), false);
   assert.equal(dashboard.includes("Show me recent conversations"), false);
