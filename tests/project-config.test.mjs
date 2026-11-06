@@ -114,7 +114,7 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend\(transcript, \{ signal \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
   assert.match(microphone, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
@@ -391,7 +391,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
 
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend\(transcript, \{ signal \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
   assert.match(dashboard, /return typeof res\.aiMessage\.text === "string" \? res\.aiMessage\.text : ""/);
   assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
@@ -401,11 +401,16 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /navigator\.mediaDevices\.getUserMedia\(\{ audio: true \}\)/);
   assert.match(voice, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
   assert.match(voice, /createVoiceMode/);
+  assert.match(voice, /send\(text, requestController\.signal, true\)/);
   assert.match(voice, /new SpeechSynthesisUtterance/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
   assert.match(component, /aria-label=\{isDictating \? "Stop voice dictation" : "Start voice dictation"\}/);
   assert.match(component, /aria-label="Start hands-free voice conversation"/);
+  assert.match(component, /AUTO_SEND_ON_DICTATION = false/);
+  assert.match(component, /misma-dictation-cancel/);
+  assert.match(component, /misma-dictation-finish/);
+  assert.match(component, /No internet connection/);
   assert.match(component, /Interrupt Misma and listen/);
   assert.match(component, /"Mute"/);
   assert.match(component, />\s*End\s*</);
