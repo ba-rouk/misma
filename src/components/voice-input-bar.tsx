@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  createDictation,
-  createVoiceMode,
-  voiceSupport,
-  type DictationState,
-  type VoiceModeState,
+  createDictation, createVoiceMode, voiceSupport,
+  type DictationState, type VoiceInputMode, type VoiceModeState,
 } from "../lib/misma-voice";
 import "./voice-input.css";
 
@@ -13,77 +10,74 @@ type VoiceInputBarProps = {
   hasAttachments?: boolean;
   hasCreateMode?: boolean;
   disabled?: boolean;
+  busy?: boolean;
   lang?: string;
   onTranscript: (text: string) => void;
   onDictationDone?: () => void;
+  onAction: () => void;
+  onStop: () => void;
   onSend: (text: string, signal: AbortSignal, voice: true) => Promise<string | null | undefined>;
   onError: (message: string) => void;
 };
-
 const AUTO_SEND_ON_DICTATION = false;
-
-const ERROR_MESSAGES: Record<string, string> = {
-  unsupported: "Voice needs Chrome, Edge or Safari over HTTPS.",
-  permission: "Microphone is blocked. Allow microphone access for Misma in your browser's site settings, then try again.",
-  "no-device": "No microphone was found. Check your device microphone and try again.",
-  "in-use": "The microphone is busy. Close other apps or tabs using it, then try again.",
-  network: "The browser speech service could not be reached. Check your connection.",
-  "audio-capture": "The microphone could not start. Check that it is connected and not in use.",
+const ERRORS: Record<string, string> = {
+  unsupported: "Voice input is not supported here. Try Chrome over HTTPS.",
+  permission: "Microphone access is blocked. Allow it for Misma in Chrome site settings, then try again.",
+  "permission-timeout": "Microphone permission took too long. Check the browser prompt and try again.",
+  "audio-capture": "The microphone could not start. Check it is connected and not in use by another app.",
+  network: "Speech recognition could not connect. Check your internet connection.",
+  "no-speech": "No speech was detected. Try speaking a little closer to your microphone.",
   "start-timeout": "Voice recognition did not start. Please try again.",
+  recognition: "Voice recognition stopped unexpectedly. Please try again.",
+  send: "Misma could not get a reply. Listening again.",
   offline: "No internet connection",
-  send: "Misma could not get a reply. Try again.",
 };
-
-const STATE_LABELS: Record<VoiceModeState, string> = {
-  listening: "Listening…",
-  thinking: "Thinking…",
-  speaking: "Speaking · tap the orb to interrupt",
-  muted: "Muted",
-  idle: "",
+const LABELS: Record<VoiceModeState, string> = {
+  listening: "Listening…", thinking: "Thinking…", speaking: "Speaking · tap the orb to interrupt",
+  muted: "Microphone muted", ready: "Hold the button to talk", idle: "",
 };
-
+const QUIET = Array.from({ length: 28 }, () => 0.035);
 type DictationController = ReturnType<typeof createDictation>;
-type VoiceModeController = ReturnType<typeof createVoiceMode>;
+type VoiceController = ReturnType<typeof createVoiceMode>;
 
 export function VoiceInputBar({
-  inputValue,
-  hasAttachments = false,
-  hasCreateMode = false,
-  disabled = false,
-  lang,
-  onTranscript,
-  onDictationDone,
-  onSend,
-  onError,
+  inputValue, hasAttachments = false, hasCreateMode = false, disabled = false, busy = false,
+  lang, onTranscript, onDictationDone, onAction, onStop, onSend, onError,
 }: VoiceInputBarProps) {
   const [dictationState, setDictationState] = useState<DictationState>("idle");
   const [dictationRequesting, setDictationRequesting] = useState(false);
-  const dictationStateRef = useRef<DictationState>("idle");
+  const [waveform, setWaveform] = useState<number[]>(QUIET);
   const [voiceState, setVoiceState] = useState<VoiceModeState>("idle");
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [voiceMode, setVoiceMode] = useState<VoiceInputMode>("hands-free");
   const [offline, setOffline] = useState(typeof navigator !== "undefined" && !navigator.onLine);
-  const [waveform, setWaveform] = useState<number[]>(Array.from({ length: 28 }, () => 0.03));
-  const meterStreamRef = useRef<MediaStream | null>(null);
-  const meterContextRef = useRef<AudioContext | null>(null);
-  const meterFrameRef = useRef<number>(0);
-  const startTimeoutRef = useRef<number | null>(null);
-
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
-  const callbacksRef = useRef({ onTranscript, onDictationDone, onSend, onError });
-  callbacksRef.current = { onTranscript, onDictationDone, onSend, onError };
+  const callbacksRef = useRef({ onTranscript, onDictationDone, onAction, onStop, onSend, onError });
+  callbacksRef.current = { onTranscript, onDictationDone, onAction, onStop, onSend, onError };
   const baseDraftRef = useRef("");
   const dictationRef = useRef<DictationController | null>(null);
-  const voiceRef = useRef<VoiceModeController | null>(null);
+  const voiceRef = useRef<VoiceController | null>(null);
   const overlayOpenRef = useRef(false);
+  const dictationStartTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const offlineHandler = () => { setOffline(true); dictationRef.current?.cancel(); voiceRef.current?.stop(); callbacksRef.current.onError(ERROR_MESSAGES.offline); };
-    const onlineHandler = () => setOffline(false);
-    window.addEventListener("offline", offlineHandler);
-    window.addEventListener("online", onlineHandler);
+    const handleOffline = () => {
+      setOffline(true);
+      dictationRef.current?.cancel();
+      voiceRef.current?.stop();
+      overlayOpenRef.current = false;
+      setVoiceOverlayOpen(false);
+      setDictationRequesting(false);
+      setDictationState("idle");
+      setWaveform(QUIET);
+      callbacksRef.current.onError(ERRORS.offline);
+    };
+    const handleOnline = () => setOffline(false);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
 
     const dictation = createDictation({
       lang,
@@ -91,146 +85,96 @@ export function VoiceInputBar({
         const base = baseDraftRef.current.trim();
         callbacksRef.current.onTranscript([base, transcript].filter(Boolean).join(base ? " " : ""));
       },
+      onWaveform: setWaveform,
       onDone: (transcript) => {
         const base = baseDraftRef.current.trim();
+        const value = [base, transcript].filter(Boolean).join(base ? " " : "");
         if (transcript) {
-          const value = [base, transcript].filter(Boolean).join(base ? " " : "");
           callbacksRef.current.onTranscript(value);
           const field = document.querySelector<HTMLTextAreaElement>(".aichat-composer-textarea");
           if (field) {
             field.value = value;
             field.dispatchEvent(new Event("input", { bubbles: true }));
           }
-          if (AUTO_SEND_ON_DICTATION) window.setTimeout(() => {
-            field?.form?.requestSubmit();
-          }, 0);
+          if (AUTO_SEND_ON_DICTATION) window.setTimeout(() => callbacksRef.current.onAction(), 0);
         }
         callbacksRef.current.onDictationDone?.();
-        setDictationRequesting(false);
-        stopMeter();
-        if (AUTO_SEND_ON_DICTATION && transcript) window.setTimeout(() => callbacksRef.current.onSend(transcript, new AbortController().signal, true), 0);
       },
-      onState: (state) => {
-        dictationStateRef.current = state;
-        setDictationState(state);
-        if (state === "idle") setDictationRequesting(false);
-      },
+      onState: (state) => setDictationState(state),
       onError: (code) => {
         setDictationRequesting(false);
-        stopMeter();
-        callbacksRef.current.onError(ERROR_MESSAGES[code] || "Voice input stopped. Please try again.");
+        setDictationState("idle");
+        setWaveform(QUIET);
+        callbacksRef.current.onError(ERRORS[code] || "Voice input stopped. Please try again.");
       },
     });
 
     const voice = createVoiceMode({
       lang,
-      send: (text, signal, voice) => callbacksRef.current.onSend(text, signal, voice),
+      send: (text, signal, voiceFlag) => callbacksRef.current.onSend(text, signal, voiceFlag),
       onState: (state) => {
         setVoiceState(state);
         if (state === "listening") setVoiceTranscript("");
       },
-      onUser: (text, isFinal) => setVoiceTranscript(text),
-      onReply: (reply) => setVoiceTranscript(reply),
+      onUser: (text) => setVoiceTranscript(text),
+      onReply: setVoiceTranscript,
       onError: (code) => {
-        callbacksRef.current.onError(ERROR_MESSAGES[code] || "Voice conversation stopped. Please try again.");
-        if (code === "permission" || code === "unsupported" || code === "network" || code === "audio-capture" || code === "start-timeout") {
+        callbacksRef.current.onError(ERRORS[code] || "Voice conversation stopped. Please try again.");
+        if (["permission", "unsupported", "network", "audio-capture", "no-speech", "start-timeout"].includes(code)) {
           voice.stop();
           overlayOpenRef.current = false;
           setVoiceOverlayOpen(false);
         }
       },
     });
-
     dictationRef.current = dictation;
     voiceRef.current = voice;
 
     return () => {
-      window.removeEventListener("offline", offlineHandler);
-      window.removeEventListener("online", onlineHandler);
-      stopMeter();
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+      if (dictationStartTimerRef.current !== null) window.clearTimeout(dictationStartTimerRef.current);
       dictation.cancel();
       voice.stop();
       dictationRef.current = null;
       voiceRef.current = null;
       overlayOpenRef.current = false;
-      setVoiceOverlayOpen(false);
     };
   }, [lang]);
 
-  const stopMeter = () => {
-    if (meterFrameRef.current) cancelAnimationFrame(meterFrameRef.current);
-    meterFrameRef.current = 0;
-    meterStreamRef.current?.getTracks().forEach((track) => track.stop());
-    meterStreamRef.current = null;
-    if (meterContextRef.current && meterContextRef.current.state !== "closed") void meterContextRef.current.close().catch(() => undefined);
-    meterContextRef.current = null;
-    setWaveform(Array.from({ length: 28 }, () => 0.03));
-  };
+  const dictating = dictationState === "listening" || dictationRequesting;
+  const hasContent = Boolean(inputValue.trim() || hasAttachments || hasCreateMode);
+  const overlayVisible = voiceOverlayOpen || voiceState !== "idle";
 
-  const startMeter = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!dictationRef.current?.active) { stream.getTracks().forEach((track) => track.stop()); return; }
-      meterStreamRef.current = stream;
-      const context = new AudioContext();
-      meterContextRef.current = context;
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.82;
-      context.createMediaStreamSource(stream).connect(analyser);
-      const tick = () => {
-        if (!meterContextRef.current) return;
-        const values = new Uint8Array(analyser.fftSize);
-        analyser.getByteTimeDomainData(values);
-        let energy = 0;
-        for (const value of values) { const sample = (value - 128) / 128; energy += sample * sample; }
-        const volume = Math.sqrt(energy / values.length);
-        setWaveform(Array.from({ length: 28 }, (_, index) => Math.max(0.03, Math.min(1, volume * 9 * (0.55 + 0.45 * Math.abs(Math.sin(index * 1.7 + performance.now() / 115)))))));
-        meterFrameRef.current = requestAnimationFrame(tick);
-      };
-      if (context.state === "suspended") await context.resume();
-      tick();
-    } catch {
-      callbacksRef.current.onError(ERROR_MESSAGES.permission);
-      dictationRef.current?.cancel();
-      stopMeter();
-    }
-  };
-
-  const toggleDictation = async () => {
+  const startDictation = async () => {
     const dictation = dictationRef.current;
-    if (!dictation || disabled || offline) return;
-    if (dictation.active) {
-      dictation.stop();
-      stopMeter();
-      return;
-    }
-    if (!voiceSupport.stt) {
-      callbacksRef.current.onError(ERROR_MESSAGES.unsupported);
-      return;
-    }
-
+    if (!dictation || disabled || offline || overlayOpenRef.current) return;
+    if (dictation.active) { dictation.stop(); return; }
+    if (!voiceSupport.stt) { callbacksRef.current.onError(ERRORS.unsupported); return; }
     baseDraftRef.current = inputValueRef.current.trim();
     setDictationRequesting(true);
-    startTimeoutRef.current = window.setTimeout(() => {
-      if (dictationRef.current?.active && dictationStateRef.current !== "listening") {
+    dictationStartTimerRef.current = window.setTimeout(() => {
+      if (dictationRef.current?.active && dictationState !== "listening") {
         dictation.cancel();
         setDictationRequesting(false);
-        stopMeter();
-        callbacksRef.current.onError(ERROR_MESSAGES["start-timeout"]);
+        setDictationState("idle");
+        setWaveform(QUIET);
+        callbacksRef.current.onError(ERRORS["start-timeout"]);
       }
     }, 8000);
     await dictation.start();
-    if (startTimeoutRef.current) window.clearTimeout(startTimeoutRef.current);
-    startTimeoutRef.current = null;
-    if (dictation.active) void startMeter();
+    if (dictationStartTimerRef.current !== null) window.clearTimeout(dictationStartTimerRef.current);
+    dictationStartTimerRef.current = null;
+    if (!dictation.active) setDictationRequesting(false);
   };
 
   const cancelDictation = () => {
     dictationRef.current?.cancel();
-    stopMeter();
+    if (dictationStartTimerRef.current !== null) window.clearTimeout(dictationStartTimerRef.current);
+    dictationStartTimerRef.current = null;
     setDictationState("idle");
     setDictationRequesting(false);
+    setWaveform(QUIET);
     callbacksRef.current.onTranscript(baseDraftRef.current);
     window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".aichat-composer-textarea")?.focus(), 0);
   };
@@ -242,19 +186,18 @@ export function VoiceInputBar({
     setVoiceState("idle");
     setVoiceTranscript("");
     setMuted(false);
+    setVoiceMode("hands-free");
   };
 
   const openVoiceMode = async () => {
     if (disabled || offline || overlayOpenRef.current) return;
-    if (!voiceSupport.stt) {
-      callbacksRef.current.onError(ERROR_MESSAGES.unsupported);
-      return;
-    }
-    dictationRef.current?.stop();
+    if (!voiceSupport.stt) { callbacksRef.current.onError(ERRORS.unsupported); return; }
+    dictationRef.current?.cancel();
     overlayOpenRef.current = true;
     setVoiceOverlayOpen(true);
     setVoiceTranscript("");
     setMuted(false);
+    setVoiceMode("hands-free");
     await voiceRef.current?.start();
     if (voiceRef.current?.state === "idle") {
       overlayOpenRef.current = false;
@@ -262,106 +205,88 @@ export function VoiceInputBar({
     }
   };
 
-  const toggleMuted = () => {
+  const toggleMute = () => {
     const next = !muted;
     setMuted(next);
     voiceRef.current?.setMuted(next);
   };
+  const chooseVoiceMode = (next: VoiceInputMode) => {
+    setVoiceMode(next);
+    voiceRef.current?.setMode(next);
+  };
 
   useEffect(() => {
-    if (!overlayOpenRef.current) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeVoiceMode();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [voiceOverlayOpen, voiceState]);
+    if (!overlayVisible) return;
+    const keyHandler = (event: KeyboardEvent) => { if (event.key === "Escape") closeVoiceMode(); };
+    window.addEventListener("keydown", keyHandler);
+    return () => window.removeEventListener("keydown", keyHandler);
+  }, [overlayVisible]);
 
-  const isDictating = dictationState === "listening" || dictationRequesting;
-  const overlayVisible = voiceOverlayOpen || voiceState !== "idle";
+  return <>
+    <div className="misma-voice-input">
+      <button type="button" className={"misma-voice-trigger" + (dictating ? " is-recording" : "")}
+        aria-label={dictating ? "Dictation is active" : "Start voice dictation"} aria-pressed={dictating}
+        title="Dictate message" disabled={disabled || offline || overlayVisible}
+        onClick={() => void startDictation()}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6"/></svg>
+      </button>
 
-  return (
-    <>
-      <div className="misma-voice-input">
-        <button
-          type="button"
-          className={"misma-voice-trigger" + (isDictating ? " is-recording" : "")}
-          aria-label={isDictating ? "Stop voice dictation" : "Start voice dictation"}
-          aria-pressed={isDictating}
-          title={isDictating ? "Stop dictation" : "Dictate message"}
-          disabled={disabled || offline || overlayVisible}
-          onClick={() => void toggleDictation()}
-        >
-          {
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="9" y="2.5" width="6" height="12" rx="3" />
-              <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" />
-            </svg>
-          }
+      {dictating ? <>
+        <button type="button" className="misma-dictation-cancel" aria-label="Cancel dictation" title="Discard dictation" onClick={cancelDictation}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
         </button>
+        <button type="button" className="misma-dictation-finish" aria-label="Finish dictation" title="Use transcript" onClick={() => dictationRef.current?.stop()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7"/></svg>
+        </button>
+      </> : !overlayVisible ? <button type="button"
+        className={"misma-voice-main-action" + (hasContent ? " has-content" : "") + (busy ? " is-busy" : "")}
+        aria-label={busy ? "Stop Misma" : hasContent ? "Send message" : "Start voice mode"}
+        title={busy ? "Stop Misma" : hasContent ? "Send message" : "Voice mode"}
+        disabled={(!hasContent && offline) || (disabled && !busy)}
+        onClick={() => {
+          if (busy) callbacksRef.current.onStop();
+          else if (hasContent) callbacksRef.current.onAction();
+          else void openVoiceMode();
+        }}>
+        <span className="misma-voice-action-wave" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2.5" y="9" width="3" height="6" rx="1.5"/><rect x="7.5" y="5" width="3" height="14" rx="1.5"/><rect x="12.5" y="7" width="3" height="10" rx="1.5"/><rect x="17.5" y="3" width="3" height="18" rx="1.5"/></svg></span>
+        <span className="misma-voice-action-send" aria-hidden="true">{busy
+          ? <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          : <svg viewBox="0 0 24 24"><path d="M12 19V5m-7 7 7-7 7 7"/></svg>}</span>
+      </button> : null}
+    </div>
 
-        {isDictating && (
-          <>
-            <button type="button" className="misma-dictation-cancel" aria-label="Cancel dictation" title="Discard dictation" onClick={cancelDictation}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
-            </button>
-            <button type="button" className="misma-dictation-finish" aria-label="Finish dictation" title="Use transcript" onClick={() => dictationRef.current?.stop()}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7" /></svg>
-            </button>
-          </>
-        )}
+    {dictating && <div className="misma-dictation-surface" role="status" aria-label="Listening to your voice">
+      <div className="misma-dictation-waveform" aria-hidden="true">{waveform.map((level, index) =>
+        <span key={index} style={{ height: `${Math.max(3, level * 34)}px` }}/>)}</div>
+      <span>Listening…</span>
+    </div>}
 
-        {!isDictating && !inputValue.trim() && !hasAttachments && !hasCreateMode && !overlayVisible && <button
-          type="button"
-          className={"misma-voice-mode-trigger" + (inputValue.trim() || hasAttachments || hasCreateMode || busy ? " is-hidden" : "")}
-          aria-hidden={Boolean(inputValue.trim() || hasAttachments || hasCreateMode || busy)}
-          tabIndex={inputValue.trim() || hasAttachments || hasCreateMode || busy ? -1 : 0}
-          aria-label="Start hands-free voice conversation"
-          title="Voice mode"
-          disabled={disabled || offline || Boolean(inputValue.trim() || hasAttachments || hasCreateMode || busy)}
-          onClick={() => void openVoiceMode()}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="9" width="2.6" height="6" rx="1.3" />
-            <rect x="8" y="5" width="2.6" height="14" rx="1.3" />
-            <rect x="13" y="8" width="2.6" height="8" rx="1.3" />
-            <rect x="18" y="3" width="2.6" height="18" rx="1.3" />
-          </svg>
-        </button>}
+    {overlayVisible && <div className="misma-voice-overlay" role="dialog" aria-modal="true" aria-label="Misma voice conversation">
+      <button type="button" className="misma-voice-overlay-close" aria-label="End voice conversation" onClick={closeVoiceMode}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+      </button>
+      <div className="misma-voice-overlay-content">
+        <button type="button" className="misma-voice-orb" data-state={voiceState}
+          aria-label={voiceState === "speaking" || voiceState === "thinking" ? "Interrupt Misma and listen" : "Voice conversation state"}
+          onClick={() => voiceRef.current?.interrupt()}><span aria-hidden="true"/></button>
+        <p className="misma-voice-overlay-status" aria-live="polite">{LABELS[voiceState] || "Starting voice…"}</p>
+        <p className="misma-voice-overlay-transcript" aria-live="polite">{voiceTranscript}</p>
       </div>
-
-      {isDictating && <div className="misma-dictation-surface" role="status" aria-label="Listening to your voice"><div className="misma-dictation-waveform" aria-hidden="true">{waveform.map((level, index) => <span key={index} style={{ height: `${Math.max(3, level * 34)}px` }} />)}</div><span>Listening…</span></div>}
-
-      {overlayVisible && (
-        <div className="misma-voice-overlay" role="dialog" aria-modal="true" aria-label="Misma voice conversation">
-          <button type="button" className="misma-voice-overlay-close" aria-label="End voice conversation" onClick={closeVoiceMode}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
-          </button>
-
-          <div className="misma-voice-overlay-content">
-            <button
-              type="button"
-              className="misma-voice-orb"
-              data-state={voiceState}
-              aria-label={voiceState === "speaking" || voiceState === "thinking" ? "Interrupt Misma and listen" : "Voice conversation is active"}
-              onClick={() => voiceRef.current?.interrupt()}
-            >
-              <span aria-hidden="true" />
-            </button>
-            <p className="misma-voice-overlay-status" aria-live="polite">{STATE_LABELS[voiceState] || "Starting voice…"}</p>
-            <p className="misma-voice-overlay-transcript" aria-live="polite">{voiceTranscript}</p>
-          </div>
-
-          <div className="misma-voice-overlay-controls">
-            <button type="button" className="misma-voice-overlay-btn" aria-pressed={muted} onClick={toggleMuted}>
-              {muted ? "Unmute" : "Mute"}
-            </button>
-            <button type="button" className="misma-voice-overlay-btn is-end" onClick={closeVoiceMode}>
-              End
-            </button>
-          </div>
+      <div className="misma-voice-overlay-controls">
+        <div className="misma-voice-mode-switch" role="group" aria-label="Voice conversation mode">
+          <button type="button" aria-pressed={voiceMode === "hands-free"} onClick={() => chooseVoiceMode("hands-free")}>Hands-free</button>
+          <button type="button" aria-pressed={voiceMode === "push-to-talk"} onClick={() => chooseVoiceMode("push-to-talk")}>Push-to-talk</button>
         </div>
-      )}
-    </>
-  );
+        {voiceMode === "push-to-talk" && <button type="button" className="misma-voice-overlay-btn misma-push-to-talk"
+          disabled={muted || voiceState === "thinking" || voiceState === "speaking"}
+          onPointerDown={(event) => { event.preventDefault(); voiceRef.current?.pushToTalkStart(); }}
+          onPointerUp={() => voiceRef.current?.pushToTalkStop()}
+          onPointerCancel={() => voiceRef.current?.pushToTalkStop()}
+          onLostPointerCapture={() => voiceRef.current?.pushToTalkStop()}
+          aria-label="Hold to talk">Hold to talk</button>}
+        <button type="button" className="misma-voice-overlay-btn" aria-pressed={muted} onClick={toggleMute}>{muted ? "Unmute" : "Mute"}</button>
+        <button type="button" className="misma-voice-overlay-btn is-end" onClick={closeVoiceMode}>End</button>
+      </div>
+    </div>}
+  </>;
 }
