@@ -163,6 +163,7 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
 test("user message tools are desktop-hover and mobile-long-press only, with a stacked keyboard-aware composer", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const styles = await read("../src/styles.css");
+  const voiceComponent = await read("../src/components/voice-input-bar.tsx");
 
   assert.match(dashboard, /startMobileMessageLongPress/);
   assert.match(dashboard, /onTouchStart=\{isUserMessage \? \(\) => startMobileMessageLongPress/);
@@ -182,8 +183,8 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
-  assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
-  assert.match(dashboard, /Start voice input/);
+  assert.match(dashboard, /draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode/);
+  assert.match(voiceComponent, /aria-label="Start voice input"/);
 });
 
 
@@ -464,7 +465,10 @@ test("dashboard chat scrolls in a full-width pane with the scrollbar at the far 
 });
 
 
-test("voice note implementation is present", async () => {
-  const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.ok(dashboard.includes("startComposerVoiceRecording"));
+test("voice input is implemented in its dedicated recorder and protected transcription function", async () => {
+  const recorder = await read("../src/hooks/use-voice-recorder.ts");
+  const edge = await read("../supabase/functions/misma-transcribe/index.ts");
+  assert.ok(recorder.includes("new MediaRecorder(stream"));
+  assert.ok(recorder.includes('fetch("/api/transcribe"'));
+  assert.ok(edge.includes("GROQ_API_KEY"));
 });
