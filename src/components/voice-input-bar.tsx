@@ -91,7 +91,16 @@ export function VoiceInputBar({
       onDone: (transcript) => {
         const base = baseDraftRef.current.trim();
         if (transcript) {
-          callbacksRef.current.onTranscript([base, transcript].filter(Boolean).join(base ? " " : ""));
+          const value = [base, transcript].filter(Boolean).join(base ? " " : "");
+          callbacksRef.current.onTranscript(value);
+          const field = document.querySelector<HTMLTextAreaElement>(".aichat-composer-textarea");
+          if (field) {
+            field.value = value;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+          if (AUTO_SEND_ON_DICTATION) window.setTimeout(() => {
+            field?.form?.requestSubmit();
+          }, 0);
         }
         callbacksRef.current.onDictationDone?.();
         setDictationRequesting(false);
@@ -120,7 +129,7 @@ export function VoiceInputBar({
       onReply: (reply) => setVoiceTranscript(reply),
       onError: (code) => {
         callbacksRef.current.onError(ERROR_MESSAGES[code] || "Voice conversation stopped. Please try again.");
-        if (code === "permission" || code === "unsupported" || code === "network") {
+        if (code === "permission" || code === "unsupported" || code === "network" || code === "audio-capture" || code === "start-timeout") {
           voice.stop();
           overlayOpenRef.current = false;
           setVoiceOverlayOpen(false);
@@ -213,6 +222,15 @@ export function VoiceInputBar({
     if (dictation.active) void startMeter();
   };
 
+  const cancelDictation = () => {
+    dictationRef.current?.cancel();
+    stopMeter();
+    setDictationState("idle");
+    setDictationRequesting(false);
+    callbacksRef.current.onTranscript(baseDraftRef.current);
+    window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".aichat-composer-textarea")?.focus(), 0);
+  };
+
   const closeVoiceMode = () => {
     voiceRef.current?.stop();
     overlayOpenRef.current = false;
@@ -277,6 +295,17 @@ export function VoiceInputBar({
             </svg>
           }
         </button>
+
+        {isDictating && (
+          <>
+            <button type="button" className="misma-dictation-cancel" aria-label="Cancel dictation" title="Discard dictation" onClick={cancelDictation}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+            </button>
+            <button type="button" className="misma-dictation-finish" aria-label="Finish dictation" title="Use transcript" onClick={() => dictationRef.current?.stop()}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7" /></svg>
+            </button>
+          </>
+        )}
 
         {!isDictating && !inputValue.trim() && !hasAttachments && !overlayVisible && <button
           type="button"
