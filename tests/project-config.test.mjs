@@ -413,7 +413,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
   assert.match(component, /Stop dictation and send transcript/);
   assert.match(component, /finishDictation\(true\)/);
-  assert.match(component, /aria-label=\{dictating \? "Dictation is active" : "Start voice dictation"\}/);
+  assert.match(component, /aria-label=\{isDictating \? "Finish voice dictation" : "Start voice dictation"\}/);
   assert.match(component, /Start voice mode/);
   assert.match(component, /AUTO_SEND_ON_DICTATION = false/);
   assert.match(component, /misma-voice-dictation-btn is-cancel/);
