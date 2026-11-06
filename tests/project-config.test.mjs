@@ -167,7 +167,7 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(styles, /\.aichat-message-row\.is-ai > \.aichat-msg-avatar\.ai/);
   assert.match(styles, /transition:\s*height\s*\.16s ease/);
   assert.match(dashboard, /aichat-composer-voice-btn/);
-  assert.match(dashboard, /Start voice chat/);
+  assert.match(dashboard, /Start voice input/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
 });
@@ -195,7 +195,7 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
-  assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
+  assert.match(dashboard, /\{!\s*draft\.trim\(\) && !selectedFiles\.length && !createMode/);
   assert.match(dashboard, /Start voice input/);
 });
 
@@ -414,6 +414,25 @@ test("composer dictation is English-only, continuous, gain-assisted, and renders
   assert.match(styles, /\.aichat-composer-input-row\.is-listening/);
   assert.match(styles, /\.aichat-composer-voice-wave-bars i/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
+});
+
+test("dictation switches the composer from microphone to Send and preserves editable speech text", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+
+  const microphoneCondition = dashboard.indexOf("{!draft.trim() && !selectedFiles.length && !createMode");
+  const sendCondition = dashboard.indexOf("{(draft.trim() || selectedFiles.length || createMode || isSending || isGeneratingMedia) && (");
+  assert.ok(microphoneCondition >= 0, "microphone control is shown only while the composer has no sendable content");
+  assert.ok(sendCondition > microphoneCondition, "Send replaces the microphone when text becomes available");
+  assert.match(dashboard, /const stopVoiceDictation = \(ignoreLateResults = false\)/);
+  assert.match(dashboard, /voiceInputManualEditRef\.current = true/);
+  assert.match(dashboard, /if \(voiceInputManualEditRef\.current\) return/);
+  assert.match(dashboard, /if \(voiceInputActive \|\| voiceRecognitionWantedRef\.current\) stopVoiceDictation\(true\)/);
+  assert.match(dashboard, /!composerMicrophoneMountedRef\.current \|\| !voiceRecognitionWantedRef\.current/);
+  assert.doesNotMatch(dashboard, /readOnly=\{voiceInputActive\}/);
+
+  const sendButton = dashboard.slice(sendCondition, dashboard.indexOf("</button>", sendCondition));
+  assert.match(sendButton, /else if \(draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode\)/);
+  assert.doesNotMatch(sendButton, /else if \(voiceInputActive\)/);
 });
 
 test("dashboard restores the last visited section and selected conversation after refresh", async () => {
