@@ -236,7 +236,7 @@ export function VoiceInputBar({
       finishDictation();
       return;
     }
-    if (voiceOverlayOpenRef.current) return;
+    if (overlayOpenRef.current) return;
 
     baseDraftRef.current = inputValueRef.current;
     setWaveLevel(0);
