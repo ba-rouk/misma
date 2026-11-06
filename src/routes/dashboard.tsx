@@ -824,6 +824,7 @@ function Dashboard() {
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [voiceInputActive, setVoiceInputActive] = useState(false);
+  const [voiceInputWaveform, setVoiceInputWaveform] = useState<number[]>(Array.from({ length: 30 }, () => 0.07));
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -1019,6 +1020,12 @@ function Dashboard() {
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
   const composerMicrophoneStreamRef = useRef<MediaStream | null>(null);
+  const voiceRecognitionWantedRef = useRef(false);
+  const voiceInputBaseDraftRef = useRef("");
+  const voiceAudioContextRef = useRef<AudioContext | null>(null);
+  const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
+  const voiceProcessedTrackRef = useRef<MediaStreamTrack | null>(null);
+  const voiceMeterFrameRef = useRef<number | null>(null);
   const microphonePermissionRequestRef = useRef(false);
   const composerMicrophoneMountedRef = useRef(true);
   const shouldAutoScrollRef = useRef(true);
@@ -1041,6 +1048,15 @@ function Dashboard() {
         recognition.onerror = null;
         try { recognition.abort?.(); } catch { /* Recognition has already stopped. */ }
       }
+      voiceRecognitionWantedRef.current = false;
+      if (voiceMeterFrameRef.current !== null) cancelAnimationFrame(voiceMeterFrameRef.current);
+      voiceMeterFrameRef.current = null;
+      voiceAnalyserRef.current = null;
+      voiceProcessedTrackRef.current?.stop();
+      voiceProcessedTrackRef.current = null;
+      const audioContext = voiceAudioContextRef.current;
+      voiceAudioContextRef.current = null;
+      if (audioContext && audioContext.state !== "closed") void audioContext.close().catch(() => undefined);
       const stream = composerMicrophoneStreamRef.current;
       composerMicrophoneStreamRef.current = null;
       stream?.getTracks().forEach((track) => track.stop());
@@ -1681,9 +1697,52 @@ function Dashboard() {
 
   const stopComposerMicrophoneStream = (expectedStream?: MediaStream) => {
     const stream = composerMicrophoneStreamRef.current;
-    if (!stream || (expectedStream && stream !== expectedStream)) return;
+    if (expectedStream && stream !== expectedStream) return;
+
     composerMicrophoneStreamRef.current = null;
-    stream.getTracks().forEach((track) => track.stop());
+    if (voiceMeterFrameRef.current !== null) cancelAnimationFrame(voiceMeterFrameRef.current);
+    voiceMeterFrameRef.current = null;
+    voiceAnalyserRef.current = null;
+    voiceProcessedTrackRef.current?.stop();
+    voiceProcessedTrackRef.current = null;
+
+    const audioContext = voiceAudioContextRef.current;
+    voiceAudioContextRef.current = null;
+    if (audioContext && audioContext.state !== "closed") void audioContext.close().catch(() => undefined);
+
+    stream?.getTracks().forEach((track) => track.stop());
+    setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
+  };
+
+  const startComposerVoiceMeter = (analyser: AnalyserNode) => {
+    voiceAnalyserRef.current = analyser;
+    const samples = new Uint8Array(analyser.fftSize);
+    let lastUpdateAt = 0;
+
+    const draw = (time: number) => {
+      if (voiceAnalyserRef.current !== analyser || !composerMicrophoneMountedRef.current) return;
+
+      analyser.getByteTimeDomainData(samples);
+      const bars = Array.from({ length: 30 }, (_, index) => {
+        const first = Math.floor((index * samples.length) / 30);
+        const last = Math.max(first + 1, Math.floor(((index + 1) * samples.length) / 30));
+        let energy = 0;
+        for (let cursor = first; cursor < last; cursor += 1) {
+          const sample = (samples[cursor] - 128) / 128;
+          energy += sample * sample;
+        }
+        const rms = Math.sqrt(energy / (last - first));
+        return Math.max(0.07, Math.min(1, rms * 14));
+      });
+
+      if (time - lastUpdateAt >= 60) {
+        lastUpdateAt = time;
+        setVoiceInputWaveform(bars);
+      }
+      voiceMeterFrameRef.current = requestAnimationFrame(draw);
+    };
+
+    voiceMeterFrameRef.current = requestAnimationFrame(draw);
   };
 
   const startVoiceRecognition = (audioTrack?: MediaStreamTrack) => {
@@ -1693,56 +1752,98 @@ function Dashboard() {
     };
     const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
     if (!Recognition) {
+      voiceRecognitionWantedRef.current = false;
       stopComposerMicrophoneStream();
-      setChatError("Voice dictation is not supported in this browser. Try the latest Chrome browser.");
+      setChatError("English voice dictation is not supported by this browser. Please use the latest Chrome or Edge.");
       return;
     }
 
     try { speechRecognitionRef.current?.abort?.(); } catch { /* Previous session already ended. */ }
     const recognition = new Recognition();
     const recognitionStream = composerMicrophoneStreamRef.current;
-    recognition.lang = navigator.language || "en-US";
+    let useAudioTrack = Boolean(audioTrack);
+
+    const startRecognition = () => {
+      if (audioTrack && useAudioTrack) {
+        try {
+          recognition.start(audioTrack);
+          return;
+        } catch (cause) {
+          const name = cause instanceof Error ? cause.name : "";
+          if (name === "InvalidStateError") throw cause;
+          // Fall back to browser-managed microphone capture when track input is unsupported.
+          useAudioTrack = false;
+        }
+      }
+      recognition.start();
+    };
+
+    voiceInputBaseDraftRef.current = draft;
+    recognition.lang = "en-US";
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.maxAlternatives = 1;
-    recognition.onstart = () => setVoiceInputActive(true);
+    recognition.onstart = () => {
+      setVoiceInputActive(true);
+      setChatError("");
+    };
     recognition.onresult = (event: any) => {
       const transcript = Array.from(event.results as ArrayLike<any>)
-        .map((result: any) => result?.[0]?.transcript || "")
+        .map((result: any) => String(result?.[0]?.transcript || "").trim())
+        .filter(Boolean)
         .join(" ")
+        .replace(/\\s+/g, " ")
         .trim();
-      if (transcript) setDraft([draft.trim(), transcript].filter(Boolean).join(draft.trim() ? " " : ""));
+      const base = voiceInputBaseDraftRef.current.trim();
+      setDraft([base, transcript].filter(Boolean).join(base && transcript ? " " : ""));
     };
     recognition.onerror = (event: any) => {
+      const errorName = String(event?.error || "");
+      if (errorName === "no-speech") return;
+
+      voiceRecognitionWantedRef.current = false;
       setVoiceInputActive(false);
       if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
       stopComposerMicrophoneStream(recognitionStream || undefined);
-      const errorName = String(event?.error || "");
+
       if (errorName === "not-allowed" || errorName === "service-not-allowed") {
-        setChatError("Microphone permission is blocked. Allow microphone access for Misma in your browser settings, then try again.");
+        setChatError("Microphone permission is blocked. Allow microphone access for Misma in your browser's site settings, then try again.");
       } else if (errorName === "audio-capture") {
         setChatError("No microphone was found. Check that your device microphone is available.");
-      } else if (errorName === "no-speech") {
-        setChatError("No speech was detected. Tap the microphone and speak again.");
       } else if (errorName === "network") {
-        setChatError("Voice recognition could not reach the browser speech service. Check your connection and try again.");
+        setChatError("English voice recognition could not reach the browser speech service. Check your connection and try again.");
       } else {
         setChatError("Voice dictation stopped. Please try again.");
       }
     };
     recognition.onend = () => {
+      if (voiceRecognitionWantedRef.current && speechRecognitionRef.current === recognition) {
+        window.setTimeout(() => {
+          if (!voiceRecognitionWantedRef.current || speechRecognitionRef.current !== recognition) return;
+          try {
+            startRecognition();
+          } catch {
+            voiceRecognitionWantedRef.current = false;
+            setVoiceInputActive(false);
+            if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
+            stopComposerMicrophoneStream(recognitionStream || undefined);
+            setChatError("Voice input stopped unexpectedly. Tap the microphone to try again.");
+          }
+        }, 180);
+        return;
+      }
+
       setVoiceInputActive(false);
       if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
       stopComposerMicrophoneStream(recognitionStream || undefined);
     };
     speechRecognitionRef.current = recognition;
     setChatError("");
+
     try {
-      // Chrome 135+ accepts the granted MediaStreamTrack directly, avoiding a second
-      // microphone capture request. Other Web Speech implementations ignore this argument.
-      if (audioTrack) recognition.start(audioTrack);
-      else recognition.start();
+      startRecognition();
     } catch (cause) {
+      voiceRecognitionWantedRef.current = false;
       setVoiceInputActive(false);
       if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
       stopComposerMicrophoneStream(recognitionStream || undefined);
@@ -1754,38 +1855,119 @@ function Dashboard() {
   };
 
   const handleVoiceInput = async () => {
-    if (voiceInputActive) {
-      try { speechRecognitionRef.current?.stop?.(); } catch { /* Recognition may already be stopped. */ }
-      setVoiceInputActive(false);
-      return;
-    }
     if (microphonePermissionRequestRef.current) return;
 
-    // Request access immediately from the click flow. When site permission is
-    // still set to Ask, the browser displays its native microphone permission prompt.
-    microphonePermissionRequestRef.current = true;
+    if (voiceInputActive || voiceRecognitionWantedRef.current) {
+      voiceRecognitionWantedRef.current = false;
+      try { speechRecognitionRef.current?.stop?.(); } catch { /* Recognition may already be stopped. */ }
+      setVoiceInputActive(false);
+      if (!speechRecognitionRef.current) stopComposerMicrophoneStream();
+      return;
+    }
+
+    voiceRecognitionWantedRef.current = true;
     setChatError("");
+    setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
+    microphonePermissionRequestRef.current = true;
+
+    let pendingAudioContext: AudioContext | null = null;
     try {
-      stopComposerMicrophoneStream();
+      const AudioContextConstructor =
+        window.AudioContext ||
+        (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+      if (AudioContextConstructor) {
+        try {
+          pendingAudioContext = new AudioContextConstructor();
+          voiceAudioContextRef.current = pendingAudioContext;
+          void pendingAudioContext.resume().catch(() => undefined);
+        } catch {
+          pendingAudioContext = null;
+        }
+      }
+
       const stream = await requestMicStream({
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        channelCount: { ideal: 1 },
+        sampleRate: { ideal: 48000 },
       });
+
       if (!composerMicrophoneMountedRef.current) {
         stream.getTracks().forEach((track) => track.stop());
+        if (pendingAudioContext && pendingAudioContext.state !== "closed") void pendingAudioContext.close().catch(() => undefined);
         return;
       }
-      const audioTrack = stream.getAudioTracks()[0];
-      if (!audioTrack) {
+
+      const microphoneTrack = stream.getAudioTracks()[0];
+      if (!microphoneTrack) {
         stream.getTracks().forEach((track) => track.stop());
         throw new MicError("no-device", "No microphone audio track was returned.");
       }
       composerMicrophoneStreamRef.current = stream;
-      startVoiceRecognition(audioTrack);
+
+      microphoneTrack.addEventListener("ended", () => {
+        if (composerMicrophoneStreamRef.current !== stream) return;
+        voiceRecognitionWantedRef.current = false;
+        try { speechRecognitionRef.current?.abort?.(); } catch { /* The track has already ended. */ }
+        setVoiceInputActive(false);
+        stopComposerMicrophoneStream(stream);
+        setChatError("The microphone disconnected. Reconnect it and start voice input again.");
+      }, { once: true });
+
+      let recognitionTrack = microphoneTrack;
+      if (pendingAudioContext) {
+        try {
+          if (pendingAudioContext.state === "suspended") await pendingAudioContext.resume();
+
+          const source = pendingAudioContext.createMediaStreamSource(stream);
+          const highPass = pendingAudioContext.createBiquadFilter();
+          highPass.type = "highpass";
+          highPass.frequency.value = 85;
+
+          const inputGain = pendingAudioContext.createGain();
+          inputGain.gain.value = 2.0;
+
+          const compressor = pendingAudioContext.createDynamicsCompressor();
+          compressor.threshold.value = -30;
+          compressor.knee.value = 20;
+          compressor.ratio.value = 3;
+          compressor.attack.value = 0.004;
+          compressor.release.value = 0.24;
+
+          const analyser = pendingAudioContext.createAnalyser();
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.68;
+
+          const destination = pendingAudioContext.createMediaStreamDestination();
+          source.connect(highPass);
+          highPass.connect(inputGain);
+          inputGain.connect(compressor);
+          compressor.connect(analyser);
+          compressor.connect(destination);
+
+          const processedTrack = destination.stream.getAudioTracks()[0];
+          if (processedTrack) {
+            voiceProcessedTrackRef.current = processedTrack;
+            recognitionTrack = processedTrack;
+          }
+          startComposerVoiceMeter(analyser);
+        } catch {
+          // Keep native microphone recognition available if Web Audio processing is unavailable.
+          voiceAnalyserRef.current = null;
+        }
+      }
+
+      if (!composerMicrophoneMountedRef.current) {
+        stopComposerMicrophoneStream(stream);
+        return;
+      }
+      startVoiceRecognition(recognitionTrack);
     } catch (cause) {
-      stopComposerMicrophoneStream();
+      voiceRecognitionWantedRef.current = false;
       setVoiceInputActive(false);
+      stopComposerMicrophoneStream();
       const micError = toMicError(cause);
       setChatError(micError.message);
     } finally {
@@ -3705,7 +3887,7 @@ function Dashboard() {
                       ))}
                     </div>
                   )}
-                  <div className="aichat-composer-input-row">
+                  <div className={`aichat-composer-input-row${voiceInputActive ? " is-listening" : ""}`}>
                     {createMode ? (
                       <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                         @create {createMode}<span aria-hidden="true">×</span>
@@ -3752,7 +3934,19 @@ function Dashboard() {
                       onBlur={() => setComposerFocused(false)}
                       disabled={isSending}
                       aria-label="Message Misma"
+                      readOnly={voiceInputActive}
                     />
+                    {voiceInputActive && (
+                      <div className="aichat-composer-voice-wave" role="status" aria-live="polite" aria-label="Listening in English. Speak normally.">
+                        <span className="aichat-composer-voice-wave-label">Listening</span>
+                        <div className="aichat-composer-voice-wave-bars" aria-hidden="true">
+                          {voiceInputWaveform.map((height, index) => (
+                            <i key={index} style={{ height: Math.round(3 + height * 21) + "px" }} />
+                          ))}
+                        </div>
+                        <span className="aichat-composer-voice-wave-language">EN</span>
+                      </div>
+                    )}
                   </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
