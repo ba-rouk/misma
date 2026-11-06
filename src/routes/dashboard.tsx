@@ -31,7 +31,7 @@ import {
 } from "../lib/api/misma.functions";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 import { MicrophoneAccessPanel } from "../components/microphone-access-panel";
-import { MicError, requestMicStream, toMicError } from "../lib/microphone";
+import { VoiceInputBar } from "../components/voice-input-bar";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -835,9 +835,6 @@ function Dashboard() {
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
-  const [voiceInputActive, setVoiceInputActive] = useState(false);
-  const [voiceRecordingPending, setVoiceRecordingPending] = useState(false);
-  const [voiceInputWaveform, setVoiceInputWaveform] = useState<number[]>(Array.from({ length: 30 }, () => 0.07));
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -1031,21 +1028,6 @@ function Dashboard() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
-  const speechRecognitionRef = useRef<any>(null);
-  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
-  const voiceRecordingChunksRef = useRef<Blob[]>([]);
-  const composerMicrophoneStreamRef = useRef<MediaStream | null>(null);
-  const voiceRecognitionWantedRef = useRef(false);
-  const voiceInputBaseDraftRef = useRef("");
-  const voiceAudioContextRef = useRef<AudioContext | null>(null);
-  const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
-  const voiceProcessedTrackRef = useRef<MediaStreamTrack | null>(null);
-  const voiceMeterFrameRef = useRef<number | null>(null);
-  const voiceInputHasAudioRef = useRef(false);
-  const voiceInputReceivedResultRef = useRef(false);
-  const voiceInputFallbackAttemptedRef = useRef(false);
-  const microphonePermissionRequestRef = useRef(false);
-  const composerMicrophoneMountedRef = useRef(true);
   const shouldAutoScrollRef = useRef(true);
   const regenerateInFlightRef = useRef(false);
   const chatLongPressTimerRef = useRef<number | null>(null);
@@ -1055,39 +1037,6 @@ function Dashboard() {
   const chatAbortControllerRef = useRef<AbortController | null>(null);
   const mediaAbortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    composerMicrophoneMountedRef.current = true;
-    return () => {
-      composerMicrophoneMountedRef.current = false;
-      const recorder = voiceRecorderRef.current;
-      voiceRecorderRef.current = null;
-      if (recorder && recorder.state !== "inactive") {
-        recorder.ondataavailable = null;
-        recorder.onstop = null;
-        try { recorder.stop(); } catch { /* The component is already unmounting. */ }
-      }
-      voiceRecordingChunksRef.current = [];
-      const recognition = speechRecognitionRef.current;
-      speechRecognitionRef.current = null;
-      if (recognition) {
-        recognition.onend = null;
-        recognition.onerror = null;
-        try { recognition.abort?.(); } catch { /* Recognition has already stopped. */ }
-      }
-      voiceRecognitionWantedRef.current = false;
-      if (voiceMeterFrameRef.current !== null) cancelAnimationFrame(voiceMeterFrameRef.current);
-      voiceMeterFrameRef.current = null;
-      voiceAnalyserRef.current = null;
-      voiceProcessedTrackRef.current?.stop();
-      voiceProcessedTrackRef.current = null;
-      const audioContext = voiceAudioContextRef.current;
-      voiceAudioContextRef.current = null;
-      if (audioContext && audioContext.state !== "closed") void audioContext.close().catch(() => undefined);
-      const stream = composerMicrophoneStreamRef.current;
-      composerMicrophoneStreamRef.current = null;
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -1721,349 +1670,6 @@ function Dashboard() {
 
 
 
-  const stopComposerMicrophoneStream = (expectedStream?: MediaStream) => {
-    const stream = composerMicrophoneStreamRef.current;
-    if (expectedStream && stream !== expectedStream) return;
-
-    composerMicrophoneStreamRef.current = null;
-    const recorder = voiceRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      setVoiceRecordingPending(true);
-      try { recorder.stop(); } catch { setVoiceRecordingPending(false); }
-    }
-    if (voiceMeterFrameRef.current !== null) cancelAnimationFrame(voiceMeterFrameRef.current);
-    voiceMeterFrameRef.current = null;
-    voiceAnalyserRef.current = null;
-    voiceProcessedTrackRef.current?.stop();
-    voiceProcessedTrackRef.current = null;
-
-    const audioContext = voiceAudioContextRef.current;
-    voiceAudioContextRef.current = null;
-    if (audioContext && audioContext.state !== "closed") void audioContext.close().catch(() => undefined);
-
-    stream?.getTracks().forEach((track) => track.stop());
-    setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
-  };
-
-  const startComposerVoiceRecording = (stream: MediaStream) => {
-    if (typeof MediaRecorder === "undefined") {
-      throw new Error("Audio recording is not supported in this browser. Please use the latest Chrome or Edge.");
-    }
-    const preferredMimeType = [
-      "audio/webm;codecs=opus",
-      "audio/mp4",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-    ].find((type) => MediaRecorder.isTypeSupported(type));
-    const recorder = new MediaRecorder(stream, preferredMimeType ? { mimeType: preferredMimeType } : undefined);
-    const chunks: Blob[] = [];
-    voiceRecordingChunksRef.current = chunks;
-    voiceRecorderRef.current = recorder;
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
-    };
-    recorder.onerror = () => {
-      setVoiceRecordingPending(false);
-      setVoiceInputActive(false);
-      setChatError("The voice note could not be recorded. Please try again.");
-    };
-    recorder.onstop = () => {
-      if (voiceRecorderRef.current === recorder) voiceRecorderRef.current = null;
-      voiceRecordingChunksRef.current = [];
-      setVoiceInputActive(false);
-      setVoiceRecordingPending(false);
-      if (!composerMicrophoneMountedRef.current) return;
-      const mimeType = recorder.mimeType || chunks.find((chunk) => chunk.type)?.type || "audio/webm";
-      const blob = new Blob(chunks, { type: mimeType });
-      if (!blob.size) {
-        setChatError("No audio was captured. Check your microphone and try again.");
-        return;
-      }
-      if (blob.size > 25 * 1024 * 1024) {
-        setChatError("This voice note is larger than 25 MB. Record a shorter message and try again.");
-        return;
-      }
-      const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
-      const file = new File([blob], "misma-voice-note-" + Date.now() + "." + extension, {
-        type: mimeType,
-        lastModified: Date.now(),
-      });
-      setChatError("");
-      addSelectedFiles([file]);
-    };
-    recorder.start(250);
-  };
-
-  const startComposerVoiceMeter = (analyser: AnalyserNode) => {
-    voiceAnalyserRef.current = analyser;
-    const samples = new Uint8Array(analyser.fftSize);
-    let lastUpdateAt = 0;
-
-    const draw = (time: number) => {
-      if (voiceAnalyserRef.current !== analyser || !composerMicrophoneMountedRef.current) return;
-
-      analyser.getByteTimeDomainData(samples);
-      const bars = Array.from({ length: 30 }, (_, index) => {
-        const first = Math.floor((index * samples.length) / 30);
-        const last = Math.max(first + 1, Math.floor(((index + 1) * samples.length) / 30));
-        let energy = 0;
-        for (let cursor = first; cursor < last; cursor += 1) {
-          const sample = (samples[cursor] - 128) / 128;
-          energy += sample * sample;
-        }
-        const rms = Math.sqrt(energy / (last - first));
-        return Math.max(0.07, Math.min(1, rms * 30));
-      });
-
-      let frameEnergy = 0;
-      for (const sample of samples) {
-        const normalized = (sample - 128) / 128;
-        frameEnergy += normalized * normalized;
-      }
-      if (Math.sqrt(frameEnergy / samples.length) > 0.0035) {
-        voiceInputHasAudioRef.current = true;
-      }
-
-      if (time - lastUpdateAt >= 60) {
-        lastUpdateAt = time;
-        setVoiceInputWaveform(bars);
-      }
-      voiceMeterFrameRef.current = requestAnimationFrame(draw);
-    };
-
-    voiceMeterFrameRef.current = requestAnimationFrame(draw);
-  };
-
-  const startVoiceRecognition = (audioTrack?: MediaStreamTrack) => {
-    const browserWindow = window as typeof window & {
-      SpeechRecognition?: new () => any;
-      webkitSpeechRecognition?: new () => any;
-    };
-    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
-    if (!Recognition) {
-      voiceRecognitionWantedRef.current = false;
-      stopComposerMicrophoneStream();
-      setChatError("English voice dictation is not supported by this browser. Please use the latest Chrome or Edge.");
-      return;
-    }
-
-    try { speechRecognitionRef.current?.abort?.(); } catch { /* Previous session already ended. */ }
-    const recognition = new Recognition();
-    const recognitionStream = composerMicrophoneStreamRef.current;
-    let useAudioTrack = Boolean(audioTrack);
-
-    const startRecognition = () => {
-      if (audioTrack && useAudioTrack) {
-        try {
-          recognition.start(audioTrack);
-          return;
-        } catch (cause) {
-          const name = cause instanceof Error ? cause.name : "";
-          if (name === "InvalidStateError") throw cause;
-          // Fall back to browser-managed microphone capture when track input is unsupported.
-          useAudioTrack = false;
-        }
-      }
-      recognition.start();
-    };
-
-    voiceInputBaseDraftRef.current = draft;
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => {
-      setVoiceInputActive(true);
-      setChatError("");
-    };
-    recognition.onresult = (event: any) => {
-      voiceInputReceivedResultRef.current = true;
-      const transcript = Array.from(event.results as ArrayLike<any>)
-        .map((result: any) => String(result?.[0]?.transcript || "").trim())
-        .filter(Boolean)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-      const base = voiceInputBaseDraftRef.current.trim();
-      setDraft([base, transcript].filter(Boolean).join(base && transcript ? " " : ""));
-    };
-    recognition.onerror = (event: any) => {
-      const errorName = String(event?.error || "");
-      if (errorName === "no-speech") return;
-
-      voiceRecognitionWantedRef.current = false;
-      setVoiceInputActive(false);
-      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
-      stopComposerMicrophoneStream(recognitionStream || undefined);
-
-      if (errorName === "not-allowed" || errorName === "service-not-allowed") {
-        setChatError("Microphone permission is blocked. Allow microphone access for Misma in your browser's site settings, then try again.");
-      } else if (errorName === "audio-capture") {
-        setChatError("No microphone was found. Check that your device microphone is available.");
-      } else if (errorName === "network") {
-        setChatError("English voice recognition could not reach the browser speech service. Check your connection and try again.");
-      } else {
-        setChatError("Voice dictation stopped. Please try again.");
-      }
-    };
-    recognition.onend = () => {
-      // Some Chromium builds accept start(audioTrack) but fail to return speech results.
-      // If the analyser confirms real microphone activity, retry once using the browser's native mic capture.
-      if (
-        voiceRecognitionWantedRef.current &&
-        useAudioTrack &&
-        voiceInputHasAudioRef.current &&
-        !voiceInputReceivedResultRef.current &&
-        !voiceInputFallbackAttemptedRef.current
-      ) {
-        voiceInputFallbackAttemptedRef.current = true;
-        if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
-        window.setTimeout(() => {
-          if (voiceRecognitionWantedRef.current) startVoiceRecognition();
-        }, 140);
-        return;
-      }
-      if (voiceRecognitionWantedRef.current && speechRecognitionRef.current === recognition) {
-        window.setTimeout(() => {
-          if (!voiceRecognitionWantedRef.current || speechRecognitionRef.current !== recognition) return;
-          try {
-            startRecognition();
-          } catch {
-            voiceRecognitionWantedRef.current = false;
-            setVoiceInputActive(false);
-            if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
-            stopComposerMicrophoneStream(recognitionStream || undefined);
-            setChatError("Voice input stopped unexpectedly. Tap the microphone to try again.");
-          }
-        }, 180);
-        return;
-      }
-
-      setVoiceInputActive(false);
-      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
-      stopComposerMicrophoneStream(recognitionStream || undefined);
-    };
-    speechRecognitionRef.current = recognition;
-    setChatError("");
-
-    try {
-      startRecognition();
-    } catch (cause) {
-      voiceRecognitionWantedRef.current = false;
-      setVoiceInputActive(false);
-      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
-      stopComposerMicrophoneStream(recognitionStream || undefined);
-      const name = cause instanceof Error ? cause.name : "";
-      setChatError(name === "InvalidStateError"
-        ? "Voice input is already running. Tap the microphone again when it is ready."
-        : "The microphone could not be started. Check browser microphone permission and try again.");
-    }
-  };
-
-  const handleVoiceInput = async () => {
-    if (microphonePermissionRequestRef.current || voiceRecordingPending) return;
-
-    if (voiceInputActive) {
-      setVoiceInputActive(false);
-      setVoiceRecordingPending(true);
-      stopComposerMicrophoneStream();
-      return;
-    }
-
-    if (typeof MediaRecorder === "undefined") {
-      setChatError("Audio recording is not supported in this browser. Please use the latest Chrome or Edge.");
-      return;
-    }
-
-    stopComposerMicrophoneStream();
-    setChatError("");
-    setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
-    microphonePermissionRequestRef.current = true;
-    let pendingAudioContext: AudioContext | null = null;
-
-    try {
-      const AudioContextConstructor =
-        window.AudioContext ||
-        (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (AudioContextConstructor) {
-        try {
-          pendingAudioContext = new AudioContextConstructor();
-          voiceAudioContextRef.current = pendingAudioContext;
-          if (pendingAudioContext.state === "suspended") await pendingAudioContext.resume();
-        } catch {
-          pendingAudioContext = null;
-        }
-      }
-
-      const stream = await requestMicStream({
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: { ideal: 1 },
-        sampleRate: { ideal: 48000 },
-      });
-
-      if (!composerMicrophoneMountedRef.current) {
-        stream.getTracks().forEach((track) => track.stop());
-        if (pendingAudioContext && pendingAudioContext.state !== "closed") void pendingAudioContext.close().catch(() => undefined);
-        return;
-      }
-
-      const microphoneTrack = stream.getAudioTracks()[0];
-      if (!microphoneTrack) {
-        stream.getTracks().forEach((track) => track.stop());
-        throw new MicError("no-device", "No microphone audio track was returned.");
-      }
-
-      composerMicrophoneStreamRef.current = stream;
-      startComposerVoiceRecording(stream);
-      setVoiceInputActive(true);
-      microphoneTrack.addEventListener("ended", () => {
-        if (composerMicrophoneStreamRef.current !== stream) return;
-        setVoiceInputActive(false);
-        stopComposerMicrophoneStream(stream);
-        setChatError("The microphone disconnected. Your captured audio is being prepared.");
-      }, { once: true });
-
-      if (pendingAudioContext) {
-        try {
-          const source = pendingAudioContext.createMediaStreamSource(stream);
-          const highPass = pendingAudioContext.createBiquadFilter();
-          highPass.type = "highpass";
-          highPass.frequency.value = 70;
-          const inputGain = pendingAudioContext.createGain();
-          inputGain.gain.value = 3.2;
-          const compressor = pendingAudioContext.createDynamicsCompressor();
-          compressor.threshold.value = -38;
-          compressor.knee.value = 18;
-          compressor.ratio.value = 4.5;
-          compressor.attack.value = 0.004;
-          compressor.release.value = 0.24;
-          const analyser = pendingAudioContext.createAnalyser();
-          analyser.fftSize = 512;
-          analyser.smoothingTimeConstant = 0.68;
-          const meterOutput = pendingAudioContext.createMediaStreamDestination();
-          voiceProcessedTrackRef.current = meterOutput.stream.getAudioTracks()[0] || null;
-          source.connect(highPass);
-          highPass.connect(inputGain);
-          inputGain.connect(compressor);
-          compressor.connect(analyser);
-          compressor.connect(meterOutput);
-          startComposerVoiceMeter(analyser);
-        } catch {
-          voiceAnalyserRef.current = null;
-        }
-      }
-    } catch (cause) {
-      setVoiceInputActive(false);
-      stopComposerMicrophoneStream();
-      if (pendingAudioContext && pendingAudioContext.state !== "closed") void pendingAudioContext.close().catch(() => undefined);
-      const micError = toMicError(cause);
-      setChatError(micError.message);
-    } finally {
-      microphonePermissionRequestRef.current = false;
-    }
-  };
   const testSelectedVoice = () => {
     if (!("speechSynthesis" in window)) {
       setChatError("Voice playback is not supported by this browser.");
@@ -2540,10 +2146,10 @@ function Dashboard() {
 
   const handleSend = async (
     customPrompt?: string,
-    options: { retry?: boolean } = {},
-  ) => {
+    options: { retry?: boolean; signal?: AbortSignal } = {},
+  ): Promise<string | null> => {
     let textToSend = (customPrompt ?? draft).trim();
-    if ((!textToSend && !selectedFiles.length) || isSending || !token) return;
+    if ((!textToSend && !selectedFiles.length) || isSending || !token || options.signal?.aborted) return null;
     if (!textToSend) {
       const hasAudio = selectedFiles.some((file) => file.type.startsWith("audio/"));
       textToSend = hasAudio
@@ -2555,7 +2161,7 @@ function Dashboard() {
     const implicitMediaMode = editingMessageId || includesVoiceNote ? null : detectMediaIntent(textToSend);
     if (implicitMediaMode) {
       void handleCreateMedia(implicitMediaMode, textToSend);
-      return;
+      return null;
     }
 
     const isRetry = options.retry === true;
@@ -2580,9 +2186,13 @@ function Dashboard() {
     setIsSending(true);
     shouldAutoScrollRef.current = true;
     const requestController = new AbortController();
+    const abortFromVoiceMode = () => requestController.abort();
+    options.signal?.addEventListener("abort", abortFromVoiceMode, { once: true });
+    if (options.signal?.aborted) requestController.abort();
     chatAbortControllerRef.current = requestController;
 
     try {
+      if (requestController.signal.aborted) return null;
       const selectedConversation = conversations.find((item: any) => Number(item.id) === Number(currentConversationId));
       if (currentConversationId && selectedConversation?.status === "Needs you" && selectedConversation?.channel !== "Dashboard" && !editId && !isRetry) {
         if (selectedFiles.length) throw new Error("Send text-only replies during a customer handoff.");
@@ -2597,7 +2207,7 @@ function Dashboard() {
         setSelectedFiles([]);
         setThinkHarder(false);
         loadData();
-        return;
+        return null;
       }
       const attachments = editId ? [] : await ensureComposerAttachmentsUploaded(filesToSend);
       if (!editId && filesToSend.length && tempUserId) {
@@ -2643,7 +2253,7 @@ function Dashboard() {
             : prev;
           return [...withPersistedUser, res.aiMessage];
         });
-        if (autoSpeakReplies) handleReadAloud(res.aiMessage);
+        if (autoSpeakReplies && !options.signal) handleReadAloud(res.aiMessage);
       }
 
       setSelectedFiles([]);
@@ -2654,8 +2264,9 @@ function Dashboard() {
       setFailedAction(null);
       setFailedPrompt("");
       loadData();
+      return typeof res.aiMessage.text === "string" ? res.aiMessage.text : "";
     } catch (cause) {
-      if (requestController.signal.aborted) return;
+      if (requestController.signal.aborted) return null;
       const errMsg = cause instanceof Error ? cause.message : "Failed to connect to Misma AI.";
       setChatError(errMsg);
       setFailedPrompt(textToSend);
@@ -2666,7 +2277,9 @@ function Dashboard() {
         setSelectedFiles(filesToSend);
       }
       setDraft(textToSend);
+      return null;
     } finally {
+      options.signal?.removeEventListener("abort", abortFromVoiceMode);
       if (chatAbortControllerRef.current === requestController) {
         chatAbortControllerRef.current = null;
         setIsSending(false);
@@ -3985,66 +3598,65 @@ function Dashboard() {
                       ))}
                     </div>
                   )}
-                  <div className={`aichat-composer-input-row${voiceInputActive ? " is-listening" : ""}`}>
-                    {createMode ? (
-                      <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
-                        @create {createMode}<span aria-hidden="true">×</span>
-                      </button>
-                    ) : thinkHarder ? (
-                      <button type="button" className="aichat-mode-token is-thinking" onClick={() => setThinkHarder(false)} aria-label="Remove thinking mode">
-                        @thinking<span aria-hidden="true">×</span>
-                      </button>
-                    ) : null}
-                    <textarea
-                      ref={textareaRef}
-                      rows={1}
-                      className="aichat-composer-textarea"
-                      placeholder={composerFocused ? "" : selectedFiles.length ? "Add a message about the attached file…" : createMode ? `Describe the ${createMode} you want Agnes to create…` : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
-                      value={draft}
-                      onChange={(e) => {
-                        const nextValue = e.target.value;
-                        const createMatch = nextValue.match(/^@create\s+(image|video)(?=\s|$)\s*/i);
-                        if (createMatch) {
-                          setCreateMode(createMatch[1].toLowerCase() as "image" | "video");
-                          setThinkHarder(false);
-                          setDraft(nextValue.slice(createMatch[0].length));
-                          return;
-                        }
-                        const thinkingMatch = nextValue.match(/^@thinking(?=\s|$)\s*/i);
-                        if (thinkingMatch) {
-                          setThinkHarder(true);
-                          setCreateMode(null);
-                          setDraft(nextValue.slice(thinkingMatch[0].length));
-                          return;
-                        }
-                        setDraft(nextValue);
+                  <div className="aichat-composer-input-row">
+                        {createMode ? (
+                          <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
+                            @create {createMode}<span aria-hidden="true">×</span>
+                          </button>
+                        ) : thinkHarder ? (
+                          <button type="button" className="aichat-mode-token is-thinking" onClick={() => setThinkHarder(false)} aria-label="Remove thinking mode">
+                            @thinking<span aria-hidden="true">×</span>
+                          </button>
+                        ) : null}
+                        <textarea
+                          ref={textareaRef}
+                          rows={1}
+                          className="aichat-composer-textarea"
+                          placeholder={composerFocused ? "" : selectedFiles.length ? "Add a message about the attached file…" : createMode ? "Describe the " + createMode + " you want Agnes to create…" : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
+                          value={draft}
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            const createMatch = nextValue.match(/^@create\s+(image|video)(?=\s|$)\s*/i);
+                            if (createMatch) {
+                              setCreateMode(createMatch[1].toLowerCase() as "image" | "video");
+                              setThinkHarder(false);
+                              setDraft(nextValue.slice(createMatch[0].length));
+                              return;
+                            }
+                            const thinkingMatch = nextValue.match(/^@thinking(?=\s|$)\s*/i);
+                            if (thinkingMatch) {
+                              setThinkHarder(true);
+                              setCreateMode(null);
+                              setDraft(nextValue.slice(thinkingMatch[0].length));
+                              return;
+                            }
+                            setDraft(nextValue);
+                          }}
+                          onKeyDown={handleKeyDown}
+                          onPaste={handleComposerPaste}
+                          onFocus={() => {
+                            setComposerFocused(true);
+                            if (window.innerWidth < 768) {
+                              window.requestAnimationFrame(() => {
+                                textareaRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                              });
+                            }
+                          }}
+                          onBlur={() => setComposerFocused(false)}
+                          disabled={isSending}
+                          aria-label="Message Misma"
+                        />
+                    <VoiceInputBar
+                      inputValue={draft}
+                      disabled={isSending || isGeneratingMedia}
+                      onTranscript={(transcript) => {
+                        setDraft(transcript);
+                        setChatError("");
                       }}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handleComposerPaste}
-                      onFocus={() => {
-                        setComposerFocused(true);
-                        if (window.innerWidth < 768) {
-                          window.requestAnimationFrame(() => {
-                            textareaRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-                          });
-                        }
-                      }}
-                      onBlur={() => setComposerFocused(false)}
-                      disabled={isSending}
-                      aria-label="Message Misma"
-                      readOnly={voiceInputActive}
+                      onDictationDone={() => textareaRef.current?.focus()}
+                      onSend={(transcript, signal) => handleSend(transcript, { signal })}
+                      onError={(message) => setChatError(message)}
                     />
-                    {voiceInputActive && (
-                      <div className="aichat-composer-voice-wave" role="status" aria-live="polite" aria-label="Recording your voice note. Speak normally.">
-                        <span className="aichat-composer-voice-wave-label">Recording</span>
-                        <div className="aichat-composer-voice-wave-bars" aria-hidden="true">
-                          {voiceInputWaveform.map((height, index) => (
-                            <i key={index} style={{ height: Math.round(3 + height * 21) + "px" }} />
-                          ))}
-                        </div>
-                        <span className="aichat-composer-voice-wave-language">EN</span>
-                      </div>
-                    )}
                   </div>
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
@@ -4087,52 +3699,24 @@ function Dashboard() {
                       )}
                     </div>
                     <div className="aichat-composer-sendrow-spacer" />
-                    {!voiceInputActive && !voiceRecordingPending && !draft.trim() && !selectedFiles.length && (
-                      <button
-                        type="button"
-                        className="aichat-composer-voice-btn"
-                        disabled={isSending || isGeneratingMedia}
-                        onClick={() => void handleVoiceInput()}
-                        title={voiceInputActive ? "Stop voice input" : "Voice input"}
-                        aria-label={voiceInputActive ? "Stop voice input" : "Start voice input"}
-                      >
-                        {voiceInputActive ? (
-                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
-                        ) : (
-                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></svg>
-                        )}
-                      </button>
-                    )}
-
                     <button
                       type="button"
-                      disabled={isSending || isGeneratingMedia || voiceRecordingPending}
-                      className={`aichat-composer-send-btn${voiceInputActive ? " is-listening" : ""}${(draft.trim() || selectedFiles.length || createMode) && !voiceInputActive && !isSending && !isGeneratingMedia ? " can-send" : ""}${isSending || isGeneratingMedia || voiceRecordingPending ? " is-thinking" : ""}`}
+                      disabled={!isSending && !isGeneratingMedia && !draft.trim() && !selectedFiles.length && !createMode}
+                      className={"aichat-composer-send-btn" + ((draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : "") + (isSending || isGeneratingMedia ? " is-thinking" : "")}
                       onClick={() => {
-                        if (isSending || isGeneratingMedia) {
-                          stopMisma();
-                        } else if (voiceInputActive) {
-                          void handleVoiceInput();
-                        } else if (draft.trim() || selectedFiles.length || createMode) {
-                          if (createMode) void handleCreateMedia();
-                          else void handleSend();
-                        } else {
-                          void handleVoiceInput();
-                        }
+                        if (isSending || isGeneratingMedia) stopMisma();
+                        else if (createMode) void handleCreateMedia();
+                        else void handleSend();
                       }}
-                      title={isSending || isGeneratingMedia ? "Stop Misma" : voiceRecordingPending ? "Preparing voice note…" : voiceInputActive ? "Stop recording" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice note"}
-                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : voiceRecordingPending ? "Preparing voice note" : voiceInputActive ? "Stop recording" : (draft.trim() || selectedFiles.length || createMode) ? (createMode ? `Create ${createMode} with Agnes` : "Send message") : "Start voice note"}
+                      title={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
+                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
                     >
-                      {isSending || isGeneratingMedia || voiceInputActive ? (
+                      {isSending || isGeneratingMedia ? (
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : voiceRecordingPending ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" fill="none" /><path d="M12 7v5l3 2" /></svg>
-                      ) : draft.trim() || selectedFiles.length || createMode ? (
-                        createMode ? <span aria-hidden="true">✦</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
-                      ) : voiceInputActive ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></svg>
+                      ) : createMode ? (
+                        <span aria-hidden="true">✦</span>
                       ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 10v4M22 11v2" /></svg>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
                       )}
                     </button>
                   </div>

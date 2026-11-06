@@ -112,25 +112,12 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.equal(dashboard.includes("How can I help you today?"), false);
   assert.match(dashboard, /chatGroupFilter === "__ungrouped__"/);
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
-  assert.match(dashboard, /recognition\.start\(\)/);
-  assert.match(dashboard, /webkitSpeechRecognition/);
-  assert.match(dashboard, /recognition\.onstart = \(\) => \{/);
-  assert.match(dashboard, /audio-capture/);
-  assert.match(dashboard, /requestMicStream\(/);
-  assert.doesNotMatch(dashboard, /navigator\.mediaDevices\?\.getUserMedia/);
+  assert.match(dashboard, /import \{ VoiceInputBar \}/);
+  assert.match(dashboard, /<VoiceInputBar/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend\(transcript, \{ signal \}\)\}/);
   assert.match(microphone, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
-  assert.match(dashboard, /recognition\.start\(audioTrack\)/);
-  assert.match(dashboard, /voiceInputHasAudioRef/);
-  assert.match(dashboard, /voiceInputFallbackAttemptedRef/);
-  assert.match(dashboard, /startVoiceRecognition\(\);\s*\}, 140\)/);
-  assert.match(dashboard, /Math\.min\(1, rms \* 30\)/);
-  assert.match(dashboard, /stopComposerMicrophoneStream/);
-  assert.match(dashboard, /composerMicrophoneMountedRef\.current = false/);
-  assert.match(dashboard, /stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
-  assert.match(dashboard, /toMicError\(cause\)/);
-  assert.match(dashboard, /setChatError\(micError\.message\)/);
   assert.doesNotMatch(dashboard, /microphonePermissionOpen|requestMicrophoneAccess/);
   assert.match(dashboard, /aichat-notification-trigger/);
   assert.match(dashboard, /activeTab === "notifications"/);
@@ -166,8 +153,8 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
   assert.match(styles, /\.aichat-notification-trigger\.has-unread/);
   assert.match(styles, /\.aichat-message-row\.is-ai > \.aichat-msg-avatar\.ai/);
   assert.match(styles, /transition:\s*height\s*\.16s ease/);
-  assert.match(dashboard, /aichat-composer-voice-btn/);
-  assert.match(dashboard, /Start voice note/);
+  assert.match(dashboard, /<VoiceInputBar/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend/);
   assert.match(styles, /\.aichat-composer-sendrow \.aichat-composer-textarea/);
   assert.match(styles, /overflow-x: clip/);
 });
@@ -176,6 +163,7 @@ test("dashboard groups, dynamic greetings, visitor notifications and voice permi
 test("user message tools are desktop-hover and mobile-long-press only, with a stacked keyboard-aware composer", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const styles = await read("../src/styles.css");
+  const voiceComponent = await read("../src/components/voice-input-bar.tsx");
 
   assert.match(dashboard, /startMobileMessageLongPress/);
   assert.match(dashboard, /onTouchStart=\{isUserMessage \? \(\) => startMobileMessageLongPress/);
@@ -191,12 +179,12 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.match(styles, /scrollbar-width: none/);
   assert.match(styles, /\.aichat-composer-input-row \.aichat-composer-textarea::-webkit-scrollbar/);
 
-  const inputRow = dashboard.indexOf('className={`aichat-composer-input-row');
+  const inputRow = dashboard.indexOf('className="aichat-composer-input-row"');
   const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
-  assert.match(dashboard, /: draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode \?/);
-  assert.match(dashboard, /Start voice input/);
+  assert.match(dashboard, /draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode/);
+  assert.match(voiceComponent, /Start voice dictation/);
 });
 
 
@@ -395,27 +383,34 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(docs, /allow="microphone"/);
 });
 
-test("composer records a voice note, shows a live waveform, and stages it for Send", async () => {
+test("browser-native dictation and hands-free voice mode send text only", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
-  const styles = await read("../src/styles.css");
+  const voice = await read("../src/lib/misma-voice.ts");
+  const component = await read("../src/components/voice-input-bar.tsx");
+  const styles = await read("../src/components/voice-input.css");
 
-  assert.match(dashboard, /new MediaRecorder\(stream/);
-  assert.match(dashboard, /recorder\.start\(250\)/);
-  assert.match(dashboard, /autoGainControl: true/);
-  assert.match(dashboard, /channelCount: \{ ideal: 1 \}/);
-  assert.match(dashboard, /inputGain\.gain\.value = 3\.2/);
-  assert.match(dashboard, /createDynamicsCompressor\(\)/);
-  assert.match(dashboard, /createMediaStreamDestination\(\)/);
-  assert.match(dashboard, /startComposerVoiceRecording\(stream\)/);
-  assert.match(dashboard, /voiceInputWaveform\.map/);
-  assert.match(dashboard, /!voiceInputActive && !voiceRecordingPending && !draft\.trim\(\) && !selectedFiles\.length && \(/, "hide the standalone microphone while a recording or staged audio exists");
-  assert.match(dashboard, /else if \(voiceInputActive\) \{\s*void handleVoiceInput\(\);\s*\} else if \(draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode\) \{/, "stop recording first, then expose the send action");
-  assert.match(dashboard, /Stop recording/);
-  assert.match(dashboard, /Preparing voice note/);
-  assert.match(dashboard, /aichat-composer-voice-wave-bars/);
-  assert.match(styles, /\.aichat-composer-input-row\.is-listening/);
-  assert.match(styles, /\.aichat-composer-voice-wave-bars i/);
-  assert.match(styles, /prefers-reduced-motion: reduce/);
+  assert.match(dashboard, /import \{ VoiceInputBar \}/);
+  assert.match(dashboard, /<VoiceInputBar/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal\) => handleSend\(transcript, \{ signal \}\)\}/);
+  assert.match(dashboard, /return typeof res\.aiMessage\.text === "string" \? res\.aiMessage\.text : ""/);
+  assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
+  assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
+  assert.match(voice, /current\.interimResults = true/);
+  assert.match(voice, /current\.continuous = false/);
+  assert.match(voice, /silentRuns < 3/);
+  assert.match(voice, /navigator\.mediaDevices\.getUserMedia\(\{ audio: true \}\)/);
+  assert.match(voice, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
+  assert.match(voice, /createVoiceMode/);
+  assert.match(voice, /new SpeechSynthesisUtterance/);
+  assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
+  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
+  assert.match(component, /aria-label=\{isDictating \? "Stop voice dictation" : "Start voice dictation"\}/);
+  assert.match(component, /aria-label="Start hands-free voice conversation"/);
+  assert.match(component, /Interrupt Misma and listen/);
+  assert.match(component, /"Mute"/);
+  assert.match(component, />\s*End\s*</);
+  assert.match(styles, /\.misma-voice-overlay/);
+  assert.match(styles, /\.misma-voice-orb\[data-state="speaking"\]/);
 });
 
 test("dashboard restores the last visited section and selected conversation after refresh", async () => {
@@ -465,7 +460,12 @@ test("dashboard chat scrolls in a full-width pane with the scrollbar at the far 
 });
 
 
-test("voice note implementation is present", async () => {
-  const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.ok(dashboard.includes("startComposerVoiceRecording"));
+test("voice integration has no audio recording or transcription endpoint", async () => {
+  const voice = await read("../src/lib/misma-voice.ts");
+  const component = await read("../src/components/voice-input-bar.tsx");
+  assert.ok(voice.includes("createDictation"));
+  assert.ok(voice.includes("createVoiceMode"));
+  assert.ok(component.includes("VoiceInputBar"));
+  await assert.rejects(read("../src/routes/api.transcribe.ts"));
+  await assert.rejects(read("../supabase/functions/misma-transcribe/index.ts"));
 });

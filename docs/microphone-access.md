@@ -57,10 +57,12 @@ The microphone stream is held by `src/lib/use-microphone.ts`. It is used only to
 Browser and operating-system menu names can vary by version and device.
 
 
-## Chat voice notes
+## Chat voice input
 
-The dashboard message-bar microphone records audio locally with the browser's MediaRecorder API. While recording, the composer shows a live waveform and a stop control. Stopping the recording creates an audio attachment with an in-composer playback control; the rightmost composer control then changes to the Send arrow. The audio is submitted to Misma when the user presses Send.
+The dashboard message-bar microphone uses the browser's native Speech Recognition API for live dictation. Spoken words appear in the composer as the browser recognizes them; tapping the microphone again stops dictation so the text can be edited and sent normally. Misma does not create an audio recording, attach an audio file, or upload microphone audio for this feature.
 
-The chat Edge Function reads the audio from the signed-in workspace's private `misma-media` bucket and sends it to Groq's transcription endpoint (`https://api.groq.com/openai/v1/audio/transcriptions`) using the server-side `GROQ_API_KEY` secret. The default model is `whisper-large-v3-turbo`, configurable with `GROQ_TRANSCRIPTION_MODEL`. The transcript is added to the user's chat prompt and the original audio remains attached and playable in the conversation. Groq currently documents support for WebM, MP4, M4A, OGG, WAV, MP3 and FLAC audio files, and the transcription endpoint currently supports `whisper-large-v3` and `whisper-large-v3-turbo`. <https://console.groq.com/docs/speech-to-text>
+The separate waveform button opens hands-free voice mode. Misma listens for a spoken turn, sends the recognized text through the existing authenticated `misma-chat` Edge Function, reads the reply aloud with the browser's `speechSynthesis` API, and then listens for the next turn. The orb interrupts the current reply or request and returns to listening; Mute pauses listening and End closes the session. A screen wake lock is requested where the browser supports it.
 
-The separate Settings microphone test remains local-only and never records or uploads audio. The chat voice-note recording is a separate, user-initiated feature; it is kept in the browser until the user stops the recording and submits it with Send.
+Speech recognition is provided by the browser and may vary by browser version, operating system, language, and network availability. The feature requires HTTPS and a browser that exposes `SpeechRecognition` or `webkitSpeechRecognition`. If the browser does not support it, Misma displays a friendly unsupported-browser message. Text recognized by the browser is sent to Misma's normal chat backend; speech audio is not sent to the backend. Text-to-speech playback stays in the browser.
+
+The separate Settings microphone test remains local-only and does not record, transcribe, or upload audio.
