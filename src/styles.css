@@ -7174,3 +7174,6 @@ html, body, #app-root {
 .aichat-composer-card-tools .aichat-composer-sendrow .aichat-composer-send-btn { display: none !important; }
 .aichat-composer-input-row:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
 .aichat-composer-input-row:has(.misma-dictation-surface) { min-height: 52px; }
+
+.aichat-composer-input-row:has(.misma-dictation-surface) { padding-right: 142px; }
+.aichat-composer-input-row:has(.misma-dictation-surface) .misma-dictation-surface { right: 140px; }
