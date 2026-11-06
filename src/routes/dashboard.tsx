@@ -3652,7 +3652,6 @@ function Dashboard() {
                       hasAttachments={selectedFiles.length > 0}
                       hasCreateMode={Boolean(createMode)}
                       busy={isSending || isGeneratingMedia}
-                      hasCreateMode={Boolean(createMode)}
                       disabled={isSending || isGeneratingMedia}
                       onTranscript={(transcript) => {
                         setDraft(transcript);
