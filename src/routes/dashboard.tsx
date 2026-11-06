@@ -835,7 +835,6 @@ function Dashboard() {
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
-  const [voiceBarActive, setVoiceBarActive] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -2147,10 +2146,12 @@ function Dashboard() {
 
   const handleSend = async (
     customPrompt?: string,
-    options: { retry?: boolean } = {},
-  ) => {
+    opt  const handleSend = async (
+    customPrompt?: string,
+    options: { retry?: boolean; signal?: AbortSignal } = {},
+  ): Promise<string | null> => {
     let textToSend = (customPrompt ?? draft).trim();
-    if ((!textToSend && !selectedFiles.length) || isSending || !token) return;
+    if ((!textToSend && !selectedFiles.length) || isSending || !token || options.signal?.aborted) return null;
     if (!textToSend) {
       const hasAudio = selectedFiles.some((file) => file.type.startsWith("audio/"));
       textToSend = hasAudio
@@ -2162,7 +2163,7 @@ function Dashboard() {
     const implicitMediaMode = editingMessageId || includesVoiceNote ? null : detectMediaIntent(textToSend);
     if (implicitMediaMode) {
       void handleCreateMedia(implicitMediaMode, textToSend);
-      return;
+      return null;
     }
 
     const isRetry = options.retry === true;
@@ -2187,9 +2188,13 @@ function Dashboard() {
     setIsSending(true);
     shouldAutoScrollRef.current = true;
     const requestController = new AbortController();
+    const abortFromVoiceMode = () => requestController.abort();
+    options.signal?.addEventListener("abort", abortFromVoiceMode, { once: true });
+    if (options.signal?.aborted) requestController.abort();
     chatAbortControllerRef.current = requestController;
 
     try {
+      if (requestController.signal.aborted) return null;
       const selectedConversation = conversations.find((item: any) => Number(item.id) === Number(currentConversationId));
       if (currentConversationId && selectedConversation?.status === "Needs you" && selectedConversation?.channel !== "Dashboard" && !editId && !isRetry) {
         if (selectedFiles.length) throw new Error("Send text-only replies during a customer handoff.");
@@ -2204,7 +2209,7 @@ function Dashboard() {
         setSelectedFiles([]);
         setThinkHarder(false);
         loadData();
-        return;
+        return null;
       }
       const attachments = editId ? [] : await ensureComposerAttachmentsUploaded(filesToSend);
       if (!editId && filesToSend.length && tempUserId) {
@@ -2250,7 +2255,7 @@ function Dashboard() {
             : prev;
           return [...withPersistedUser, res.aiMessage];
         });
-        if (autoSpeakReplies) handleReadAloud(res.aiMessage);
+        if (autoSpeakReplies && !options.signal) handleReadAloud(res.aiMessage);
       }
 
       setSelectedFiles([]);
@@ -2261,8 +2266,9 @@ function Dashboard() {
       setFailedAction(null);
       setFailedPrompt("");
       loadData();
+      return typeof res.aiMessage.text === "string" ? res.aiMessage.text : "";
     } catch (cause) {
-      if (requestController.signal.aborted) return;
+      if (requestController.signal.aborted) return null;
       const errMsg = cause instanceof Error ? cause.message : "Failed to connect to Misma AI.";
       setChatError(errMsg);
       setFailedPrompt(textToSend);
@@ -2273,7 +2279,9 @@ function Dashboard() {
         setSelectedFiles(filesToSend);
       }
       setDraft(textToSend);
+      return null;
     } finally {
+      options.signal?.removeEventListener("abort", abortFromVoiceMode);
       if (chatAbortControllerRef.current === requestController) {
         chatAbortControllerRef.current = null;
         setIsSending(false);
@@ -2281,9 +2289,7 @@ function Dashboard() {
     }
   };
 
-  const stopMisma = () => {
-    let stopped = false;
-    if (chatAbortControllerRef.current) {
+atAbortControllerRef.current) {
       const controller = chatAbortControllerRef.current;
       chatAbortControllerRef.current = null;
       controller.abort();
@@ -3592,9 +3598,7 @@ function Dashboard() {
                       ))}
                     </div>
                   )}
-                  <div className={`aichat-composer-input-row${voiceBarActive ? " is-voice-recording" : ""}`}>
-                    {!voiceBarActive && (
-                      <>
+                  <div className="aichat-composer-input-row">
                         {createMode ? (
                           <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                             @create {createMode}<span aria-hidden="true">×</span>
@@ -3642,23 +3646,17 @@ function Dashboard() {
                           disabled={isSending}
                           aria-label="Message Misma"
                         />
-                      </>
-                    )}
                     <VoiceInputBar
-                      accessToken={token}
+                      inputValue={draft}
                       disabled={isSending || isGeneratingMedia}
                       onTranscript={(transcript) => {
-                        setDraft((current) => current.trim() ? current.trim() + " " + transcript : transcript);
+                        setDraft(transcript);
                         setChatError("");
                       }}
-                      onSend={async (transcript) => {
-                        await handleSend(transcript);
-                      }}
+                      onSend={(transcript, signal) => handleSend(transcript, { signal })}
                       onError={(message) => setChatError(message)}
-                      onPhaseChange={(phase) => setVoiceBarActive(phase !== "idle")}
                     />
                   </div>
-                  {!voiceBarActive && (
                   <div className="aichat-composer-sendrow">
                     <div className="aichat-composer-plus-wrap">
                       <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
@@ -3721,7 +3719,6 @@ function Dashboard() {
                       )}
                     </button>
                   </div>
-                  )}
                   <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
