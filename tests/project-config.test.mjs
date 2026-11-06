@@ -400,7 +400,7 @@ test("composer dictation is English-only, continuous, gain-assisted, and renders
   assert.match(dashboard, /recognition\.interimResults = true/);
   assert.match(dashboard, /autoGainControl: true/);
   assert.match(dashboard, /channelCount: \{ ideal: 1 \}/);
-  assert.match(dashboard, /inputGain\.gain\.value = 2\.0/);
+  assert.match(dashboard, /inputGain\.gain\.value = 2\.5/);
   assert.match(dashboard, /createDynamicsCompressor\(\)/);
   assert.match(dashboard, /createMediaStreamDestination\(\)/);
   assert.match(dashboard, /recognition\.start\(audioTrack\)/);
