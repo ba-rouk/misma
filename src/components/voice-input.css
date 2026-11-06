@@ -1,18 +1,18 @@
 .misma-voice-input {
-  position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  gap: 3px;
   flex: 0 0 auto;
-  min-width: 38px;
-  z-index: 2;
+  min-width: 72px;
 }
 
-.misma-voice-trigger {
+.misma-voice-trigger,
+.misma-voice-mode-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 35px;
+  height: 35px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -20,18 +20,22 @@
   background: transparent;
   cursor: pointer;
   transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.misma-voice-trigger:hover:not(:disabled) {
+.misma-voice-trigger:hover:not(:disabled),
+.misma-voice-mode-trigger:hover:not(:disabled) {
   color: var(--text-primary, #f3f4f6);
   background: var(--surface-hover, rgba(255, 255, 255, 0.07));
 }
 
-.misma-voice-trigger:active:not(:disabled) {
+.misma-voice-trigger:active:not(:disabled),
+.misma-voice-mode-trigger:active:not(:disabled) {
   transform: scale(0.94);
 }
 
-.misma-voice-trigger:disabled {
+.misma-voice-trigger:disabled,
+.misma-voice-mode-trigger:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
@@ -46,220 +50,211 @@
   stroke-linejoin: round;
 }
 
-.misma-voice-input.is-active {
-  width: 100%;
-  min-width: 0;
-  flex: 1 1 100%;
-  animation: misma-voice-enter 180ms ease-out both;
-}
-
-.misma-voice-recording-pill {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-  min-height: 54px;
-  gap: 10px;
-  padding: 7px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 999px;
-  background: #17191e;
-  color: #f4f4f5;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.13);
-  transition: background 180ms ease, border-color 180ms ease;
-}
-
-.misma-voice-recording-pill.is-transcribing {
-  background: #1c1e23;
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.misma-voice-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 50%;
-  color: #f6f6f7;
-  background: rgba(255, 255, 255, 0.055);
-  cursor: pointer;
-  transition: transform 140ms ease, background 140ms ease, opacity 140ms ease;
-}
-
-.misma-voice-control:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.13);
-}
-
-.misma-voice-control:active:not(:disabled) {
-  transform: scale(0.93);
-}
-
-.misma-voice-control:disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
-
-.misma-voice-control svg {
-  display: block;
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.misma-voice-control.is-stop {
-  background: rgba(255, 255, 255, 0.11);
-}
-
-.misma-voice-control.is-stop svg {
+.misma-voice-mode-trigger svg {
+  width: 19px;
+  height: 19px;
   fill: currentColor;
   stroke: none;
 }
 
-.misma-voice-control.is-send {
-  border-color: #d97757;
-  color: #fff;
-  background: #d97757;
-}
-
-.misma-voice-control.is-send:hover:not(:disabled) {
-  background: #c96949;
-}
-
-.misma-voice-control.is-send svg {
-  width: 19px;
-  height: 19px;
-  stroke-width: 2.1;
-}
-
-.misma-voice-waveform {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 34px;
-  gap: 3px;
-  overflow: hidden;
-}
-
-.misma-voice-waveform i {
-  display: block;
-  flex: 0 0 3px;
-  width: 3px;
-  min-height: 3px;
-  max-height: 28px;
-  border-radius: 999px;
-  background: #f5f5f5;
-  transform-origin: center;
-  transition: height 65ms linear, opacity 65ms linear;
-}
-
-.misma-voice-status-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  color: #d4d4d8;
-  background: rgba(23, 25, 30, 0.82);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  pointer-events: none;
+.misma-voice-trigger.is-recording {
+  color: #ff7777;
+  background: rgba(255, 95, 95, 0.1);
+  animation: misma-voice-pulse 1.2s ease-in-out infinite;
 }
 
 .misma-voice-spinner {
   display: block;
   width: 17px;
   height: 17px;
-  border: 2px solid rgba(255, 255, 255, 0.38);
-  border-top-color: #fff;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
   border-radius: 50%;
   animation: misma-voice-spin 720ms linear infinite;
 }
 
-.misma-voice-toast {
-  position: absolute;
-  z-index: 5;
-  left: 50%;
-  bottom: calc(100% + 9px);
-  max-width: min(280px, 80vw);
-  padding: 7px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #f8fafc;
-  background: #25282e;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
-  font-size: 12px;
-  line-height: 1.35;
-  text-align: center;
-  transform: translateX(-50%);
-  animation: misma-voice-enter 140ms ease-out both;
-  pointer-events: none;
-}
-
-.aichat-composer-input-row.is-voice-recording {
+.misma-voice-overlay {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  width: 100%;
-  min-width: 0;
-  padding: 0;
+  justify-content: space-between;
+  gap: 18px;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) 24px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  color: #f4f6fb;
+  background: #0b0d12;
+  font-family: inherit;
+  animation: misma-voice-overlay-in 180ms ease-out both;
 }
 
-.aichat-composer-input-row.is-voice-recording .misma-voice-input {
+.misma-voice-overlay-close {
+  align-self: flex-end;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  color: #f4f6fb;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.misma-voice-overlay-close svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.misma-voice-overlay-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  flex: 1 1 100%;
+  max-width: 38rem;
+  min-height: 0;
+  gap: 20px;
+}
+
+.misma-voice-orb {
+  display: grid;
+  place-items: center;
+  width: min(44vw, 190px);
+  height: min(44vw, 190px);
+  min-width: 132px;
+  min-height: 132px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #e1edff, #8ab4ff 46%, #3b5bdb 100%);
+  box-shadow: 0 0 70px rgba(108, 151, 255, 0.28), inset 0 0 32px rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
+}
+
+.misma-voice-orb span {
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.38);
+  filter: blur(10px);
+}
+
+.misma-voice-orb[data-state="listening"] {
+  animation: misma-voice-breathe 1.8s ease-in-out infinite;
+}
+
+.misma-voice-orb[data-state="thinking"] {
+  animation: misma-voice-think 1s ease-in-out infinite;
+}
+
+.misma-voice-orb[data-state="speaking"] {
+  animation: misma-voice-speak 0.7s ease-in-out infinite;
+}
+
+.misma-voice-orb[data-state="muted"] {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.misma-voice-overlay-status {
+  min-height: 1.4em;
+  margin: 0;
+  color: rgba(244, 246, 251, 0.76);
+  font-size: 15px;
+  text-align: center;
+}
+
+.misma-voice-overlay-transcript {
+  width: 100%;
+  max-height: 28vh;
+  margin: 0;
+  overflow-y: auto;
+  color: #f4f6fb;
+  font-size: 17px;
+  line-height: 1.55;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.misma-voice-overlay-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.misma-voice-overlay-btn {
+  min-width: 104px;
+  min-height: 44px;
+  padding: 11px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  color: #f4f6fb;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.misma-voice-overlay-btn[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.misma-voice-overlay-btn.is-end {
+  border-color: transparent;
+  color: #fff;
+  background: #e5484d;
 }
 
 @keyframes misma-voice-spin {
   to { transform: rotate(360deg); }
 }
 
-@keyframes misma-voice-enter {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes misma-voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.42); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 107, 107, 0); }
+}
+
+@keyframes misma-voice-breathe {
+  0%, 100% { transform: scale(0.96); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes misma-voice-think {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 0.95; transform: scale(1); }
+}
+
+@keyframes misma-voice-speak {
+  0%, 100% { transform: scale(0.98); }
+  50% { transform: scale(1.12); }
+}
+
+@keyframes misma-voice-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 520px) {
-  .misma-voice-recording-pill {
-    min-height: 52px;
-    gap: 7px;
-    padding: 6px 7px;
-  }
-
-  .misma-voice-control {
-    flex-basis: 34px;
-    width: 34px;
-    height: 34px;
-  }
-
-  .misma-voice-waveform {
-    gap: 2px;
-  }
-
-  .misma-voice-waveform i {
-    flex-basis: 2.5px;
-    width: 2.5px;
-  }
+  .misma-voice-input { min-width: 66px; gap: 0; }
+  .misma-voice-trigger,
+  .misma-voice-mode-trigger { width: 33px; height: 33px; }
+  .misma-voice-overlay { padding-left: 18px; padding-right: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .misma-voice-input,
   .misma-voice-trigger,
-  .misma-voice-control,
-  .misma-voice-waveform i,
-  .misma-voice-spinner {
-    animation: none !important;
-    transition: none !important;
-  }
+  .misma-voice-mode-trigger,
+  .misma-voice-orb,
+  .misma-voice-spinner { animation: none !important; transition: none !important; }
 }
