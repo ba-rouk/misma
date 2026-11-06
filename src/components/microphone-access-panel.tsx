@@ -31,7 +31,7 @@ export function MicrophoneAccessPanel() {
       </div>
 
       <p className="misma-mic-privacy">
-        Your microphone is used only while this test is active. Audio is analysed locally for the level meter; Misma does not record or upload it.
+        This Settings test analyses audio locally and never records or uploads it. Chat voice notes are separate and are submitted only when you press Send.
       </p>
 
       {isActive ? (

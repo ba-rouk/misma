@@ -57,8 +57,10 @@ The microphone stream is held by `src/lib/use-microphone.ts`. It is used only to
 Browser and operating-system menu names can vary by version and device.
 
 
-## Composer English dictation
+## Chat voice notes
 
-The dashboard message-bar microphone uses the browser's Web Speech recognition service. It is fixed to English (United States), accepts continuous speech, and places interim and final recognized words into the editable message field. The live waveform is calculated from the microphone signal locally through Web Audio; a high-pass filter, automatic gain control, modest software gain, and a dynamics compressor help make quieter speech easier to recognize. The processed audio is passed directly to the browser speech-recognition API and is not played through the speakers.
+The dashboard message-bar microphone records audio locally with the browser's MediaRecorder API. While recording, the composer shows a live waveform and a stop control. Stopping the recording creates an audio attachment with an in-composer playback control; the rightmost composer control then changes to the Send arrow. The audio is submitted to Misma when the user presses Send.
 
-Misma does not create or store an audio recording. Browser speech recognition is not universally available and may use a remote recognition service; for example, Chrome can send speech audio to its browser speech service for transcription. Only the resulting editable text is sent to Misma when the user presses **Send**. Browser/network availability and the selected microphone still affect recognition quality.
+The chat Edge Function reads the audio from the signed-in workspace's private `misma-media` bucket and sends it to Groq's transcription endpoint (`https://api.groq.com/openai/v1/audio/transcriptions`) using the server-side `GROQ_API_KEY` secret. The default model is `whisper-large-v3-turbo`, configurable with `GROQ_TRANSCRIPTION_MODEL`. The transcript is added to the user's chat prompt and the original audio remains attached and playable in the conversation. Groq currently documents support for WebM, MP4, M4A, OGG, WAV, MP3 and FLAC audio files, and the transcription endpoint currently supports `whisper-large-v3` and `whisper-large-v3-turbo`. <https://console.groq.com/docs/speech-to-text>
+
+The separate Settings microphone test remains local-only and never records or uploads audio. The chat voice-note recording is a separate, user-initiated feature; it is kept in the browser until the user stops the recording and submits it with Send.
