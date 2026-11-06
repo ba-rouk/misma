@@ -13,6 +13,7 @@ type VoiceInputBarProps = {
   disabled?: boolean;
   lang?: string;
   onTranscript: (text: string) => void;
+  onDictationDone?: () => void;
   onSend: (text: string, signal: AbortSignal) => Promise<string | null | undefined>;
   onError: (message: string) => void;
 };
@@ -42,6 +43,7 @@ export function VoiceInputBar({
   disabled = false,
   lang,
   onTranscript,
+  onDictationDone,
   onSend,
   onError,
 }: VoiceInputBarProps) {
@@ -54,8 +56,8 @@ export function VoiceInputBar({
 
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
-  const callbacksRef = useRef({ onTranscript, onSend, onError });
-  callbacksRef.current = { onTranscript, onSend, onError };
+  const callbacksRef = useRef({ onTranscript, onDictationDone, onSend, onError });
+  callbacksRef.current = { onTranscript, onDictationDone, onSend, onError };
   const baseDraftRef = useRef("");
   const dictationRef = useRef<DictationController | null>(null);
   const voiceRef = useRef<VoiceModeController | null>(null);
@@ -73,6 +75,7 @@ export function VoiceInputBar({
         if (transcript) {
           callbacksRef.current.onTranscript([base, transcript].filter(Boolean).join(base ? " " : ""));
         }
+        callbacksRef.current.onDictationDone?.();
         setDictationRequesting(false);
       },
       onState: (state) => {
