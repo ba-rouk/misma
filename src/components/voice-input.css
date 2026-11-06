@@ -11,7 +11,7 @@
 .misma-voice-action-wave,.misma-voice-action-send{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transform:scale(.72);transition:opacity 150ms ease,transform 150ms ease;pointer-events:none}
 .misma-voice-action-wave svg,.misma-voice-action-send svg{width:22px;height:22px;fill:currentColor;stroke:none}
 .misma-voice-action-send svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.misma-voice-main-action:not(.has-content) .misma-voice-action-wave,.misma-voice-main-action.has-content .misma-voice-action-send,.misma-voice-main-action.is-busy .misma-voice-action-send{opacity:1;transform:scale(1)}
+.misma-voice-main-action:not(.has-content):not(.is-busy) .misma-voice-action-wave,.misma-voice-main-action.has-content .misma-voice-action-send,.misma-voice-main-action.is-busy .misma-voice-action-send{opacity:1;transform:scale(1)}
 .misma-voice-main-action.is-busy .misma-voice-action-send svg{fill:currentColor;stroke:none}
 .misma-dictation-surface{position:absolute;z-index:4;top:0;right:106px;bottom:0;left:4px;display:flex;align-items:center;gap:10px;min-height:44px;padding:3px 8px;color:#eaf0f9;background:#111925;border:1px solid rgba(132,157,195,.25);border-radius:12px;pointer-events:none}
 .misma-dictation-waveform{display:flex;flex:1;align-items:center;justify-content:center;gap:3px;min-width:0;height:36px}
