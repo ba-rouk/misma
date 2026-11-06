@@ -391,6 +391,27 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(docs, /allow="microphone"/);
 });
 
+test("composer dictation is English-only, continuous, gain-assisted, and renders a live waveform", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /recognition\.lang = "en-US"/);
+  assert.match(dashboard, /recognition\.continuous = true/);
+  assert.match(dashboard, /recognition\.interimResults = true/);
+  assert.match(dashboard, /autoGainControl: true/);
+  assert.match(dashboard, /channelCount: \{ ideal: 1 \}/);
+  assert.match(dashboard, /inputGain\.gain\.value = 2\.0/);
+  assert.match(dashboard, /createDynamicsCompressor\(\)/);
+  assert.match(dashboard, /createMediaStreamDestination\(\)/);
+  assert.match(dashboard, /recognition\.start\(audioTrack\)/);
+  assert.match(dashboard, /voiceInputBaseDraftRef/);
+  assert.match(dashboard, /voiceInputWaveform\.map/);
+  assert.match(dashboard, /aichat-composer-voice-wave-bars/);
+  assert.match(styles, /\.aichat-composer-input-row\.is-listening/);
+  assert.match(styles, /\.aichat-composer-voice-wave-bars i/);
+  assert.match(styles, /prefers-reduced-motion: reduce/);
+});
+
 test("dashboard restores the last visited section and selected conversation after refresh", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
 
