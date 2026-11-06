@@ -1026,6 +1026,9 @@ function Dashboard() {
   const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
   const voiceProcessedTrackRef = useRef<MediaStreamTrack | null>(null);
   const voiceMeterFrameRef = useRef<number | null>(null);
+  const voiceInputHasAudioRef = useRef(false);
+  const voiceInputReceivedResultRef = useRef(false);
+  const voiceInputFallbackAttemptedRef = useRef(false);
   const microphonePermissionRequestRef = useRef(false);
   const composerMicrophoneMountedRef = useRef(true);
   const shouldAutoScrollRef = useRef(true);
@@ -1732,8 +1735,17 @@ function Dashboard() {
           energy += sample * sample;
         }
         const rms = Math.sqrt(energy / (last - first));
-        return Math.max(0.07, Math.min(1, rms * 14));
+        return Math.max(0.07, Math.min(1, rms * 30));
       });
+
+      let frameEnergy = 0;
+      for (const sample of samples) {
+        const normalized = (sample - 128) / 128;
+        frameEnergy += normalized * normalized;
+      }
+      if (Math.sqrt(frameEnergy / samples.length) > 0.0035) {
+        voiceInputHasAudioRef.current = true;
+      }
 
       if (time - lastUpdateAt >= 60) {
         lastUpdateAt = time;
@@ -1788,6 +1800,7 @@ function Dashboard() {
       setChatError("");
     };
     recognition.onresult = (event: any) => {
+      voiceInputReceivedResultRef.current = true;
       const transcript = Array.from(event.results as ArrayLike<any>)
         .map((result: any) => String(result?.[0]?.transcript || "").trim())
         .filter(Boolean)
@@ -1817,6 +1830,22 @@ function Dashboard() {
       }
     };
     recognition.onend = () => {
+      // Some Chromium builds accept start(audioTrack) but fail to return speech results.
+      // If the analyser confirms real microphone activity, retry once using the browser's native mic capture.
+      if (
+        voiceRecognitionWantedRef.current &&
+        useAudioTrack &&
+        voiceInputHasAudioRef.current &&
+        !voiceInputReceivedResultRef.current &&
+        !voiceInputFallbackAttemptedRef.current
+      ) {
+        voiceInputFallbackAttemptedRef.current = true;
+        if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
+        window.setTimeout(() => {
+          if (voiceRecognitionWantedRef.current) startVoiceRecognition();
+        }, 140);
+        return;
+      }
       if (voiceRecognitionWantedRef.current && speechRecognitionRef.current === recognition) {
         window.setTimeout(() => {
           if (!voiceRecognitionWantedRef.current || speechRecognitionRef.current !== recognition) return;
@@ -1876,6 +1905,9 @@ function Dashboard() {
 
     stopComposerMicrophoneStream();
     voiceRecognitionWantedRef.current = true;
+    voiceInputHasAudioRef.current = false;
+    voiceInputReceivedResultRef.current = false;
+    voiceInputFallbackAttemptedRef.current = false;
     setChatError("");
     setVoiceInputWaveform(Array.from({ length: 30 }, () => 0.07));
     microphonePermissionRequestRef.current = true;
@@ -1934,15 +1966,15 @@ function Dashboard() {
           const source = pendingAudioContext.createMediaStreamSource(stream);
           const highPass = pendingAudioContext.createBiquadFilter();
           highPass.type = "highpass";
-          highPass.frequency.value = 85;
+          highPass.frequency.value = 70;
 
           const inputGain = pendingAudioContext.createGain();
-          inputGain.gain.value = 2.5;
+          inputGain.gain.value = 3.2;
 
           const compressor = pendingAudioContext.createDynamicsCompressor();
-          compressor.threshold.value = -30;
-          compressor.knee.value = 20;
-          compressor.ratio.value = 3;
+          compressor.threshold.value = -38;
+          compressor.knee.value = 18;
+          compressor.ratio.value = 4.5;
           compressor.attack.value = 0.004;
           compressor.release.value = 0.24;
 
