@@ -3650,6 +3650,7 @@ function Dashboard() {
                     <VoiceInputBar
                       inputValue={draft}
                       hasAttachments={selectedFiles.length > 0}
+                      hasCreateMode={Boolean(createMode)}
                       disabled={isSending || isGeneratingMedia}
                       onTranscript={(transcript) => {
                         setDraft(transcript);
