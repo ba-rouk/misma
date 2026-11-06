@@ -410,6 +410,8 @@ test("composer dictation is English-only, continuous, gain-assisted, and renders
   assert.match(dashboard, /recognition\.start\(audioTrack\)/);
   assert.match(dashboard, /voiceInputBaseDraftRef/);
   assert.match(dashboard, /voiceInputWaveform\.map/);
+  assert.match(dashboard, /!draft\.trim\(\) && \(/, "hide the microphone control as soon as a transcript is available");
+  assert.match(dashboard, /if \(draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode\) \{\s*if \(voiceInputActive\) handleVoiceInput\(\);\s*if \(createMode\) void handleCreateMedia\(\);\s*else void handleSend\(\);/, "send the transcript instead of treating the send click as stop-listening");
   assert.match(dashboard, /aichat-composer-voice-wave-bars/);
   assert.match(styles, /\.aichat-composer-input-row\.is-listening/);
   assert.match(styles, /\.aichat-composer-voice-wave-bars i/);
