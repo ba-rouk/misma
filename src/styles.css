@@ -7165,3 +7165,12 @@ html, body, #app-root {
 .aichat-composer-card-tools .aichat-composer-sendrow { min-height: 44px; }
 
 .aichat-composer-card-tools .aichat-composer-send-btn { width: 44px; height: 44px; }
+
+
+/* The mic and single wave/send action share the text-field row. */
+.aichat-composer-input-row { position: relative; min-height: 52px; padding-right: 98px; }
+.aichat-composer-input-row .aichat-composer-textarea { padding-right: 0 !important; }
+.aichat-composer-input-row .misma-voice-input { right: 0; top: 50%; bottom: auto; transform: translateY(-50%); }
+.aichat-composer-card-tools .aichat-composer-sendrow .aichat-composer-send-btn { display: none !important; }
+.aichat-composer-input-row:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
+.aichat-composer-input-row:has(.misma-dictation-surface) { min-height: 52px; }
