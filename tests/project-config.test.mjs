@@ -405,8 +405,10 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /send\(text, request\.signal, true\)/);
   assert.match(voice, /new SpeechSynthesisUtterance/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
-  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
+  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
   assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
+  assert.match(component, /Stop dictation and send transcript/);
+  assert.match(component, /finishDictation\(true\)/);
   assert.match(component, /aria-label=\{dictating \? "Dictation is active" : "Start voice dictation"\}/);
   assert.match(component, /Start voice mode/);
   assert.match(component, /AUTO_SEND_ON_DICTATION = false/);
