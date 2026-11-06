@@ -7152,3 +7152,14 @@ html, body, #app-root {
 .aichat-composer-card-tools:has(.misma-voice-trigger.is-recording) .aichat-composer-send-btn { display: none !important; }
 .aichat-composer-card-tools:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
 .aichat-composer-card-tools .aichat-composer-sendrow { min-height: 44px; }
+
+
+/* Crossfade the single right-side action between voice and send. */
+.aichat-composer-card-tools { position: relative; padding-bottom: 58px; }
+.aichat-composer-card-tools .aichat-composer-input-row { position: static; }
+.aichat-composer-card-tools .aichat-composer-input-row .aichat-composer-textarea { padding-right: 4px; }
+.aichat-composer-card-tools:has(.misma-voice-mode-trigger) .aichat-composer-send-btn,
+.aichat-composer-card-tools:has(.misma-dictation-surface) .aichat-composer-send-btn { opacity: 0 !important; visibility: hidden !important; transform: scale(.72); pointer-events: none; }
+.aichat-composer-card-tools .aichat-composer-sendrow .aichat-composer-send-btn { transition: opacity 150ms ease, transform 150ms ease, visibility 150ms ease; }
+.aichat-composer-card-tools:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
+.aichat-composer-card-tools .aichat-composer-sendrow { min-height: 44px; }
