@@ -114,7 +114,8 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(dashboard, /aichat-chat-group-filter-menu/);
   assert.match(dashboard, /import \{ VoiceInputBar \}/);
   assert.match(dashboard, /<VoiceInputBar/);
-  assert.match(dashboard, /onSend=\{\(transcript, signal, voice\) => handleSend\(transcript, \{ signal, voice \}\)\}/);
+  assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>/);
+  assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(microphone, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
@@ -405,6 +406,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /new SpeechSynthesisUtterance/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
+  assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
   assert.match(component, /aria-label=\{dictating \? "Dictation is active" : "Start voice dictation"\}/);
   assert.match(component, /Start voice mode/);
   assert.match(component, /AUTO_SEND_ON_DICTATION = false/);
@@ -475,4 +477,16 @@ test("voice integration has no audio recording or transcription endpoint", async
   assert.ok(component.includes("VoiceInputBar"));
   await assert.rejects(read("../src/routes/api.transcribe.ts"));
   await assert.rejects(read("../supabase/functions/misma-transcribe/index.ts"));
+});
+
+
+test("voice chat requests receive concise spoken replies and never upload recorded audio", async () => {
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const voice = await read("../src/lib/misma-voice.ts");
+  assert.match(dashboard, /voice: options\?\.voice === true/);
+  assert.match(edgeFunction, /const voice = input\.voice === true/);
+  assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
+  assert.doesNotMatch(edgeFunction, /transcribeAudioAttachment|audio\/transcriptions|VOICE NOTE:/);
+  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
 });
