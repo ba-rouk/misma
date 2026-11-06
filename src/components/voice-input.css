@@ -1,3 +1,8 @@
+:root {
+  --mv-send: #d97757;
+  --mv-send-fg: #ffffff;
+}
+
 .misma-voice-composer {
   display: flex;
   align-items: center;
