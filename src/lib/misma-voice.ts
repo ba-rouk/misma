@@ -1,73 +1,70 @@
 export type DictationState = "idle" | "listening";
-export type VoiceModeState = "idle" | "listening" | "thinking" | "speaking" | "muted";
+export type VoiceModeState = "idle" | "listening" | "thinking" | "speaking" | "muted" | "ready";
+export type VoiceInputMode = "hands-free" | "push-to-talk";
 
 type RecognitionResult = { isFinal: boolean; 0: { transcript: string } };
 type RecognitionEvent = { resultIndex: number; results: ArrayLike<RecognitionResult> };
 type RecognitionErrorEvent = { error: string };
-
 type SpeechRecognitionLike = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
+  lang: string; interimResults: boolean; continuous: boolean;
   onstart: (() => void) | null;
   onresult: ((event: RecognitionEvent) => void) | null;
   onerror: ((event: RecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
+  start(): void; stop(): void; abort(): void;
 };
-
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+const START_TIMEOUT_MS = 8000;
+const QUIET_WAVEFORM = () => Array.from({ length: 28 }, () => 0.035);
 
 function getSpeechRecognition(): SpeechRecognitionConstructor | null {
   if (typeof window === "undefined") return null;
-  const browserWindow = window as Window & {
+  const w = window as Window & {
     SpeechRecognition?: SpeechRecognitionConstructor;
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
   };
-  return browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition || null;
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
+
+function normalizeError(cause: unknown): string {
+  if (cause && typeof cause === "object" && "code" in cause) return String((cause as { code: unknown }).code);
+  const name = cause instanceof Error ? cause.name : "";
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") return "permission";
+  if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "NotReadableError") return "audio-capture";
+  if (name === "NotSupportedError") return "unsupported";
+  return "permission";
+}
+
+/** Request microphone access for the local waveform meter. Audio is never recorded or uploaded. */
+async function requestMicrophone(): Promise<MediaStream> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia ||
+      (typeof window !== "undefined" && !window.isSecureContext)) {
+    throw Object.assign(new Error("unsupported"), { code: "unsupported" });
+  }
+  const request = navigator.mediaDevices.getUserMedia({ audio: true });
+  let timer = 0;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = window.setTimeout(() => reject(Object.assign(new Error("permission-timeout"), { code: "permission-timeout" })), START_TIMEOUT_MS);
+    });
+    return await Promise.race([request, timeout]);
+  } catch (cause) {
+    request.then((lateStream) => lateStream.getTracks().forEach((track) => track.stop())).catch(() => undefined);
+    throw Object.assign(new Error(normalizeError(cause)), { code: normalizeError(cause) });
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 export const voiceSupport = {
-  get stt(): boolean {
-    return Boolean(getSpeechRecognition());
-  },
-  get tts(): boolean {
-    return typeof window !== "undefined" && "speechSynthesis" in window;
-  },
+  get stt(): boolean { return Boolean(getSpeechRecognition()); },
+  get tts(): boolean { return typeof window !== "undefined" && "speechSynthesis" in window; },
 };
 
-/** Request browser mic permission and release the stream; speech recognition owns capture. */
-export async function ensureMicPermission(): Promise<void> {
-  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-    throw Object.assign(new Error("unsupported"), { code: "unsupported" });
-  }
-  if (typeof window !== "undefined" && !window.isSecureContext) {
-    throw Object.assign(new Error("insecure"), { code: "unsupported" });
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((track) => track.stop());
-  } catch (cause) {
-    const name = cause instanceof Error ? cause.name : "";
-    const code = name === "NotAllowedError" || name === "PermissionDeniedError"
-      ? "permission"
-      : name === "NotFoundError" || name === "DevicesNotFoundError"
-        ? "no-device"
-        : name === "NotReadableError" || name === "TrackStartError"
-          ? "in-use"
-          : "permission";
-    throw Object.assign(new Error(code), { code });
-  }
-}
-
-/** Remove markdown and formatting that should not be spoken by text-to-speech. */
 export function cleanForSpeech(text = ""): string {
   return String(text)
-    .replace(/\`\`\`[\s\S]*?\`\`\`/g, " (code omitted) ")
-    .replace(/\`([^\`]+)\`/g, "$1")
+    .replace(/```[\s\S]*?```/g, " code omitted ")
+    .replace(/`([^`]+)`/g, "$1")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/^\s*[-•*]\s+/gm, "")
@@ -77,23 +74,18 @@ export function cleanForSpeech(text = ""): string {
     .trim();
 }
 
-/** Sentence-sized chunks prevent long Android Chrome utterances from being cut off. */
 export function toSpeechChunks(text: string, max = 200): string[] {
   const sentences = text.match(/[^.!?]+[.!?]*\s*/g) || [];
-  const output: string[] = [];
+  const chunks: string[] = [];
   let current = "";
-
   for (const sentence of sentences) {
     if (current && (current + sentence).length > max) {
-      output.push(current.trim());
+      chunks.push(current.trim());
       current = sentence;
-    } else {
-      current += sentence;
-    }
+    } else current += sentence;
   }
-
-  if (current.trim()) output.push(current.trim());
-  return output;
+  if (current.trim()) chunks.push(current.trim());
+  return chunks;
 }
 
 type DictationOptions = {
@@ -101,188 +93,202 @@ type DictationOptions = {
   onText?: (transcript: string) => void;
   onDone?: (finalTranscript: string) => void;
   onState?: (state: DictationState) => void;
+  onWaveform?: (levels: number[]) => void;
   onError?: (code: string) => void;
 };
 
-/** Browser-native live dictation. Speech audio is never recorded or uploaded. */
+/** Live dictation with a local Web Audio waveform meter. No recording or file upload. */
 export function createDictation({
   lang = typeof navigator === "undefined" ? "en-US" : navigator.language || "en-US",
-  onText,
-  onDone,
-  onState,
-  onError,
+  onText, onDone, onState, onWaveform, onError,
 }: DictationOptions = {}) {
   let recognition: SpeechRecognitionLike | null = null;
   let active = false;
+  let finishRequested = false;
   let finalText = "";
-  let silentRuns = 0;
-  let restartTimer: number | null = null;
-  let discardResult = false;
-  let startTimer: number | null = null;
+  let interimText = "";
+  let restartTimer = 0;
+  let startTimer = 0;
+  let stopFallbackTimer = 0;
+  let stream: MediaStream | null = null;
+  let audioContext: AudioContext | null = null;
+  let analyser: AnalyserNode | null = null;
+  let animationFrame = 0;
+  let started = false;
 
-  const clearRestart = () => {
-    if (restartTimer !== null && typeof window !== "undefined") {
-      window.clearTimeout(restartTimer);
-    }
-    restartTimer = null;
-    if (startTimer !== null) window.clearTimeout(startTimer);
-    startTimer = null;
+  const clearTimers = () => {
+    window.clearTimeout(restartTimer);
+    window.clearTimeout(startTimer);
+    window.clearTimeout(stopFallbackTimer);
+    restartTimer = startTimer = stopFallbackTimer = 0;
   };
 
-  const finish = () => {
-    clearRestart();
-    recognition = null;
+  const releaseAudio = () => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = 0;
+    stream?.getTracks().forEach((track) => track.stop());
+    stream = null;
+    if (audioContext && audioContext.state !== "closed") void audioContext.close().catch(() => undefined);
+    audioContext = null;
+    analyser = null;
+    onWaveform?.(QUIET_WAVEFORM());
+  };
+
+  const finishNow = (commit: boolean) => {
+    if (!active && !recognition && !stream && !audioContext) return;
     active = false;
+    clearTimers();
+    const current = recognition;
+    recognition = null;
+    try { current?.abort(); } catch { /* Recognition may already have ended. */ }
+    releaseAudio();
     onState?.("idle");
-    if (!discardResult) onDone?.(finalText.trim());
+    if (commit) onDone?.(finalText.trim());
   };
 
-  const begin = () => {
-    const Recognition = getSpeechRecognition();
-    if (!Recognition || !active) return;
+  const fail = (code: string) => {
+    finishNow(false);
+    onError?.(code);
+  };
 
-    const current = new Recognition();
+  const meterTick = () => {
+    if (!active || !analyser) return;
+    const data = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(data);
+    let energy = 0;
+    for (const byte of data) {
+      const sample = (byte - 128) / 128;
+      energy += sample * sample;
+    }
+    const rms = Math.sqrt(energy / data.length);
+    const now = performance.now();
+    const levels = Array.from({ length: 28 }, (_, index) => {
+      const mod = 0.55 + 0.45 * Math.abs(Math.sin(index * 1.7 + now / 115));
+      return Math.max(0.035, Math.min(1, rms * 9 * mod));
+    });
+    onWaveform?.(levels);
+    animationFrame = requestAnimationFrame(meterTick);
+  };
+
+  const beginRecognition = () => {
+    const Constructor = getSpeechRecognition();
+    if (!Constructor || !active || finishRequested) return;
+    const current = new Constructor();
     recognition = current;
+    started = false;
+    interimText = "";
     current.lang = lang;
     current.interimResults = true;
     current.continuous = false;
-    let gotSpeech = false;
-    let recognitionStarted = false;
     current.onstart = () => {
-      recognitionStarted = true;
-      if (startTimer !== null) window.clearTimeout(startTimer);
-      startTimer = null;
+      started = true;
+      window.clearTimeout(startTimer);
+      startTimer = 0;
     };
-    startTimer = window.setTimeout(() => {
-      if (active && recognition === current && !recognitionStarted) {
-        active = false;
-        try { current.abort(); } catch { /* already ended */ }
-        recognition = null;
-        clearRestart();
-        onState?.("idle");
-        onError?.("start-timeout");
-      }
-    }, 8000);
-
     current.onresult = (event) => {
-      let interim = "";
+      interimText = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
         const spoken = String(result?.[0]?.transcript || "").trim();
         if (!spoken) continue;
         if (result.isFinal) finalText = [finalText, spoken].filter(Boolean).join(" ").trim();
-        else interim = [interim, spoken].filter(Boolean).join(" ").trim();
+        else interimText = [interimText, spoken].filter(Boolean).join(" ").trim();
       }
-      if (interim || finalText) {
-        gotSpeech = true;
-        onText?.([finalText, interim].filter(Boolean).join(" ").trim());
-      }
+      onText?.([finalText, interimText].filter(Boolean).join(" ").trim());
     };
-
     current.onerror = (event) => {
-      if (event.error === "no-speech" || event.error === "aborted") return;
-      active = false;
-      clearRestart();
-      if (recognition === current) recognition = null;
-      onState?.("idle");
-      onError?.(
-        event.error === "not-allowed" || event.error === "service-not-allowed"
-          ? "permission"
-          : event.error,
-      );
+      if (event.error === "aborted") return;
+      const code = event.error === "not-allowed" || event.error === "service-not-allowed"
+        ? "permission"
+        : event.error === "audio-capture" ? "audio-capture"
+          : event.error === "no-speech" ? "no-speech"
+            : event.error === "network" ? "network" : event.error || "recognition";
+      fail(code);
     };
-
     current.onend = () => {
-      if (startTimer !== null) window.clearTimeout(startTimer);
-      startTimer = null;
       if (recognition !== current) return;
       recognition = null;
-
-      if (active) {
-        silentRuns = gotSpeech ? 0 : silentRuns + 1;
-        if (silentRuns < 3) {
-          restartTimer = window.setTimeout(() => {
-            restartTimer = null;
-            if (!active) return;
-            try {
-              begin();
-            } catch {
-              finish();
-              onError?.("recognition");
-            }
-          }, 140);
-          return;
-        }
-      }
-      finish();
-    };
-
-    current.start();
-  };
-
-  return {
-    async start() {
-      if (active) return;
-      if (!getSpeechRecognition()) {
-        onError?.("unsupported");
-        return;
-      }
-
-      active = true;
-      finalText = "";
-      discardResult = false;
-      silentRuns = 0;
-      clearRestart();
-
-      try {
-        await ensureMicPermission();
-      } catch (cause) {
-        active = false;
-        onState?.("idle");
-        const code = cause && typeof cause === "object" && "code" in cause
-          ? String((cause as { code: unknown }).code)
-          : "permission";
-        onError?.(code);
+      if (finishRequested) {
+        finishRequested = false;
+        finishNow(true);
         return;
       }
       if (!active) return;
+      restartTimer = window.setTimeout(() => {
+        restartTimer = 0;
+        if (active && !finishRequested) {
+          try { beginRecognition(); } catch { fail("recognition"); }
+        }
+      }, 180);
+    };
+    startTimer = window.setTimeout(() => {
+      if (active && recognition === current && !started) fail("start-timeout");
+    }, START_TIMEOUT_MS);
+    current.start();
+  };
 
-      onState?.("listening");
-      try {
-        begin();
-      } catch {
-        active = false;
-        onState?.("idle");
-        onError?.("recognition");
-      }
-    },
-
-    cancel() {
-      discardResult = true;
-      finalText = "";
-      this.stop();
-    },
-
-    stop() {
-      if (!active && !recognition) return;
-      active = false;
-      clearRestart();
-      const current = recognition;
-      if (!current) {
-        finish();
+  const start = async () => {
+    if (active) return;
+    if (!getSpeechRecognition()) { onError?.("unsupported"); return; }
+    active = true;
+    finishRequested = false;
+    finalText = "";
+    interimText = "";
+    onState?.("listening");
+    try {
+      stream = await requestMicrophone();
+      if (!active) {
+        stream.getTracks().forEach((track) => track.stop());
+        stream = null;
         return;
       }
-      try {
-        current.stop();
-      } catch {
-        finish();
-      }
-    },
-
-    get active() {
-      return active;
-    },
+      audioContext = new AudioContext();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.82;
+      audioContext.createMediaStreamSource(stream).connect(analyser);
+      if (audioContext.state === "suspended") await audioContext.resume();
+      if (!active) return;
+      meterTick();
+      beginRecognition();
+    } catch (cause) {
+      fail(normalizeError(cause));
+    }
   };
+
+  const stop = () => {
+    if (!active) return;
+    finishRequested = true;
+    window.clearTimeout(restartTimer);
+    window.clearTimeout(startTimer);
+    restartTimer = startTimer = 0;
+    const current = recognition;
+    if (!current) {
+      finishRequested = false;
+      finishNow(true);
+      return;
+    }
+    try {
+      current.stop();
+      stopFallbackTimer = window.setTimeout(() => {
+        if (finishRequested) {
+          finishRequested = false;
+          finishNow(true);
+        }
+      }, 700);
+    } catch {
+      finishRequested = false;
+      finishNow(true);
+    }
+  };
+
+  const cancel = () => {
+    finishRequested = false;
+    finalText = "";
+    finishNow(false);
+  };
+
+  return { start, stop, cancel, get active() { return active; } };
 }
 
 type VoiceModeOptions = {
@@ -294,286 +300,216 @@ type VoiceModeOptions = {
   onError?: (code: string) => void;
 };
 
-/** Hands-free listen -> send text -> speak reply -> listen again. */
+/** Hands-free or push-to-talk voice conversation. Only recognized text reaches Misma. */
 export function createVoiceMode({
-  send,
-  lang = typeof navigator === "undefined" ? "en-US" : navigator.language || "en-US",
-  onState,
-  onUser,
-  onReply,
-  onError,
+  send, lang = typeof navigator === "undefined" ? "en-US" : navigator.language || "en-US",
+  onState, onUser, onReply, onError,
 }: VoiceModeOptions) {
-  let on = false;
+  let active = false;
   let muted = false;
+  let mode: VoiceInputMode = "hands-free";
   let state: VoiceModeState = "idle";
   let recognition: SpeechRecognitionLike | null = null;
   let controller: AbortController | null = null;
   let wakeLock: WakeLockSentinel | null = null;
   let turn = 0;
   let startAttempt = 0;
-  let retryTimer: number | null = null;
+  let retryTimer = 0;
   let cancelSpeech: (() => void) | null = null;
-  let activeUtterance: SpeechSynthesisUtterance | null = null;
 
-  const setState = (next: VoiceModeState) => {
-    state = next;
-    onState?.(next);
-  };
+  const setState = (next: VoiceModeState) => { state = next; onState?.(next); };
+  const clearRetry = () => { window.clearTimeout(retryTimer); retryTimer = 0; };
 
-  const clearRetry = () => {
-    if (retryTimer !== null && typeof window !== "undefined") window.clearTimeout(retryTimer);
-    retryTimer = null;
-  };
-
-  const listen = () => {
-    if (!on) return;
-    clearRetry();
-    if (muted) {
-      setState("muted");
-      return;
-    }
-
-    const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      onError?.("unsupported");
-      stop();
-      return;
-    }
-
-    setState("listening");
+  const createRecognition = (pushToTalk: boolean) => {
+    if (!active || muted) return;
+    const Constructor = getSpeechRecognition();
+    if (!Constructor) { onError?.("unsupported"); stop(); return; }
+    setState(pushToTalk ? "listening" : "listening");
     let transcript = "";
-    const current = new Recognition();
+    let didStart = false;
+    const current = new Constructor();
     recognition = current;
     current.lang = lang;
     current.interimResults = true;
     current.continuous = false;
-
+    const startTimer = window.setTimeout(() => {
+      if (active && recognition === current && !didStart) {
+        onError?.("start-timeout");
+        stop();
+      }
+    }, START_TIMEOUT_MS);
+    current.onstart = () => { didStart = true; window.clearTimeout(startTimer); };
     current.onresult = (event) => {
       transcript = Array.from(event.results)
         .map((result) => String(result?.[0]?.transcript || "").trim())
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+        .filter(Boolean).join(" ").trim();
       if (transcript) onUser?.(transcript, false);
     };
-
     current.onerror = (event) => {
-      if (event.error === "no-speech" || event.error === "aborted") return;
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        onError?.("permission");
-      } else if (event.error === "network") {
-        onError?.("network");
-      } else {
-        onError?.(event.error || "recognition");
-      }
-      stop();
+      if (event.error === "aborted") return;
+      window.clearTimeout(startTimer);
+      const code = event.error === "not-allowed" || event.error === "service-not-allowed"
+        ? "permission"
+        : event.error === "audio-capture" ? "audio-capture"
+          : event.error === "no-speech" ? "no-speech"
+            : event.error === "network" ? "network" : event.error || "recognition";
+      onError?.(code);
+      if (code === "no-speech" && active && mode === "push-to-talk") setState("ready");
+      else stop();
     };
-
     current.onend = () => {
+      window.clearTimeout(startTimer);
       if (recognition !== current) return;
       recognition = null;
-      if (!on || muted) return;
-      if (transcript.trim()) {
-        void respond(transcript.trim());
-      } else {
-        retryTimer = window.setTimeout(() => {
-          retryTimer = null;
-          listen();
-        }, 200);
-      }
+      if (!active || muted) return;
+      if (transcript.trim()) void respond(transcript.trim());
+      else if (mode === "hands-free") retryTimer = window.setTimeout(() => { retryTimer = 0; listen(); }, 220);
+      else setState("ready");
     };
-
-    try {
-      current.start();
-    } catch {
+    try { current.start(); }
+    catch {
+      window.clearTimeout(startTimer);
       recognition = null;
-      retryTimer = window.setTimeout(() => {
-        retryTimer = null;
-        listen();
-      }, 300);
+      if (mode === "hands-free") retryTimer = window.setTimeout(() => { retryTimer = 0; listen(); }, 300);
+      else setState("ready");
     }
   };
 
+  const listen = () => {
+    if (!active || muted) return;
+    clearRetry();
+    if (mode === "push-to-talk") { setState("ready"); return; }
+    createRecognition(false);
+  };
+
   const speak = (rawText: string) => new Promise<void>((resolve) => {
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
-    const chunks = synth ? toSpeechChunks(cleanForSpeech(rawText)) : [];
-    if (!synth || !chunks.length) {
-      resolve();
-      return;
-    }
-
-    let index = 0;
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      cancelSpeech = null;
-      activeUtterance = null;
-      resolve();
-    };
-
-    cancelSpeech = () => {
-      index = chunks.length;
-      synth.cancel();
-      finish();
-    };
-
+    const synth = window.speechSynthesis;
+    const chunks = toSpeechChunks(cleanForSpeech(rawText));
+    if (!chunks.length) { resolve(); return; }
+    let index = 0, finished = false;
+    const finish = () => { if (finished) return; finished = true; cancelSpeech = null; resolve(); };
+    cancelSpeech = () => { synth.cancel(); finish(); };
     const next = () => {
-      if (done) return;
-      if (index >= chunks.length || !on) {
-        finish();
-        return;
-      }
+      if (finished) return;
+      if (index >= chunks.length || !active) { finish(); return; }
       const utterance = new SpeechSynthesisUtterance(chunks[index++]);
       utterance.lang = lang;
       utterance.onend = next;
       utterance.onerror = next;
-      activeUtterance = utterance;
       synth.speak(utterance);
     };
-
     setState("speaking");
     next();
   });
 
   const respond = async (text: string) => {
-    const myTurn = ++turn;
+    const currentTurn = ++turn;
     setState("thinking");
     onUser?.(text, true);
-
-    const requestController = new AbortController();
-    controller = requestController;
-
+    const request = new AbortController();
+    controller = request;
     try {
-      const reply = await send(text, requestController.signal, true);
-      if (!on || myTurn !== turn || requestController.signal.aborted) return;
-      if (reply) {
-        onReply?.(reply);
-        await speak(reply);
-      }
+      const reply = await send(text, request.signal, true);
+      if (!active || currentTurn !== turn || request.signal.aborted) return;
+      if (!reply) throw new Error("empty-reply");
+      onReply?.(reply);
+      await speak(reply);
     } catch (cause) {
-      if (!(cause instanceof Error && cause.name === "AbortError") && myTurn === turn) {
-        onError?.("send");
-      }
+      if (!(cause instanceof Error && cause.name === "AbortError") && currentTurn === turn) onError?.("send");
     } finally {
-      if (controller === requestController) controller = null;
+      if (controller === request) controller = null;
     }
-
-    if (on && myTurn === turn && !muted) listen();
-    else if (on && muted) setState("muted");
+    if (active && currentTurn === turn && !muted) listen();
+    else if (active && muted) setState("muted");
   };
 
-  /** Stop TTS or the pending AI turn and immediately return to listening. */
+  const pushToTalkStart = () => {
+    if (!active || muted || mode !== "push-to-talk" || recognition || state === "thinking" || state === "speaking") return;
+    createRecognition(true);
+  };
+  const pushToTalkStop = () => {
+    if (!active || mode !== "push-to-talk" || !recognition) return;
+    try { recognition.stop(); } catch { setState("ready"); }
+  };
+
+  const setMode = (next: VoiceInputMode) => {
+    if (mode === next) return;
+    mode = next;
+    if (!active) return;
+    const current = recognition;
+    recognition = null;
+    try { current?.abort(); } catch { /* already ended */ }
+    if (mode === "hands-free") listen();
+    else setState(muted ? "muted" : "ready");
+  };
+
   const interrupt = () => {
-    if (!on || (state !== "speaking" && state !== "thinking")) return;
-    turn += 1;
+    if (!active || (state !== "speaking" && state !== "thinking")) return;
+    turn++;
     controller?.abort();
     controller = null;
     cancelSpeech?.();
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    window.speechSynthesis?.cancel();
     listen();
   };
 
-  const setMuted = (nextMuted: boolean) => {
-    muted = Boolean(nextMuted);
-    if (!on) return;
-
-    if (muted && state === "listening") {
-      try {
-        recognition?.abort();
-      } catch {
-        // Recognition may have stopped already.
-      }
+  const setMuted = (next: boolean) => {
+    muted = Boolean(next);
+    if (!active) return;
+    if (muted) {
+      try { recognition?.abort(); } catch { /* already ended */ }
+      recognition = null;
+      cancelSpeech?.();
+      window.speechSynthesis?.cancel();
       setState("muted");
-    } else if (!muted && state === "muted") {
-      listen();
-    }
+    } else if (state === "muted") listen();
   };
 
   const start = async () => {
-    if (on) return;
-    if (!getSpeechRecognition()) {
-      onError?.("unsupported");
-      return;
-    }
-
+    if (active) return;
+    if (!getSpeechRecognition()) { onError?.("unsupported"); return; }
     const attempt = ++startAttempt;
-
-    // Unlock text-to-speech before awaiting permission, while the user gesture is active.
+    try { window.speechSynthesis?.speak(new SpeechSynthesisUtterance("")); } catch { /* browser may block TTS */ }
     try {
-      window.speechSynthesis?.speak(new SpeechSynthesisUtterance(""));
-    } catch {
-      // Speech output may be unavailable in this browser.
-    }
-
-    try {
-      await ensureMicPermission();
+      const stream = await requestMicrophone();
+      stream.getTracks().forEach((track) => track.stop());
     } catch (cause) {
       if (attempt !== startAttempt) return;
-      const code = cause && typeof cause === "object" && "code" in cause
-        ? String((cause as { code: unknown }).code)
-        : "permission";
-      onError?.(code);
+      onError?.(normalizeError(cause));
       return;
     }
-
     if (attempt !== startAttempt) return;
-    on = true;
+    active = true;
     muted = false;
-
-    let acquiredWakeLock: WakeLockSentinel | null = null;
-    try {
-      acquiredWakeLock = (await navigator.wakeLock?.request("screen")) || null;
-    } catch {
-      acquiredWakeLock = null;
-    }
-
-    if (attempt !== startAttempt || !on) {
-      if (acquiredWakeLock) void acquiredWakeLock.release().catch(() => undefined);
+    try { wakeLock = (await navigator.wakeLock?.request("screen")) || null; } catch { wakeLock = null; }
+    if (attempt !== startAttempt || !active) {
+      if (wakeLock) void wakeLock.release().catch(() => undefined);
+      wakeLock = null;
       return;
     }
-
-    wakeLock = acquiredWakeLock;
     listen();
   };
 
   function stop() {
-    startAttempt += 1;
-    on = false;
-    turn += 1;
+    startAttempt++;
+    active = false;
+    turn++;
     clearRetry();
-
     const current = recognition;
     recognition = null;
-    try {
-      current?.abort();
-    } catch {
-      // Recognition may have ended already.
-    }
-
+    try { current?.abort(); } catch { /* ended */ }
     controller?.abort();
     controller = null;
     cancelSpeech?.();
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
-    activeUtterance = null;
-
-    if (wakeLock) {
-      void wakeLock.release().catch(() => undefined);
-      wakeLock = null;
-    }
+    window.speechSynthesis?.cancel();
+    if (wakeLock) { void wakeLock.release().catch(() => undefined); wakeLock = null; }
     setState("idle");
   }
 
   return {
-    start,
-    stop,
-    interrupt,
-    setMuted,
-    get state() {
-      return state;
-    },
-    get muted() {
-      return muted;
-    },
+    start, stop, interrupt, setMuted, setMode, pushToTalkStart, pushToTalkStop,
+    get state() { return state; },
+    get muted() { return muted; },
+    get mode() { return mode; },
   };
 }
