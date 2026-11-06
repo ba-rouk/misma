@@ -100,7 +100,6 @@ type DictationOptions = {
   onText?: (transcript: string) => void;
   onDone?: (finalTranscript: string) => void;
   onState?: (state: DictationState) => void;
-  onWaveform?: (levels: number[]) => void;
   onError?: (code: string) => void;
 };
 
@@ -110,7 +109,6 @@ export function createDictation({
   onText,
   onDone,
   onState,
-  onWaveform,
   onError,
 }: DictationOptions = {}) {
   let recognition: SpeechRecognitionLike | null = null;
