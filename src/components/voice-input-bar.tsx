@@ -185,7 +185,7 @@ export function VoiceInputBar({
         let energy = 0;
         for (const value of values) { const sample = (value - 128) / 128; energy += sample * sample; }
         const volume = Math.sqrt(energy / values.length);
-        setWaveform(Array.from({ length: 28 }, (_, index) => Math.max(0.03, Math.min(1, volume * 9 * (0.55 + 0.45 * Math.abs(Math.sin(index * 1.7 + performance.now() / 115))))));
+        setWaveform(Array.from({ length: 28 }, (_, index) => Math.max(0.03, Math.min(1, volume * 9 * (0.55 + 0.45 * Math.abs(Math.sin(index * 1.7 + performance.now() / 115)))))));
         meterFrameRef.current = requestAnimationFrame(tick);
       };
       if (context.state === "suspended") await context.resume();
