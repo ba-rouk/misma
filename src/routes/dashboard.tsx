@@ -2287,7 +2287,9 @@ function Dashboard() {
     }
   };
 
-atAbortControllerRef.current) {
+  const stopMisma = () => {
+    let stopped = false;
+    if (chatAbortControllerRef.current) {
       const controller = chatAbortControllerRef.current;
       chatAbortControllerRef.current = null;
       controller.abort();
