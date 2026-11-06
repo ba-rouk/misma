@@ -119,7 +119,6 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.match(microphone, /window\.isSecureContext/);
   assert.match(microphone, /getMicPermission/);
   assert.doesNotMatch(dashboard, /microphonePermissionOpen|requestMicrophoneAccess/);
-  assert.doesNotMatch(dashboard, /microphonePermissionOpen|requestMicrophoneAccess/);
   assert.match(dashboard, /aichat-notification-trigger/);
   assert.match(dashboard, /activeTab === "notifications"/);
   assert.match(dashboard, /markVisitorMessagesRead/);
