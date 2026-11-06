@@ -4409,7 +4409,6 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
                 <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
                 <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Settings microphone testing is analysed locally and is never recorded or uploaded.</span></div>
-                <div className="aichat-settings-info-row"><strong>Chat voice notes</strong><span>Chat recordings are prepared as audio attachments after you stop recording. The audio is submitted to Misma only when you press Send, and remains playable in the conversation.</span></div>
               </section>
 
               <section id="settings-history" className="aichat-card aichat-settings-card">
