@@ -3651,6 +3651,7 @@ atAbortControllerRef.current) {
                         setDraft(transcript);
                         setChatError("");
                       }}
+                      onDictationDone={() => textareaRef.current?.focus()}
                       onSend={(transcript, signal) => handleSend(transcript, { signal })}
                       onError={(message) => setChatError(message)}
                     />
