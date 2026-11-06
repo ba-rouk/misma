@@ -405,8 +405,9 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /function stopTracks\(stream: MediaStream \| null\)/);
   assert.match(voice, /stopTracks\(stream\)/);
   assert.match(voice, /createVoiceMode/);
-  assert.match(voice, /send\(text, request\.signal, true\)/);
+  assert.match(component, /onSend\(text, signal, \{ voice: true \}\)/);
   assert.match(voice, /new SpeechSynthesisUtterance/);
+  assert.match(voice, /shortenForSpeech\(cleanForSpeech\(rawText\), 320\)/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
   assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
@@ -415,8 +416,8 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(component, /aria-label=\{dictating \? "Dictation is active" : "Start voice dictation"\}/);
   assert.match(component, /Start voice mode/);
   assert.match(component, /AUTO_SEND_ON_DICTATION = false/);
-  assert.match(component, /misma-dictation-cancel/);
-  assert.match(component, /misma-dictation-finish/);
+  assert.match(component, /misma-voice-dictation-btn is-cancel/);
+  assert.match(component, /misma-voice-dictation-btn is-finish/);
   assert.match(component, /No internet connection/);
   assert.match(component, /Interrupt Misma and listen/);
   assert.match(component, /Push-to-talk/);
