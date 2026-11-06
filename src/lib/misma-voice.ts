@@ -212,9 +212,6 @@ export function createDictation({
 
       try {
         await ensureMicPermission();
-        if (!active) return;
-        onState?.("listening");
-        begin();
       } catch (cause) {
         active = false;
         onState?.("idle");
@@ -222,6 +219,17 @@ export function createDictation({
           ? String((cause as { code: unknown }).code)
           : "permission";
         onError?.(code);
+        return;
+      }
+      if (!active) return;
+
+      onState?.("listening");
+      try {
+        begin();
+      } catch {
+        active = false;
+        onState?.("idle");
+        onError?.("recognition");
       }
     },
 
@@ -272,6 +280,7 @@ export function createVoiceMode({
   let controller: AbortController | null = null;
   let wakeLock: WakeLockSentinel | null = null;
   let turn = 0;
+  let startAttempt = 0;
   let retryTimer: number | null = null;
   let cancelSpeech: (() => void) | null = null;
   let activeUtterance: SpeechSynthesisUtterance | null = null;
@@ -458,6 +467,8 @@ export function createVoiceMode({
       return;
     }
 
+    const attempt = ++startAttempt;
+
     // Unlock text-to-speech before awaiting permission, while the user gesture is active.
     try {
       window.speechSynthesis?.speak(new SpeechSynthesisUtterance(""));
@@ -468,6 +479,7 @@ export function createVoiceMode({
     try {
       await ensureMicPermission();
     } catch (cause) {
+      if (attempt !== startAttempt) return;
       const code = cause && typeof cause === "object" && "code" in cause
         ? String((cause as { code: unknown }).code)
         : "permission";
@@ -475,19 +487,28 @@ export function createVoiceMode({
       return;
     }
 
+    if (attempt !== startAttempt) return;
     on = true;
     muted = false;
 
+    let acquiredWakeLock: WakeLockSentinel | null = null;
     try {
-      wakeLock = (await navigator.wakeLock?.request("screen")) || null;
+      acquiredWakeLock = (await navigator.wakeLock?.request("screen")) || null;
     } catch {
-      wakeLock = null;
+      acquiredWakeLock = null;
     }
 
+    if (attempt !== startAttempt || !on) {
+      if (acquiredWakeLock) void acquiredWakeLock.release().catch(() => undefined);
+      return;
+    }
+
+    wakeLock = acquiredWakeLock;
     listen();
   };
 
   function stop() {
+    startAttempt += 1;
     on = false;
     turn += 1;
     clearRetry();
