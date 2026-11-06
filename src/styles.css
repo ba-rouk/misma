@@ -7142,3 +7142,38 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .aichat-composer-voice-wave-bars i { transition: none; }
 }
+
+
+/* Claude-style composer voice action placement and dictation waveform. */
+.aichat-composer-card-tools { position: relative; padding-bottom: 58px; }
+.aichat-composer-card-tools .aichat-composer-input-row { position: static; }
+.aichat-composer-card-tools .aichat-composer-input-row .aichat-composer-textarea { padding-right: 4px; }
+.aichat-composer-card-tools:has(.misma-voice-mode-trigger) .aichat-composer-send-btn,
+.aichat-composer-card-tools:has(.misma-voice-trigger.is-recording) .aichat-composer-send-btn { display: none !important; }
+.aichat-composer-card-tools:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
+.aichat-composer-card-tools .aichat-composer-sendrow { min-height: 44px; }
+
+
+/* Crossfade the single right-side action between voice and send. */
+.aichat-composer-card-tools { position: relative; padding-bottom: 58px; }
+.aichat-composer-card-tools .aichat-composer-input-row { position: static; }
+.aichat-composer-card-tools .aichat-composer-input-row .aichat-composer-textarea { padding-right: 4px; }
+.aichat-composer-card-tools:has(.misma-voice-mode-trigger:not(.is-hidden)) .aichat-composer-send-btn:not(.is-thinking),
+.aichat-composer-card-tools:has(.misma-dictation-surface) .aichat-composer-send-btn { opacity: 0 !important; visibility: hidden !important; transform: scale(.72); pointer-events: none; }
+.aichat-composer-card-tools .aichat-composer-sendrow .aichat-composer-send-btn { transition: opacity 150ms ease, transform 150ms ease, visibility 150ms ease; }
+.aichat-composer-card-tools:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
+.aichat-composer-card-tools .aichat-composer-sendrow { min-height: 44px; }
+
+.aichat-composer-card-tools .aichat-composer-send-btn { width: 44px; height: 44px; }
+
+
+/* The mic and single wave/send action share the text-field row. */
+.aichat-composer-input-row { position: relative; min-height: 52px; padding-right: 98px; }
+.aichat-composer-input-row .aichat-composer-textarea { padding-right: 0 !important; }
+.aichat-composer-input-row .misma-voice-input { right: 0; top: 50%; bottom: auto; transform: translateY(-50%); }
+.aichat-composer-card-tools .aichat-composer-sendrow .aichat-composer-send-btn { display: none !important; }
+.aichat-composer-input-row:has(.misma-dictation-surface) .aichat-composer-textarea { visibility: hidden; }
+.aichat-composer-input-row:has(.misma-dictation-surface) { min-height: 52px; }
+
+.aichat-composer-input-row:has(.misma-dictation-surface) { padding-right: 142px; }
+.aichat-composer-input-row:has(.misma-dictation-surface) .misma-dictation-surface { right: 140px; }
