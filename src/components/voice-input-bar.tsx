@@ -49,6 +49,7 @@ export function VoiceInputBar({
   const [dictationRequesting, setDictationRequesting] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceModeState>("idle");
   const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [muted, setMuted] = useState(false);
 
   const inputValueRef = useRef(inputValue);
@@ -98,6 +99,7 @@ export function VoiceInputBar({
         if (code === "permission" || code === "unsupported" || code === "network") {
           voice.stop();
           overlayOpenRef.current = false;
+          setVoiceOverlayOpen(false);
         }
       },
     });
@@ -111,6 +113,7 @@ export function VoiceInputBar({
       dictationRef.current = null;
       voiceRef.current = null;
       overlayOpenRef.current = false;
+      setVoiceOverlayOpen(false);
     };
   }, [lang]);
 
@@ -134,6 +137,7 @@ export function VoiceInputBar({
   const closeVoiceMode = () => {
     voiceRef.current?.stop();
     overlayOpenRef.current = false;
+    setVoiceOverlayOpen(false);
     setVoiceState("idle");
     setVoiceTranscript("");
     setMuted(false);
@@ -147,10 +151,14 @@ export function VoiceInputBar({
     }
     dictationRef.current?.stop();
     overlayOpenRef.current = true;
+    setVoiceOverlayOpen(true);
     setVoiceTranscript("");
     setMuted(false);
     await voiceRef.current?.start();
-    if (voiceRef.current?.state === "idle") overlayOpenRef.current = false;
+    if (voiceRef.current?.state === "idle") {
+      overlayOpenRef.current = false;
+      setVoiceOverlayOpen(false);
+    }
   };
 
   const toggleMuted = () => {
@@ -166,10 +174,10 @@ export function VoiceInputBar({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [voiceState]);
+  }, [voiceOverlayOpen, voiceState]);
 
   const isDictating = dictationState === "listening" || dictationRequesting;
-  const overlayVisible = overlayOpenRef.current || voiceState !== "idle";
+  const overlayVisible = voiceOverlayOpen || voiceState !== "idle";
 
   return (
     <>
