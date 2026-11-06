@@ -90,6 +90,7 @@ export function VoiceInputBar({
   const dictationRef = useRef<ReturnType<typeof createDictation> | null>(null);
   const voiceRef = useRef<ReturnType<typeof createVoiceMode> | null>(null);
   const overlayOpenRef = useRef(false);
+  const sendAfterDictationRef = useRef(false);
   const toastTimerRef = useRef<number | null>(null);
   const showToastRef = useRef<(message: string) => void>(() => undefined);
 
@@ -123,6 +124,14 @@ export function VoiceInputBar({
         window.requestAnimationFrame(() => {
           writeNativeInputValue(nextValue);
           callbacksRef.current.onDictationDone?.();
+          if (sendAfterDictationRef.current) {
+            sendAfterDictationRef.current = false;
+            if (nextValue.trim()) {
+              void callbacksRef.current.onSend(nextValue, new AbortController().signal, { voice: false });
+            } else {
+              showToastRef.current("No speech was detected. Try again.");
+            }
+          }
         });
 
         if (AUTO_SEND_ON_DICTATION && nextValue.trim()) {
@@ -203,7 +212,8 @@ export function VoiceInputBar({
     };
   }, []);
 
-  const finishDictation = () => {
+  const finishDictation = (sendNow = false) => {
+    sendAfterDictationRef.current = sendNow;
     dictationRef.current?.stop();
   };
 
@@ -355,9 +365,18 @@ export function VoiceInputBar({
               className="misma-voice-dictation-btn is-finish"
               aria-label="Finish dictation and insert transcript"
               title="Finish dictation"
-              onClick={finishDictation}
+              onClick={() => finishDictation(false)}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+            </button>
+            <button
+              type="button"
+              className="misma-voice-dictation-btn is-send"
+              aria-label="Stop dictation and send transcript"
+              title="Stop and send"
+              onClick={() => finishDictation(true)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
             </button>
           </div>
         ) : primaryActionVisible ? (
