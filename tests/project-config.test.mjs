@@ -395,23 +395,23 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(docs, /allow="microphone"/);
 });
 
-test("composer dictation is English-only, continuous, gain-assisted, and renders a live waveform", async () => {
+test("composer records a voice note, shows a live waveform, and stages it for Send", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const styles = await read("../src/styles.css");
 
-  assert.match(dashboard, /recognition\.lang = "en-US"/);
-  assert.match(dashboard, /recognition\.continuous = true/);
-  assert.match(dashboard, /recognition\.interimResults = true/);
+  assert.match(dashboard, /new MediaRecorder\(stream/);
+  assert.match(dashboard, /recorder\.start\(250\)/);
   assert.match(dashboard, /autoGainControl: true/);
   assert.match(dashboard, /channelCount: \{ ideal: 1 \}/);
   assert.match(dashboard, /inputGain\.gain\.value = 3\.2/);
   assert.match(dashboard, /createDynamicsCompressor\(\)/);
   assert.match(dashboard, /createMediaStreamDestination\(\)/);
-  assert.match(dashboard, /recognition\.start\(audioTrack\)/);
-  assert.match(dashboard, /voiceInputBaseDraftRef/);
+  assert.match(dashboard, /startComposerVoiceRecording\(stream\)/);
   assert.match(dashboard, /voiceInputWaveform\.map/);
-  assert.match(dashboard, /!draft\.trim\(\) && \(/, "hide the microphone control as soon as a transcript is available");
-  assert.match(dashboard, /if \(draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode\) \{\s*if \(voiceInputActive\) handleVoiceInput\(\);\s*if \(createMode\) void handleCreateMedia\(\);\s*else void handleSend\(\);/, "send the transcript instead of treating the send click as stop-listening");
+  assert.match(dashboard, /!voiceInputActive && !voiceRecordingPending && !draft\.trim\(\) && !selectedFiles\.length && \(/, "hide the standalone microphone while a recording or staged audio exists");
+  assert.match(dashboard, /else if \(voiceInputActive\) \{\s*void handleVoiceInput\(\);\s*\} else if \(draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode\) \{/, "stop recording first, then expose the send action");
+  assert.match(dashboard, /Stop recording/);
+  assert.match(dashboard, /Preparing voice note/);
   assert.match(dashboard, /aichat-composer-voice-wave-bars/);
   assert.match(styles, /\.aichat-composer-input-row\.is-listening/);
   assert.match(styles, /\.aichat-composer-voice-wave-bars i/);
