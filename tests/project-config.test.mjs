@@ -420,7 +420,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(component, /misma-voice-dictation-btn is-finish/);
   assert.match(component, /No internet connection/);
   assert.match(component, /Interrupt Misma and listen/);
-  assert.match(component, /Push-to-talk/);
+  assert.match(component, /Push to talk/);
   assert.match(component, /Hands-free/);
   assert.match(component, /"Mute"/);
   assert.match(component, />\s*End\s*</);
