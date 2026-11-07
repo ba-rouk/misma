@@ -4,7 +4,7 @@ export type VoiceConversationMode = "hands-free" | "push-to-talk";
 
 export type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
 
-const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|google us english|google uk english female/i;
+const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|google.*female/i;
 const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee|microsoft.*male/i;
 
 export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {

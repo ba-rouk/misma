@@ -1106,6 +1106,11 @@ function Dashboard() {
   const [whatsappPhoneNumber, setWhatsappPhoneNumber] = useState("");
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
+  const sharedWidgetPublicKey = connectedWebsites.length
+    ? connectedWebsites[0].widget_public_key || connectedWebsites[0].public_key
+    : "";
+  const everyWebsiteUsesSharedWidget = Boolean(sharedWidgetPublicKey) &&
+    connectedWebsites.every((site) => (site.widget_public_key || site.public_key) === sharedWidgetPublicKey);
   const [knowledgeUploadBusy, setKnowledgeUploadBusy] = useState(false);
   const [recommendationBusy, setRecommendationBusy] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
@@ -5087,6 +5092,16 @@ function Dashboard() {
                   alert("One widget is now shared across " + result.websiteCount + " connected websites.");
                 } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not share the widget."); }
               }}>Use one widget for all connected websites</button>
+              {everyWebsiteUsesSharedWidget && (
+                <div className="aichat-shared-script">
+                  <label className="aichat-widget-script-label">General shared website script — paste this same script on every registered website</label>
+                  <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                  <button type="button" className="aichat-action-btn" onClick={() => {
+                    const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    void navigator.clipboard.writeText(script).then(() => alert("Shared website widget script copied."));
+                  }}>Copy general script</button>
+                </div>
+              )}
             </div>
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
               {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className="aichat-website-card" key={site.id}>

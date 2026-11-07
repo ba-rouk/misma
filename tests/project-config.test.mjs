@@ -685,3 +685,34 @@ test("website widget connections support shared keys and safe removal", async ()
   assert.match(dashboard, /Use one widget for all connected websites/);
   assert.match(dashboard, /Remove widget/);
 });
+
+
+test("embedded chat widget has in-field green send, microphone dictation and female speech chat", async () => {
+  const widget = await read("../public/assets/misma-widget.js");
+  assert.match(widget, /class='icon-btn mic'/);
+  assert.match(widget, /class='send-btn primary is-voice'/);
+  assert.match(widget, /background:#22c55e/);
+  assert.match(widget, /function speakAsWoman/);
+  assert.match(widget, /femalePattern/);
+  assert.match(widget, /showTyping/);
+  assert.match(widget, /Misma is typing/);
+});
+
+test("embedded chat widget supports minimizing, resizing and saved size", async () => {
+  const widget = await read("../public/assets/misma-widget.js");
+  assert.match(widget, /class='minimize'/);
+  assert.match(widget, /class='resize-handle'/);
+  assert.match(widget, /pointermove/);
+  assert.match(widget, /localStorage\.setItem\(sizeStore/);
+});
+
+test("shared installation script uses the same widget key while the server checks each registered host", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const migration = await read("../supabase/migrations/20261107110000_website_widget_groups.sql");
+  assert.match(dashboard, /General shared website script/);
+  assert.match(dashboard, /data-site-key="\$\{sharedWidgetPublicKey\}"/);
+  assert.match(edge, /candidate\.domain/);
+  assert.match(migration, /widget_public_key/);
+  assert.match(migration, /widget_deleted_at/);
+});
