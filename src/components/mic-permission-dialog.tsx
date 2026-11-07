@@ -151,7 +151,7 @@ export function MicPermissionDialog({
             <button type="button" disabled={requesting} onClick={onAllow}>
               Allow this time
             </button>
-            <button type="button" className="is-secondary" disabled={requesting} onClick={onNeverAllow}>
+            <button type="button" disabled={requesting} onClick={onNeverAllow}>
               Never allow
             </button>
           </div>
