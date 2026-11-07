@@ -169,6 +169,40 @@ async function answerCustomer(db: Db, workspaceId: string, message: string, voic
   ].join("\n");
   return await generateText(system, message);
 }
+
+function getWebsiteWidgetSocialLinks(site: AnyRecord) {
+  const countryCode = safeString(site.whatsapp_country_code, 8).replace(/\D/g, "");
+  const subscriberNumber = safeString(site.whatsapp_number, 24).replace(/\D/g, "").replace(/^0+/, "");
+  const fullNumber = countryCode + subscriberNumber;
+  const message = safeString(site.whatsapp_message, 1000);
+  const whatsappUrl = countryCode && subscriberNumber &&
+      countryCode.length <= 4 &&
+      fullNumber.length >= 7 &&
+      fullNumber.length <= 15 &&
+      message
+    ? "https://wa.me/" + fullNumber + "?text=" + encodeURIComponent(message)
+    : null;
+
+  let instagramUrl: string | null = null;
+  try {
+    const parsedInstagram = new URL(safeString(site.instagram_url, 2048));
+    const instagramHost = parsedInstagram.hostname.toLowerCase().replace(/^www\./, "");
+    const segments = parsedInstagram.pathname.split("/").filter(Boolean);
+    const instagramHandle = segments[0] || "";
+    if (
+      parsedInstagram.protocol === "https:" &&
+      instagramHost === "instagram.com" &&
+      segments.length === 1 &&
+      /^[A-Za-z0-9._]{1,30}$/.test(instagramHandle)
+    ) {
+      instagramUrl = "https://instagram.com/" + instagramHandle;
+    }
+  } catch {
+    instagramUrl = null;
+  }
+  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl };
+}
+
 async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRecord> {
   if (!key) throw new Error("This website widget has no site key.");
   const originHeader = request.headers.get("origin") || "";
@@ -196,18 +230,40 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
 }
 async function ensureWebsiteConversation(db: Db, site: AnyRecord, visitorId: string, conversationId: unknown) {
   const sessionId = visitorId || crypto.randomUUID();
+
   if (typeof conversationId === "number" && Number.isSafeInteger(conversationId) && conversationId > 0) {
-    const existing = await db.from("conversations").select("id,contact_id")
-      .eq("id", conversationId).eq("workspace_id", site.workspace_id)
-      .eq("website_connection_id", site.id).eq("visitor_session_id", sessionId).maybeSingle();
-    if (existing.error) throw new Error("Could not load the visitor conversation.");
-    if (existing.data) return { conversation: existing.data, visitorId: sessionId };
+    const requested = await db.from("conversations").select("id,contact_id")
+      .eq("id", conversationId)
+      .eq("workspace_id", site.workspace_id)
+      .eq("website_connection_id", site.id)
+      .eq("visitor_session_id", sessionId)
+      .maybeSingle();
+    if (requested.error) throw new Error("Could not load the visitor conversation.");
+    if (requested.data) return { conversation: requested.data, visitorId: sessionId };
   }
+
+  // Reuse the visitor's conversation even when session storage retained the visitor id
+  // but lost its conversation id. This also avoids the website-session unique index.
+  const byVisitorSession = await db.from("conversations").select("id,contact_id")
+    .eq("workspace_id", site.workspace_id)
+    .eq("website_connection_id", site.id)
+    .eq("visitor_session_id", sessionId)
+    .maybeSingle();
+  if (byVisitorSession.error) throw new Error("Could not look up the visitor's existing conversation.");
+  if (byVisitorSession.data) return { conversation: byVisitorSession.data, visitorId: sessionId };
+
   const created = await db.from("conversations").insert({
-    workspace_id: site.workspace_id, channel: "Website", latest_text: "", status: "AI",
-    website_connection_id: site.id, visitor_session_id: sessionId,
+    workspace_id: site.workspace_id,
+    channel: "Website",
+    latest_text: "",
+    status: "AI",
+    website_connection_id: site.id,
+    visitor_session_id: sessionId,
   }).select("id,contact_id").single();
-  if (created.error || !created.data) throw new Error("Could not create the visitor conversation.");
+  if (created.error || !created.data) {
+    console.error("[misma-widget] Could not create website conversation:", created.error?.code || "unknown", created.error?.message || "no row returned");
+    throw new Error("Could not create the visitor conversation.");
+  }
   return { conversation: created.data, visitorId: sessionId };
 }
 async function createOrFindContact(db: Db, workspaceId: string, visitorId: string, name: string, email: string, phone: string) {
@@ -949,29 +1005,10 @@ Deno.serve(async (request: Request) => {
     try { return await handlePhoneWebhook(request, db); }
     catch (error) {
       console.error("[misma-widget] Phone webhook error:", error instanceof Error ? error.name : "unknown");
-      return new Response("<Response><Say>Sorry, this call could not be completed.</Say><Hangup/></Response>", { status: 500, headers: { "Content-Type": "text/xml" } });
-    }
-  }
-  if (request.method === "POST" && (url.searchParams.get("channel") === "whatsapp" || request.headers.get("x-hub-signature-256"))) {
-    try { return await handleWhatsAppWebhook(request, db); }
-    catch (error) {
-      console.error("[misma-widget] WhatsApp webhook error:", error instanceof Error ? error.name : "unknown");
-      return new Response("EVENT_RECEIVED", { status: 200, headers: cors });
-    }
-  }
-  if (request.method !== "POST") return respond(405, { error: "Use POST for Misma widget actions." });
-
-  let input: AnyRecord;
-  try {
-    const raw = await request.text();
-    if (new TextEncoder().encode(raw).byteLength > 120000) return respond(413, { error: "Request body is too large." });
-    input = JSON.parse(raw);
-  } catch { return respond(400, { error: "Request body must be valid JSON." }); }
-  if (!isRecord(input)) return respond(400, { error: "Invalid request." });
-
-  try {
-    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "widget-config") {
-      const site = await allowedSite(db, safeString(input.siteKey, 100), request);
+      return new Response("<Response><Say>Sor      if (input.action === "widget-config") {
+        return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) });
+      }
+est);
       if (input.action === "widget-config") {
         const countryCode = safeString(site.whatsapp_country_code, 8).replace(/\D/g, "");
         const subscriberNumber = safeString(site.whatsapp_number, 24).replace(/\D/g, "").replace(/^0+/, "");
@@ -1004,9 +1041,9 @@ Deno.serve(async (request: Request) => {
         } else {
           await refreshTask;
         }
-        return respond(200, { ok: true, connected: true, knowledgeRefreshQueued: true });
+        return respond(200, { ok: true, connected: true, knowledgeRefreshQueued: true, ...getWebsiteWidgetSocialLinks(site) });
       }
-      if (input.action === "heartbeat") return respond(200, { ok: true, connected: true });
+      if (input.action === "heartbeat") return respond(200, { ok: true, connected: true, ...getWebsiteWidgetSocialLinks(site) });
       const visitorId = safeString(input.visitorId, 120) || crypto.randomUUID();
       const { conversation } = await ensureWebsiteConversation(db, site, visitorId, input.conversationId);
       if (input.action === "history") {
