@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useMicPermission } from "../lib/use-mic-permission";
+import { MicPermissionDialog } from "./mic-permission-dialog";
 import {
   createDictation,
   createVoiceMode,
@@ -88,6 +90,7 @@ export function VoiceInputBar({
   const [muted, setMuted] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [toast, setToast] = useState("");
+  const micPermission = useMicPermission();
 
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
@@ -243,7 +246,12 @@ export function VoiceInputBar({
     });
   };
 
-  const toggleDictation = async () => {
+  const startDictationAfterPermission = async () => {
+    const started = await dictationRef.current?.start();
+    if (!started) setDictationState("idle");
+  };
+
+  const toggleDictation = () => {
     if (disabled) return;
     if (!online) {
       showToast("No internet connection");
@@ -260,8 +268,7 @@ export function VoiceInputBar({
 
     baseDraftRef.current = inputValueRef.current;
     setWaveLevel(0);
-    const started = await dictation.start();
-    if (!started) setDictationState("idle");
+    micPermission.runWithPermission(() => startDictationAfterPermission());
   };
 
   const closeVoiceMode = () => {
@@ -272,13 +279,7 @@ export function VoiceInputBar({
     setMuted(false);
   };
 
-  const openVoiceMode = async () => {
-    if (disabled || overlayOpenRef.current) return;
-    if (!online) {
-      showToast("No internet connection");
-      return;
-    }
-
+  const beginVoiceModeAfterPermission = async () => {
     dictationRef.current?.cancel();
     callbacksRef.current.onTranscript(baseDraftRef.current);
     setDictationState("idle");
@@ -298,6 +299,15 @@ export function VoiceInputBar({
       overlayOpenRef.current = false;
       setVoiceOverlayOpen(false);
     }
+  };
+
+  const openVoiceMode = () => {
+    if (disabled || overlayOpenRef.current) return;
+    if (!online) {
+      showToast("No internet connection");
+      return;
+    }
+    micPermission.runWithPermission(() => beginVoiceModeAfterPermission());
   };
 
   const toggleMuted = () => {
@@ -365,7 +375,7 @@ export function VoiceInputBar({
             <span className="misma-voice-toolbar-spacer" />
             <button
               type="button"
-              className={"misma-voice-mic" + (isDictating ? " is-active" : "")}
+              className={"misma-voice-mic" + (isDictating ? " is-active" : "") + (micPermission.neverAllowed ? " is-never-allowed" : "")}
               aria-label={isDictating ? "Finish voice dictation" : "Start voice dictation"}
               aria-pressed={isDictating}
               title={isDictating ? "Finish dictation" : "Dictate message"}
@@ -404,7 +414,7 @@ export function VoiceInputBar({
               primaryIsVoice ? (
                 <button
                   type="button"
-                  className="misma-voice-primary is-voice"
+                  className={"misma-voice-primary is-voice" + (micPermission.neverAllowed ? " is-never-allowed" : "")}
                   aria-label="Start voice mode"
                   title="Start voice mode"
                   disabled={disabled || !online}
@@ -511,6 +521,14 @@ export function VoiceInputBar({
         </div>
       )}
 
+      <MicPermissionDialog
+        open={micPermission.dialogOpen}
+        view={micPermission.dialogView}
+        requesting={micPermission.requesting}
+        onAllow={micPermission.allow}
+        onNeverAllow={micPermission.neverAllow}
+        onClose={micPermission.dismiss}
+      />
       {toast && <div className="misma-voice-toast" role="alert">{toast}</div>}
     </>
   );

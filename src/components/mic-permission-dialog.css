@@ -1,0 +1,167 @@
+:root {
+  --misma-mic-green: var(--misma-control-green, #22c55e);
+}
+
+.misma-mic-permission-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: Roboto, "Google Sans", system-ui, sans-serif;
+  animation: misma-mic-fade-in 150ms ease both;
+}
+
+.misma-mic-permission-dialog {
+  box-sizing: border-box;
+  width: min(440px, calc(100% - 0px));
+  min-height: 270px;
+  padding: 24px;
+  border: 0;
+  border-radius: 24px;
+  background: #2b2d30;
+  color: #e3e3e3;
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.48);
+  animation: misma-mic-scale-in 150ms ease both;
+  outline: none;
+}
+
+.misma-mic-permission-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+}
+
+.misma-mic-permission-icon {
+  display: grid;
+  flex: 0 0 40px;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--misma-mic-green);
+  color: #ffffff;
+}
+
+.misma-mic-permission-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.misma-mic-permission-header p {
+  margin: 0;
+  color: #e3e3e3;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.misma-mic-permission-header strong {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.misma-mic-permission-actions {
+  display: grid;
+  gap: 4px;
+  margin-top: 20px;
+}
+
+.misma-mic-permission-actions button {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #22c55e;
+  color: #ecfdf5;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 150ms ease, transform 150ms ease, opacity 150ms ease;
+}
+
+.misma-mic-permission-actions button:hover:not(:disabled) {
+  background: #4ade80;
+}
+
+.misma-mic-permission-actions button:active:not(:disabled) {
+  background: #16a34a;
+  transform: scale(0.99);
+}
+
+.misma-mic-permission-actions button.is-secondary {
+  background: #3b3e42;
+  color: #e3e3e3;
+}
+
+.misma-mic-permission-actions button.is-secondary:hover:not(:disabled) {
+  background: #484c51;
+}
+
+.misma-mic-permission-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.misma-mic-permission-help {
+  margin-top: 20px;
+}
+
+.misma-mic-permission-help p {
+  margin: 0;
+  color: #e3e3e3;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.misma-mic-permission-help .misma-mic-permission-detail {
+  margin-top: 10px;
+  color: #b8bdc4;
+  font-size: 13px;
+}
+
+.misma-mic-permission-help .misma-mic-permission-actions {
+  margin-top: 20px;
+}
+
+.misma-mic-permission-status {
+  display: block;
+  margin-top: 10px;
+  color: #cbd5e1;
+  font-size: 12px;
+  text-align: center;
+}
+
+@keyframes misma-mic-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes misma-mic-scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .misma-mic-permission-scrim,
+  .misma-mic-permission-dialog,
+  .misma-mic-permission-actions button {
+    animation: none !important;
+    transition: none !important;
+  }
+}

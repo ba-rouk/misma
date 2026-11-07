@@ -85,6 +85,27 @@
   background: rgba(34, 197, 94, 0.16);
 }
 
+.misma-voice-mic.is-never-allowed,
+.misma-voice-primary.is-never-allowed {
+  position: relative;
+  opacity: 0.5;
+}
+
+.misma-voice-mic.is-never-allowed::after {
+  content: "";
+  position: absolute;
+  width: 27px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-48deg);
+  box-shadow: 0 0 0 1px rgba(7, 17, 29, 0.55);
+}
+
+.misma-voice-mic.is-never-allowed:hover {
+  opacity: 0.82;
+}
+
 .misma-voice-field {
   display: flex;
   flex: 1 1 auto;
