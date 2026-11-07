@@ -544,3 +544,23 @@ test("privacy and voice preferences are persisted and used by dashboard voice/ch
   assert.match(edgeFunction, /DASHBOARD ASSISTANT PREFERENCES/);
   assert.match(voice, /currentVoicePreset === "girl"/);
 });
+
+
+test("current and recent questions trigger web search with a freshness window", async () => {
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+
+  assert.match(edgeFunction, /what\(\?:'s\| is\) new/);
+  assert.match(edgeFunction, /latest\|newest\|most recent/);
+  assert.match(edgeFunction, /search_depth:\s*"fast"/);
+  assert.match(edgeFunction, /time_range:\s*currentTimeRange/);
+  assert.match(edgeFunction, /CURRENT DATE:/);
+});
+
+test("attachment preparation is concurrent and skipped for attachment-only clarification prompts", async () => {
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+
+  assert.match(edgeFunction, /Promise\.all\(attachments\.slice\(index,\s*index \+ 2\)\.map\(prepareOne\)\)/);
+  assert.match(edgeFunction, /shouldAnalyzeAttachments = Boolean\(message\.trim\(\)\)/);
+  assert.match(edgeFunction, /historyWindow = requestedAttachments\.length \? 4 : 10/);
+  assert.match(edgeFunction, /historyTextLimit = requestedAttachments\.length \? 1_800 : 4_000/);
+});
