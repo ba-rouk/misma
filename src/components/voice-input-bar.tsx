@@ -44,6 +44,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   timeout: "Microphone startup took too long. Check the permission prompt and try again.",
   recognition: "Voice recognition stopped unexpectedly. Please try again.",
   send: "Misma could not reply. You can try speaking again.",
+  "voice-unavailable": "The selected voice is not installed on this device. Add a matching voice in your device text-to-speech settings, then retry.",
 };
 
 const STATE_LABELS: Record<VoiceModeState, string> = {

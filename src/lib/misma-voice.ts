@@ -2,6 +2,22 @@ export type DictationState = "idle" | "requesting" | "listening";
 export type VoiceModeState = "idle" | "starting" | "ready" | "listening" | "thinking" | "speaking" | "muted";
 export type VoiceConversationMode = "hands-free" | "push-to-talk";
 
+export type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
+
+const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|google us english|google uk english female/i;
+const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee|microsoft.*male/i;
+
+export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
+  const female = voices.filter((voice) => {
+    const label = voice.name + " " + voice.voiceURI;
+    return FEMALE_VOICE_PATTERN.test(label) && !MALE_VOICE_PATTERN.test(label);
+  });
+  const male = voices.filter((voice) => MALE_VOICE_PATTERN.test(voice.name + " " + voice.voiceURI));
+  const pool = preset === "girl" || preset === "woman" ? female : male;
+  const preferredIndex = preset === "girl" || preset === "boy" ? 0 : 1;
+  return pool[preferredIndex] || pool[0];
+}
+
 type RecognitionResult = { isFinal: boolean; 0: { transcript: string } };
 type RecognitionEvent = { resultIndex: number; results: ArrayLike<RecognitionResult> };
 type RecognitionErrorEvent = { error: string };
@@ -483,14 +499,14 @@ export function createVoiceMode({
       }
       const utterance = new SpeechSynthesisUtterance(chunks[index++]);
       utterance.lang = lang;
-      utterance.pitch = currentVoicePreset === "girl" ? 1.28 : currentVoicePreset === "boy" ? 1.18 : currentVoicePreset === "woman" ? 1 : 0.9;
-      const available = synth.getVoices();
-      const female = available.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
-      const male = available.filter((voice) => /(^|[^A-Za-z])(male|man|boy)(?=$|[^A-Za-z])|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
-      const matching = currentVoicePreset === "girl" || currentVoicePreset === "woman" ? female : male;
-      const preferredIndex = currentVoicePreset === "girl" || currentVoicePreset === "boy" ? 0 : 1;
-      const preferredVoice = matching[preferredIndex] || matching[0] || available.find((voice) => voice.default);
-      if (preferredVoice) utterance.voice = preferredVoice;
+      utterance.pitch = currentVoicePreset === "girl" ? 1.2 : currentVoicePreset === "boy" ? 0.88 : currentVoicePreset === "woman" ? 1 : 0.82;
+      const preferredVoice = getSpeechVoiceForPreset(synth.getVoices(), currentVoicePreset);
+      if (!preferredVoice) {
+        finish();
+        onError?.("voice-unavailable");
+        return;
+      }
+      utterance.voice = preferredVoice;
       utterance.onend = speakNext;
       utterance.onerror = speakNext;
       synth.speak(utterance);

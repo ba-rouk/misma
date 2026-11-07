@@ -165,21 +165,21 @@ async function answerCustomer(db: Db, workspaceId: string, message: string): Pro
 }
 async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRecord> {
   if (!key) throw new Error("This website widget has no site key.");
-  const result = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,status,last_scanned_at")
-    .eq("public_key", key)
-    .maybeSingle();
-  if (result.error || !result.data) throw new Error("This Misma website key is not valid.");
-  if (result.data.status === "paused") throw new Error("This website connection is paused by its owner.");
   const originHeader = request.headers.get("origin") || "";
   if (!originHeader) throw new Error("A website origin is required.");
   let origin: URL;
   try { origin = new URL(originHeader); } catch { throw new Error("The website origin is invalid."); }
-  const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
-  const registeredHost = String(result.data.domain || "").toLowerCase().replace(/^www\./, "");
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
-  if (originHost !== registeredHost) throw new Error("This widget key is not authorized for this website domain.");
-  return result.data;
+  const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
+  const result = await db.from("website_connections")
+    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at")
+    .eq("widget_public_key", key)
+    .is("widget_deleted_at", null);
+  if (result.error || !result.data?.length) throw new Error("This Misma website key is not valid or has been removed.");
+  const site = result.data.find((candidate: AnyRecord) => String(candidate.domain || "").toLowerCase().replace(/^www\./, "") === originHost);
+  if (!site) throw new Error("This shared widget key is not authorized for this website domain. Register this domain in Misma first.");
+  if (site.status === "paused") throw new Error("This website connection is paused by its owner.");
+  return site;
 }
 async function ensureWebsiteConversation(db: Db, site: AnyRecord, visitorId: string, conversationId: unknown) {
   const sessionId = visitorId || crypto.randomUUID();

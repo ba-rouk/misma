@@ -655,3 +655,33 @@ test("profile photo save waits for image preparation and persists the selected s
   assert.match(dashboard, /setProfileAvatarStoragePath\(avatarPath\)/);
   assert.match(dashboard, /contentType: profileAvatarFile\.type \|\| "image\/jpeg"/);
 });
+
+
+test("multiple sent attachments remain horizontal in the user message", async () => {
+  const styles = await read("../src/styles.css");
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content > \.aichat-message-attachments\.is-user-attachments\s*\{[^}]*flex-wrap:\s*nowrap !important/);
+  assert.match(styles, /overflow-x:\s*auto/);
+});
+
+test("male and female voice presets never use an unrelated browser default voice", async () => {
+  const voice = await read("../src/lib/misma-voice.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(voice, /export function getSpeechVoiceForPreset/);
+  assert.match(voice, /return pool\[preferredIndex\] \|\| pool\[0\]/);
+  assert.match(voice, /onError\?\.\("voice-unavailable"\)/);
+  assert.match(dashboard, /getSpeechVoiceForPreset/);
+  assert.match(dashboard, /voicePreset=\{selectedVoicePreset\}/);
+});
+
+test("website widget connections support shared keys and safe removal", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(api, /shareWebsiteWidgetAcrossWorkspace/);
+  assert.match(api, /sharedWidgetKey/);
+  assert.match(api, /deleteWebsiteConnection/);
+  assert.match(edge, /\.eq\("widget_public_key", key\)/);
+  assert.match(edge, /\.is\("widget_deleted_at", null\)/);
+  assert.match(dashboard, /Use one widget for all connected websites/);
+  assert.match(dashboard, /Remove widget/);
+});
