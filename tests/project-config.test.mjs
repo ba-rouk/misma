@@ -512,8 +512,9 @@ test("voice chat requests receive concise spoken replies and never upload record
   assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(edgeFunction, /const voice = input\.voice === true/);
   assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
-  assert.doesNotMatch(edgeFunction, /transcribeAudioAttachment|audio\/transcriptions|VOICE NOTE:/);
-  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
+  assert.match(edgeFunction, /audio\/transcriptions/);
+  assert.match(edgeFunction, /VOICE CONVERSATION/);
+  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/, "live speech chat stays on the browser speech pipeline, while uploaded audio is transcribed separately");
 });
 
 test("attachments stay private, show per-file progress, and are separate from user text", async () => {
@@ -943,7 +944,7 @@ test("closing a website widget deletes only visitor sessions with no human hando
   assert.match(migration, /public\.human_requests/);
   assert.match(migration, /public\.human_handoff_requests/);
   assert.match(migration, /conversation\.channel = 'Website'/);
-  assert.match(migration, /GRANT EXECUTE[\s\S]*TO service_role/);
+  assert.match(migration, /grant execute[\s\S]*to service_role/i);
 });
 
 test("website scanning requests structured JSON, validates extraction and retries once", async () => {
@@ -962,7 +963,8 @@ test("website scanning requests structured JSON, validates extraction and retrie
 test("voice-note webm files are audio and use Groq transcription instead of video keyframes", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edge = await read("../supabase/functions/misma-chat/index.ts");
-  assert.match(dashboard, /webm: \/(?:misma-)?voice-note-/);
+  assert.ok(dashboard.includes('webm: /(?:misma-)?voice-note-/i.test(file.name) ? "audio/webm" : "video/webm"'));
+  assert.match(dashboard, /isLegacyVoiceNoteWebm/);
   assert.match(dashboard, /uploadOne\(normalizedAudio, "audio"\)/);
   assert.match(dashboard, /isAudio && previewUrl/);
   assert.match(edge, /"audio", "file"/);

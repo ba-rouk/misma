@@ -606,6 +606,10 @@ function normalizeComposerAttachment(file: File): File {
   };
   const inferredType = inferredTypes[extension];
   const currentType = file.type.toLowerCase();
+  const isLegacyVoiceNoteWebm = extension === "webm" && /(?:misma-)?voice-note-/i.test(file.name);
+  if (isLegacyVoiceNoteWebm && !currentType.startsWith("audio/")) {
+    return new File([file], file.name, { type: "audio/webm", lastModified: file.lastModified });
+  }
   const shouldInfer = !currentType || currentType === "application/octet-stream";
   if (!shouldInfer || !inferredType || inferredType === currentType) return file;
   return new File([file], file.name, { type: inferredType, lastModified: file.lastModified });
