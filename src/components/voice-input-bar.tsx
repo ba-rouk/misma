@@ -16,6 +16,7 @@ type VoiceSendOptions = { voice?: boolean };
 type VoiceInputBarProps = {
   children: ReactNode;
   toolbarStart?: ReactNode;
+  voicePreset?: "girl" | "woman" | "boy" | "man";
   inputValue: string;
   hasContent: boolean;
   isBusy?: boolean;
@@ -64,6 +65,7 @@ function appendTranscript(base: string, transcript: string): string {
 export function VoiceInputBar({
   children,
   toolbarStart,
+  voicePreset = "woman",
   inputValue,
   hasContent,
   isBusy = false,
@@ -159,6 +161,7 @@ export function VoiceInputBar({
     });
 
     const voice = createVoiceMode({
+      voicePreset,
       send: async (text, signal) => {
         const reply = await callbacksRef.current.onSend(text, signal, { voice: true });
         if (typeof reply !== "string" || !reply.trim()) throw new Error("Voice reply was empty.");
