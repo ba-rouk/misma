@@ -265,12 +265,31 @@ input.addEventListener("input",function(){resizeInput();updatePrimary();});
 input.addEventListener("keydown",function(event){if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);}});
 $(".composer").addEventListener("submit",function(event){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);});
 micButton.addEventListener("click",function(){
-  if(dictating){if(recognition){try{recognition.stop();}catch(error){}}return;}
+  if(dictating)return;
   if(voiceSession)stopVoiceSession();if(busy)return;
-  requestMicPermission().then(function(){dictating=true;micButton.classList.add("is-active");setStatus("Listening…");listen(false);})
-    .catch(function(){setStatus("Allow microphone access in your browser settings, then try again.");});
+  finalTranscript="";interimTranscript="";dictationSendAfterStop=false;dictating=true;composer.classList.add("recording");micButton.classList.add("is-active");setStatus("Listening · tap Send when you are finished.");updatePrimary();
+  requestMicPermission().then(function(){if(dictating)listen(false);})
+    .catch(function(){dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();setStatus("Allow microphone access in your browser settings, then try again.");});
 });
-primaryButton.addEventListener("click",function(){if(input.value.trim())sendMessage(input.value,false);else startVoiceSession();});
+primaryButton.addEventListener("click",function(){if(dictating){finishDictationAndSend();return;}if(input.value.trim())sendMessage(input.value,false);else startVoiceSession();});
+voiceView.querySelector(".voice-exit").addEventListener("click",stopVoiceSession);
+voiceView.querySelector(".voice-end").addEventListener("click",stopVoiceSession);
+voiceMuteButton.addEventListener("click",function(){
+  if(!voiceSession)return;
+  voiceMuted=!voiceMuted;
+  if(voiceMuted){stopRecognition();setVoiceState("muted");}
+  else if(voiceModeChoice==="hands-free")listen(true);
+  else setVoiceState("ready");
+});
+voiceStopButton.addEventListener("click",interruptVoice);
+voiceOrb.addEventListener("click",function(){
+  if(!voiceSession)return;
+  if(voiceModeChoice==="push-to-talk"){
+    if(voiceState==="listening"){if(recognition){try{recognition.stop();}catch(error){setVoiceState("ready");}}}
+    else if(voiceState==="ready")listen(true);
+  }else if(voiceState==="thinking"||voiceState==="speaking")interruptVoice();
+});
+voiceModeButtons.forEach(function(button){button.addEventListener("click",function(){changeVoiceMode(button.getAttribute("data-mode"));});});
 
 function saveSize(){try{localStorage.setItem(sizeStore,JSON.stringify({width:panel.offsetWidth,height:panel.offsetHeight}));}catch(error){}}
 try{
@@ -279,7 +298,7 @@ try{
 }catch(error){}
 var resizeState=null;
 resizeHandle.addEventListener("pointerdown",function(event){if(panel.classList.contains("minimized"))return;event.preventDefault();resizeState={x:event.clientX,y:event.clientY,width:panel.offsetWidth,height:panel.offsetHeight};try{resizeHandle.setPointerCapture(event.pointerId);}catch(error){}});
-resizeHandle.addEventListener("pointermove",function(event){if(!resizeState)return;var width=Math.max(270,Math.min(window.innerWidth-28,resizeState.width+event.clientX-resizeState.x));var height=Math.max(350,Math.min(window.innerHeight-96,resizeState.height+event.clientY-resizeState.y));panel.style.width=width+"px";panel.style.height=height+"px";});
+resizeHandle.addEventListener("pointermove",function(event){if(!resizeState)return;var width=Math.max(270,Math.min(window.innerWidth-28,resizeState.width+resizeState.x-event.clientX));var height=Math.max(350,Math.min(window.innerHeight-96,resizeState.height+event.clientY-resizeState.y));panel.style.width=width+"px";panel.style.height=height+"px";});
 function finishResize(){if(!resizeState)return;resizeState=null;saveSize();}
 resizeHandle.addEventListener("pointerup",finishResize);resizeHandle.addEventListener("pointercancel",finishResize);
 
