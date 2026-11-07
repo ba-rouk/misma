@@ -1666,7 +1666,7 @@ function Dashboard() {
 
   const openHumanRequestNotification = async (notification: any) => {
     const notificationId = Number(notification.id);
-    setSelectedHumanRequestNotificationId(notificationId);
+    setSelectedHumanRequestNotificationId((current) => current === notificationId ? null : notificationId);
     if (notification.is_read === true || !token) return;
     setAllNotifications((current) => current.map((item) =>
       Number(item.id) === notificationId ? { ...item, is_read: true } : item

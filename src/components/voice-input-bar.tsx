@@ -329,7 +329,17 @@ export function VoiceInputBar({
           aria-live={isDictating ? "polite" : undefined}
         >
           {isDictating ? (
-            <div className="misma-voice-waveform" role="status" aria-label="Listening. Speak to see the waveform.">
+            <div className="misma-voice-recording-row">
+              <button
+                type="button"
+                className="misma-voice-dictation-btn is-cancel"
+                aria-label="Cancel dictation and discard transcript"
+                title="Cancel dictation"
+                onClick={cancelDictation}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+              </button>
+              <div className="misma-voice-waveform" role="status" aria-label="Listening. Speak to see the waveform.">
               {WAVEFORM_BARS.map((index) => {
                 const variation = 0.34 + ((index * 7) % 11) / 16;
                 const height = waveLevel < 0.035 ? 3 : Math.max(4, 3 + waveLevel * variation * 34);
@@ -342,6 +352,7 @@ export function VoiceInputBar({
                   />
                 );
               })}
+              </div>
             </div>
           ) : (
             children
@@ -369,15 +380,6 @@ export function VoiceInputBar({
 
             {isDictating ? (
               <div className="misma-voice-dictation-actions">
-                <button
-                  type="button"
-                  className="misma-voice-dictation-btn is-cancel"
-                  aria-label="Cancel dictation and discard transcript"
-                  title="Cancel dictation"
-                  onClick={cancelDictation}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-                </button>
                 <button
                   type="button"
                   className="misma-voice-dictation-btn is-finish"
