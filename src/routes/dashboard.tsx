@@ -380,92 +380,38 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
 }
 
 function ComposerAttachmentPreview({
-  file,
-  index,
-  isUploading,
-  onRemove,
+  file, previewUrl, uploadStatus, uploadProgress, onRemove, onRetry,
 }: {
   file: File;
-  index: number;
-  isUploading: boolean;
-  onRemove: (index: number) => void;
+  previewUrl: string | null;
+  uploadStatus: "uploading" | "ready" | "error";
+  uploadProgress: number;
+  onRemove: () => void;
+  onRetry: () => void;
 }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewLoaded, setPreviewLoaded] = useState(false);
-  const [previewFailed, setPreviewFailed] = useState(false);
   const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i.test(file.name);
   const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
-  const isAudio = file.type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name);
-  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  const previewPending = (isImage || isVideo) && !previewLoaded;
-  const extension = file.name.split(".").pop()?.slice(0, 5).toUpperCase() || "FILE";
-  const sizeLabel = file.size < 1024 * 1024
-    ? Math.max(1, Math.round(file.size / 1024)) + " KB"
-    : (file.size / (1024 * 1024)).toFixed(1) + " MB";
-
-  useEffect(() => {
-    setPreviewLoaded(!isImage && !isVideo);
-    setPreviewFailed(false);
-    if (!isImage && !isVideo && !isAudio) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file, isImage, isVideo, isAudio]);
-
+  const extension = file.name.split(".").pop()?.slice(0, 6).toUpperCase() || "FILE";
+  const sizeLabel = file.size < 1024 * 1024 ? Math.max(1, Math.round(file.size / 1024)) + " KB" : (file.size / (1024 * 1024)).toFixed(1) + " MB";
+  const isUploading = uploadStatus === "uploading";
+  const isError = uploadStatus === "error";
+  const cardClass = "aichat-composer-attachment-card" + (isImage ? " is-image" : " is-file") + (isError ? " is-error" : "");
   return (
-    <div className={"aichat-composer-attachment-card" + (isAudio ? " is-audio" : "")} title={file.name}>
-      <div className={"aichat-composer-attachment-square" + (isAudio ? " is-audio" : "")}>
-        {isImage && previewUrl && !previewFailed ? (
-          <img
-            src={previewUrl}
-            alt={file.name}
-            decoding="async"
-            loading="eager"
-            fetchPriority="high"
-            onLoad={() => setPreviewLoaded(true)}
-            onError={() => { setPreviewLoaded(true); setPreviewFailed(true); }}
-          />
-        ) : isVideo && previewUrl && !previewFailed ? (
-          <video
-            src={previewUrl}
-            muted
-            playsInline
-            preload="metadata"
-            onLoadedMetadata={() => setPreviewLoaded(true)}
-            onError={() => { setPreviewLoaded(true); setPreviewFailed(true); }}
-          />
-        ) : isAudio && previewUrl ? (
-          <audio className="aichat-composer-audio-player" src={previewUrl} controls preload="metadata" aria-label={"Play " + file.name} />
-        ) : (
-          <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
-            <span>{isPdf ? "PDF" : isImage ? "IMAGE" : isVideo ? "VIDEO" : isAudio ? "AUDIO" : extension}</span>
-            <small>{isPdf ? "Document" : isImage ? (previewFailed ? "Preview unavailable" : "Image") : isVideo ? (previewFailed ? "Preview unavailable" : "Video") : isAudio ? "Voice note" : "File"}</small>
-          </div>
-        )}
-        <button
-          type="button"
-          className="aichat-composer-attachment-remove"
-          aria-label={"Remove " + file.name}
-          onClick={() => onRemove(index)}
-        >×</button>
-        {isUploading || previewPending ? (
-          <div className="aichat-composer-upload-state is-uploading" role="status">
-            <i />
-            <span>{isUploading ? "Uploading" : "Loading"}</span>
-          </div>
-        ) : (
-          <span className="aichat-composer-upload-state is-ready"><i>✓</i></span>
-        )}
+    <div className={cardClass} title={isImage ? undefined : file.name} aria-busy={isUploading}>
+      <div className={"aichat-composer-attachment-square" + (isImage ? "" : " is-file")}>
+        {isImage && previewUrl ? <img src={previewUrl} alt={file.name} decoding="async" loading="eager" fetchPriority="high" />
+          : isVideo && previewUrl ? <video src={previewUrl} muted playsInline preload="metadata" aria-label={file.name} />
+          : <div className="aichat-composer-file-card-copy"><span className="aichat-composer-file-icon" aria-hidden="true">{extension}</span><span className="aichat-composer-file-details"><strong>{file.name}</strong><small>{extension} · {sizeLabel}</small></span></div>}
+        {isUploading && <div className="aichat-composer-upload-state is-uploading" role="progressbar" aria-label={"Uploading " + file.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}>
+          <svg className="aichat-composer-upload-ring" viewBox="0 0 28 28" aria-hidden="true"><circle className="aichat-composer-upload-track" cx="14" cy="14" r="11" /><circle className="aichat-composer-upload-progress" cx="14" cy="14" r="11" style={{ strokeDashoffset: 69.12 * (1 - Math.max(0, Math.min(1, uploadProgress))) }} /></svg>
+        </div>}
+        {uploadStatus === "ready" && <span className="aichat-composer-upload-state is-ready" role="status" aria-label={file.name + " uploaded"}><i>✓</i></span>}
       </div>
-      <span className="aichat-composer-attachment-name">{file.name}</span>
-      <span className="aichat-composer-attachment-size">{sizeLabel}</span>
+      <button type="button" className="aichat-composer-attachment-remove" aria-label={"Remove " + file.name} onClick={onRemove}>×</button>
+      {isError && <button type="button" className="aichat-composer-attachment-retry" aria-label={"Retry upload of " + file.name} title="Retry upload" onClick={onRetry}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" /></svg></button>}
     </div>
   );
 }
-
 function LibraryFilePreview({
   asset,
   onClose,
