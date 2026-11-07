@@ -321,6 +321,41 @@ async function compressImageForUpload(file: File): Promise<File> {
   }
 }
 
+async function uploadStorageObjectWithProgress(file: File, path: string, signal?: AbortSignal, onProgress?: (fraction: number) => void): Promise<void> {
+  const config = getSupabaseConfig();
+  const client = getSupabaseClient();
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken || !config) throw new Error("Your sign-in session expired. Please sign in again.");
+  if (signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const endpoint = config.url.replace(/\\/$/, "") + "/storage/v1/object/misma-media/" + encodedPath;
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let settled = false;
+    const abort = () => xhr.abort();
+    const cleanup = () => signal?.removeEventListener("abort", abort);
+    const finish = (callback: () => void) => { if (settled) return; settled = true; cleanup(); callback(); };
+    xhr.open("POST", endpoint, true);
+    xhr.setRequestHeader("apikey", config.publishableKey);
+    xhr.setRequestHeader("Authorization", "Bearer " + accessToken);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.setRequestHeader("Cache-Control", "3600");
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable && event.total > 0) onProgress?.(event.loaded / event.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { onProgress?.(1); finish(resolve); return; }
+      let detail = "";
+      try { const payload = JSON.parse(xhr.responseText) as { message?: string; error?: string }; detail = payload.message || payload.error || ""; } catch { /* use a generic storage error */ }
+      finish(() => reject(new Error(detail || "Supabase Storage rejected the upload (HTTP " + xhr.status + ").")));
+    };
+    xhr.onerror = () => finish(() => reject(new Error("Network error while uploading " + file.name + ".")));
+    xhr.onabort = () => finish(() => reject(new DOMException("Upload cancelled.", "AbortError")));
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) { xhr.abort(); return; }
+    xhr.send(file);
+  });
+}
 async function extractVideoKeyframes(file: File): Promise<File[]> {
   const objectUrl = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -521,12 +556,14 @@ function MessageAttachmentViews({
   onCrop,
   onShare,
   onCopy,
+  onOpenImage,
 }: {
   attachments?: MessageAttachment[];
   onDownload?: (attachment: MessageAttachment) => void;
   onCrop?: (attachment: MessageAttachment) => void;
   onShare?: (attachment: MessageAttachment) => void;
   onCopy?: (attachment: MessageAttachment) => void;
+  onOpenImage: (attachment: MessageAttachment) => void;
 }) {
   if (!attachments?.length) return null;
   const visible = attachments.filter((item) => item.kind !== "video-frame" && item.kind !== "video-job" && item.url);
@@ -539,9 +576,9 @@ function MessageAttachmentViews({
           const isGenerated = item.kind === "generated-image";
           return (
             <div key={key} className="aichat-generated-media-wrap is-image">
-              <a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link">
+              <button type="button" className="aichat-attachment-image-link" onClick={() => onOpenImage(item)} aria-label={"Open image " + item.name}>
                 <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="eager" decoding="async" fetchPriority="high" />
-              </a>
+              </button>
               {isGenerated && (
                 <GeneratedImageActions
                   onDownload={onDownload ? () => onDownload(item) : undefined}
@@ -565,6 +602,23 @@ function MessageAttachmentViews({
   );
 }
 
+function AttachmentImageLightbox({ attachment, onClose }: { attachment: MessageAttachment; onClose: () => void }) {
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+  if (!attachment.url) return null;
+  return <div className="aichat-attachment-lightbox" role="dialog" aria-modal="true" aria-label={"Image viewer: " + attachment.name}
+    onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    onTouchStart={(event) => { const t = event.touches[0]; touchStart.current = { x: t.clientX, y: t.clientY }; }}
+    onTouchEnd={(event) => { const start = touchStart.current; const t = event.changedTouches[0]; touchStart.current = null; if (start && (Math.abs(t.clientX - start.x) > 90 || Math.abs(t.clientY - start.y) > 90)) onClose(); }}>
+    <button type="button" className="aichat-attachment-lightbox-close" onClick={onClose} aria-label="Close image viewer">×</button>
+    <img src={attachment.url} alt={attachment.name} />
+    <span className="aichat-attachment-lightbox-caption">{attachment.name}</span>
+  </div>;
+}
 function getLoginGreeting(): string {
   const hour = new Date().getHours();
   const choices = hour < 12
