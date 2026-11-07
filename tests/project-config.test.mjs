@@ -310,7 +310,7 @@ test("Library navigation has no file-count badge", async () => {
 test("Ask Misma launcher uses the Misma mark, sits at the bottom-left, and is icon-only on mobile", async () => {
   const landingWidget = await read("../src/components/landing-chat-widget.tsx");
   const styles = await read("../src/styles.css");
-  const embed = await read("../public/assets/misma-widget.js");
+  const embed = await read("../src/assets/misma-widget-runtime.js");
 
   assert.match(landingWidget, /<MismaIcon size=\{28\} className="misma-guest-launcher-logo" \/>/);
   assert.match(landingWidget, /<span className="misma-guest-launcher-label">Ask Misma<\/span>/);
@@ -678,7 +678,7 @@ test("website widget connections support shared keys and safe removal", async ()
   const api = await read("../src/lib/api/misma.functions.ts");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.match(api, /shareWebsiteWidgetAcrossWorkspace/);
   assert.match(api, /sharedWidgetKey/);
   assert.match(api, /deleteWebsiteConnection/);
@@ -697,7 +697,7 @@ test("website widget connections support shared keys and safe removal", async ()
 
 
 test("embedded chat widget has in-field green send, microphone dictation and female speech chat", async () => {
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.match(widget, /class='icon-btn mic'/);
   assert.match(widget, /class='send-btn primary is-voice'/);
   assert.match(widget, /background:#22c55e/);
@@ -709,7 +709,7 @@ test("embedded chat widget has in-field green send, microphone dictation and fem
 });
 
 test("embedded chat widget has no header minimize control and still supports resizing and saved size", async () => {
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.doesNotMatch(widget, /class='minimize'/);
   assert.doesNotMatch(widget, /minimizeButton\.addEventListener/);
   assert.match(widget, /class='resize-handle'/);
@@ -720,7 +720,7 @@ test("embedded chat widget has no header minimize control and still supports res
 test("shared installation script uses the same widget key while the server checks each registered host", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   const migration = await read("../supabase/migrations/20261107110000_website_widget_groups.sql");
   assert.match(dashboard, /General shared website script/);
   assert.match(dashboard, /data-site-key="\$\{sharedWidgetPublicKey\}"/);
@@ -732,7 +732,7 @@ test("shared installation script uses the same widget key while the server check
 
 
 test("website widget resize handle is in the top-right header and drag-resizes from that corner", async () => {
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   const handle = widget.indexOf("class='resize-handle'");
   const headerEnd = widget.indexOf("</header>", handle);
   assert.ok(handle >= 0 && headerEnd > handle, "resize control should be inside the widget header");
@@ -742,7 +742,7 @@ test("website widget resize handle is in the top-right header and drag-resizes f
 });
 
 test("website widget dictation shows a recording waveform and waits for Send to submit", async () => {
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.match(widget, /class='recording-waveform'/);
   assert.match(widget, /composer\.classList\.add\("recording"\)/);
   assert.match(widget, /function finishDictationAndSend\(\)/);
@@ -752,7 +752,7 @@ test("website widget dictation shows a recording waveform and waits for Send to 
 });
 
 test("website widget speech talk provides the dashboard voice controls and spoken-reply context", async () => {
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   assert.match(widget, /class='voice-view'/);
   assert.match(widget, /data-mode='hands-free'/);
@@ -769,7 +769,7 @@ test("website widget speech talk provides the dashboard voice controls and spoke
 
 test("website human handoff always creates an owner notification with the visitor message", async () => {
   const edge = await read("../supabase/functions/misma-widget/index.ts");
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   const dashboard = await read("../src/routes/dashboard.tsx");
 
   const handoff = edge.slice(edge.indexOf("async function saveHumanRequest"), edge.indexOf("\nfunction isSafeWebsiteUrl"));
@@ -790,21 +790,28 @@ test("website human handoff always creates an owner notification with the visito
 });
 
 
-test("website widget reloads fetch the latest public asset without changing site keys", async () => {
+test("website widget uses a permanent URL backed by a live, non-cacheable server route", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  const widgetRoute = await read("../src/routes/assets/misma-widget[.]js.ts");
   const security = await read("../src/lib/security-headers.server.ts");
   const server = await read("../src/server.ts");
   const vite = await read("../vite.config.ts");
+
   assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
   assert.ok(!dashboard.includes("misma-widget.js?v="));
-  assert.ok(security.includes("Cache-Control"));
+  assert.ok(dashboard.includes("data-site-key="));
+  assert.ok(widgetRoute.includes('createFileRoute("/assets/misma-widget.js")'));
+  assert.ok(widgetRoute.includes('import widgetRuntime from "../../assets/misma-widget-runtime.js?raw"'));
+  assert.ok(widgetRoute.includes('"Content-Type": "application/javascript; charset=utf-8"'));
+  assert.ok(widgetRoute.includes('"Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"'));
+  assert.ok(widgetRoute.includes('"CDN-Cache-Control": "no-store"'));
   assert.ok(security.includes("CDN-Cache-Control"));
   assert.ok(security.includes("/assets/misma-widget.js"));
   assert.ok(vite.includes('"/assets/misma-widget.js"'));
-  assert.ok(vite.includes('"Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"'));
   assert.ok(server.includes("applySecurityHeaders(await normalizeCatastrophicSsrResponse(response), request)"));
-  assert.ok(dashboard.includes("data-site-key="));
+  await assert.rejects(read("../public/assets/misma-widget.js"), "the widget must not be shadowed by a static public file");
+  assert.doesNotThrow(() => new Function(widget), "the dynamically served widget source must parse");
 });
 
 test("dashboard notification feed and badge count only pending human handoffs", async () => {
@@ -821,7 +828,7 @@ test("dashboard notification feed and badge count only pending human handoffs", 
 });
 
 test("embedded speech talk is English-only and does not display transcripts or reply text", async () => {
-  const widget = await read("../public/assets/misma-widget.js");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   assert.ok(!widget.includes("voiceTranscript"));
   assert.ok(!widget.includes("voice-transcript"));
