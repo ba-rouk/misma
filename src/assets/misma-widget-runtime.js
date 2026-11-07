@@ -305,7 +305,7 @@ voiceMuteButton.addEventListener("click",function(){
 });
 voiceStopButton.addEventListener("click",interruptVoice);
 voiceOrb.addEventListener("click",function(){
-  if(!voiceSession)return;
+  if(!voiceSession){startVoiceSession();return;}
   if(voiceModeChoice==="push-to-talk"){
     if(voiceState==="listening"){if(recognition){try{recognition.stop();}catch(error){setVoiceState("ready");}}}
     else if(voiceState==="ready")listen(true);
@@ -319,7 +319,7 @@ try{
   if(savedSize&&savedSize.width&&savedSize.height){panel.style.width=Math.max(270,Math.min(window.innerWidth-28,Number(savedSize.width)))+"px";panel.style.height=Math.max(350,Math.min(window.innerHeight-96,Number(savedSize.height)))+"px";}
 }catch(error){}
 var resizeState=null;
-resizeHandle.addEventListener("pointerdown",function(event){if(false)return;event.preventDefault();resizeState={x:event.clientX,y:event.clientY,width:panel.offsetWidth,height:panel.offsetHeight};try{resizeHandle.setPointerCapture(event.pointerId);}catch(error){}});
+resizeHandle.addEventListener("pointerdown",function(event){event.preventDefault();resizeState={x:event.clientX,y:event.clientY,width:panel.offsetWidth,height:panel.offsetHeight};try{resizeHandle.setPointerCapture(event.pointerId);}catch(error){}});
 resizeHandle.addEventListener("pointermove",function(event){if(!resizeState)return;var width=Math.max(270,Math.min(window.innerWidth-28,resizeState.width+event.clientX-resizeState.x));var height=Math.max(350,Math.min(window.innerHeight-96,resizeState.height+resizeState.y-event.clientY));panel.style.width=width+"px";panel.style.height=height+"px";});
 function finishResize(){if(!resizeState)return;resizeState=null;saveSize();}
 resizeHandle.addEventListener("pointerup",finishResize);resizeHandle.addEventListener("pointercancel",finishResize);
@@ -330,7 +330,7 @@ $(".handoff-submit").addEventListener("click",function(){
   call(Object.assign({action:"human-request"},data)).then(function(){handoff.classList.remove("open");handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});setStatus("Human request sent. A person will reply here.");return refreshHistory();})
     .catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
 });
-window.setInterval(function(){if(panel.classList.contains("open")&&!false&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
+window.setInterval(function(){if(panel.classList.contains("open")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
 call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
 }
 fetch(api,{
