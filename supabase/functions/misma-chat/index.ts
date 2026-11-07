@@ -1576,7 +1576,10 @@ Deno.serve(async (request) => {
       message = "The user attached files without a written request. Acknowledge the attachment and ask what they would like you to do with it. Do not assume they want a summary, extraction, or analysis.";
     }
     if (prepared.extractedText) {
-      message += `\n\nPlease analyze the following attached file content:\n\n${prepared.extractedText}`;
+      const extractionInstruction = userVisibleMessage
+        ? "Please analyze the following attached file content:"
+        : "Attached file content (reference only; the user has not yet requested an analysis):";
+      message += `\n\n${extractionInstruction}\n\n${prepared.extractedText}`;
     }
     const attachedPhotoCount = requestedAttachments.filter((attachment) =>
       attachment.kind !== "video-frame" && (attachment.kind === "image" || attachment.mimeType.startsWith("image/"))
