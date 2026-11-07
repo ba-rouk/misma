@@ -540,5 +540,5 @@ test("privacy and voice preferences are persisted and used by dashboard voice/ch
   assert.match(edgeFunction, /useConversationHistory = privacySettings\.useConversationHistory !== false/);
   assert.match(edgeFunction, /if \(useConversationHistory\)/);
   assert.match(edgeFunction, /DASHBOARD ASSISTANT PREFERENCES/);
-  assert.match(voice, /voicePreset === "girl"/);
+  assert.match(voice, /currentVoicePreset === "girl"/);
 });
