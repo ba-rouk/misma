@@ -980,3 +980,36 @@ test("voice-note webm files are audio and use Groq transcription instead of vide
   assert.match(edge, /whisper-large-v3-turbo/);
   assert.match(edge, /transcribedAudio/);
 });
+
+
+test("dashboard and website widget share the Chrome-style microphone permission flow", async () => {
+  const hook = await read("../src/lib/use-mic-permission.ts");
+  const dialog = await read("../src/components/mic-permission-dialog.tsx");
+  const dialogCss = await read("../src/components/mic-permission-dialog.css");
+  const voiceInput = await read("../src/components/voice-input-bar.tsx");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  const checklist = await read("../docs/mic-permission-dialog.md");
+
+  assert.match(hook, /MISMA_ORIGIN_LABEL = "misma\.onrender\.com"/);
+  assert.match(hook, /navigator\.permissions\.query/);
+  assert.match(hook, /getUserMedia\(\{ audio: true \}\)/);
+  assert.match(hook, /MISMA_MIC_PREFERENCE_KEY/);
+  assert.match(dialog, /role="alertdialog"/);
+  assert.match(dialog, /Allow while visiting the site/);
+  assert.match(dialog, /Allow this time/);
+  assert.match(dialog, /Never allow/);
+  assert.match(dialogCss, /rgba\(0, 0, 0, 0\.55\)/);
+  assert.match(dialogCss, /prefers-reduced-motion/);
+  assert.match(voiceInput, /useMicPermission/);
+  assert.match(voiceInput, /MicPermissionDialog/);
+  assert.match(widget, /MISMA_ORIGIN_LABEL="misma\.onrender\.com"/);
+  assert.match(widget, /role='alertdialog'/);
+  assert.match(widget, /mic-permission-while/);
+  assert.match(widget, /mic-permission-once/);
+  assert.match(widget, /mic-permission-never/);
+  assert.match(widget, /attachShadow/);
+  assert.match(widget, /z-index:2147483647/);
+  assert.match(checklist, /Chrome Android/);
+  assert.match(checklist, /Safari iOS/);
+  assert.match(checklist, /schoolsize\.netlify\.app/);
+});
