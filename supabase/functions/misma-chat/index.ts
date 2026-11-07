@@ -1650,19 +1650,19 @@ Deno.serve(async (request) => {
     const responseTone = allowedSetting(aiSettings.responseTone, ["Professional and friendly", "Warm and conversational", "Formal"], "Professional and friendly");
     const responseLength = allowedSetting(aiSettings.responseLength, ["Concise", "Balanced", "Detailed"], "Balanced");
     const languageMode = allowedSetting(aiSettings.languageMode, ["Match visitor language", "Business primary language", "English"], "Match visitor language");
-    systemPrompt += "\\n\\nDASHBOARD ASSISTANT PREFERENCES (user-configured):\\n" +
-      "- Primary role: " + assistantMode + ".\\n" +
-      "- Response tone: " + responseTone + ".\\n" +
-      "- Response length: " + responseLength + ".\\n" +
-      "- Reply language: " + languageMode + ".\\n" +
-      "- Use business knowledge first: " + String(aiSettings.useBusinessKnowledge !== false) + ".\\n" +
-      "- Avoid unverified promises: " + String(aiSettings.avoidUnverifiedClaims !== false) + ".\\n" +
-      "- Ask clarifying questions when details are missing: " + String(aiSettings.askClarifyingQuestions !== false) + ".\\n" +
-      "- Qualify interested leads when appropriate: " + String(aiSettings.qualifyLeads === true) + ".\\n" +
-      "- Capture order details when relevant: " + String(aiSettings.captureOrders === true) + ".\\n" +
-      "- Respect configured business hours: " + String(aiSettings.respectBusinessHours !== false) + ".\\n" +
-      "- Offer human handoff when appropriate: " + String(aiSettings.humanHandoff !== false) + ".\\n" +
-      "- Welcome greeting preference: " + String(aiSettings.welcomeGreeting !== false) + ".\\n" +
+    systemPrompt += "\n\nDASHBOARD ASSISTANT PREFERENCES (user-configured):\n" +
+      "- Primary role: " + assistantMode + ".\n" +
+      "- Response tone: " + responseTone + ".\n" +
+      "- Response length: " + responseLength + ".\n" +
+      "- Reply language: " + languageMode + ".\n" +
+      "- Use business knowledge first: " + String(aiSettings.useBusinessKnowledge !== false) + ".\n" +
+      "- Avoid unverified promises: " + String(aiSettings.avoidUnverifiedClaims !== false) + ".\n" +
+      "- Ask clarifying questions when details are missing: " + String(aiSettings.askClarifyingQuestions !== false) + ".\n" +
+      "- Qualify interested leads when appropriate: " + String(aiSettings.qualifyLeads === true) + ".\n" +
+      "- Capture order details when relevant: " + String(aiSettings.captureOrders === true) + ".\n" +
+      "- Respect configured business hours: " + String(aiSettings.respectBusinessHours !== false) + ".\n" +
+      "- Offer human handoff when appropriate: " + String(aiSettings.humanHandoff !== false) + ".\n" +
+      "- Welcome greeting preference: " + String(aiSettings.welcomeGreeting !== false) + ".\n" +
       "- Protect sensitive information: " + String(aiSettings.protectSensitiveData !== false) + ".";
 
     if (voice) {
