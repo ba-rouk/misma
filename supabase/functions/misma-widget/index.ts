@@ -236,28 +236,104 @@ async function saveHumanRequest(db: Db, site: AnyRecord, conversation: AnyRecord
   const email = safeString(input.email, 240);
   const phone = safeString(input.phone, 80);
   const reason = safeString(input.reason, 500) || "Visitor requested a human agent";
-  const pending = await db.from("human_requests").select("id").eq("workspace_id", site.workspace_id)
-    .eq("conversation_id", conversation.id).eq("status", "pending").limit(1).maybeSingle();
+
+  const pending = await db.from("human_requests").select("id")
+    .eq("workspace_id", site.workspace_id)
+    .eq("conversation_id", conversation.id)
+    .eq("status", "pending")
+    .limit(1)
+    .maybeSingle();
   if (pending.error) throw new Error("Could not check existing handoff requests.");
+
   const contactId = await createOrFindContact(db, site.workspace_id, visitorId, name, email, phone);
-  await db.from("conversations").update({
+  let requestId: number;
+  const alreadyPending = Boolean(pending.data);
+
+  if (pending.data) {
+    const updatedRequest = await db.from("human_requests").update({
+      contact_id: contactId,
+      visitor_name: name,
+      visitor_email: email || null,
+      visitor_phone: phone || null,
+      reason,
+    })
+      .eq("id", pending.data.id)
+      .eq("workspace_id", site.workspace_id)
+      .select("id")
+      .single();
+    if (updatedRequest.error || !updatedRequest.data) {
+      throw new Error("Could not update the existing human handoff request.");
+    }
+    requestId = Number(updatedRequest.data.id);
+  } else {
+    const created = await db.from("human_requests").insert({
+      workspace_id: site.workspace_id,
+      conversation_id: conversation.id,
+      contact_id: contactId,
+      visitor_name: name,
+      visitor_email: email || null,
+      visitor_phone: phone || null,
+      reason,
+      status: "pending",
+    }).select("id").single();
+    if (created.error || !created.data) throw new Error("Could not submit the human handoff request.");
+    requestId = Number(created.data.id);
+  }
+
+  const conversationUpdate = await db.from("conversations").update({
     ...(contactId ? { contact_id: contactId } : {}),
-    status: "Needs you", updated_at: new Date().toISOString(),
-  }).eq("id", conversation.id).eq("workspace_id", site.workspace_id);
-  if (pending.data) return { requestId: Number(pending.data.id), alreadyPending: true };
-  const created = await db.from("human_requests").insert({
-    workspace_id: site.workspace_id, conversation_id: conversation.id, contact_id: contactId,
-    visitor_name: name, visitor_email: email || null, visitor_phone: phone || null, reason, status: "pending",
-  }).select("id").single();
-  if (created.error || !created.data) throw new Error("Could not submit the human handoff request.");
-  const notification = await db.from("workspace_notifications").insert({
-    workspace_id: site.workspace_id, notification_type: "human_request", title: "Visitor requested a human",
-    body: name + (email ? " · " + email : "") + " asked to speak with your team.",
-    conversation_id: conversation.id, contact_id: contactId, human_request_id: created.data.id,
-    website_connection_id: site.id, is_read: false,
-  });
-  if (notification.error) console.warn("[misma-widget] Handoff notification insert failed:", notification.error.code);
-  return { requestId: Number(created.data.id), alreadyPending: false };
+    status: "Needs you",
+    latest_text: ("Human request: " + reason).slice(0, 200),
+    updated_at: new Date().toISOString(),
+  })
+    .eq("id", conversation.id)
+    .eq("workspace_id", site.workspace_id);
+  if (conversationUpdate.error) throw new Error("The human request was saved, but its conversation could not be updated.");
+
+  const notificationBody = [
+    name + " requested a person on " + safeString(site.domain, 180) + ".",
+    "Message: " + reason,
+    email ? "Email: " + email : "",
+    phone ? "Phone: " + phone : "",
+  ].filter(Boolean).join("\n");
+  const notificationValues = {
+    workspace_id: site.workspace_id,
+    notification_type: "human_request",
+    title: "Website visitor requested a human",
+    body: notificationBody,
+    conversation_id: conversation.id,
+    contact_id: contactId,
+    human_request_id: requestId,
+    website_connection_id: site.id,
+    is_read: false,
+  };
+
+  // Make notification delivery idempotent. If the request row was saved but
+  // notification creation failed, a visitor retry completes the missing alert.
+  const existingNotification = await db.from("workspace_notifications").select("id")
+    .eq("workspace_id", site.workspace_id)
+    .eq("human_request_id", requestId)
+    .limit(1)
+    .maybeSingle();
+  if (existingNotification.error) throw new Error("Could not check the owner notification.");
+
+  if (existingNotification.data) {
+    const updatedNotification = await db.from("workspace_notifications").update(notificationValues)
+      .eq("id", existingNotification.data.id)
+      .eq("workspace_id", site.workspace_id)
+      .select("id")
+      .single();
+    if (updatedNotification.error || !updatedNotification.data) {
+      throw new Error("The request was saved, but Misma could not update the owner notification.");
+    }
+  } else {
+    const createdNotification = await db.from("workspace_notifications").insert(notificationValues).select("id").single();
+    if (createdNotification.error || !createdNotification.data) {
+      throw new Error("The request was saved, but Misma could not create the owner notification.");
+    }
+  }
+
+  return { requestId, alreadyPending };
 }
 function isSafeWebsiteUrl(value: string): URL | null {
   try {
@@ -1091,7 +1167,13 @@ Deno.serve(async (request: Request) => {
     return respond(400, { error: "Unsupported Misma widget action." });
   } catch (error) {
     const message = error instanceof Error ? error.message : "The Misma request could not be completed.";
-    const status = /sign in|session has expired/i.test(message) ? 401 : /not authorized|not found/i.test(message) ? 403 : 400;
+    const action = safeString(input.action, 40) || "unknown";
+    console.error("[misma-widget] Action failed:", action, message);
+    const status = /sign in|session has expired/i.test(message)
+      ? 401
+      : /not authorized|not found/i.test(message)
+        ? 403
+        : action === "human-request" ? 500 : 400;
     return respond(status, { error: message });
   }
 });
