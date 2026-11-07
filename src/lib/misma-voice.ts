@@ -485,7 +485,7 @@ export function createVoiceMode({
       utterance.pitch = voicePreset === "girl" ? 1.28 : voicePreset === "boy" ? 1.18 : voicePreset === "woman" ? 1 : 0.9;
       const available = synth.getVoices();
       const female = available.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
-      const male = available.filter((voice) => /male|man|boy|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
+      const male = available.filter((voice) => /(?:^|[\\s_-])(male|man|boy)(?:$|[\\s_-])|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
       const matching = voicePreset === "girl" || voicePreset === "woman" ? female : male;
       const preferredIndex = voicePreset === "girl" || voicePreset === "boy" ? 0 : 1;
       const preferredVoice = matching[preferredIndex] || matching[0] || available.find((voice) => voice.default);
