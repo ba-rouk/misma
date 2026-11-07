@@ -842,6 +842,7 @@ function Dashboard() {
   const [profileImage, setProfileImage] = useState("");
   const profileAvatarPathRef = useRef<string | null>(null);
   const profileAvatarPreviewUrlRef = useRef<string | null>(null);
+  const profileAvatarFallbackUrlRef = useRef<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
@@ -1186,11 +1187,27 @@ function Dashboard() {
           const avatarPath = typeof metadata.avatar_path === "string" && metadata.avatar_path.length > 0 ? metadata.avatar_path : null;
           profileAvatarPathRef.current = avatarPath;
           if (avatarPath) {
-            void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 604800).then(({ data, error }) => {
+            void (async () => {
+              const storage = getSupabaseClient().storage.from("misma-media");
+              const { data: signed, error: signedError } = await storage.createSignedUrl(avatarPath, 604800);
               if (!active) return;
-              if (!error && data?.signedUrl) setProfileImage(data.signedUrl);
-              else setProfileImage(image ?? "");
-            });
+              if (!signedError && signed?.signedUrl) {
+                setProfileImage(signed.signedUrl);
+                return;
+              }
+              // A direct download is a resilient fallback for browsers that fail to render
+              // a signed Storage URL even though the authenticated user can read the object.
+              const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
+              if (!active) return;
+              if (!downloadError && avatarBlob) {
+                const fallbackUrl = URL.createObjectURL(avatarBlob);
+                if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
+                profileAvatarFallbackUrlRef.current = fallbackUrl;
+                setProfileImage(fallbackUrl);
+              } else {
+                setProfileImage(image ?? "");
+              }
+            })().catch(() => { if (active) setProfileImage(image ?? ""); });
           } else {
             setProfileImage(image ?? "");
           }
@@ -1820,9 +1837,20 @@ function Dashboard() {
       setProfileName(name);
       if (avatarPath) {
         profileAvatarPathRef.current = avatarPath;
-        const { data: signed, error: signedError } = await client.storage.from("misma-media").createSignedUrl(avatarPath, 604800);
-        if (signedError || !signed?.signedUrl) throw new Error("Your profile photo was uploaded but its preview could not be refreshed. Reopen Settings to retry.");
-        setProfileImage(signed.signedUrl);
+        const storage = client.storage.from("misma-media");
+        const { data: signed, error: signedError } = await storage.createSignedUrl(avatarPath, 604800);
+        if (!signedError && signed?.signedUrl) {
+          setProfileImage(signed.signedUrl);
+        } else {
+          const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
+          if (downloadError || !avatarBlob) {
+            throw new Error("Your profile photo was uploaded, but Misma could not load its preview. Check the storage permissions and try again.");
+          }
+          const fallbackUrl = URL.createObjectURL(avatarBlob);
+          if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
+          profileAvatarFallbackUrlRef.current = fallbackUrl;
+          setProfileImage(fallbackUrl);
+        }
       }
       if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
       profileAvatarPreviewUrlRef.current = null;
@@ -1840,9 +1868,18 @@ function Dashboard() {
     const path = profileAvatarPathRef.current;
     if (!path) { setProfileImage(""); return; }
     try {
-      const { data, error } = await getSupabaseClient().storage.from("misma-media").createSignedUrl(path, 604800);
-      if (error || !data?.signedUrl) throw error || new Error("Could not refresh avatar.");
-      setProfileImage(data.signedUrl);
+      const storage = getSupabaseClient().storage.from("misma-media");
+      const { data, error } = await storage.createSignedUrl(path, 604800);
+      if (!error && data?.signedUrl) {
+        setProfileImage(data.signedUrl);
+        return;
+      }
+      const { data: avatarBlob, error: downloadError } = await storage.download(path);
+      if (downloadError || !avatarBlob) throw downloadError || new Error("Could not load the profile photo.");
+      const fallbackUrl = URL.createObjectURL(avatarBlob);
+      if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
+      profileAvatarFallbackUrlRef.current = fallbackUrl;
+      setProfileImage(fallbackUrl);
     } catch { setProfileImage(""); }
   };
 
@@ -1916,6 +1953,11 @@ function Dashboard() {
   useEffect(() => {
     selectedComposerFilesRef.current = selectedFiles;
   }, [selectedFiles]);
+
+  useEffect(() => () => {
+    if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+    if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
+  }, []);
 
   const releaseComposerPreviewUrl = (file: File) => {
     const url = composerPreviewUrlsRef.current.get(file);

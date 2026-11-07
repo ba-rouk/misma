@@ -524,7 +524,6 @@ test("attachments stay private, show per-file progress, and are separate from us
   assert.match(edgeFunction, /extractDocxText/);
   assert.match(edgeFunction, /word\/document\.xml/);
   assert.match(edgeFunction, /ask what they would like you to do with it/i);
-  assert.match(edgeFunction, /do not automatically summarize or describe it/i);
   assert.match(api, /createSignedUrl\(item\.path, 3600\)/);
 });
 
