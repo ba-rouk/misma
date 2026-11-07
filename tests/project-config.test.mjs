@@ -822,7 +822,7 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
 test("dashboard notification feed shows named human requests and counts unread notifications", async () => {
   const api = await read("../src/lib/api/misma.functions.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 2);
+  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 3);
   assert.ok(api.includes("export const markHumanRequestNotificationRead"));
   assert.ok(dashboard.includes('const unreadHumanRequestNotificationCount = allNotifications.filter((notification) => notification.is_read !== true).length;'));
   assert.ok(dashboard.includes("markHumanRequestNotificationRead({ data: { token, notificationId } })"));
