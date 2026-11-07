@@ -608,6 +608,10 @@ function normalizeComposerAttachment(file: File): File {
   };
   const inferredType = inferredTypes[extension];
   const currentType = file.type.toLowerCase();
+  // Older recorder builds occasionally mislabeled voice-note WebM blobs as video/webm.
+  if (isMismaVoiceNote && extension === "webm" && !currentType.startsWith("audio/")) {
+    return new File([file], file.name, { type: "audio/webm", lastModified: file.lastModified });
+  }
   const shouldInfer = !currentType || currentType === "application/octet-stream";
   if (!shouldInfer || !inferredType || inferredType === currentType) return file;
   return new File([file], file.name, { type: inferredType, lastModified: file.lastModified });
