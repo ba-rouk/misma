@@ -195,6 +195,10 @@ export function VoiceInputBar({
   }, []);
 
   useEffect(() => {
+    voiceRef.current?.setVoicePreset(voicePreset);
+  }, [voicePreset]);
+
+  useEffect(() => {
     const handleOnline = () => setOnline(true);
     const handleOffline = () => {
       setOnline(false);
