@@ -266,6 +266,21 @@ export const getWorkspaceLiveUpdates = createServerFn({ method: "POST" })
     };
   });
 
+export const markHumanRequestNotificationRead = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, notificationId: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: notification, error } = await db.from("workspace_notifications")
+      .update({ is_read: true })
+      .eq("id", data.notificationId)
+      .eq("workspace_id", workspaceId)
+      .eq("notification_type", "human_request")
+      .select("id")
+      .single();
+    const saved = check(notification, error);
+    return { ok: true, notificationId: Number(saved.id) };
+  });
+
 export const getVisitorNotifications = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
