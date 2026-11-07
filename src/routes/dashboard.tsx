@@ -154,6 +154,7 @@ type MessageAttachment = {
   videoId?: string;
   model?: string;
 };
+type ComposerUploadStatus = "uploading" | "ready" | "error";
 
 function cleanRecentChatTitle(value: unknown): string {
   const cleaned = String(value ?? "")
@@ -334,7 +335,7 @@ async function uploadStorageObjectWithProgress(file: File, path: string, signal?
   if (sessionError || !accessToken || !config) throw new Error("Your sign-in session expired. Please sign in again.");
   if (signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  const endpoint = config.url.replace(/\\/$/, "") + "/storage/v1/object/misma-media/" + encodedPath;
+  const endpoint = config.url.replace(/\/$/, "") + "/storage/v1/object/misma-media/" + encodedPath;
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     let settled = false;
@@ -3709,20 +3710,73 @@ function Dashboard() {
                     {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
                   </div>
                   {selectedFiles.length > 0 && (
-                    <div className="aichat-composer-attachments" aria-label="Attachments ready to send">
+                    <div className="aichat-composer-attachments" aria-label="Attached files" aria-live="polite">
                       {selectedFiles.map((file, index) => (
                         <ComposerAttachmentPreview
                           key={`${file.name}-${file.lastModified}-${index}`}
                           file={file}
-                          index={index}
-                          isUploading={uploadingAttachments}
-                          onRemove={removeSelectedComposerFile}
+                          previewUrl={composerPreviewUrlsRef.current.get(file) || null}
+                          uploadStatus={composerUploadStatuses.get(file) || "uploading"}
+                          uploadProgress={composerUploadProgress.get(file) || 0}
+                          onRemove={() => removeSelectedComposerFile(index)}
+                          onRetry={() => {
+                            setChatError("");
+                            setComposerUploadStatuses((current) => new Map(current).set(file, "uploading"));
+                            setComposerUploadProgress((current) => new Map(current).set(file, 0));
+                            void queueComposerAttachmentUpload([file]).catch((cause) => setChatError(cause instanceof Error ? cause.message : "Could not upload " + file.name + "."));
+                          }}
                         />
                       ))}
                     </div>
                   )}
                   <div className="aichat-composer-input-row">
                     <VoiceInputBar
+                      toolbarStart={
+                        <>
+                          <div className="aichat-composer-plus-wrap">
+                            <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
+                              {plusMenuOpen ? (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                              ) : (
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                              )}
+                            </button>
+                            {plusMenuOpen && (
+                              <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
+                                <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setCreateMode(null); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/></svg></span>
+                                  <span><strong>Think harder</strong></span>
+                                  <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H6a3 3 0 0 1 0-6h1"/><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2l-8.2 8.2a5 5 0 0 1-7.1-7.1L12 2.7"/></svg></span>
+                                  <span><strong>Upload files</strong></span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                                  <span><strong>Photo</strong></span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { cameraInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m14 4 7 5h-7z"/><circle cx="10" cy="12" r="3"/></svg></span>
+                                  <span><strong>Camera</strong></span>
+                                </button>
+                                <div className="aichat-plus-menu-divider" />
+                                <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("image"); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                                  <span><strong>Create image</strong></span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("video"); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
+                                  <span><strong>Create video</strong></span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                        </>
+                      }
+                      sendDisabled={selectedFiles.some((file) => composerUploadStatuses.get(file) !== "ready")}
+                      voicePreset={selectedVoicePreset}
                       inputValue={draft}
                       hasContent={Boolean(draft.trim() || selectedFiles.length || createMode)}
                       isBusy={isSending || isGeneratingMedia}
@@ -3756,7 +3810,7 @@ function Dashboard() {
                           ref={textareaRef}
                           rows={1}
                           className="aichat-composer-textarea"
-                          placeholder={composerFocused ? "" : selectedFiles.length ? "Add a message about the attached file…" : createMode ? "Describe the " + createMode + " you want Agnes to create…" : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
+                          placeholder={composerFocused ? "" : createMode ? "Describe the " + createMode + " you want Agnes to create…" : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
                           value={draft}
                           onChange={(e) => {
                             const nextValue = e.target.value;
@@ -3793,69 +3847,7 @@ function Dashboard() {
                       </>
                     </VoiceInputBar>
                   </div>
-                  <div className="aichat-composer-sendrow">
-                    <div className="aichat-composer-plus-wrap">
-                      <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
-                        {plusMenuOpen ? (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                        ) : (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                        )}
-                      </button>
-                      {plusMenuOpen && (
-                        <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
-                          <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setCreateMode(null); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/></svg></span>
-                            <span><strong>Think harder</strong></span>
-                            <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H6a3 3 0 0 1 0-6h1"/><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2l-8.2 8.2a5 5 0 0 1-7.1-7.1L12 2.7"/></svg></span>
-                            <span><strong>Upload files</strong></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
-                            <span><strong>Photo</strong></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { cameraInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m14 4 7 5h-7z"/><circle cx="10" cy="12" r="3"/></svg></span>
-                            <span><strong>Camera</strong></span>
-                          </button>
-                          <div className="aichat-plus-menu-divider" />
-                          <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("image"); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
-                            <span><strong>Create image</strong></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("video"); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
-                            <span><strong>Create video</strong></span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="aichat-composer-sendrow-spacer" />
-                    <button
-                      type="button"
-                      disabled={!isSending && !isGeneratingMedia && !draft.trim() && !selectedFiles.length && !createMode}
-                      className={"aichat-composer-send-btn" + ((draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : "") + (isSending || isGeneratingMedia ? " is-thinking" : "")}
-                      onClick={() => {
-                        if (isSending || isGeneratingMedia) stopMisma();
-                        else if (createMode) void handleCreateMedia();
-                        else void handleSend();
-                      }}
-                      title={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
-                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
-                    >
-                      {isSending || isGeneratingMedia ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : createMode ? (
-                        <span aria-hidden="true">✦</span>
-                      ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
-                      )}
-                    </button>
-                  </div>
-                  <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf,.docx,.txt,.csv,.md,.json" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                 </form>
