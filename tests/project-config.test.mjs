@@ -874,3 +874,36 @@ test("embedded speech talk is English-only and does not display transcripts or r
   assert.ok(widget.includes("^en(?:-|$)"));
   assert.ok(edge.includes("Always understand and respond in English"));
 });
+
+
+test("website social links are owner-scoped and WhatsApp links are composed from stored parts", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const migration = await read("../supabase/migrations/20261108100000_website_social_links.sql");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(api, /saveWebsiteSocialLinks/);
+  assert.match(api, /Only the workspace owner can edit website social links/);
+  assert.match(api, /whatsappCountryCode: z\.string\(\)\.regex\(\/\^\\d\{1,4\}\$\/\)/);
+  assert.match(edge, /input\.action === "widget-config"/);
+  assert.match(edge, /"https:\/\/wa\.me\/" \+ fullNumber \+ "\?text=" \+ encodeURIComponent\(message\)/);
+  assert.match(dashboard, /Only instagram\.com profile URLs are accepted/);
+  assert.match(dashboard, /totalDigits < 7 \|\| totalDigits > 15/);
+  assert.match(migration, /website_connections_update_owner/);
+  assert.match(migration, /workspace\.owner_id = \(select auth\.uid\(\)\)/);
+});
+
+test("connected website settings and social widget controls stay accessible on mobile", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  const css = await read("../src/styles.css");
+  assert.match(dashboard, /className="aichat-website-expand"/);
+  assert.match(dashboard, /aria-expanded=\{!minimizedWebsiteIds\.includes\(site\.id\)\}/);
+  assert.match(dashboard, /Add websites/);
+  assert.match(runtime, /class='social-link whatsapp-link'/);
+  assert.match(runtime, /class='social-link instagram-link'/);
+  assert.match(runtime, /target='_blank' rel='noopener noreferrer'/);
+  assert.doesNotMatch(runtime, /resize-handle|sizeStore|Resize widget|saveSize|resizeState/);
+  assert.match(css, /\.aichat-website-expand[\s\S]*?width: 40px/);
+  assert.match(css, /@media \(max-width: 560px\)[\s\S]*?aichat-website-row-heading/);
+  assert.doesNotThrow(() => new Function(runtime), "widget runtime must parse");
+});
