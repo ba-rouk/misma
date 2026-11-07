@@ -501,8 +501,8 @@ test("voice input records typed audio files while live dictation remains text-fi
   assert.ok(voice.includes("createDictation"));
   assert.ok(voice.includes("createVoiceMode"));
   assert.match(voice, /new MediaRecorder/);
-  assert.match(voice, /audio\\/mp4/);
-  assert.match(voice, /audio\\/webm/);
+  assert.ok(voice.includes('"audio/mp4"'));
+  assert.ok(voice.includes('"audio/webm;codecs=opus"'));
   assert.match(voice, /onAudioRecordingReady/);
   assert.match(component, /onAudioRecordingReady/);
   assert.match(component, /Stop recording and send voice note/);
@@ -521,7 +521,7 @@ test("voice notes are uploaded as audio and transcribed by Groq before the AI re
   assert.match(dashboard, /misma-voice-note-/);
   assert.match(edgeFunction, /const voice = input\.voice === true/);
   assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
-  assert.match(edgeFunction, /audio\\/transcriptions/);
+  assert.ok(edgeFunction.includes("/audio/transcriptions"));
   assert.match(edgeFunction, /whisper-large-v3-turbo/);
   assert.match(edgeFunction, /kind === "audio"/);
   assert.match(voice, /requestMicrophoneStream\(\)/);
@@ -953,20 +953,20 @@ test("website visitor chats are deleted on close only when no human request exis
   assert.match(edge, /delete_website_visitor_conversation_if_ephemeral/);
   assert.match(migration, /public\.human_requests/);
   assert.match(migration, /public\.human_handoff_requests/);
-  assert.match(migration, /REVOKE ALL[\\s\\S]*FROM anon, authenticated/);
-  assert.match(migration, /GRANT EXECUTE[\\s\\S]*TO service_role/);
+  assert.ok(migration.includes("REVOKE ALL ON FUNCTION") && migration.includes("FROM anon, authenticated"));
+  assert.ok(migration.includes("GRANT EXECUTE") && migration.includes("TO service_role"));
 });
 
 test("website scanning uses structured bounded JSON with schema validation and inline status", async () => {
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.match(edge, /responseMimeType: "application\\/json"/);
-  assert.match(edge, /response_format:[\\s\\S]*?json_schema/);
+  assert.ok(edge.includes('responseMimeType: "application/json"'));
+  assert.ok(edge.includes("response_format: provider.kind") && edge.includes('type: "json_schema"'));
   assert.match(edge, /businessExtractionSchema/);
   assert.match(edge, /generateValidatedBusinessExtraction/);
-  assert.match(edge, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
-  assert.match(edge, /rawResponse: answer\.slice\(0, 1200\)/);
-  assert.match(edge, /AbortSignal\.timeout\(75_000\)/);
+  assert.ok(edge.includes("for (let attempt = 0; attempt < 2; attempt += 1)"));
+  assert.ok(edge.includes("rawResponse: answer.slice(0, 1200)"));
+  assert.ok(edge.includes("AbortSignal.timeout(75_000)"));
   assert.match(dashboard, /websiteScanFeedback/);
   assert.match(dashboard, /controller\.abort\(\)/);
   assert.match(dashboard, /aichat-website-scan-feedback/);
