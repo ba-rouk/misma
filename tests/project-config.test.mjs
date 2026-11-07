@@ -801,7 +801,7 @@ test("website widget reloads fetch the latest public asset without changing site
   assert.ok(security.includes("CDN-Cache-Control"));
   assert.ok(security.includes("/assets/misma-widget.js"));
   assert.ok(server.includes("applySecurityHeaders(await normalizeCatastrophicSsrResponse(response), request)"));
-  assert.ok(widget.includes("data-site-key"));
+  assert.ok(dashboard.includes("data-site-key="));
 });
 
 test("dashboard notification feed and badge count only pending human handoffs", async () => {
