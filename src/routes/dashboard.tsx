@@ -888,6 +888,11 @@ function Dashboard() {
       const savedNotifications = localStorage.getItem("misma_notification_preferences");
       const savedVoice = localStorage.getItem("misma_voice_preset") || localStorage.getItem("misma_voice_uri");
       const savedAutoSpeak = localStorage.getItem("misma_auto_speak_replies");
+      const savedPrivacy = localStorage.getItem("misma_privacy_preferences");
+      if (savedPrivacy) {
+        const parsed = JSON.parse(savedPrivacy) as Partial<typeof privacyPreferences>;
+        setPrivacyPreferences((current) => ({ ...current, ...parsed }));
+      }
       if (savedAccent && /^#[0-9a-f]{6}$/i.test(savedAccent)) setAccentColor(savedAccent);
       if (savedNotifications) {
         const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
@@ -1703,6 +1708,7 @@ function Dashboard() {
     const utterance = new SpeechSynthesisUtterance(msg.text);
     const selectedVoice = getVoiceForPreset(availableVoices, selectedVoicePreset);
     if (selectedVoice) utterance.voice = selectedVoice;
+    utterance.pitch = selectedVoicePreset === "girl" ? 1.28 : selectedVoicePreset === "boy" ? 1.18 : selectedVoicePreset === "woman" ? 1 : 0.9;
     utterance.onend = () => setSpeakingMessageId(null);
     utterance.onerror = () => setSpeakingMessageId(null);
     setSpeakingMessageId(msg.id);
@@ -1720,6 +1726,7 @@ function Dashboard() {
     const utterance = new SpeechSynthesisUtterance("Hello, this is your selected Misma voice.");
     const voice = getVoiceForPreset(availableVoices, selectedVoicePreset);
     if (voice) utterance.voice = voice;
+    utterance.pitch = selectedVoicePreset === "girl" ? 1.28 : selectedVoicePreset === "boy" ? 1.18 : selectedVoicePreset === "woman" ? 1 : 0.9;
     window.speechSynthesis.speak(utterance);
   };
 
@@ -4869,6 +4876,7 @@ function Dashboard() {
             </section>
           </div>
         )}
+        {lightboxAttachment && <AttachmentImageLightbox attachment={lightboxAttachment} onClose={() => setLightboxAttachment(null)} />}
         {mediaActionStatus && <div className="aichat-media-toast" role="status">{mediaActionStatus}</div>}
       </main>
     </div>
