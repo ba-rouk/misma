@@ -588,3 +588,30 @@ test("composer and sent attachments use compact right-aligned square previews", 
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-attachments\.is-user-attachments\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?max-width:\s*352px/);
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments \.aichat-attachment-image-link\s*\{[^}]*width:\s*112px[^}]*height:\s*112px/);
 });
+
+ 
+test("composer previews stay left while sent user attachments align with the right edge of the message", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-start\s*!important/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content\s*\{[^}]*align-items:\s*flex-end/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-attachments\.is-user-attachments\s*\{[^}]*align-self:\s*flex-end/);
+  assert.match(dashboard, /attachments=\{uniqueUserAttachments\}/);
+});
+
+test("retries reuse unique attachment paths and do not render duplicate uploaded files", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /const sentAttachmentKeys = new Set<string>\(\)/);
+  assert.match(dashboard, /const seenUserAttachmentPaths = new Set<string>\(\)/);
+  assert.match(dashboard, /const seenAttachmentKeys = new Set<string>\(\)/);
+  assert.match(dashboard, /uploadedComposerAttachmentsRef\.current\.has\(file\)/);
+});
+
+test("profile image selection and saved avatar previews use decoded image data", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /function readBlobAsDataUrl\(blob: Blob/);
+  assert.match(dashboard, /readBlobAsDataUrl\(file, "selected profile photo"\)/);
+  assert.match(dashboard, /readBlobAsDataUrl\(avatarBlob, "profile photo"\)/);
+  assert.match(dashboard, /profileAvatarPreviewRequestRef\.current === previewRequest/);
+  assert.doesNotMatch(dashboard, /const previewUrl = URL\.createObjectURL\(file\);\s*profileAvatarPreviewUrlRef\.current = previewUrl;\s*setProfileAvatarFile\(file\);\s*setProfileImage\(previewUrl\)/);
+});

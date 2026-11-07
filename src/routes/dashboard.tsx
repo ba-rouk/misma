@@ -493,7 +493,17 @@ function readComposerFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-async function createComposerImageThumbnail(file: File): Promise<string> {
+async function readBlobAsDataUrl(blob: Blob, label = "image"): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the " + label + " preview."));
+    reader.onabort = () => reject(new Error("The " + label + " preview was cancelled."));
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The browser returned an invalid " + label + " preview."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function createComposerImageThumbnail(file: File): Promise<string> {
   // Decode the browser File and draw a small thumbnail. This avoids depending
   // on Android's temporary picker/blob URL after the upload request completes.
   const bitmap = await createImageBitmap(file);
@@ -802,7 +812,14 @@ function MessageAttachmentViews({
   variant?: "default" | "user";
 }) {
   if (!attachments?.length) return null;
-  const visible = attachments.filter((item) => item.kind !== "video-frame" && item.kind !== "video-job" && item.url);
+  const seenAttachmentKeys = new Set<string>();
+  const visible = attachments.filter((item) => {
+    if (item.kind === "video-frame" || item.kind === "video-job" || !item.url) return false;
+    const key = item.path || item.videoId || item.url;
+    if (seenAttachmentKeys.has(key)) return false;
+    seenAttachmentKeys.add(key);
+    return true;
+  });
   if (!visible.length) return null;
   return (
     <div className={"aichat-message-attachments" + (variant === "user" ? " is-user-attachments" : "")}>
@@ -1067,6 +1084,7 @@ function Dashboard() {
   const profileAvatarPathRef = useRef<string | null>(null);
   const profileAvatarPreviewUrlRef = useRef<string | null>(null);
   const profileAvatarFallbackUrlRef = useRef<string | null>(null);
+  const profileAvatarPreviewRequestRef = useRef(0);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
@@ -1424,10 +1442,8 @@ function Dashboard() {
               const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
               if (!active) return;
               if (!downloadError && avatarBlob) {
-                const fallbackUrl = URL.createObjectURL(avatarBlob);
-                if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
-                profileAvatarFallbackUrlRef.current = fallbackUrl;
-                setProfileImage(fallbackUrl);
+                const fallbackUrl = await readBlobAsDataUrl(avatarBlob, "profile photo");
+                if (active) setProfileImage(fallbackUrl);
               } else {
                 setProfileImage(image ?? "");
               }
@@ -2062,19 +2078,11 @@ function Dashboard() {
       if (avatarPath) {
         profileAvatarPathRef.current = avatarPath;
         const storage = client.storage.from("misma-media");
-        const { data: signed, error: signedError } = await storage.createSignedUrl(avatarPath, 604800);
-        if (!signedError && signed?.signedUrl) {
-          setProfileImage(signed.signedUrl);
-        } else {
-          const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
-          if (downloadError || !avatarBlob) {
-            throw new Error("Your profile photo was uploaded, but Misma could not load its preview. Check the storage permissions and try again.");
-          }
-          const fallbackUrl = URL.createObjectURL(avatarBlob);
-          if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
-          profileAvatarFallbackUrlRef.current = fallbackUrl;
-          setProfileImage(fallbackUrl);
+        const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
+        if (downloadError || !avatarBlob) {
+          throw new Error("Your profile photo was uploaded, but Misma could not load its preview. Check the storage permissions and try again.");
         }
+        setProfileImage(await readBlobAsDataUrl(avatarBlob, "profile photo"));
       }
       if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
       profileAvatarPreviewUrlRef.current = null;
@@ -2093,17 +2101,9 @@ function Dashboard() {
     if (!path) { setProfileImage(""); return; }
     try {
       const storage = getSupabaseClient().storage.from("misma-media");
-      const { data, error } = await storage.createSignedUrl(path, 604800);
-      if (!error && data?.signedUrl) {
-        setProfileImage(data.signedUrl);
-        return;
-      }
       const { data: avatarBlob, error: downloadError } = await storage.download(path);
       if (downloadError || !avatarBlob) throw downloadError || new Error("Could not load the profile photo.");
-      const fallbackUrl = URL.createObjectURL(avatarBlob);
-      if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
-      profileAvatarFallbackUrlRef.current = fallbackUrl;
-      setProfileImage(fallbackUrl);
+      setProfileImage(await readBlobAsDataUrl(avatarBlob, "profile photo"));
     } catch { setProfileImage(""); }
   };
 
@@ -2619,7 +2619,14 @@ function Dashboard() {
         loadData();
         return null;
       }
-      const attachments = editId ? [] : await ensureComposerAttachmentsUploaded(filesToSend);
+      const uploadedAttachments = editId ? [] : await ensureComposerAttachmentsUploaded(filesToSend);
+      const sentAttachmentKeys = new Set<string>();
+      const attachments = uploadedAttachments.filter((attachment) => {
+        const key = attachment.path || attachment.url || attachment.name;
+        if (sentAttachmentKeys.has(key)) return false;
+        sentAttachmentKeys.add(key);
+        return true;
+      });
       if (!editId && filesToSend.length && tempUserId) {
         setMessages((prev) => prev.map((item) =>
           item.id === tempUserId ? { ...item, attachments } : item
@@ -3815,9 +3822,20 @@ function Dashboard() {
                 </div>
               ) : (
                 /* Message Stream */
-                messages.map((msg) => {
+                (() => {
+                  const seenUserAttachmentPaths = new Set<string>();
+                  return messages.map((msg) => {
                   const isUserMessage = msg.role === "human" || msg.role === "customer";
                   const isAiMessage = msg.role === "ai";
+                  const uniqueUserAttachments = isUserMessage
+                    ? (msg.attachments || []).filter((attachment) => {
+                        const key = attachment.path || attachment.url;
+                        if (!key) return true;
+                        if (seenUserAttachmentPaths.has(key)) return false;
+                        seenUserAttachmentPaths.add(key);
+                        return true;
+                      })
+                    : msg.attachments;
                   const isLatestAiMessage = isAiMessage && msg.id === latestAiMessageId;
                   return (
                     <div
@@ -3834,7 +3852,7 @@ function Dashboard() {
                       )}
                       <div className="aichat-message-content">
                         {isUserMessage && <MessageAttachmentViews
-                          attachments={msg.attachments}
+                          attachments={uniqueUserAttachments}
                           variant="user"
                           onDownload={(attachment) => void handleDownloadGeneratedMedia(attachment)}
                           onCrop={(attachment) => handleOpenImageCrop(attachment)}
@@ -3955,7 +3973,8 @@ function Dashboard() {
                       </div>
                     </div>
                   );
-                })
+                  });
+                })()
               )}
 
               {/* AI Thinking State */}
@@ -4724,13 +4743,24 @@ function Dashboard() {
                     if (file) {
                       if (file.size > 5 * 1024 * 1024) {
                         setProfileError("Profile photos must be 5 MB or smaller.");
+                      } else if (!file.type.startsWith("image/")) {
+                        setProfileError("Choose a PNG, JPG, or WebP image.");
                       } else {
-                        if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
-                        const previewUrl = URL.createObjectURL(file);
-                        profileAvatarPreviewUrlRef.current = previewUrl;
+                        if (profileAvatarPreviewUrlRef.current) {
+                          URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+                          profileAvatarPreviewUrlRef.current = null;
+                        }
+                        const previewRequest = ++profileAvatarPreviewRequestRef.current;
                         setProfileAvatarFile(file);
-                        setProfileImage(previewUrl);
+                        setProfileImage("");
                         setProfileError("");
+                        void readBlobAsDataUrl(file, "selected profile photo").then((previewUrl) => {
+                          if (profileAvatarPreviewRequestRef.current === previewRequest) setProfileImage(previewUrl);
+                        }).catch((cause) => {
+                          if (profileAvatarPreviewRequestRef.current === previewRequest) {
+                            setProfileError(cause instanceof Error ? cause.message : "Could not preview this profile photo.");
+                          }
+                        });
                       }
                     }
                     event.target.value = "";
