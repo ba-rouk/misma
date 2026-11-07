@@ -238,8 +238,6 @@ export function VoiceInputBar({
     dictationRef.current?.cancel();
     const base = baseDraftRef.current;
     callbacksRef.current.onTranscript(base);
-    setDictationState("idle");
-    setWaveLevel(0);
     window.requestAnimationFrame(() => {
       writeNativeInputValue(base);
       callbacksRef.current.onDictationDone?.();
