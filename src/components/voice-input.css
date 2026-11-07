@@ -1,15 +1,31 @@
 :root {
-  --mv-send: #d97757;
-  --mv-send-fg: #ffffff;
+  --misma-control-green: #22c55e;
+  --mv-send: var(--misma-control-green, #22c55e);
+  --mv-send-fg: #05210f;
 }
 
 .misma-voice-composer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
+}
+.misma-voice-toolbar {
   display: flex;
   align-items: center;
   width: 100%;
   min-width: 0;
   gap: 6px;
 }
+.misma-voice-toolbar-start {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.misma-voice-toolbar-spacer { flex: 1 1 auto; min-width: 8px; }
 
 .misma-voice-mic,
 .misma-voice-primary,
@@ -31,14 +47,14 @@
 }
 
 .misma-voice-mic {
-  color: #b8c3d2;
-  background: transparent;
+  color: var(--misma-control-green, #22c55e);
+  background: rgba(34, 197, 94, 0.06);
   transition: color 150ms ease, background 150ms ease, transform 150ms ease;
 }
 
 .misma-voice-mic:hover:not(:disabled) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.07);
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.12);
 }
 
 .misma-voice-mic:active:not(:disabled),
@@ -65,8 +81,8 @@
 }
 
 .misma-voice-mic.is-active {
-  color: #9bbcff;
-  background: rgba(88, 139, 245, 0.12);
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.16);
 }
 
 .misma-voice-field {
@@ -102,7 +118,7 @@
   min-width: 2px;
   max-width: 3px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #b9d0ff 0%, #729ef0 100%);
+  background: linear-gradient(180deg, #86efac 0%, var(--misma-control-green, #22c55e) 100%);
   transition: height 70ms linear;
   will-change: height;
 }
@@ -154,30 +170,30 @@
 }
 
 .misma-voice-primary.is-voice {
-  color: #e9f0fc;
-  background: #243248;
-  border-color: #35465f;
+  color: var(--misma-control-green, #22c55e);
+  background: rgba(34, 197, 94, 0.09);
+  border-color: rgba(34, 197, 94, 0.34);
 }
 
 .misma-voice-primary.is-voice:hover:not(:disabled) {
-  background: #314562;
+  background: rgba(34, 197, 94, 0.18);
 }
 
 .misma-voice-primary.is-send {
-  color: #10151d;
-  background: #f4f7fb;
-  border-color: #f4f7fb;
+  color: #05210f;
+  background: var(--misma-control-green, #22c55e);
+  border-color: var(--misma-control-green, #22c55e);
 }
 
 .misma-voice-primary.is-send:hover:not(:disabled) {
-  color: #080c12;
-  background: #dce8fb;
+  color: #05210f;
+  background: #4ade80;
 }
 
 .misma-voice-primary.is-busy {
-  color: #f3f6fb;
-  background: #39475a;
-  border-color: #39475a;
+  color: #05210f;
+  background: #4ade80;
+  border-color: #4ade80;
 }
 
 .misma-voice-primary-glyph {
@@ -454,7 +470,8 @@
 }
 
 @media (max-width: 520px) {
-  .misma-voice-composer { gap: 3px; }
+  .misma-voice-composer { gap: 4px; }
+  .misma-voice-toolbar { gap: 3px; }
   .misma-voice-overlay {
     padding-left: 18px;
     padding-right: 18px;
