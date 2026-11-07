@@ -856,6 +856,8 @@ function Dashboard() {
     securityAlerts: true,
     chatActivity: true,
   });
+  const [notificationPermissionMessage, setNotificationPermissionMessage] = useState("");
+  const notificationCursorRef = useRef({ initialized: false, latestId: 0 });
   const [privacyPreferences, setPrivacyPreferences] = useState({ useConversationHistory: true });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
@@ -949,6 +951,26 @@ function Dashboard() {
 
   const updateAiSetting = <K extends keyof MismaAiSettings>(key: K, value: MismaAiSettings[K]) => {
     setAiSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const toggleChatActivityNotifications = async () => {
+    const enabling = !notificationPreferences.chatActivity;
+    if (enabling) {
+      if (typeof window === "undefined" || !("Notification" in window)) {
+        setNotificationPermissionMessage("This browser does not support desktop notifications. Your preference is saved, but alerts will not appear here.");
+      } else {
+        let permission = window.Notification.permission;
+        if (permission === "default") permission = await window.Notification.requestPermission();
+        if (permission !== "granted") {
+          setNotificationPermissionMessage("Allow Misma notifications in your browser's site settings to receive new chat alerts.");
+          return;
+        }
+        setNotificationPermissionMessage("Browser notifications are enabled for new visitor messages.");
+      }
+    } else {
+      setNotificationPermissionMessage("Browser notifications are paused.");
+    }
+    setNotificationPreferences((current) => ({ ...current, chatActivity: enabling }));
   };
 
   // Chat conversation state
@@ -1250,6 +1272,30 @@ function Dashboard() {
   };
 
   // Load workspace and dashboard data
+  useEffect(() => {
+    if (!dashboardDataLoaded) return;
+    const latestId = unreadVisitorMessages.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+    const cursor = notificationCursorRef.current;
+    if (!cursor.initialized) {
+      cursor.initialized = true;
+      cursor.latestId = latestId;
+      return;
+    }
+    const newMessages = unreadVisitorMessages.filter((item) => Number(item.id) > cursor.latestId);
+    cursor.latestId = Math.max(cursor.latestId, latestId);
+    if (!notificationPreferences.chatActivity || !newMessages.length || typeof window === "undefined" || !("Notification" in window) || window.Notification.permission !== "granted" || document.visibilityState === "visible") return;
+    const latest = newMessages.reduce((current, item) => Number(item.id) > Number(current.id) ? item : current);
+    const notification = new window.Notification("New Misma chat message", {
+      body: (latest.conversationTitle ? latest.conversationTitle + ": " : "") + latest.text.slice(0, 140),
+      tag: "misma-visitor-message-" + latest.id,
+    });
+    notification.onclick = () => {
+      window.focus();
+      setActiveTab("notifications");
+      notification.close();
+    };
+  }, [dashboardDataLoaded, unreadVisitorMessages, notificationPreferences.chatActivity]);
+
   const loadData = () => {
     if (!token) return;
     setDashboardDataLoaded(false);
@@ -4510,8 +4556,9 @@ function Dashboard() {
                 </div>
                 <SettingsToggle title="Product updates" description="Show relevant information about new Misma features." checked={notificationPreferences.productUpdates} onToggle={() => setNotificationPreferences((current) => ({ ...current, productUpdates: !current.productUpdates }))} />
                 <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
-                <SettingsToggle title="Chat activity" description="Enable notifications for new chat activity when supported by the browser." checked={notificationPreferences.chatActivity} onToggle={() => setNotificationPreferences((current) => ({ ...current, chatActivity: !current.chatActivity }))} />
-                <p className="aichat-settings-hint">These preferences are saved in this browser. Push delivery requires a notification service to be configured by the app.</p>
+                <SettingsToggle title="Chat activity" description="Receive a browser notification when a new visitor message arrives while Misma is in the background." checked={notificationPreferences.chatActivity} onToggle={() => void toggleChatActivityNotifications()} />
+                {notificationPermissionMessage && <p className="aichat-settings-hint" role="status">{notificationPermissionMessage}</p>}
+                <p className="aichat-settings-hint">Product update and security alert preferences are saved here. Their notification feeds will appear when those services are connected.</p>
               </section>
 
               <section id="settings-voice" className="aichat-card aichat-settings-card">
