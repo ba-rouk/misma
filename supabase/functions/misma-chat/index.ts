@@ -489,7 +489,9 @@ async function extractDocxText(bytes: Uint8Array): Promise<string> {
       if (compressionMethod === 0) {
         documentXml = compressed.slice();
       } else if (compressionMethod === 8) {
-        const stream = new Blob([compressed]).stream().pipeThrough(
+        const compressedBuffer = new ArrayBuffer(compressed.byteLength);
+        new Uint8Array(compressedBuffer).set(compressed);
+        const stream = new Blob([compressedBuffer]).stream().pipeThrough(
           new DecompressionStream("deflate-raw" as CompressionFormat),
         );
         documentXml = new Uint8Array(await new Response(stream).arrayBuffer());
