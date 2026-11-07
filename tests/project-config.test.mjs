@@ -771,7 +771,7 @@ test("website human handoff always creates an owner notification with the visito
   const widget = await read("../public/assets/misma-widget.js");
   const dashboard = await read("../src/routes/dashboard.tsx");
 
-  const handoff = edge.slice(edge.indexOf("async function saveHumanRequest"), edge.indexOf("\\nfunction isSafeWebsiteUrl"));
+  const handoff = edge.slice(edge.indexOf("async function saveHumanRequest"), edge.indexOf("\nfunction isSafeWebsiteUrl"));
   assert.match(handoff, /workspace_id: site\.workspace_id/);
   assert.match(handoff, /notification_type: "human_request"/);
   assert.match(handoff, /human_request_id: requestId/);
@@ -781,7 +781,7 @@ test("website human handoff always creates an owner notification with the visito
   assert.match(handoff, /existingNotification\.data/);
   assert.match(handoff, /createdNotification\.error/);
   assert.doesNotMatch(handoff, /notification\.error\) console\.warn/);
-  assert.match(edge, /Action failed:\", action, message/);
+  assert.match(edge, /Action failed:", action, message/);
   assert.match(edge, /action === "human-request" \? 500/);
   assert.match(widget, /call\(Object\.assign\(\{action:"human-request"\},data\)\)/);
   assert.match(dashboard, /refreshVisitorNotifications\(\); setActiveTab\("notifications"\)/);
