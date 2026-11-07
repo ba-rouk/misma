@@ -6389,6 +6389,10 @@ html, body, #app-root {
 .aichat-hub-form { display: grid; gap: 14px; max-width: 680px; }
 .aichat-hub-form label { display: grid; gap: 7px; color: #aab9c9; font-size: 12px; }
 .aichat-website-card { padding: 16px 0; border-top: 1px solid rgba(255,255,255,.07); }
+.aichat-website-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: none; }
+.aichat-website-minimize { white-space: nowrap; padding-inline: 10px; }
+.aichat-website-card-details[hidden] { display: none !important; }
+.aichat-website-card.is-minimized { padding-bottom: 10px; }
 .aichat-website-card p { margin: 12px 0 0; color: #8295aa; font-size: 12px; line-height: 1.6; }
 .aichat-handoff-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 0; border: 0; border-top: 1px solid rgba(255,255,255,.07); background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .aichat-handoff-row:hover { background: rgba(255,255,255,.025); }

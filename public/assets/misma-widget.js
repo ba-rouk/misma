@@ -2,6 +2,7 @@
 "use strict";
 var tag=document.currentScript,key=tag&&tag.dataset.siteKey,api=tag&&tag.dataset.endpoint;
 if(!key||!api){console.warn("[Misma] Missing site key or API endpoint.");return;}
+function initWidget(){
 var siteSessionKey=key+"_"+location.hostname.toLowerCase();
 var store="misma_visitor_"+siteSessionKey,conversationStore="misma_conversation_"+siteSessionKey,sizeStore="misma_widget_size_"+key;
 var visitor="",conversation=null;
@@ -25,7 +26,7 @@ root.innerHTML=[
 "@media(max-width:520px){.launch{width:54px;height:54px;min-height:54px;padding:0;gap:0;border-radius:50%}.launch-label{display:none}.panel{left:0;right:auto;width:calc(100vw - 28px);max-width:calc(100vw - 28px);height:min(570px,calc(100dvh - 100px))}.resize-handle{width:28px;height:28px}}",
 "@media(prefers-reduced-motion:reduce){.launch,.typing:after{animation:none;transition:none}}",
 "</style>",
-"<button class='launch' aria-label='Open Misma chat' aria-expanded='false'><svg class="launch-logo" viewBox='0 0 100 100' fill='none' aria-hidden='true'><circle cx='50' cy='50' r='50' fill='#080b10'/><polyline points='17,48 32,63 56,36' stroke='#fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/><polyline points='37,48 52,63 76,36' stroke='#fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/></svg><span class='launch-label'>Ask Misma</span></button>",
+"<button class='launch' aria-label='Open Misma chat' aria-expanded='false'><svg class='launch-logo' viewBox='0 0 100 100' fill='none' aria-hidden='true'><circle cx='50' cy='50' r='50' fill='#080b10'/><polyline points='17,48 32,63 56,36' stroke='#fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/><polyline points='37,48 52,63 76,36' stroke='#fff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/></svg><span class='launch-label'>Ask Misma</span></button>",
 "<section class='panel' aria-label='Misma customer chat'><header class='top'><div class='brand'><b>Misma</b><small>Business assistant</small></div>",
 "<button class='human' type='button' title='Request a human' aria-label='Request a human'><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round'><circle cx='12' cy='8' r='3.4'/><path d='M5 20a7 7 0 0 1 14 0M19 5v4m-2-2h4'/></svg></button>",
 "<button class='minimize' type='button' aria-label='Minimize chat' title='Minimize'>−</button><button class='close' type='button' aria-label='Close' title='Close'>×</button></header>",
@@ -187,4 +188,17 @@ $(".handoff-submit").addEventListener("click",function(){
 });
 window.setInterval(function(){if(panel.classList.contains("open")&&!panel.classList.contains("minimized")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
 call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
+}
+fetch(api,{
+  method:"POST",
+  headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({action:"heartbeat",siteKey:key,pageUrl:location.href})
+}).then(function(response){
+  return response.json().then(function(data){
+    if(!response.ok||data.error||data.connected!==true)throw Error(data.error||"This widget key is inactive for this website.");
+    return data;
+  });
+}).then(initWidget).catch(function(error){
+  console.warn("[Misma] Widget is disabled for this website.",error&&error.message?error.message:"");
+});
 })();

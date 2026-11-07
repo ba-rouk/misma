@@ -1106,6 +1106,7 @@ function Dashboard() {
   const [whatsappPhoneNumber, setWhatsappPhoneNumber] = useState("");
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
+  const [minimizedWebsiteIds, setMinimizedWebsiteIds] = useState<string[]>([]);
   const sharedWidgetPublicKey = connectedWebsites.length
     ? connectedWebsites[0].widget_public_key || connectedWebsites[0].public_key
     : "";
@@ -5095,23 +5096,24 @@ function Dashboard() {
               {everyWebsiteUsesSharedWidget && (
                 <div className="aichat-shared-script">
                   <label className="aichat-widget-script-label">General shared website script — paste this same script on every registered website</label>
-                  <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                  <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-fix1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-fix1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(script).then(() => alert("Shared website widget script copied."));
                   }}>Copy general script</button>
                 </div>
               )}
             </div>
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
-              {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className="aichat-website-card" key={site.id}>
-                <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>
+              {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className={`aichat-website-card${minimizedWebsiteIds.includes(site.id) ? " is-minimized" : ""}`} key={site.id}>
+                <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><div className="aichat-website-heading-actions"><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span><button type="button" className="aichat-action-btn secondary aichat-website-minimize" aria-expanded={!minimizedWebsiteIds.includes(site.id)} aria-label={minimizedWebsiteIds.includes(site.id) ? "Expand website details" : "Minimize website details"} onClick={() => setMinimizedWebsiteIds((current) => current.includes(site.id) ? current.filter((id) => id !== site.id) : [...current, site.id])}>{minimizedWebsiteIds.includes(site.id) ? "Expand" : "Minimize"}</button></div></div>
+                <div className="aichat-website-card-details" hidden={minimizedWebsiteIds.includes(site.id)}>
                 <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
                 <label className="aichat-widget-script-label">General website installation script</label>
-                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-fix1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-fix1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
@@ -5126,15 +5128,16 @@ function Dashboard() {
                     } finally { setWebsiteActionId(null); }
                   }}>{websiteActionId === site.id ? "Scanning…" : "Scan website"}</button>
                   <button type="button" className="aichat-action-btn secondary is-danger" onClick={async () => {
-                    if (!token || !window.confirm("Remove the Misma widget from " + (site.domain || site.website_url) + "? It will be disabled on this domain; visitor history is preserved.")) return;
+                    if (!token || !window.confirm("Delete the connection for " + (site.domain || site.website_url) + "? This deactivates its widget key on this domain immediately, so the Misma launcher will no longer appear here. Other registered domains using the same shared key remain active. Visitor history is preserved.")) return;
                     try {
                       await deleteWebsiteConnection({ data: { token, websiteId: site.id } });
                       setConnectedWebsites((items) => items.filter((item) => item.id !== site.id));
                     } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not remove the widget."); }
-                  }}>Remove widget</button>
+                  }}>Delete connection</button>
                 </div>
                 <small>Last verified: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
                 <small>Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
+                </div>
               </article>)}
             </div>
           </div></div>
