@@ -1167,22 +1167,27 @@ Deno.serve(async (request: Request) => {
         if (conversationResult.error) throw new Error("Could not verify this visitor conversation before closing.");
         if (!conversationResult.data) return respond(200, { ok: true, deleted: false });
 
-        const messageResult = await db.from("messages")
-          .select("attachments")
-          .eq("conversation_id", conversationId)
-          .limit(500);
-        if (messageResult.error) throw new Error("Could not prepare temporary visitor files for cleanup.");
-        const attachmentPaths = (messageResult.data || []).flatMap((row: AnyRecord) =>
-          Array.isArray(row.attachments)
-            ? row.attachments.flatMap((item: unknown) => {
-              if (!isRecord(item) || typeof item.path !== "string") return [];
+        const attachmentPathSet = new Set<string>();
+        for (let offset = 0; ; offset += 500) {
+          const messagePage = await db.from("messages")
+            .select("attachments")
+            .eq("conversation_id", conversationId)
+            .order("id", { ascending: true })
+            .range(offset, offset + 499);
+          if (messagePage.error) throw new Error("Could not prepare temporary visitor files for cleanup.");
+          for (const row of messagePage.data || []) {
+            if (!Array.isArray(row.attachments)) continue;
+            for (const item of row.attachments as unknown[]) {
+              if (!isRecord(item) || typeof item.path !== "string") continue;
               const path = item.path;
-              return path.startsWith(site.workspace_id + "/") && !path.includes("..") && path.split("/").length >= 3
-                ? [path]
-                : [];
-            })
-            : []
-        );
+              if (path.startsWith(site.workspace_id + "/") && !path.includes("..") && path.split("/").length >= 3) {
+                attachmentPathSet.add(path);
+              }
+            }
+          }
+          if ((messagePage.data || []).length < 500) break;
+        }
+        const attachmentPaths = [...attachmentPathSet];
         const deletion = await db.rpc("delete_website_visitor_conversation_if_ephemeral", {
           p_conversation_id: conversationId,
           p_workspace_id: site.workspace_id,
