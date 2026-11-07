@@ -9,7 +9,7 @@ var visitor="",conversation=null,pendingClose=null;
 try{visitor=sessionStorage.getItem(store)||crypto.randomUUID();sessionStorage.setItem(store,visitor);conversation=sessionStorage.getItem(conversationStore)||null;}
 catch(error){visitor="v-"+Date.now()+"-"+Math.random().toString(36).slice(2);}
 var host=document.createElement("div");
-host.style.cssText="position:fixed;left:20px;bottom:20px;z-index:2147483000";
+host.style.cssText="position:fixed;left:20px;bottom:20px;z-index:2147483647";
 document.body.appendChild(host);
 var root=host.attachShadow?host.attachShadow({mode:"open"}):host;
 root.innerHTML=[
@@ -23,7 +23,7 @@ root.innerHTML=[
 ".top .social-link{box-sizing:border-box;width:34px;height:34px;display:grid;place-items:center;flex:none;border:0;border-radius:9px;background:#ffffff1c;color:#fff;text-decoration:none}.top .social-link[hidden]:not(.is-visible){display:none!important}.top .social-link.is-visible{display:grid!important}.top .social-link svg{width:18px;height:18px;display:block;fill:currentColor;stroke:none}.top .social-link:hover,.top button:hover{background:#ffffff30}",
 ".messages{min-height:0;overflow:auto;padding:13px;background:#f8fafc;display:flex;flex-direction:column;gap:9px;overscroll-behavior:contain}.bubble{max-width:88%;padding:10px 12px;border-radius:13px;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.ai{align-self:flex-start;background:white;border:1px solid #e6ebf2;color:#1a2635}.user{align-self:flex-end;background:#172033;color:#fff}.err{align-self:flex-start;background:#fff0ef;color:#9c332c}.typing{color:#697789;display:flex;align-items:center;gap:5px;font-style:italic}.typing:after{content:'';width:5px;height:5px;border-radius:50%;background:#22c55e;animation:misma-dot .9s ease-in-out infinite alternate}@keyframes misma-dot{to{opacity:.2;transform:translateY(-3px)}}",
 ".composer-wrap{padding:10px 10px 8px;border-top:1px solid #e8edf3;background:#fff}.composer{display:flex;align-items:flex-end;gap:8px;margin:0;padding:7px 7px 7px 10px;min-width:0;border:1px solid #dce2eb;border-radius:15px;background:#f7f9fc;box-shadow:0 1px 2px #0f172a0c}.composer textarea{box-sizing:border-box;flex:1;min-width:0;min-height:36px;max-height:108px;resize:none;border:0;outline:0;padding:8px 3px;background:transparent;font:400 13px/1.45 Inter,system-ui,sans-serif;color:#172033}.composer-actions{display:flex;align-items:center;gap:5px;flex:none;padding-bottom:2px}.icon-btn{width:35px;height:35px;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:#536274;cursor:pointer;padding:0}.icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.icon-btn.is-active{background:#e8f8ee;color:#16a34a}.send-btn{width:38px;height:38px;display:grid;place-items:center;border:0;border-radius:50%;background:#22c55e;color:#fff;cursor:pointer;padding:0}.send-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.send-btn[disabled]{opacity:.5;cursor:not-allowed}",
-".handoff{display:none;padding:12px;border-top:1px solid #e8edf3;background:#fff;gap:8px}.handoff.open{display:grid}.handoff b{font-size:13px}.handoff p{margin:0;font-size:11px;color:#657286;line-height:1.45}.handoff input,.handoff textarea{box-sizing:border-box;width:100%;min-width:0;border:1px solid #dce2eb;border-radius:10px;padding:10px;font-family:inherit;font-size:13px;line-height:1.4;color:#182232}.handoff button{border:0;border-radius:10px;background:#172033;color:#fff;padding:10px 13px;cursor:pointer}.status{padding:0 12px 7px;font-size:11px;color:#718096;background:#fff;min-height:0}.composer.recording textarea{display:none}.recording-waveform{display:none;flex:1;align-items:center;justify-content:center;min-width:0;height:42px;gap:3px;overflow:hidden}.composer.recording .recording-waveform{display:flex}.recording-waveform i{display:block;width:3px;height:8px;flex:none;border-radius:9px;background:#22c55e;animation:misma-recording-wave .72s ease-in-out infinite alternate}.recording-waveform i:nth-child(3n){animation-delay:-.38s}.recording-waveform i:nth-child(3n + 1){animation-delay:-.16s}.recording-waveform i:nth-child(4n){animation-duration:.92s}@keyframes misma-recording-wave{from{height:5px;opacity:.55}to{height:29px;opacity:1}}.mic.is-active{color:#16a34a;background:#e8f8ee;animation:misma-mic-pulse 1.3s ease-in-out infinite}@keyframes misma-mic-pulse{50%{box-shadow:0 0 0 5px #22c55e20}}.voice-view{display:none;position:absolute;inset:0;z-index:8;box-sizing:border-box;flex-direction:column;align-items:center;justify-content:space-between;gap:10px;padding:12px;color:#f4f6fb;background:#0b0d12;border-radius:18px;overflow:hidden;font-family:Inter,system-ui,sans-serif}.voice-view.open{display:flex}.voice-top{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:34px;gap:8px;color:#f4f6fb;font-size:13px;font-weight:600}.voice-exit{width:34px;height:34px;display:grid;place-items:center;border:1px solid #ffffff2a;border-radius:50%;background:#ffffff0d;color:#fff;cursor:pointer;font-size:19px}.voice-content{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;width:100%;min-height:0;gap:12px}.voice-mode-choice{display:inline-flex;align-items:center;gap:3px;padding:3px;border:1px solid #ffffff20;border-radius:999px;background:#ffffff0d}.voice-mode-choice button{min-height:36px;padding:8px 12px;border:0;border-radius:999px;background:transparent;color:#c5ceda;font:500 12px Inter,system-ui,sans-serif;cursor:pointer}.voice-mode-choice button.is-selected{background:#e8eef8;color:#0d1420;font-weight:700}.voice-orb{display:grid;place-items:center;width:clamp(112px,30vw,154px);height:clamp(112px,30vw,154px);flex:none;padding:0;border:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e1edff,#8ab4ff 46%,#3b5bdb 100%);box-shadow:0 0 55px #6c97ff47,inset 0 0 25px #ffffff4d;cursor:pointer;transition:opacity .2s,filter .2s,transform .2s}.voice-orb span{width:30%;height:30%;border-radius:50%;background:#ffffff61;filter:blur(9px)}.voice-orb[data-state=starting],.voice-orb[data-state=thinking]{animation:misma-voice-think 1s ease-in-out infinite}.voice-orb[data-state=listening]{animation:misma-voice-breathe 1.6s ease-in-out infinite}.voice-orb[data-state=speaking]{animation:misma-voice-speak .7s ease-in-out infinite}.voice-orb[data-state=ready]{opacity:.78}.voice-orb[data-state=muted]{opacity:.3;filter:grayscale(1)}.voice-status{min-height:1.4em;margin:0;color:#cbd5e1;font-size:13px;text-align:center}.voice-controls{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;width:100%}.voice-control{min-width:78px;min-height:38px;padding:8px 13px;border:1px solid #ffffff40;border-radius:999px;background:transparent;color:#f4f6fb;font:500 12px Inter,system-ui,sans-serif;cursor:pointer}.voice-control[aria-pressed=true]{background:#ffffff20}.voice-control.is-stop{background:#303d50;border-color:#303d50}.voice-control.is-end{background:#d94c56;border-color:#d94c56}.voice-control[hidden]{display:none!important}.mic-permission-backdrop{display:none;position:absolute;inset:0;z-index:20;align-items:center;justify-content:center;padding:18px;background:#080b10b8}.mic-permission-backdrop.open{display:flex}.mic-permission-dialog{width:min(310px,100%);box-sizing:border-box;padding:22px;border:1px solid #dce3ec;border-radius:18px;background:#fff;color:#182232;box-shadow:0 18px 50px #0005;text-align:left}.mic-permission-dialog h3{margin:0 0 9px;font-size:17px}.mic-permission-dialog p{margin:0 0 17px;color:#526174;font-size:13px;line-height:1.5}.mic-permission-actions{display:flex;justify-content:flex-end;gap:8px}.mic-permission-actions button{min-height:38px;padding:8px 13px;border:1px solid #dce2eb;border-radius:10px;background:#f7f9fc;color:#263447;font:600 12px Inter,system-ui,sans-serif;cursor:pointer}.mic-permission-actions .allow{border-color:#16a34a;background:#16a34a;color:#fff}.mic-permission-actions button:disabled{opacity:.6;cursor:wait}.mic-permission-error{display:none;margin-top:12px!important;color:#a12d2d!important}.mic-permission-error.open{display:block}@keyframes misma-voice-breathe{0%,100%{transform:scale(.96)}50%{transform:scale(1.06)}}@keyframes misma-voice-think{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:.95;transform:scale(1)}}@keyframes misma-voice-speak{0%,100%{transform:scale(.98)}50%{transform:scale(1.12)}}",
+".handoff{display:none;padding:12px;border-top:1px solid #e8edf3;background:#fff;gap:8px}.handoff.open{display:grid}.handoff b{font-size:13px}.handoff p{margin:0;font-size:11px;color:#657286;line-height:1.45}.handoff input,.handoff textarea{box-sizing:border-box;width:100%;min-width:0;border:1px solid #dce2eb;border-radius:10px;padding:10px;font-family:inherit;font-size:13px;line-height:1.4;color:#182232}.handoff button{border:0;border-radius:10px;background:#172033;color:#fff;padding:10px 13px;cursor:pointer}.status{padding:0 12px 7px;font-size:11px;color:#718096;background:#fff;min-height:0}.composer.recording textarea{display:none}.recording-waveform{display:none;flex:1;align-items:center;justify-content:center;min-width:0;height:42px;gap:3px;overflow:hidden}.composer.recording .recording-waveform{display:flex}.recording-waveform i{display:block;width:3px;height:8px;flex:none;border-radius:9px;background:#22c55e;animation:misma-recording-wave .72s ease-in-out infinite alternate}.recording-waveform i:nth-child(3n){animation-delay:-.38s}.recording-waveform i:nth-child(3n + 1){animation-delay:-.16s}.recording-waveform i:nth-child(4n){animation-duration:.92s}@keyframes misma-recording-wave{from{height:5px;opacity:.55}to{height:29px;opacity:1}}.mic.is-active{color:#16a34a;background:#e8f8ee;animation:misma-mic-pulse 1.3s ease-in-out infinite}@keyframes misma-mic-pulse{50%{box-shadow:0 0 0 5px #22c55e20}}.voice-view{display:none;position:absolute;inset:0;z-index:8;box-sizing:border-box;flex-direction:column;align-items:center;justify-content:space-between;gap:10px;padding:12px;color:#f4f6fb;background:#0b0d12;border-radius:18px;overflow:hidden;font-family:Inter,system-ui,sans-serif}.voice-view.open{display:flex}.voice-top{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:34px;gap:8px;color:#f4f6fb;font-size:13px;font-weight:600}.voice-exit{width:34px;height:34px;display:grid;place-items:center;border:1px solid #ffffff2a;border-radius:50%;background:#ffffff0d;color:#fff;cursor:pointer;font-size:19px}.voice-content{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;width:100%;min-height:0;gap:12px}.voice-mode-choice{display:inline-flex;align-items:center;gap:3px;padding:3px;border:1px solid #ffffff20;border-radius:999px;background:#ffffff0d}.voice-mode-choice button{min-height:36px;padding:8px 12px;border:0;border-radius:999px;background:transparent;color:#c5ceda;font:500 12px Inter,system-ui,sans-serif;cursor:pointer}.voice-mode-choice button.is-selected{background:#e8eef8;color:#0d1420;font-weight:700}.voice-orb{display:grid;place-items:center;width:clamp(112px,30vw,154px);height:clamp(112px,30vw,154px);flex:none;padding:0;border:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e1edff,#8ab4ff 46%,#3b5bdb 100%);box-shadow:0 0 55px #6c97ff47,inset 0 0 25px #ffffff4d;cursor:pointer;transition:opacity .2s,filter .2s,transform .2s}.voice-orb span{width:30%;height:30%;border-radius:50%;background:#ffffff61;filter:blur(9px)}.voice-orb[data-state=starting],.voice-orb[data-state=thinking]{animation:misma-voice-think 1s ease-in-out infinite}.voice-orb[data-state=listening]{animation:misma-voice-breathe 1.6s ease-in-out infinite}.voice-orb[data-state=speaking]{animation:misma-voice-speak .7s ease-in-out infinite}.voice-orb[data-state=ready]{opacity:.78}.voice-orb[data-state=muted]{opacity:.3;filter:grayscale(1)}.voice-status{min-height:1.4em;margin:0;color:#cbd5e1;font-size:13px;text-align:center}.voice-controls{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;width:100%}.voice-control{min-width:78px;min-height:38px;padding:8px 13px;border:1px solid #ffffff40;border-radius:999px;background:transparent;color:#f4f6fb;font:500 12px Inter,system-ui,sans-serif;cursor:pointer}.voice-control[aria-pressed=true]{background:#ffffff20}.voice-control.is-stop{background:#303d50;border-color:#303d50}.voice-control.is-end{background:#d94c56;border-color:#d94c56}.voice-control[hidden]{display:none!important}.mic-permission-backdrop{display:none;position:fixed;inset:0;z-index:2147483647;align-items:center;justify-content:center;padding:10px;background:rgba(0,0,0,.55);font-family:Roboto,"Google Sans",system-ui,sans-serif;animation:misma-mic-fade-in .15s ease both}.mic-permission-backdrop.open{display:flex}.mic-permission-dialog{box-sizing:border-box;width:min(440px,calc(100vw - 20px));min-height:270px;padding:24px;border:0;border-radius:24px;background:#2b2d30;color:#e3e3e3;box-shadow:0 18px 56px #0007;text-align:left;animation:misma-mic-scale-in .15s ease both;outline:none}.mic-permission-head{display:flex;align-items:center;gap:12px;min-height:40px}.mic-permission-icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:50%;background:#22c55e;color:#05210f}.mic-permission-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.mic-permission-title{margin:0;color:#e3e3e3;font-size:16px;font-weight:400;line-height:1.2}.mic-permission-title strong{font-weight:700;white-space:nowrap}.mic-permission-actions{display:grid;gap:4px;margin-top:20px}.mic-permission-actions button{box-sizing:border-box;display:block;width:100%;min-height:52px;padding:10px 14px;border:0;border-radius:10px;background:#22c55e;color:#05210f;font:500 16px/1.2 Roboto,"Google Sans",system-ui,sans-serif;text-align:center;cursor:pointer;touch-action:manipulation;transition:background .15s ease,transform .15s ease,opacity .15s ease}.mic-permission-actions button:hover:not(:disabled){background:#4ade80}.mic-permission-actions button:active:not(:disabled){background:#16a34a;transform:scale(.99)}.mic-permission-actions button:disabled{opacity:.62;cursor:wait}.mic-permission-help{display:none;margin-top:20px}.mic-permission-help.open{display:block}.mic-permission-help p{margin:0;color:#e3e3e3;font-size:14px;line-height:1.5}.mic-permission-help .mic-permission-steps{margin-top:10px;color:#b8bdc4;font-size:13px}.mic-permission-help .mic-permission-actions{margin-top:20px}.mic-permission-got-it{display:none}.mic-permission-got-it.open{display:block}.mic-permission-status{display:none;margin-top:10px;color:#cbd5e1;font-size:12px;text-align:center}.mic-permission-backdrop[data-requesting=true] .mic-permission-status{display:block}.mic.is-never-allowed{position:relative;opacity:.48}.mic.is-never-allowed:after{content:"";position:absolute;width:26px;height:2px;border-radius:2px;background:currentColor;transform:rotate(-48deg);box-shadow:0 0 0 1px #fff}.mic-permission-actions button:focus-visible{outline:2px solid #ecfdf5;outline-offset:2px}@keyframes misma-mic-fade-in{from{opacity:0}to{opacity:1}}@keyframes misma-mic-scale-in{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}@media(prefers-reduced-motion:reduce){.mic-permission-backdrop,.mic-permission-dialog,.mic-permission-actions button{animation:none!important;transition:none!important}}@keyframes misma-voice-breathe{0%,100%{transform:scale(.96)}50%{transform:scale(1.06)}}@keyframes misma-voice-think{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:.95;transform:scale(1)}}@keyframes misma-voice-speak{0%,100%{transform:scale(.98)}50%{transform:scale(1.12)}}",
 "@media(max-width:520px){.launch{width:54px;height:54px;min-height:54px;padding:0;gap:0;border-radius:50%}.launch-label{display:none}.panel{left:0;right:auto;width:calc(100vw - 28px);max-width:calc(100vw - 28px);height:min(570px,calc(100dvh - 100px))}}",
 "@media(prefers-reduced-motion:reduce){.launch,.typing:after{animation:none;transition:none}}",
 "</style>",
@@ -41,14 +41,18 @@ root.innerHTML=[
 "</div></form></div>",
 "<div class='status' role='status' aria-live='polite'></div><div class='voice-view' role='dialog' aria-modal='true' aria-label='Misma speech talk'><div class='voice-top'><span>Misma speech talk</span><button class='voice-exit' type='button' aria-label='Exit speech talk' title='Exit'>×</button></div><div class='voice-content'><div class='voice-mode-choice' role='group' aria-label='Voice conversation style'><button type='button' class='voice-mode is-selected' data-mode='hands-free' aria-pressed='true'>Hands-free</button><button type='button' class='voice-mode' data-mode='push-to-talk' aria-pressed='false'>Push to talk</button></div><button class='voice-orb' type='button' data-state='starting' aria-label='Voice conversation is connecting'><span aria-hidden='true'></span></button><p class='voice-status' aria-live='polite'>Connecting to your microphone…</p></div><div class='voice-controls'><button type='button' class='voice-control voice-mute' aria-pressed='false'>Mute</button><button type='button' class='voice-control voice-stop is-stop' hidden>Stop</button><button type='button' class='voice-control voice-end is-end'>End</button></div></div></section>"
 
-,"<div class='mic-permission-backdrop' role='presentation'><section class='mic-permission-dialog' role='dialog' aria-modal='true' aria-labelledby='mic-permission-title'><h3 id='mic-permission-title'>Allow microphone access?</h3><p>Misma needs microphone access to hear your message and respond in speech talk. Your audio is processed by your browser and is not recorded or stored by this widget.</p><p class='mic-permission-error' role='alert'></p><div class='mic-permission-actions'><button type='button' class='mic-permission-cancel'>Cancel</button><button type='button' class='allow mic-permission-continue'>Continue</button></div></section></div>"
+,"<div class='mic-permission-backdrop' role='presentation' aria-hidden='true'><section class='mic-permission-dialog' role='alertdialog' aria-modal='true' aria-labelledby='mic-permission-title' tabindex='-1'><div class='mic-permission-head'><span class='mic-permission-icon' aria-hidden='true'><svg viewBox='0 0 24 24'><rect x='9' y='2.5' width='6' height='12' rx='3'/><path d='M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6'/></svg></span><p class='mic-permission-title' id='mic-permission-title'><strong>misma.onrender.com</strong> wants to use your microphone</p></div><div class='mic-permission-help'><p class='mic-permission-copy'></p><p class='mic-permission-steps'></p><div class='mic-permission-actions'><button type='button' class='mic-permission-got-it'>Got it</button></div></div><div class='mic-permission-actions mic-permission-choices'><button type='button' class='mic-permission-while'>Allow while visiting the site</button><button type='button' class='mic-permission-once'>Allow this time</button><button type='button' class='mic-permission-never'>Never allow</button></div><span class='mic-permission-status' role='status'>Requesting microphone access…</span></section></div>"
 ].join("");
 
 var $=function(selector){return root.querySelector(selector);};
 var panel=$(".panel"),messages=$(".messages"),input=$(".composer textarea"),status=$(".status"),handoff=$(".handoff"),composer=$(".composer");
 var micButton=$(".mic"),primaryButton=$(".primary"),whatsappLink=$(".whatsapp-link"),instagramLink=$(".instagram-link");
-var micPermissionDialog=$(".mic-permission-backdrop"),micPermissionError=$(".mic-permission-error"),micPermissionContinue=$(".mic-permission-continue"),micPermissionCancel=$(".mic-permission-cancel");
-var pendingMicAction=null;
+var MISMA_ORIGIN_LABEL="misma.onrender.com";
+var micPermissionDialog=$(".mic-permission-backdrop"),micPermissionCard=$(".mic-permission-dialog"),micPermissionChoices=$(".mic-permission-choices"),micPermissionHelp=$(".mic-permission-help"),micPermissionCopy=$(".mic-permission-copy"),micPermissionSteps=$(".mic-permission-steps"),micPermissionWhile=$(".mic-permission-while"),micPermissionOnce=$(".mic-permission-once"),micPermissionNever=$(".mic-permission-never"),micPermissionGotIt=$(".mic-permission-got-it");
+var micPreferenceKey="misma_mic_never_allow_"+siteSessionKey,micNeverAllowed=false,micPermissionState="checking",micPermissionStatus=null,pendingMicAction=null,previousMicFocus=null,micRequesting=false;
+try{micNeverAllowed=localStorage.getItem(micPreferenceKey)==="1";}catch(error){}
+function updateMicPreferenceIcon(){micButton.classList.toggle("is-never-allowed",micNeverAllowed);}
+updateMicPreferenceIcon();
 
 function applySocialLink(link, rawUrl, expectedHost) {
   if (!link) return;
@@ -302,28 +306,146 @@ function stopVoiceSession(){
   setVoiceState("idle");updatePrimary();
   if(!busy)setStatus("");
 }
-function showMicPermissionPrompt(action){pendingMicAction=action;micPermissionError.textContent="";micPermissionError.classList.remove("open");micPermissionContinue.disabled=false;micPermissionContinue.textContent="Continue";micPermissionDialog.classList.add("open");}
-function hideMicPermissionPrompt(){micPermissionDialog.classList.remove("open");pendingMicAction=null;}
-function requestMicPermissionAndStart(){
-  var action=pendingMicAction;if(!action)return;
-  micPermissionContinue.disabled=true;micPermissionContinue.textContent="Requesting…";
-  if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=="function"||!window.isSecureContext){micPermissionError.textContent="Microphone access is unavailable. Open this website over HTTPS in a supported browser.";micPermissionError.classList.add("open");micPermissionContinue.disabled=false;micPermissionContinue.textContent="Try again";return;}
-  navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){stream.getTracks().forEach(function(track){track.stop();});hideMicPermissionPrompt();micPermissionContinue.disabled=false;micPermissionContinue.textContent="Continue";
-    if(action==="dictation"){finalTranscript="";interimTranscript="";dictationSendAfterStop=false;dictating=true;composer.classList.add("recording");micButton.classList.add("is-active");setStatus("Listening · tap Send when you are finished.");updatePrimary();listen(false);}
-    else{beginVoiceSessionAfterPermission();}
-  }).catch(function(error){var name=error&&error.name||"";micPermissionError.textContent=/NotAllowed|PermissionDenied|SecurityError/.test(name)?"Microphone access is blocked for this website. Allow it in your browser site settings, then return and try again.":name==="NotFoundError"?"No microphone was found. Connect a microphone and try again.":"Misma could not access the microphone. Check your browser permission and try again.";micPermissionError.classList.add("open");micPermissionContinue.disabled=false;micPermissionContinue.textContent="Try again";});
+function micBrowserHelp(){
+  var ua=navigator.userAgent||"";
+  if(/Android/i.test(ua)&&/Chrome/i.test(ua))return "Chrome on Android: tap the site controls icon beside the address bar, open Permissions or Site settings, set Microphone to Allow, then reload this page.";
+  if(/iPhone|iPad|iPod/i.test(ua))return "Safari on iPhone or iPad: open Settings > Apps > Safari > Microphone and allow access. You can also open Safari's page menu > Website Settings and allow Microphone. Return to Misma and reload.";
+  if(/Firefox/i.test(ua))return "Firefox: select the lock icon beside the address bar, open Permissions, find Use the Microphone, choose Allow, then reload.";
+  if(/Chrome|Chromium|Edg/i.test(ua))return "Desktop Chrome: select the tune or lock icon beside the address bar, open Site settings, set Microphone to Allow, then reload.";
+  return "Open this website's permissions in your browser settings, set Microphone to Allow, then reload Misma.";
 }
+function setMicDialogView(view){
+  micPermissionDialog.setAttribute("data-view",view);
+  micPermissionChoices.style.display=view==="permission"?"grid":"none";
+  micPermissionHelp.classList.toggle("open",view!=="permission");
+  micPermissionGotIt.classList.toggle("open",view!=="permission");
+  micPermissionDialog.setAttribute("aria-hidden","false");
+  if(view==="blocked"){
+    micPermissionCopy.textContent="Microphone is blocked. Tap the lock icon next to the address bar, open Permissions, set Microphone to Allow, then reload.";
+    micPermissionSteps.textContent=micBrowserHelp();
+  }else if(view==="no-device"){
+    micPermissionCopy.textContent="No microphone was found on this device. Connect or enable a microphone, then try again.";
+    micPermissionSteps.textContent="Check that your device has an available microphone and that it is not disabled by your operating system.";
+  }else if(view==="insecure"){
+    micPermissionCopy.textContent="Microphone access requires a secure HTTPS connection.";
+    micPermissionSteps.textContent="Open this website over HTTPS. Browsers block microphone access on ordinary insecure pages.";
+  }else if(view==="unsupported"){
+    micPermissionCopy.textContent="This browser cannot provide microphone access.";
+    micPermissionSteps.textContent="Open the website in a current browser that supports microphone access, using HTTPS.";
+  }else{
+    micPermissionCopy.textContent="";
+    micPermissionSteps.textContent="";
+  }
+}
+function focusMicDialog(){
+  var target=micPermissionDialog.querySelector(micPermissionDialog.getAttribute("data-view")==="permission"?".mic-permission-while":".mic-permission-got-it");
+  if(target&&typeof target.focus==="function")target.focus();
+}
+function showMicPermissionPrompt(action){
+  pendingMicAction=action||pendingMicAction;
+  previousMicFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+  setMicDialogView("permission");
+  micPermissionDialog.classList.add("open");
+  window.requestAnimationFrame(focusMicDialog);
+}
+function hideMicPermissionPrompt(clearAction){
+  micPermissionDialog.classList.remove("open");
+  micPermissionDialog.setAttribute("aria-hidden","true");
+  micPermissionDialog.setAttribute("data-requesting","false");
+  micRequesting=false;
+  [micPermissionWhile,micPermissionOnce,micPermissionNever].forEach(function(button){button.disabled=false;});
+  if(clearAction!==false)pendingMicAction=null;
+  if(previousMicFocus&&typeof previousMicFocus.focus==="function")previousMicFocus.focus();
+}
+function showMicFailure(error){
+  var name=error&&error.name||"";
+  var view=(!window.isSecureContext)?"insecure":name==="NotFoundError"||name==="DevicesNotFoundError"?"no-device":name==="TypeError"||name==="NotSupportedError"?"unsupported":"blocked";
+  if(view==="blocked")micPermissionState="denied";
+  setMicDialogView(view);
+  micPermissionDialog.classList.add("open");
+  micPermissionDialog.setAttribute("aria-hidden","false");
+  micRequesting=false;
+  micPermissionDialog.setAttribute("data-requesting","false");
+  [micPermissionWhile,micPermissionOnce,micPermissionNever].forEach(function(button){button.disabled=false;});
+  window.requestAnimationFrame(focusMicDialog);
+}
+function startPendingMicAction(){
+  var action=pendingMicAction;
+  pendingMicAction=null;
+  if(!action)return;
+  if(action==="dictation"){
+    finalTranscript="";interimTranscript="";dictationSendAfterStop=false;dictating=true;composer.classList.add("recording");micButton.classList.add("is-active");setStatus("Listening · tap Send when you are finished.");updatePrimary();listen(false);
+  }else{
+    beginVoiceSessionAfterPermission();
+  }
+}
+function requestMicPermissionAndStart(){
+  if(micRequesting)return;
+  if(!window.isSecureContext){showMicFailure({name:"SecurityError"});return;}
+  if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=="function"){showMicFailure({name:"NotSupportedError"});return;}
+  // This call is made synchronously from the selected Allow button's click handler.
+  var request;
+  try{request=navigator.mediaDevices.getUserMedia({audio:true});}
+  catch(error){showMicFailure(error);return;}
+  micRequesting=true;
+  micPermissionDialog.setAttribute("data-requesting","true");
+  [micPermissionWhile,micPermissionOnce,micPermissionNever].forEach(function(button){button.disabled=true;});
+  request.then(function(stream){
+    stream.getTracks().forEach(function(track){track.stop();});
+    micPermissionState="granted";
+    micNeverAllowed=false;
+    try{localStorage.removeItem(micPreferenceKey);}catch(error){}
+    updateMicPreferenceIcon();
+    hideMicPermissionPrompt(false);
+    startPendingMicAction();
+  }).catch(showMicFailure);
+}
+function requestMicForAction(action){
+  if(voiceSession){stopVoiceSession();}
+  if(!window.isSecureContext){pendingMicAction=action;showMicFailure({name:"SecurityError"});return;}
+  if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=="function"){pendingMicAction=action;showMicFailure({name:"NotSupportedError"});return;}
+  if(micNeverAllowed||micPermissionState==="prompt"||micPermissionState==="denied"||micPermissionState==="checking"){
+    showMicPermissionPrompt(action);
+    return;
+  }
+  pendingMicAction=action;
+  // Browsers without a microphone Permissions API use a direct getUserMedia fallback.
+  requestMicPermissionAndStart();
+}
+function refreshMicPermission(){
+  if(!navigator.permissions||typeof navigator.permissions.query!=="function"){micPermissionState="unsupported";return;}
+  navigator.permissions.query({name:"microphone"}).then(function(status){
+    micPermissionStatus=status;
+    micPermissionState=status.state;
+    status.addEventListener("change",function(){micPermissionState=status.state;});
+  }).catch(function(){micPermissionState="unsupported";});
+}
+micPermissionDialog.addEventListener("keydown",function(event){
+  if(event.key==="Escape"){event.preventDefault();hideMicPermissionPrompt();return;}
+  if(event.key!=="Tab")return;
+  var controls=Array.prototype.slice.call(micPermissionDialog.querySelectorAll("button:not([disabled]):not([hidden])")).filter(function(button){return button.offsetParent!==null;});
+  if(!controls.length)return;
+  var first=controls[0],last=controls[controls.length-1];
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+});
+micPermissionWhile.addEventListener("click",requestMicPermissionAndStart);
+micPermissionOnce.addEventListener("click",requestMicPermissionAndStart);
+micPermissionNever.addEventListener("click",function(){
+  try{localStorage.setItem(micPreferenceKey,"1");}catch(error){}
+  micNeverAllowed=true;updateMicPreferenceIcon();hideMicPermissionPrompt();
+});
+micPermissionGotIt.addEventListener("click",function(){hideMicPermissionPrompt();});
 function startVoiceSession(){
   if(voiceSession){stopVoiceSession();return;}if(busy)return;
-  voiceView.classList.add("open");
   if(!recognitionConstructor()){
-    primaryButton.classList.remove("is-active");
+    voiceView.classList.add("open");primaryButton.classList.remove("is-active");
     setVoiceState("idle","Speech talk is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");
     return;
   }
-  showMicPermissionPrompt("speech");
+  requestMicForAction("speech");
 }
-function beginVoiceSessionAfterPermission(){voiceSession=true;voiceMuted=false;voiceModeChoice="hands-free";updateVoiceModeChoice();setVoiceState("starting");primaryButton.classList.add("is-active");listen(true);}
+function beginVoiceSessionAfterPermission(){voiceView.classList.add("open");voiceSession=true;voiceMuted=false;voiceModeChoice="hands-free";updateVoiceModeChoice();setVoiceState("starting");primaryButton.classList.add("is-active");listen(true);}
 function interruptVoice(){
   if(!voiceSession)return;
   if(voiceRequestController){voiceRequestController.abort();voiceRequestController=null;}
@@ -363,10 +485,7 @@ $(".human").addEventListener("click",function(){handoff.classList.toggle("open")
 input.addEventListener("input",function(){resizeInput();updatePrimary();});
 input.addEventListener("keydown",function(event){if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);}});
 $(".composer").addEventListener("submit",function(event){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);});
-micButton.addEventListener("click",function(){if(dictating)return;if(voiceSession)stopVoiceSession();if(busy)return;if(!recognitionConstructor()){setStatus("Microphone dictation is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");return;}showMicPermissionPrompt("dictation");});
-micPermissionContinue.addEventListener("click",requestMicPermissionAndStart);
-micPermissionCancel.addEventListener("click",hideMicPermissionPrompt);
-micPermissionDialog.addEventListener("click",function(event){if(event.target===micPermissionDialog)hideMicPermissionPrompt();});
+micButton.addEventListener("click",function(){if(dictating)return;if(busy)return;if(!recognitionConstructor()){setStatus("Microphone dictation is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");return;}requestMicForAction("dictation");});
 primaryButton.addEventListener("click",function(){if(dictating){finishDictationAndSend();return;}if(input.value.trim())sendMessage(input.value,false);else startVoiceSession();});
 voiceView.querySelector(".voice-exit").addEventListener("click",stopVoiceSession);
 voiceView.querySelector(".voice-end").addEventListener("click",stopVoiceSession);
@@ -400,6 +519,7 @@ $(".handoff-submit").addEventListener("click",function(){
   }).catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
 });
 window.setInterval(function(){if(panel.classList.contains("open")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
+refreshMicPermission();
 call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
 }
 fetch(api,{
