@@ -424,6 +424,62 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
   }
 }
 
+async function readDocxComposerPreview(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.length < 22) throw new Error("This Word document is incomplete.");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const minimumOffset = Math.max(0, bytes.length - 65_557);
+  let endRecord = -1;
+  for (let offset = bytes.length - 22; offset >= minimumOffset; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) { endRecord = offset; break; }
+  }
+  if (endRecord < 0) throw new Error("This is not a readable Word document.");
+  const entryCount = view.getUint16(endRecord + 10, true);
+  let cursor = view.getUint32(endRecord + 16, true);
+  let documentXml: Uint8Array | null = null;
+  for (let index = 0; index < entryCount && cursor + 46 <= bytes.length; index += 1) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) break;
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const uncompressedSize = view.getUint32(cursor + 24, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    const nameEnd = cursor + 46 + nameLength;
+    const name = new TextDecoder().decode(bytes.subarray(cursor + 46, nameEnd));
+    if (name === "word/document.xml") {
+      if (uncompressedSize > 10 * 1024 * 1024 || localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== 0x04034b50) {
+        throw new Error("This Word document is too large or incomplete to preview.");
+      }
+      const dataStart = localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true);
+      const dataEnd = dataStart + compressedSize;
+      if (dataEnd > bytes.length) throw new Error("This Word document is incomplete.");
+      const compressed = bytes.subarray(dataStart, dataEnd);
+      if (method === 0) documentXml = compressed.slice();
+      else if (method === 8) {
+        const buffer = new ArrayBuffer(compressed.byteLength);
+        new Uint8Array(buffer).set(compressed);
+        const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream("deflate-raw" as CompressionFormat));
+        documentXml = new Uint8Array(await new Response(stream).arrayBuffer());
+      } else throw new Error("This Word document uses an unsupported compression method.");
+      break;
+    }
+    cursor = nameEnd + extraLength + commentLength;
+  }
+  if (!documentXml) throw new Error("No readable text was found in this Word document.");
+  return new TextDecoder().decode(documentXml)
+    .replace(/<w:tab\b[^>]*\/>/gi, "\t")
+    .replace(/<w:(?:br|cr)\b[^>]*\/>/gi, "\n")
+    .replace(/<\/w:p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"").replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_m, h: string) => String.fromCodePoint(Number.parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_m, n: string) => String.fromCodePoint(Number.parseInt(n, 10)))
+    .replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 1_600);
+}
+
 function ComposerAttachmentPreview({
   file, previewUrl, uploadStatus, uploadProgress, onRemove, onRetry,
 }: {
@@ -434,26 +490,77 @@ function ComposerAttachmentPreview({
   onRemove: () => void;
   onRetry: () => void;
 }) {
-  const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i.test(file.name);
-  const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
+  const lowerName = file.name.toLowerCase();
+  const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i.test(lowerName);
+  const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(lowerName);
+  const isPdf = file.type === "application/pdf" || lowerName.endsWith(".pdf");
+  const isDocx = file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || lowerName.endsWith(".docx");
+  const isTextPreviewable = file.type.startsWith("text/") ||
+    /\.(txt|md|csv|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i.test(lowerName);
   const extension = file.name.split(".").pop()?.slice(0, 6).toUpperCase() || "FILE";
-  const sizeLabel = file.size < 1024 * 1024 ? Math.max(1, Math.round(file.size / 1024)) + " KB" : (file.size / (1024 * 1024)).toFixed(1) + " MB";
+  const sizeLabel = file.size < 1024 * 1024
+    ? Math.max(1, Math.round(file.size / 1024)) + " KB"
+    : (file.size / (1024 * 1024)).toFixed(1) + " MB";
   const isUploading = uploadStatus === "uploading";
   const isError = uploadStatus === "error";
-  const cardClass = "aichat-composer-attachment-card" + (isImage ? " is-image" : " is-file") + (isError ? " is-error" : "");
+  const [textPreview, setTextPreview] = useState<string | null>(null);
+  const className = "aichat-composer-attachment-card" +
+    (isImage ? " is-image" : isVideo ? " is-video" : " is-file") + (isError ? " is-error" : "");
+
+  useEffect(() => {
+    let active = true;
+    if (!isTextPreviewable && !isDocx) {
+      setTextPreview(null);
+      return () => { active = false; };
+    }
+    setTextPreview(null);
+    void (async () => {
+      try {
+        const content = isDocx ? await readDocxComposerPreview(file) : await file.slice(0, 6_000).text();
+        if (active) setTextPreview(content.trim() || "This file contains no readable text.");
+      } catch {
+        if (active) setTextPreview("A text preview is not available for this file.");
+      }
+    })();
+    return () => { active = false; };
+  }, [file, isTextPreviewable, isDocx]);
+
   return (
-    <div className={cardClass} title={isImage ? undefined : file.name} aria-busy={isUploading}>
-      <div className={"aichat-composer-attachment-square" + (isImage ? "" : " is-file")}>
-        {isImage && previewUrl ? <img src={previewUrl} alt={file.name} decoding="async" loading="eager" fetchPriority="high" />
-          : isVideo && previewUrl ? <video src={previewUrl} muted playsInline preload="metadata" aria-label={file.name} />
-          : <div className="aichat-composer-file-card-copy"><span className="aichat-composer-file-icon" aria-hidden="true">{extension}</span><span className="aichat-composer-file-details"><strong>{file.name}</strong><small>{extension} · {sizeLabel}</small></span></div>}
-        {isUploading && <div className={"aichat-composer-upload-state is-uploading" + (uploadProgress > 0 ? " is-determinate" : "")} role="progressbar" aria-label={"Uploading " + file.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}>
-          <svg className="aichat-composer-upload-ring" viewBox="0 0 28 28" aria-hidden="true"><circle className="aichat-composer-upload-track" cx="14" cy="14" r="11" /><circle className="aichat-composer-upload-progress" cx="14" cy="14" r="11" style={{ strokeDashoffset: 69.12 * (1 - Math.max(0, Math.min(1, uploadProgress))) }} /></svg>
-        </div>}
+    <div className={className} title={file.name} aria-busy={isUploading}>
+      <div className={"aichat-composer-attachment-square" + (!isImage && !isVideo ? " is-file" : "")}>
+        {isImage && previewUrl ? (
+          <img className="aichat-composer-attachment-content-image" src={previewUrl} alt={file.name} decoding="async" loading="eager" fetchPriority="high" />
+        ) : isVideo && previewUrl ? (
+          <video className="aichat-composer-attachment-content-video" src={previewUrl} muted playsInline preload="metadata" aria-label={file.name} />
+        ) : isPdf && previewUrl ? (
+          <iframe className="aichat-composer-file-preview-pdf" src={previewUrl} title={"PDF preview: " + file.name} />
+        ) : isTextPreviewable || isDocx ? (
+          <pre className="aichat-composer-file-preview-text">{textPreview === null ? "Loading file content…" : textPreview}</pre>
+        ) : (
+          <div className="aichat-composer-file-card-copy">
+            <span className="aichat-composer-file-icon" aria-hidden="true">{extension}</span>
+            <span className="aichat-composer-file-details"><strong>{file.name}</strong><small>{extension} · {sizeLabel}</small></span>
+          </div>
+        )}
+        {isUploading && (
+          <div className={"aichat-composer-upload-state is-uploading" + (uploadProgress > 0 ? " is-determinate" : "")}
+            role="progressbar" aria-label={"Uploading " + file.name} aria-valuemin={0} aria-valuemax={100}
+            aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}>
+            <svg className="aichat-composer-upload-ring" viewBox="0 0 28 28" aria-hidden="true">
+              <circle className="aichat-composer-upload-track" cx="14" cy="14" r="11" />
+              <circle className="aichat-composer-upload-progress" cx="14" cy="14" r="11"
+                style={{ strokeDashoffset: 69.12 * (1 - Math.max(0, Math.min(1, uploadProgress))) }} />
+            </svg>
+          </div>
+        )}
         {uploadStatus === "ready" && <span className="aichat-composer-upload-state is-ready" role="status" aria-label={file.name + " uploaded"}><i>✓</i></span>}
       </div>
+      <span className="aichat-composer-attachment-name" title={file.name}>{file.name} · {sizeLabel}</span>
       <button type="button" className="aichat-composer-attachment-remove" aria-label={"Remove " + file.name} onClick={onRemove}>×</button>
-      {isError && <button type="button" className="aichat-composer-attachment-retry" aria-label={"Retry upload of " + file.name} title="Retry upload" onClick={onRetry}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" /></svg></button>}
+      {isError && <button type="button" className="aichat-composer-attachment-retry" aria-label={"Retry upload of " + file.name}
+        title="Retry upload" onClick={onRetry}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" /></svg>
+      </button>}
     </div>
   );
 }
@@ -2866,9 +2973,7 @@ function Dashboard() {
     }
     setChatError("");
     for (const file of additions) {
-      if (file.type.startsWith("image/") || isVideoFile(file)) {
-        composerPreviewUrlsRef.current.set(file, URL.createObjectURL(file));
-      }
+      composerPreviewUrlsRef.current.set(file, URL.createObjectURL(file));
     }
     setComposerUploadStatuses((current) => {
       const nextStatus = new Map(current);
