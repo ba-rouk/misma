@@ -519,7 +519,7 @@ test("attachments stay private, show per-file progress, and are separate from us
   assert.match(dashboard, /lightboxAttachment && <AttachmentImageLightbox/);
   assert.match(styles, /--misma-control-green:\s*#22c55e/);
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments/);
-  assert.match(styles, /grid-template-columns:\s*repeat\(3, 112px\)/);
+  assert.match(styles, /\.aichat-message-attachments\.is-user-attachments\s*\{[^}]*flex-wrap:\s*wrap/);
   assert.match(edgeFunction, /userVisibleMessage/);
   assert.match(edgeFunction, /ask what they would like you to do with it/i);
   assert.match(api, /createSignedUrl\(item\.path, 3600\)/);
