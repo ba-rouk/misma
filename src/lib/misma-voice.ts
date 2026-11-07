@@ -383,10 +383,11 @@ export function createDictation({
           const supportedType = preferredTypes.find((type) => {
             try { return MediaRecorder.isTypeSupported(type); } catch { return false; }
           });
+          // Own the stream before constructing the recorder so failures still release it.
+          audioStream = stream;
           const recorder = supportedType
             ? new MediaRecorder(stream, { mimeType: supportedType })
             : new MediaRecorder(stream);
-          audioStream = stream;
           mediaRecorder = recorder;
           recorder.addEventListener("dataavailable", (event) => {
             if (event.data && event.data.size > 0) audioChunks.push(event.data);
