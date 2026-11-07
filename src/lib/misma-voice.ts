@@ -290,7 +290,9 @@ export function createDictation({
   };
 
   const fail = (code: string) => {
-    finishResources(false);
+    // Keep the recorded audio on a speech-recognition service error; server-side
+    // Whisper transcription can still recover the visitor's message.
+    finishResources(true);
     onError?.(code);
   };
 
