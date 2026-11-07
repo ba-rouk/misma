@@ -50,6 +50,7 @@ var micButton=$(".mic"),primaryButton=$(".primary"),whatsappLink=$(".whatsapp-li
 var MISMA_ORIGIN_LABEL="misma.onrender.com";
 var micPermissionDialog=$(".mic-permission-backdrop"),micPermissionCard=$(".mic-permission-dialog"),micPermissionChoices=$(".mic-permission-choices"),micPermissionHelp=$(".mic-permission-help"),micPermissionCopy=$(".mic-permission-copy"),micPermissionSteps=$(".mic-permission-steps"),micPermissionWhile=$(".mic-permission-while"),micPermissionOnce=$(".mic-permission-once"),micPermissionNever=$(".mic-permission-never"),micPermissionGotIt=$(".mic-permission-got-it");
 var micPreferenceKey="misma_mic_never_allow_"+siteSessionKey,micNeverAllowed=false,micPermissionState="checking",micPermissionStatus=null,pendingMicAction=null,previousMicFocus=null,micRequesting=false;
+var micPermissionDomain=micPermissionDialog.querySelector(".mic-permission-title strong");if(micPermissionDomain)micPermissionDomain.textContent=MISMA_ORIGIN_LABEL;
 try{micNeverAllowed=localStorage.getItem(micPreferenceKey)==="1";}catch(error){}
 function updateMicPreferenceIcon(){micButton.classList.toggle("is-never-allowed",micNeverAllowed);}
 updateMicPreferenceIcon();
