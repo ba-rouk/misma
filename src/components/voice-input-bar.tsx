@@ -19,6 +19,7 @@ type VoiceInputBarProps = {
   voicePreset?: "girl" | "woman" | "boy" | "man";
   inputValue: string;
   hasContent: boolean;
+  hasAttachment?: () => boolean;
   isBusy?: boolean;
   disabled?: boolean;
   sendDisabled?: boolean;
@@ -68,6 +69,7 @@ export function VoiceInputBar({
   voicePreset = "woman",
   inputValue,
   hasContent,
+  hasAttachment,
   isBusy = false,
   disabled = false,
   sendDisabled = false,
@@ -311,7 +313,7 @@ export function VoiceInputBar({
 
   const isDictating = dictationState !== "idle";
   const primaryActionVisible = !isDictating && !voiceOverlayOpen;
-  const primaryIsVoice = !hasContent && !isBusy;
+  const primaryIsVoice = !hasContent && !hasAttachment?.() && !isBusy;
 
   return (
     <>
