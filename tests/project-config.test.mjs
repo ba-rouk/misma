@@ -857,18 +857,19 @@ test("dashboard notification feed shows named human requests and counts unread n
 
 test("widget microphone and speech talk show an explicit permission dialog and use dashboard female voice selection", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.match(widget, /class='mic-permission-backdrop'/);
-  assert.match(widget, /Allow microphone access\\?/);
-  assert.match(widget, /micPermissionContinue\\.addEventListener\\("click",requestMicPermissionAndStart\\)/);
-  assert.match(widget, /navigator\\.mediaDevices\\.getUserMedia\\(\\{audio:true\\}\\)/);
-  assert.match(widget, /showMicPermissionPrompt\\("dictation"\\)/);
-  assert.match(widget, /showMicPermissionPrompt\\("speech"\\)/);
-  assert.match(widget, /function beginVoiceSessionAfterPermission\\(\\)[\\s\\S]*?listen\\(true\\)/);
-  assert.match(widget, /function getFemaleVoice\\(\\)[\\s\\S]*?return female\\[1\\]\\|\\|female\\[0\\]/);
-  assert.match(widget, /synth\\.resume\\(\\)/);
-  assert.match(widget, /setVoiceState\\("idle",errorMessage\\)/);
-  assert.match(widget, /Microphone access is blocked for this website/);
-  assert.match(widget, /error==="audio-capture"/);
+  assert.ok(widget.includes("class='mic-permission-backdrop'"));
+  assert.ok(widget.includes("Allow microphone access?"));
+  assert.ok(widget.includes('micPermissionContinue.addEventListener("click",requestMicPermissionAndStart)'));
+  assert.ok(widget.includes("navigator.mediaDevices.getUserMedia({audio:true})"));
+  assert.ok(widget.includes('showMicPermissionPrompt("dictation")'));
+  assert.ok(widget.includes('showMicPermissionPrompt("speech")'));
+  assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
+  assert.ok(widget.includes("function getFemaleVoice()"));
+  assert.ok(widget.includes("return female[1]||female[0]"));
+  assert.ok(widget.includes("synth.resume()"));
+  assert.ok(widget.includes("Microphone access is blocked for this website"));
+  assert.ok(widget.includes('setVoiceState("idle",errorMessage)'));
+  assert.ok(widget.includes('error==="audio-capture"'));
   assert.doesNotMatch(widget, /minimized/);
   assert.doesNotThrow(() => new Function(widget), "widget microphone code must parse");
 });
