@@ -6392,6 +6392,11 @@ html, body, #app-root {
 .aichat-website-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: none; }
 .aichat-website-minimize { white-space: nowrap; padding-inline: 10px; }
 .aichat-website-card-details[hidden] { display: none !important; }
+.aichat-website-meta { display: block; margin-top: 8px; line-height: 1.5; overflow-wrap: anywhere; }
+.aichat-website-scan-feedback { margin: 8px 0 2px !important; font-size: 11px !important; line-height: 1.5; }
+.aichat-website-scan-feedback.is-info { color: #aab8c8 !important; }
+.aichat-website-scan-feedback.is-success { color: #86efac !important; }
+.aichat-website-scan-feedback.is-error { color: #fca5a5 !important; }
 .aichat-website-card.is-minimized { padding-bottom: 10px; }
 .aichat-website-card p { margin: 12px 0 0; color: #8295aa; font-size: 12px; line-height: 1.6; }
 .aichat-handoff-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 0; border: 0; border-top: 1px solid rgba(255,255,255,.07); background: transparent; color: inherit; text-align: left; cursor: pointer; }
@@ -8287,7 +8292,7 @@ html, body, #app-root {
 }
 .aichat-whatsapp-number-row {
   display: grid;
-  grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+  grid-template-columns: minmax(108px, .92fr) minmax(0, 1.08fr);
   gap: 9px;
   min-width: 0;
 }
@@ -8331,5 +8336,8 @@ html, body, #app-root {
   .aichat-website-heading-main strong { max-width: 175px; font-size: 12px; }
   .aichat-website-heading-main .aichat-status-pill { padding: 3px 6px; font-size: 9px; }
   .aichat-social-form { padding: 11px; }
-  .aichat-whatsapp-number-row { grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); gap: 7px; }
+  .aichat-whatsapp-number-row { grid-template-columns: minmax(100px, .82fr) minmax(0, 1.18fr); gap: 7px; }
 }
+
+.aichat-composer-audio-player { display: block; width: 100%; max-width: 100%; height: 42px; }
+.aichat-composer-attachment-card.is-audio .aichat-composer-attachment-square { display: flex; align-items: center; justify-content: center; padding: 6px; }

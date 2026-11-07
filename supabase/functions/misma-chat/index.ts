@@ -449,7 +449,10 @@ function validateAttachmentList(value: unknown): AttachmentInput[] {
     if (!path || path.includes("..") || !name || !Number.isFinite(size) || size < 0 || size > 25 * 1024 * 1024) {
       throw new Error("Each attachment must be valid and no larger than 25 MB.");
     }
-    if (!["image", "video", "video-frame", "file"].includes(kind) || mimeType.startsWith("audio/")) {
+    const isAudio = kind === "audio" && mimeType.startsWith("audio/");
+    if (!["image", "video", "video-frame", "audio", "file"].includes(kind) ||
+        (mimeType.startsWith("audio/") && !isAudio) ||
+        (kind === "audio" && !mimeType.startsWith("audio/"))) {
       throw new Error("Unsupported attachment type.");
     }
     return { path, name, mimeType, size, kind };
@@ -539,7 +542,7 @@ async function prepareAttachments(
   attachments: AttachmentInput[],
   expectedPrefix: string,
   analyzeContent = true,
-): Promise<{ stored: StoredAttachment[]; images: PreparedImage[]; pdfs: PreparedPdf[]; extractedText: string }> {
+): Promise<{ stored: StoredAttachment[]; images: PreparedImage[]; pdfs: PreparedPdf[]; extractedText: string; transcribedAudio: string }> {
   const prepareOne = async (attachment: AttachmentInput) => {
     if (!attachment.path.startsWith(expectedPrefix)) throw new Error("Attachment path is outside your workspace.");
     const { data: signed, error: signedError } = await db.storage
@@ -552,6 +555,7 @@ async function prepareAttachments(
       images: [] as PreparedImage[],
       pdfs: [] as PreparedPdf[],
       extractedText: "",
+      transcribedAudio: "",
     };
     // Keep the uploaded file preview and skip analysis for messages with no instruction.
     if (!analyzeContent) return item;
@@ -563,6 +567,41 @@ async function prepareAttachments(
       attachment.mimeType.startsWith("text/") ||
       /\.(txt|md|csv|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i.test(lowerName);
 
+    if (attachment.kind === "audio" || attachment.mimeType.startsWith("audio/")) {
+      if (attachment.size > 24 * 1024 * 1024) throw new Error("Voice notes must be 24 MB or smaller to transcribe.");
+      const groqKey = Deno.env.get("GROQ_API_KEY");
+      if (!groqKey) throw new Error("Voice-note transcription is not configured. Add GROQ_API_KEY to Misma's chat function secrets.");
+      const { data: audioBlob, error: audioError } = await db.storage.from("misma-media").download(attachment.path);
+      if (audioError || !audioBlob) throw new Error("Could not read the uploaded voice note.");
+      const audioMime = attachment.mimeType.startsWith("audio/")
+        ? attachment.mimeType
+        : audioBlob.type.startsWith("audio/") ? audioBlob.type : "audio/webm";
+      const audioFile = new File([audioBlob], attachment.name || "misma-voice-note.webm", { type: audioMime });
+      const form = new FormData();
+      form.set("file", audioFile);
+      form.set("model", "whisper-large-v3-turbo");
+      form.set("response_format", "json");
+      let transcriptionResponse: Response;
+      try {
+        transcriptionResponse = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + groqKey },
+          body: form,
+          signal: AbortSignal.timeout(45_000),
+        });
+      } catch (error) {
+        const timedOut = error instanceof Error && /timeout|timed out|signal timed out/i.test(error.message);
+        throw new Error(timedOut ? "Voice-note transcription timed out. Please retry the recording." : "Could not connect to voice-note transcription. Please retry.");
+      }
+      const transcriptionPayload: unknown = await transcriptionResponse.json().catch(() => null);
+      if (!transcriptionResponse.ok || !isRecord(transcriptionPayload) || typeof transcriptionPayload.text !== "string") {
+        console.warn("[misma-chat] Voice-note transcription failed.", { status: transcriptionResponse.status });
+        throw new Error("Misma could not transcribe this voice note. Try recording it again or send a text message.");
+      }
+      item.transcribedAudio = transcriptionPayload.text.trim().slice(0, 20_000);
+      if (!item.transcribedAudio) throw new Error("No speech was detected in this voice note.");
+      return item;
+    }
     if (attachment.kind === "image" || attachment.kind === "video-frame" || attachment.mimeType.startsWith("image/")) {
       if (attachment.size > 8 * 1024 * 1024) throw new Error("Images must be 8 MB or smaller after upload preparation.");
       const { data: blob, error } = await db.storage.from("misma-media").download(attachment.path);
@@ -612,6 +651,7 @@ async function prepareAttachments(
     images: items.flatMap((item) => item.images),
     pdfs: items.flatMap((item) => item.pdfs),
     extractedText: items.map((item) => item.extractedText).filter(Boolean).join("\n\n"),
+    transcribedAudio: items.map((item) => item.transcribedAudio).filter(Boolean).join("\n\n").slice(0, 20_000),
   };
 }
 async function createConversationIfNeeded(
@@ -864,7 +904,7 @@ Deno.serve(async (request) => {
   }
   let action = typeof input.action === "string" ? input.action : "chat";
   let message = typeof input.message === "string" ? input.message.trim() : "";
-  const userVisibleMessage = message;
+  let userVisibleMessage = message;
   const privacySettings = isRecord(input.privacySettings) ? input.privacySettings : {};
   const useConversationHistory = privacySettings.useConversationHistory !== false;
   const aiSettings = isRecord(input.aiSettings) ? input.aiSettings : {};
@@ -1121,7 +1161,7 @@ Deno.serve(async (request) => {
       const savedAttachments = Array.isArray(sourcePrompt.attachments)
         ? sourcePrompt.attachments.filter((item: unknown) =>
             isRecord(item) && typeof item.path === "string" &&
-            ["image", "video", "video-frame", "file"].includes(String(item.kind))
+            ["image", "video", "video-frame", "audio", "file"].includes(String(item.kind))
           )
         : [];
       try {
@@ -1139,10 +1179,11 @@ Deno.serve(async (request) => {
       }
     }
     const attachmentPrefix = `${workspaceId}/${userData.user.id}/`;
-    let prepared = { stored: [] as StoredAttachment[], images: [] as PreparedImage[], pdfs: [] as PreparedPdf[], extractedText: "" };
+    let prepared = { stored: [] as StoredAttachment[], images: [] as PreparedImage[], pdfs: [] as PreparedPdf[], extractedText: "", transcribedAudio: "" };
     if (requestedAttachments.length) {
       try {
-        const shouldAnalyzeAttachments = Boolean(message.trim()) ||
+        const containsAudio = requestedAttachments.some((attachment) => attachment.kind === "audio" || attachment.mimeType.startsWith("audio/"));
+        const shouldAnalyzeAttachments = Boolean(message.trim()) || containsAudio ||
           action === "review-video-frames" || action === "download-video-for-review";
         prepared = await prepareAttachments(db, requestedAttachments, attachmentPrefix, shouldAnalyzeAttachments);
       } catch (error) {
@@ -1725,8 +1766,15 @@ Deno.serve(async (request) => {
       })),
       orderContextNote: "Recent orders are limited to the five latest records and are not an all-time total.",
     };
+    if (prepared.transcribedAudio) {
+      message = message.trim()
+        ? message.trim() + "\n\nVoice note transcription:\n" + prepared.transcribedAudio
+        : prepared.transcribedAudio;
+      userVisibleMessage = message;
+    }
     if (!message && requestedAttachments.length) {
       message = "The user attached files without a written request. Acknowledge the attachment and ask what they would like you to do with it. Do not assume they want a summary, extraction, or analysis.";
+      userVisibleMessage = message;
     }
     if (prepared.extractedText) {
       const extractionInstruction = userVisibleMessage

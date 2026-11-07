@@ -819,7 +819,7 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
   const vite = await read("../vite.config.ts");
 
   assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
-  assert.ok(!dashboard.includes("misma-widget.js?v="));
+  assert.ok(dashboard.includes("misma-widget.js?v=20261107-widget-channels-1"));
   assert.ok(dashboard.includes("data-site-key="));
   assert.ok(widgetRoute.includes('createFileRoute("/assets/misma-widget.js")'));
   assert.ok(widgetRoute.includes('import widgetRuntime from "../../assets/misma-widget-runtime.js?raw"'));
@@ -899,7 +899,8 @@ test("connected website settings and social widget controls stay accessible on m
   const css = await read("../src/styles.css");
   assert.match(dashboard, /className="aichat-website-expand"/);
   assert.match(dashboard, /aria-expanded=\{!minimizedWebsiteIds\.includes\(site\.id\)\}/);
-  assert.match(dashboard, /Add websites/);
+  assert.match(dashboard, /Add channels/);
+  assert.match(dashboard, /Last activity:/);
   assert.match(runtime, /class='social-link whatsapp-link'/);
   assert.match(runtime, /class='social-link instagram-link'/);
   assert.match(runtime, /target='_blank' rel='noopener noreferrer'/);
@@ -930,4 +931,42 @@ test("website visitor history reuses the existing conversation by site and visit
   assert.match(resolver, /\.eq\("website_connection_id", site\.id\)[\s\S]*?\.eq\("visitor_session_id", sessionId\)/);
   assert.match(resolver, /byVisitorSession\.data\) return \{ conversation: byVisitorSession\.data, visitorId: sessionId \}/);
   assert.match(resolver, /Could not look up the visitor's existing conversation/);
+});
+
+test("closing a website widget deletes only visitor sessions with no human handoff", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  const migration = await read("../supabase/migrations/20261107170000_widget_close_ephemeral_retention.sql");
+  assert.match(runtime, /call\(\{action:"close",conversationId:closingConversation,visitorId:closingVisitor\}\)/);
+  assert.match(edge, /input\.action === "close"/);
+  assert.match(edge, /delete_website_visitor_conversation_if_ephemeral/);
+  assert.match(migration, /public\.human_requests/);
+  assert.match(migration, /public\.human_handoff_requests/);
+  assert.match(migration, /conversation\.channel = 'Website'/);
+  assert.match(migration, /GRANT EXECUTE[\s\S]*TO service_role/);
+});
+
+test("website scanning requests structured JSON, validates extraction and retries once", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(edge, /responseMimeType: "application\/json"/);
+  assert.match(edge, /response_format:[\s\S]*json_schema/);
+  assert.match(edge, /WEBSITE_EXTRACTION_SCHEMA\.safeParse/);
+  assert.match(edge, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
+  assert.match(edge, /rawPreview: answer\.slice\(0, 1600\)/);
+  assert.match(edge, /AbortSignal\.timeout\(100_000\)/);
+  assert.match(dashboard, /window\.setTimeout\(\(\) => controller\.abort\(\), 112_000\)/);
+  assert.match(dashboard, /websiteScanFeedback\[site\.id\]/);
+});
+
+test("voice-note webm files are audio and use Groq transcription instead of video keyframes", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edge = await read("../supabase/functions/misma-chat/index.ts");
+  assert.match(dashboard, /webm: \/(?:misma-)?voice-note-/);
+  assert.match(dashboard, /uploadOne\(normalizedAudio, "audio"\)/);
+  assert.match(dashboard, /isAudio && previewUrl/);
+  assert.match(edge, /"audio", "file"/);
+  assert.match(edge, /api\.groq\.com\/openai\/v1\/audio\/transcriptions/);
+  assert.match(edge, /whisper-large-v3-turbo/);
+  assert.match(edge, /transcribedAudio/);
 });
