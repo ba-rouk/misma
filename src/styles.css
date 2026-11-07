@@ -7312,9 +7312,11 @@ html, body, #app-root {
   position: absolute;
   inset: 0;
   z-index: 2;
-  display: grid;
-  place-items: center;
-  padding: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 7px;
+  box-sizing: border-box;
   border: 0;
   border-radius: inherit;
   background: rgba(0,0,0,.35);
@@ -7439,15 +7441,16 @@ html, body, #app-root {
 .aichat-message-row.is-user .aichat-message-content { max-width: min(100%, 560px); }
 .aichat-message-content .aichat-bubble { margin-top: 0; }
 .aichat-message-attachments.is-user-attachments {
-  display: grid;
-  grid-template-columns: repeat(3, 112px);
-  align-items: start;
-  justify-content: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
   gap: 8px;
   width: min(100%, 352px);
   max-width: 352px;
   margin: 0 0 0 auto;
 }
+.aichat-message-row.is-user .aichat-message-content { gap: 6px; }
 .aichat-message-attachments.is-user-attachments .aichat-generated-media-wrap { width: 112px; min-width: 112px; margin: 0; }
 .aichat-message-attachments.is-user-attachments .aichat-attachment-image-link {
   display: block;
@@ -7537,10 +7540,7 @@ html, body, #app-root {
 @media (max-width: 600px) {
   .aichat-composer-attachment-card { flex-basis: 80px; width: 80px; min-width: 80px; }
   .aichat-composer-attachment-card.is-file { flex-basis: 170px; width: 170px; min-width: 170px; }
-  .aichat-message-attachments.is-user-attachments {
-    grid-template-columns: repeat(3, minmax(0, 112px));
-    width: min(100%, 352px);
-  }
+  .aichat-message-attachments.is-user-attachments { width: min(100%, 352px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .aichat-composer-upload-progress { transition: none; }
