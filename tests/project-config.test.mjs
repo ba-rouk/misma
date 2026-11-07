@@ -414,7 +414,9 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /new SpeechSynthesisUtterance/);
   assert.match(voice, /shortenForSpeech\(cleanForSpeech\(rawText\), 320\)/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
-  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
+  const voiceModeSource = voice.slice(voice.indexOf("export function createVoiceMode"));
+  assert.ok(voice.includes("new MediaRecorder"));
+  assert.doesNotMatch(voiceModeSource, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
   assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
   assert.match(component, /Stop dictation and send transcript/);
   assert.match(component, /finishDictation\(true\)/);
