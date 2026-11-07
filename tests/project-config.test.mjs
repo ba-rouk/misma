@@ -858,16 +858,18 @@ test("dashboard notification feed shows named human requests and counts unread n
 test("widget microphone and speech talk show an explicit permission dialog and use dashboard female voice selection", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.ok(widget.includes("class='mic-permission-backdrop'"));
-  assert.ok(widget.includes("Allow microphone access?"));
-  assert.ok(widget.includes('micPermissionContinue.addEventListener("click",requestMicPermissionAndStart)'));
+  assert.ok(widget.includes("<strong>misma.onrender.com</strong> wants to use your microphone"));
+  assert.ok(widget.includes('micPermissionWhile.addEventListener("click",requestMicPermissionAndStart)'));
+  assert.ok(widget.includes('micPermissionOnce.addEventListener("click",requestMicPermissionAndStart)'));
+  assert.ok(widget.includes('micPermissionNever.addEventListener("click"'));
   assert.ok(widget.includes("navigator.mediaDevices.getUserMedia({audio:true})"));
-  assert.ok(widget.includes('showMicPermissionPrompt("dictation")'));
-  assert.ok(widget.includes('showMicPermissionPrompt("speech")'));
+  assert.ok(widget.includes('requestMicForAction("dictation")'));
+  assert.ok(widget.includes('requestMicForAction("speech")'));
   assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
   assert.ok(widget.includes("function getFemaleVoice()"));
   assert.ok(widget.includes("return female[1]||female[0]"));
   assert.ok(widget.includes("synth.resume()"));
-  assert.ok(widget.includes("Microphone access is blocked for this website"));
+  assert.ok(widget.includes("Microphone is blocked. Tap the lock icon next to the address bar"));
   assert.ok(widget.includes('setVoiceState("idle",errorMessage)'));
   assert.ok(widget.includes('error==="audio-capture"'));
   assert.doesNotMatch(widget, /minimized/);
