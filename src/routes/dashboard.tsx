@@ -594,7 +594,7 @@ function ComposerAttachmentPreview({
     <div className={className} title={file.name} aria-busy={isUploading}>
       <div className={"aichat-composer-attachment-square" + (!isImage && !isVideo ? " is-file" : "")}>
         {isImage ? (
-          imagePreview ? (
+          imagePreview && !imagePreviewError ? (
             <img
               className="aichat-composer-attachment-content-image"
               src={imagePreview}

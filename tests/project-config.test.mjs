@@ -574,6 +574,7 @@ test("composer image previews decode selected files and show a centered upload i
   assert.match(dashboard, /createImageBitmap\(file\)/);
   assert.match(dashboard, /readComposerFileAsDataUrl\(file\)/);
   assert.match(dashboard, /aichat-composer-attachment-content-image/);
+  assert.match(dashboard, /imagePreview && !imagePreviewError/);
   assert.match(dashboard, /onError=\{\(\) => setImagePreviewError\(true\)\}/);
   assert.match(styles, /\.aichat-composer-upload-state\.is-uploading\s*\{[^}]*place-items:\s*center/);
   assert.match(styles, /\.aichat-composer-upload-ring\s*\{[^}]*width:\s*30px/);
