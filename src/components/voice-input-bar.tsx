@@ -27,6 +27,7 @@ type VoiceInputBarProps = {
   onPrimaryAction: () => void;
   onTranscript: (text: string) => void;
   onDictationDone?: () => void;
+  onAudioRecordingReady?: (file: File) => void;
   onSend: (
     text: string,
     signal: AbortSignal,
@@ -78,6 +79,7 @@ export function VoiceInputBar({
   onPrimaryAction,
   onTranscript,
   onDictationDone,
+  onAudioRecordingReady,
   onSend,
 }: VoiceInputBarProps) {
   const [dictationState, setDictationState] = useState<DictationState>("idle");
@@ -91,8 +93,8 @@ export function VoiceInputBar({
 
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
-  const callbacksRef = useRef({ onTranscript, onDictationDone, onSend, onPrimaryAction });
-  callbacksRef.current = { onTranscript, onDictationDone, onSend, onPrimaryAction };
+  const callbacksRef = useRef({ onTranscript, onDictationDone, onAudioRecordingReady, onSend, onPrimaryAction });
+  callbacksRef.current = { onTranscript, onDictationDone, onAudioRecordingReady, onSend, onPrimaryAction };
 
   const fieldRef = useRef<HTMLDivElement | null>(null);
   const baseDraftRef = useRef("");
@@ -127,6 +129,7 @@ export function VoiceInputBar({
       onText: (transcript) => {
         callbacksRef.current.onTranscript(appendTranscript(baseDraftRef.current, transcript));
       },
+      onAudioRecordingReady: (file) => callbacksRef.current.onAudioRecordingReady?.(file),
       onDone: (transcript) => {
         const nextValue = appendTranscript(baseDraftRef.current, transcript);
         callbacksRef.current.onTranscript(nextValue);
@@ -383,8 +386,8 @@ export function VoiceInputBar({
                 <button
                   type="button"
                   className="misma-voice-dictation-btn is-finish"
-                  aria-label="Finish dictation and insert transcript"
-                  title="Finish dictation"
+                  aria-label="Stop recording and keep the voice note"
+                  title="Stop recording"
                   onClick={() => finishDictation(false)}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
@@ -392,8 +395,8 @@ export function VoiceInputBar({
                 <button
                   type="button"
                   className="misma-voice-dictation-btn is-send"
-                  aria-label="Stop dictation and send transcript"
-                  title="Stop and send"
+                  aria-label="Stop recording"
+                  title="Stop recording"
                   disabled={sendDisabled}
                   onClick={() => finishDictation(true)}
                 >
