@@ -55,7 +55,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
         db.from("website_connections").select("id,name,website_url,domain,public_key,widget_public_key,widget_deleted_at,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: false }),
         db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
-        db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+        db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("channel_connections").select("id,channel,provider,display_name,external_id,phone_number,status,created_at").eq("workspace_id", workspaceId),
         db.from("workspace_library_files").select("id,storage_path,file_name,mime_type,file_size,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
@@ -248,7 +248,7 @@ export const getWorkspaceLiveUpdates = createServerFn({ method: "POST" })
         db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)")
           .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at")
-          .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
+          .eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
         db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction")
           .eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
         db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name")
