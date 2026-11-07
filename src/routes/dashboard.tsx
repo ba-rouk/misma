@@ -635,7 +635,7 @@ type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
 
 function getVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
   const female = voices.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
-  const male = voices.filter((voice) => /male|man|boy|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
+  const male = voices.filter((voice) => /(?:^|[\\s_-])(male|man|boy)(?:$|[\\s_-])|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
   const other = voices.filter((voice) => !female.includes(voice) && !male.includes(voice));
   const pool = preset === "girl" || preset === "woman" ? female : male;
   const index = preset === "girl" || preset === "boy" ? 0 : 1;
