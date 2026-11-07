@@ -23,6 +23,7 @@ import {
   markVisitorMessagesRead,
   markHumanRequestNotificationRead,
   createWebsiteConnection,
+  saveWebsiteSocialLinks,
   shareWebsiteWidgetAcrossWorkspace,
   deleteWebsiteConnection,
   createProductService,
@@ -140,6 +141,310 @@ function SettingsToggle({
       </span>
       <span className={`aichat-setting-switch${checked ? " is-on" : ""}`} aria-hidden="true"><span /></span>
     </button>
+  );
+}
+
+
+const WEBSITE_PHONE_COUNTRY_CODES = [
+  { name: "Rwanda", code: "250", flag: "🇷🇼" },
+  { name: "United States", code: "1", flag: "🇺🇸" },
+  { name: "Canada", code: "1", flag: "🇨🇦" },
+  { name: "United Kingdom", code: "44", flag: "🇬🇧" },
+  { name: "France", code: "33", flag: "🇫🇷" },
+  { name: "Germany", code: "49", flag: "🇩🇪" },
+  { name: "Belgium", code: "32", flag: "🇧🇪" },
+  { name: "Netherlands", code: "31", flag: "🇳🇱" },
+  { name: "Switzerland", code: "41", flag: "🇨🇭" },
+  { name: "Ireland", code: "353", flag: "🇮🇪" },
+  { name: "Italy", code: "39", flag: "🇮🇹" },
+  { name: "Spain", code: "34", flag: "🇪🇸" },
+  { name: "Portugal", code: "351", flag: "🇵🇹" },
+  { name: "Sweden", code: "46", flag: "🇸🇪" },
+  { name: "Norway", code: "47", flag: "🇳🇴" },
+  { name: "Denmark", code: "45", flag: "🇩🇰" },
+  { name: "Poland", code: "48", flag: "🇵🇱" },
+  { name: "Turkey", code: "90", flag: "🇹🇷" },
+  { name: "United Arab Emirates", code: "971", flag: "🇦🇪" },
+  { name: "Saudi Arabia", code: "966", flag: "🇸🇦" },
+  { name: "Qatar", code: "974", flag: "🇶🇦" },
+  { name: "India", code: "91", flag: "🇮🇳" },
+  { name: "Pakistan", code: "92", flag: "🇵🇰" },
+  { name: "Bangladesh", code: "880", flag: "🇧🇩" },
+  { name: "China", code: "86", flag: "🇨🇳" },
+  { name: "Japan", code: "81", flag: "🇯🇵" },
+  { name: "South Korea", code: "82", flag: "🇰🇷" },
+  { name: "Singapore", code: "65", flag: "🇸🇬" },
+  { name: "Malaysia", code: "60", flag: "🇲🇾" },
+  { name: "Indonesia", code: "62", flag: "🇮🇩" },
+  { name: "Philippines", code: "63", flag: "🇵🇭" },
+  { name: "Thailand", code: "66", flag: "🇹🇭" },
+  { name: "Vietnam", code: "84", flag: "🇻🇳" },
+  { name: "Australia", code: "61", flag: "🇦🇺" },
+  { name: "New Zealand", code: "64", flag: "🇳🇿" },
+  { name: "South Africa", code: "27", flag: "🇿🇦" },
+  { name: "Nigeria", code: "234", flag: "🇳🇬" },
+  { name: "Ghana", code: "233", flag: "🇬🇭" },
+  { name: "Kenya", code: "254", flag: "🇰🇪" },
+  { name: "Uganda", code: "256", flag: "🇺🇬" },
+  { name: "Tanzania", code: "255", flag: "🇹🇿" },
+  { name: "Burundi", code: "257", flag: "🇧🇮" },
+  { name: "Ethiopia", code: "251", flag: "🇪🇹" },
+  { name: "Egypt", code: "20", flag: "🇪🇬" },
+  { name: "Morocco", code: "212", flag: "🇲🇦" },
+  { name: "Brazil", code: "55", flag: "🇧🇷" },
+  { name: "Mexico", code: "52", flag: "🇲🇽" },
+  { name: "Argentina", code: "54", flag: "🇦🇷" },
+  { name: "Colombia", code: "57", flag: "🇨🇴" },
+];
+
+function normalizeInstagramProfile(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  let handle = "";
+  if (trimmed.startsWith("@")) {
+    handle = trimmed.slice(1);
+  } else {
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed.includes("://") ? trimmed : "https://" + trimmed);
+    } catch {
+      throw new Error("Enter an @handle or a valid instagram.com profile URL.");
+    }
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if ((parsed.protocol !== "https:" && parsed.protocol !== "http:") || host !== "instagram.com") {
+      throw new Error("Only instagram.com profile URLs are accepted.");
+    }
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length !== 1) throw new Error("Enter a single Instagram profile URL, not a post or reel link.");
+    handle = segments[0].replace(/^@/, "");
+  }
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(handle)) {
+    throw new Error("Enter a valid Instagram username (letters, numbers, periods, or underscores).");
+  }
+  return "https://instagram.com/" + handle;
+}
+
+type WebsiteSocialDraft = {
+  instagramUrl: string;
+  whatsappCountryCode: string;
+  whatsappNumber: string;
+  whatsappMessage: string;
+};
+
+function WebsiteSocialSettings({
+  site,
+  token,
+  onSaved,
+}: {
+  site: any;
+  token: string;
+  onSaved: (website: any) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [countrySearch, setCountrySearch] = useState("");
+  const [draft, setDraft] = useState<WebsiteSocialDraft>({
+    instagramUrl: site.instagram_url || "",
+    whatsappCountryCode: site.whatsapp_country_code || "250",
+    whatsappNumber: site.whatsapp_number || "",
+    whatsappMessage: site.whatsapp_message || "",
+  });
+
+  const filteredCountries = WEBSITE_PHONE_COUNTRY_CODES.filter((country) => {
+    const query = countrySearch.trim().toLowerCase().replace(/^\+/, "");
+    return !query || country.name.toLowerCase().includes(query) || country.code.includes(query);
+  });
+  const selectedCountry = WEBSITE_PHONE_COUNTRY_CODES.find((country) => country.code === draft.whatsappCountryCode);
+
+  const currentDraft = (): WebsiteSocialDraft => ({
+    instagramUrl: site.instagram_url || "",
+    whatsappCountryCode: site.whatsapp_country_code || "250",
+    whatsappNumber: site.whatsapp_number || "",
+    whatsappMessage: site.whatsapp_message || "",
+  });
+
+  async function saveDraft(nextDraft: WebsiteSocialDraft) {
+    setError("");
+    setStatus("");
+    let instagramUrl: string | null;
+    try {
+      instagramUrl = normalizeInstagramProfile(nextDraft.instagramUrl);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Enter a valid Instagram profile.");
+      return;
+    }
+
+    const digitsOnly = nextDraft.whatsappNumber.replace(/\D/g, "");
+    const subscriberNumber = digitsOnly.replace(/^0+/, "");
+    const countryCode = nextDraft.whatsappCountryCode.replace(/\D/g, "");
+    let whatsappCountryCode: string | null = null;
+    let whatsappNumber: string | null = null;
+    let whatsappMessage: string | null = null;
+    if (subscriberNumber) {
+      const totalDigits = countryCode.length + subscriberNumber.length;
+      if (!countryCode || countryCode.length > 4 || totalDigits < 7 || totalDigits > 15) {
+        setError("Enter a valid WhatsApp number. The country code and number must total 7–15 digits.");
+        return;
+      }
+      whatsappCountryCode = countryCode;
+      whatsappNumber = subscriberNumber;
+      whatsappMessage = nextDraft.whatsappMessage.trim();
+      if (!whatsappMessage) {
+        setError("A welcome message is required when a WhatsApp number is provided.");
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const result = await saveWebsiteSocialLinks({
+        data: {
+          token,
+          websiteId: site.id,
+          instagramUrl,
+          whatsappCountryCode,
+          whatsappNumber,
+          whatsappMessage,
+        },
+      });
+      onSaved(result.website);
+      setDraft({
+        instagramUrl: result.website.instagram_url || "",
+        whatsappCountryCode: result.website.whatsapp_country_code || "250",
+        whatsappNumber: result.website.whatsapp_number || "",
+        whatsappMessage: result.website.whatsapp_message || "",
+      });
+      setStatus("Saved. The widget will show the updated links on the next website refresh.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save the website links.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeInstagram() {
+    await saveDraft({ ...draft, instagramUrl: "" });
+  }
+
+  async function removeWhatsApp() {
+    await saveDraft({
+      ...draft,
+      whatsappCountryCode: "250",
+      whatsappNumber: "",
+      whatsappMessage: "",
+    });
+  }
+
+  return (
+    <div className="aichat-website-social-settings">
+      <button
+        type="button"
+        className="aichat-social-dropdown"
+        aria-expanded={open}
+        aria-label={open ? "Close Add websites settings" : "Open Add websites settings"}
+        onClick={() => {
+          if (!open) {
+            setDraft(currentDraft());
+            setError("");
+            setStatus("");
+          }
+          setOpen((current) => !current);
+        }}
+      >
+        <span>Add websites</span>
+        <svg className={open ? "is-open" : ""} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+
+      {open && (
+        <div className="aichat-social-form">
+          <section className="aichat-social-channel">
+            <div className="aichat-social-channel-heading">
+              <strong>Instagram</strong>
+              <span>{site.instagram_url ? "Connected" : "Optional"}</span>
+            </div>
+            <label>
+              Instagram URL or @handle
+              <input
+                value={draft.instagramUrl}
+                type="text"
+                placeholder="https://instagram.com/yourbusiness or @yourbusiness"
+                autoComplete="url"
+                onChange={(event) => setDraft((current) => ({ ...current, instagramUrl: event.target.value }))}
+              />
+            </label>
+            {site.instagram_url && (
+              <button type="button" className="aichat-social-remove" disabled={saving} onClick={() => void removeInstagram()}>
+                Remove Instagram
+              </button>
+            )}
+          </section>
+
+          <section className="aichat-social-channel">
+            <div className="aichat-social-channel-heading">
+              <strong>WhatsApp</strong>
+              <span>{site.whatsapp_number ? "Connected" : "Optional"}</span>
+            </div>
+            <label>
+              Search country or dial code
+              <input
+                type="search"
+                value={countrySearch}
+                placeholder="Search country or +250"
+                onChange={(event) => setCountrySearch(event.target.value)}
+              />
+            </label>
+            <div className="aichat-whatsapp-number-row">
+              <label>
+                Country code
+                <select
+                  value={draft.whatsappCountryCode}
+                  onChange={(event) => setDraft((current) => ({ ...current, whatsappCountryCode: event.target.value }))}
+                >
+                  {selectedCountry && !filteredCountries.some((country) => country.name === selectedCountry.name) && (
+                    <option value={selectedCountry.code}>{selectedCountry.flag} {selectedCountry.name} (+{selectedCountry.code})</option>
+                  )}
+                  {filteredCountries.map((country) => (
+                    <option key={country.name} value={country.code}>{country.flag} {country.name} (+{country.code})</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Phone number
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel-national"
+                  value={draft.whatsappNumber}
+                  placeholder="e.g. 788123456"
+                  onChange={(event) => setDraft((current) => ({ ...current, whatsappNumber: event.target.value }))}
+                />
+              </label>
+            </div>
+            <label>
+              Welcome message
+              <textarea
+                rows={3}
+                value={draft.whatsappMessage}
+                placeholder="Hello! How can we help you today?"
+                onChange={(event) => setDraft((current) => ({ ...current, whatsappMessage: event.target.value }))}
+              />
+            </label>
+            {site.whatsapp_number && (
+              <button type="button" className="aichat-social-remove" disabled={saving} onClick={() => void removeWhatsApp()}>
+                Remove WhatsApp
+              </button>
+            )}
+          </section>
+          {error && <p className="aichat-social-error" role="alert">{error}</p>}
+          {status && <p className="aichat-social-success" role="status">{status}</p>}
+          <button type="button" className="aichat-social-save" disabled={saving} onClick={() => void saveDraft(draft)}>
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -5126,9 +5431,32 @@ function Dashboard() {
             </div>
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
               {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className={`aichat-website-card${minimizedWebsiteIds.includes(site.id) ? " is-minimized" : ""}`} key={site.id}>
-                <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><div className="aichat-website-heading-actions"><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span><button type="button" className="aichat-action-btn secondary aichat-website-minimize" aria-expanded={!minimizedWebsiteIds.includes(site.id)} aria-label={minimizedWebsiteIds.includes(site.id) ? "Expand website details" : "Minimize website details"} onClick={() => setMinimizedWebsiteIds((current) => current.includes(site.id) ? current.filter((id) => id !== site.id) : [...current, site.id])}>{minimizedWebsiteIds.includes(site.id) ? "Expand" : "Minimize"}</button></div></div>
+                <div className="aichat-website-row-heading">
+                  <div className="aichat-website-heading-copy">
+                    <div className="aichat-website-heading-main">
+                      <strong title={site.name || site.domain}>{site.name || site.domain}</strong>
+                      <span className={"aichat-status-pill is-" + site.status}>{site.status}</span>
+                    </div>
+                    <small title={site.website_url}>{site.website_url}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="aichat-website-expand"
+                    aria-expanded={!minimizedWebsiteIds.includes(site.id)}
+                    aria-label={minimizedWebsiteIds.includes(site.id) ? "Expand website details" : "Collapse website details"}
+                    title={minimizedWebsiteIds.includes(site.id) ? "Expand website details" : "Collapse website details"}
+                    onClick={() => setMinimizedWebsiteIds((current) => current.includes(site.id) ? current.filter((id) => id !== site.id) : [...current, site.id])}
+                  >
+                    <svg className={minimizedWebsiteIds.includes(site.id) ? "" : "is-expanded"} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                  </button>
+                </div>
                 <div className="aichat-website-card-details" hidden={minimizedWebsiteIds.includes(site.id)}>
                 <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
+                <WebsiteSocialSettings
+                  site={site}
+                  token={token || ""}
+                  onSaved={(website) => setConnectedWebsites((items) => items.map((item) => item.id === website.id ? { ...item, ...website } : item))}
+                />
                 <label className="aichat-widget-script-label">General website installation script</label>
                 <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
