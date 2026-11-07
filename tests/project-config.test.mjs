@@ -712,6 +712,7 @@ test("embedded chat widget has no header minimize control and still supports res
   const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.doesNotMatch(widget, /class='minimize'/);
   assert.doesNotMatch(widget, /minimizeButton\.addEventListener/);
+  assert.doesNotMatch(widget, /minimized/);
   assert.match(widget, /class='resize-handle'/);
   assert.match(widget, /pointermove/);
   assert.match(widget, /localStorage\.setItem\(sizeStore/);
@@ -775,6 +776,7 @@ test("website human handoff always creates an owner notification with the visito
   const handoff = edge.slice(edge.indexOf("async function saveHumanRequest"), edge.indexOf("\nfunction isSafeWebsiteUrl"));
   assert.match(handoff, /workspace_id: site\.workspace_id/);
   assert.match(handoff, /notification_type: "human_request"/);
+  assert.match(handoff, /title: name/);
   assert.match(handoff, /human_request_id: requestId/);
   assert.match(handoff, /Message: " \+ reason/);
   assert.match(handoff, /Email: " \+ email/);
@@ -785,6 +787,9 @@ test("website human handoff always creates an owner notification with the visito
   assert.match(edge, /Action failed:", action, message/);
   assert.match(edge, /action === "human-request" \? 500/);
   assert.match(widget, /call\(Object\.assign\(\{action:"human-request"\},data\)\)/);
+  assert.match(edge, /confirmationText = "Your request to speak with a person has been sent/);
+  assert.match(edge, /role: "ai"/);
+  assert.match(widget, /Human request sent/);
   assert.match(dashboard, /refreshVisitorNotifications\(\); setActiveTab\("notifications"\)/);
   assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
 });
@@ -814,17 +819,36 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
   assert.doesNotThrow(() => new Function(widget), "the dynamically served widget source must parse");
 });
 
-test("dashboard notification feed and badge count only pending human handoffs", async () => {
+test("dashboard notification feed shows named human requests and counts unread notifications", async () => {
   const api = await read("../src/lib/api/misma.functions.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 2);
-  assert.ok(dashboard.includes('const pendingHumanRequestCount = humanHandoffs.filter((request) => request.status === "pending").length;'));
-  assert.ok(dashboard.includes("Human handoff requests ({allNotifications.length})"));
-  assert.ok(dashboard.includes("Only visitors who asked to speak with a person appear here"));
-  const start = dashboard.indexOf('{activeTab === "notifications" && (');
-  const end = dashboard.indexOf("\n\n        {deleteChatTarget && (", start);
-  assert.ok(start >= 0 && end > start);
-  assert.ok(!dashboard.slice(start, end).includes("unreadVisitorMessages.map"));
+  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 3);
+  assert.ok(api.includes("export const markHumanRequestNotificationRead"));
+  assert.ok(dashboard.includes('const unreadHumanRequestNotificationCount = allNotifications.filter((notification) => notification.is_read !== true).length;'));
+  assert.ok(dashboard.includes("markHumanRequestNotificationRead({ data: { token, notificationId } })"));
+  assert.ok(dashboard.includes("selectedHumanRequestNotificationId"));
+  assert.ok(dashboard.includes("<strong>{visitorName}</strong>"));
+  assert.ok(dashboard.includes("request?.visitor_email"));
+  assert.ok(dashboard.includes("request?.visitor_phone"));
+  assert.ok(dashboard.includes("request?.reason"));
+  assert.ok(dashboard.includes("Open conversation"));
+  const viewStart = dashboard.indexOf('{activeTab === "notifications" && (');
+  const viewEnd = dashboard.indexOf("\n\n        {deleteChatTarget && (", viewStart);
+  assert.ok(viewStart >= 0 && viewEnd > viewStart);
+  assert.ok(!dashboard.slice(viewStart, viewEnd).includes("unreadVisitorMessages.map"));
+});
+
+
+test("widget microphone and speech talk start from the click and stay visible on permission errors", async () => {
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  assert.doesNotMatch(widget, /requestMicPermission/);
+  assert.match(widget, /micButton\.addEventListener\("click",[\s\S]*?listen\(false\)/);
+  assert.match(widget, /function startVoiceSession\(\)[\s\S]*?voiceView\.classList\.add\("open"\)[\s\S]*?listen\(true\)/);
+  assert.match(widget, /setVoiceState\("idle",errorMessage\)/);
+  assert.match(widget, /Allow microphone access for this website in your browser settings/);
+  assert.match(widget, /error==="audio-capture"/);
+  assert.doesNotMatch(widget, /minimized/);
+  assert.doesNotThrow(() => new Function(widget), "widget microphone code must parse");
 });
 
 test("embedded speech talk is English-only and does not display transcripts or reply text", async () => {

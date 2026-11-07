@@ -18,7 +18,7 @@ root.innerHTML=[
 ".launch{min-height:58px;padding:0 18px 0 12px;display:inline-flex;align-items:center;justify-content:center;gap:10px;border:1px solid #ffffff25;border-radius:999px;background:#080b10;color:#fff;box-shadow:0 8px 28px #0003;cursor:pointer;font:600 14px Inter,system-ui,sans-serif}",
 ".launch-logo{display:block;width:30px;height:30px;flex:none}.launch-label{white-space:nowrap;font-size:14px;line-height:1}",
 ".panel{display:none;position:absolute;left:0;bottom:70px;width:min(380px,calc(100vw - 32px));height:min(570px,calc(100dvh - 110px));min-width:270px;min-height:350px;max-width:calc(100vw - 28px);max-height:calc(100dvh - 96px);box-sizing:border-box;background:#fff;border:1px solid #dce3ec;border-radius:19px;overflow:hidden;box-shadow:0 18px 55px #0f172a40;grid-template-rows:auto minmax(0,1fr) auto auto auto}",
-".panel.open{display:grid}.panel.minimized{height:auto!important;min-height:0!important;grid-template-rows:auto}.panel.minimized .messages,.panel.minimized .handoff,.panel.minimized .composer-wrap,.panel.minimized .status,.panel.minimized .resize-handle,.panel.minimized .voice-view{display:none!important}",
+".panel.open{display:grid}",
 ".top{display:flex;align-items:center;gap:8px;padding:12px;background:#111827;color:white;min-width:0}.brand{flex:1;min-width:0}.brand b{display:block;font-size:14px}.brand small{font-size:11px;color:#b6c1cf}.top button{width:34px;height:34px;flex:none;border:0;border-radius:9px;background:#ffffff1c;color:#fff;cursor:pointer;font:600 19px/1 system-ui}",
 ".messages{min-height:0;overflow:auto;padding:13px;background:#f8fafc;display:flex;flex-direction:column;gap:9px;overscroll-behavior:contain}.bubble{max-width:88%;padding:10px 12px;border-radius:13px;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.ai{align-self:flex-start;background:white;border:1px solid #e6ebf2;color:#1a2635}.user{align-self:flex-end;background:#172033;color:#fff}.err{align-self:flex-start;background:#fff0ef;color:#9c332c}.typing{color:#697789;display:flex;align-items:center;gap:5px;font-style:italic}.typing:after{content:'';width:5px;height:5px;border-radius:50%;background:#22c55e;animation:misma-dot .9s ease-in-out infinite alternate}@keyframes misma-dot{to{opacity:.2;transform:translateY(-3px)}}",
 ".composer-wrap{padding:10px 10px 8px;border-top:1px solid #e8edf3;background:#fff}.composer{display:flex;align-items:flex-end;gap:8px;margin:0;padding:7px 7px 7px 10px;min-width:0;border:1px solid #dce2eb;border-radius:15px;background:#f7f9fc;box-shadow:0 1px 2px #0f172a0c}.composer textarea{box-sizing:border-box;flex:1;min-width:0;min-height:36px;max-height:108px;resize:none;border:0;outline:0;padding:8px 3px;background:transparent;font:400 13px/1.45 Inter,system-ui,sans-serif;color:#172033}.composer-actions{display:flex;align-items:center;gap:5px;flex:none;padding-bottom:2px}.icon-btn{width:35px;height:35px;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:#536274;cursor:pointer;padding:0}.icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.icon-btn.is-active{background:#e8f8ee;color:#16a34a}.send-btn{width:38px;height:38px;display:grid;place-items:center;border:0;border-radius:50%;background:#22c55e;color:#fff;cursor:pointer;padding:0}.send-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.send-btn[disabled]{opacity:.5;cursor:not-allowed}",
@@ -75,10 +75,6 @@ function refreshHistory(){
 }
 function recognitionConstructor(){return window.SpeechRecognition||window.webkitSpeechRecognition||null;}
 function stopRecognition(){if(!recognition)return;var current=recognition;recognition=null;current.onresult=null;current.onerror=null;current.onend=null;try{current.abort();}catch(error){}}
-function requestMicPermission(){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return Promise.resolve();
-  return navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){stream.getTracks().forEach(function(track){track.stop();});});
-}
 function setVoiceState(nextState,message){
   voiceState=nextState;
   voiceOrb.setAttribute("data-state",nextState);
@@ -98,7 +94,12 @@ function updateVoiceModeChoice(){
 }
 function listen(isVoiceChat){
   var Recognition=recognitionConstructor();
-  if(!Recognition){setStatus("Voice input is not supported in this browser. Try Chrome on HTTPS.");if(isVoiceChat)stopVoiceSession();else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();}return;}
+  if(!Recognition){
+    var unsupportedMessage="Voice input is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.";
+    if(isVoiceChat){voiceSession=false;voiceView.classList.add("open");primaryButton.classList.remove("is-active");setVoiceState("idle",unsupportedMessage);updatePrimary();}
+    else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();setStatus(unsupportedMessage);}
+    return;
+  }
   stopRecognition();
   if(isVoiceChat){finalTranscript="";interimTranscript="";setVoiceState("listening");}
   else{interimTranscript="";}
@@ -117,9 +118,20 @@ function listen(isVoiceChat){
   instance.onerror=function(event){
     var error=event&&event.error?event.error:"recognition";if(recognition===instance)recognition=null;
     if(error==="no-speech"&&((isVoiceChat&&voiceSession&&voiceModeChoice==="hands-free")||(!isVoiceChat&&dictating)))return;
-    setStatus(error==="not-allowed"||error==="service-not-allowed"?"Allow microphone access in your browser settings, then try again.":"Voice input stopped. Tap the microphone to try again.");
-    if(isVoiceChat)stopVoiceSession();
-    else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();}
+    var errorMessage=error==="not-allowed"||error==="service-not-allowed"
+      ?"Allow microphone access for this website in your browser settings, then tap the voice control to retry."
+      :error==="audio-capture"
+        ?"No microphone was found. Connect a microphone and try again."
+        :error==="network"
+          ?"The speech recognition service is unavailable. Check your internet connection and try again."
+          :"Voice input stopped. Tap the microphone to try again.";
+    if(isVoiceChat){
+      voiceSession=false;voiceMuted=false;
+      if(voiceSpeechCancel){voiceSpeechCancel();voiceSpeechCancel=null;}
+      if(window.speechSynthesis)window.speechSynthesis.cancel();
+      voiceView.classList.add("open");primaryButton.classList.remove("is-active");
+      setVoiceState("idle",errorMessage);updatePrimary();
+    }else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();setStatus(errorMessage);}
   };
   instance.onend=function(){
     if(recognition===instance)recognition=null;
@@ -144,7 +156,12 @@ function listen(isVoiceChat){
     }
   };
   try{instance.start();}
-  catch(error){if(recognition===instance)recognition=null;setStatus("Microphone could not start. Check browser microphone permission.");if(isVoiceChat)stopVoiceSession();else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();}}
+  catch(error){
+    if(recognition===instance)recognition=null;
+    var startMessage="Microphone could not start. Allow microphone access in your browser settings, then tap to retry.";
+    if(isVoiceChat){voiceSession=false;voiceView.classList.add("open");primaryButton.classList.remove("is-active");setVoiceState("idle",startMessage);updatePrimary();}
+    else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();setStatus(startMessage);}
+  }
 }
 function speakAsWoman(text){
   var synth=window.speechSynthesis;
@@ -226,12 +243,16 @@ function stopVoiceSession(){
 }
 function startVoiceSession(){
   if(voiceSession){stopVoiceSession();return;}if(busy)return;
-  if(!recognitionConstructor()){setStatus("Voice chat requires Chrome or another supported browser on HTTPS.");return;}
-  voiceSession=true;voiceMuted=false;voiceModeChoice="hands-free";updateVoiceModeChoice();voiceView.classList.add("open");setVoiceState("starting");primaryButton.classList.add("is-active");
-  requestMicPermission().then(function(){
-    if(!voiceSession)return;
-    if(voiceModeChoice==="hands-free")listen(true);else setVoiceState("ready");
-  }).catch(function(){setStatus("Allow microphone access in your browser settings, then try again.");stopVoiceSession();});
+  voiceView.classList.add("open");
+  if(!recognitionConstructor()){
+    primaryButton.classList.remove("is-active");
+    setVoiceState("idle","Speech talk is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");
+    return;
+  }
+  voiceSession=true;voiceMuted=false;voiceModeChoice="hands-free";updateVoiceModeChoice();setVoiceState("starting");primaryButton.classList.add("is-active");
+  // Start recognition directly from the user's click so the browser can show its
+  // native microphone permission prompt without an asynchronous permission preflight.
+  if(voiceModeChoice==="hands-free")listen(true);else setVoiceState("ready");
 }
 function interruptVoice(){
   if(!voiceSession)return;
@@ -256,9 +277,9 @@ function changeVoiceMode(nextMode){
 
 $(".launch").addEventListener("click",function(){
   var opened=panel.classList.toggle("open");$(".launch").setAttribute("aria-expanded",String(opened));
-  if(opened){panel.classList.remove("minimized");input.focus();call({action:"heartbeat"}).catch(function(error){setStatus(error.message);});refreshHistory().catch(function(error){setStatus(error.message);});}
+  if(opened){input.focus();call({action:"heartbeat"}).catch(function(error){setStatus(error.message);});refreshHistory().catch(function(error){setStatus(error.message);});}
 });
-$(".close").addEventListener("click",function(){panel.classList.remove("open","minimized");stopVoiceSession();stopDictation();$(".launch").setAttribute("aria-expanded","false");});
+$(".close").addEventListener("click",function(){panel.classList.remove("open");stopVoiceSession();stopDictation();$(".launch").setAttribute("aria-expanded","false");});
 
 $(".human").addEventListener("click",function(){handoff.classList.toggle("open");if(handoff.classList.contains("open"))handoff.querySelector("[name='name']").focus();});
 input.addEventListener("input",function(){resizeInput();updatePrimary();});
@@ -267,9 +288,10 @@ $(".composer").addEventListener("submit",function(event){event.preventDefault();
 micButton.addEventListener("click",function(){
   if(dictating)return;
   if(voiceSession)stopVoiceSession();if(busy)return;
+  if(!recognitionConstructor()){setStatus("Microphone dictation is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");return;}
   finalTranscript="";interimTranscript="";dictationSendAfterStop=false;dictating=true;composer.classList.add("recording");micButton.classList.add("is-active");setStatus("Listening · tap Send when you are finished.");updatePrimary();
-  requestMicPermission().then(function(){if(dictating)listen(false);})
-    .catch(function(){dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();setStatus("Allow microphone access in your browser settings, then try again.");});
+  // Recognition starts within the click gesture, allowing the browser to request mic access.
+  listen(false);
 });
 primaryButton.addEventListener("click",function(){if(dictating){finishDictationAndSend();return;}if(input.value.trim())sendMessage(input.value,false);else startVoiceSession();});
 voiceView.querySelector(".voice-exit").addEventListener("click",stopVoiceSession);
@@ -283,7 +305,7 @@ voiceMuteButton.addEventListener("click",function(){
 });
 voiceStopButton.addEventListener("click",interruptVoice);
 voiceOrb.addEventListener("click",function(){
-  if(!voiceSession)return;
+  if(!voiceSession){startVoiceSession();return;}
   if(voiceModeChoice==="push-to-talk"){
     if(voiceState==="listening"){if(recognition){try{recognition.stop();}catch(error){setVoiceState("ready");}}}
     else if(voiceState==="ready")listen(true);
@@ -297,7 +319,7 @@ try{
   if(savedSize&&savedSize.width&&savedSize.height){panel.style.width=Math.max(270,Math.min(window.innerWidth-28,Number(savedSize.width)))+"px";panel.style.height=Math.max(350,Math.min(window.innerHeight-96,Number(savedSize.height)))+"px";}
 }catch(error){}
 var resizeState=null;
-resizeHandle.addEventListener("pointerdown",function(event){if(panel.classList.contains("minimized"))return;event.preventDefault();resizeState={x:event.clientX,y:event.clientY,width:panel.offsetWidth,height:panel.offsetHeight};try{resizeHandle.setPointerCapture(event.pointerId);}catch(error){}});
+resizeHandle.addEventListener("pointerdown",function(event){event.preventDefault();resizeState={x:event.clientX,y:event.clientY,width:panel.offsetWidth,height:panel.offsetHeight};try{resizeHandle.setPointerCapture(event.pointerId);}catch(error){}});
 resizeHandle.addEventListener("pointermove",function(event){if(!resizeState)return;var width=Math.max(270,Math.min(window.innerWidth-28,resizeState.width+event.clientX-resizeState.x));var height=Math.max(350,Math.min(window.innerHeight-96,resizeState.height+resizeState.y-event.clientY));panel.style.width=width+"px";panel.style.height=height+"px";});
 function finishResize(){if(!resizeState)return;resizeState=null;saveSize();}
 resizeHandle.addEventListener("pointerup",finishResize);resizeHandle.addEventListener("pointercancel",finishResize);
@@ -305,10 +327,16 @@ resizeHandle.addEventListener("pointerup",finishResize);resizeHandle.addEventLis
 $(".handoff-submit").addEventListener("click",function(){
   if(busy)return;var data={};handoff.querySelectorAll("input,textarea").forEach(function(element){data[element.name]=element.value.trim();});
   if(!data.name){setStatus("Please enter your name.");return;}busy=true;setStatus("Sending your request…");
-  call(Object.assign({action:"human-request"},data)).then(function(){handoff.classList.remove("open");handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});setStatus("Human request sent. A person will reply here.");return refreshHistory();})
-    .catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
+  call(Object.assign({action:"human-request"},data)).then(function(result){
+    handoff.classList.remove("open");
+    handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});
+    setStatus("Human request sent. A person will reply here.");
+    return refreshHistory().then(function(){
+      if(!result.confirmationSaved)bubble(result.confirmationText||"Your request to speak with a person has been sent. The business team will follow up here.","ai");
+    });
+  }).catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
 });
-window.setInterval(function(){if(panel.classList.contains("open")&&!panel.classList.contains("minimized")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
+window.setInterval(function(){if(panel.classList.contains("open")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
 call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
 }
 fetch(api,{

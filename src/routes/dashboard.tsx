@@ -21,6 +21,7 @@ import {
   updateOrderStatus,
   saveWorkspaceProfile,
   markVisitorMessagesRead,
+  markHumanRequestNotificationRead,
   createWebsiteConnection,
   shareWebsiteWidgetAcrossWorkspace,
   deleteWebsiteConnection,
@@ -1098,6 +1099,7 @@ function Dashboard() {
   const [connectedWebsites, setConnectedWebsites] = useState<any[]>([]);
   const [humanHandoffs, setHumanHandoffs] = useState<any[]>([]);
   const [allNotifications, setAllNotifications] = useState<any[]>([]);
+  const [selectedHumanRequestNotificationId, setSelectedHumanRequestNotificationId] = useState<number | null>(null);
   const [productsServices, setProductsServices] = useState<any[]>([]);
   const [channelConnections, setChannelConnections] = useState<any[]>([]);
   const [channelEnvironment, setChannelEnvironment] = useState({ whatsappConfigured: false, phoneConfigured: false });
@@ -1112,7 +1114,7 @@ function Dashboard() {
     : "";
   const everyWebsiteUsesSharedWidget = Boolean(sharedWidgetPublicKey) &&
     connectedWebsites.every((site) => (site.widget_public_key || site.public_key) === sharedWidgetPublicKey);
-  const pendingHumanRequestCount = humanHandoffs.filter((request) => request.status === "pending").length;
+  const unreadHumanRequestNotificationCount = allNotifications.filter((notification) => notification.is_read !== true).length;
   const [knowledgeUploadBusy, setKnowledgeUploadBusy] = useState(false);
   const [recommendationBusy, setRecommendationBusy] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
@@ -1661,6 +1663,23 @@ function Dashboard() {
     if (!authChecked || !token) return;
     loadData();
   }, [authChecked, token]);
+
+  const openHumanRequestNotification = async (notification: any) => {
+    const notificationId = Number(notification.id);
+    setSelectedHumanRequestNotificationId(notificationId);
+    if (notification.is_read === true || !token) return;
+    setAllNotifications((current) => current.map((item) =>
+      Number(item.id) === notificationId ? { ...item, is_read: true } : item
+    ));
+    try {
+      await markHumanRequestNotificationRead({ data: { token, notificationId } });
+    } catch (cause) {
+      setAllNotifications((current) => current.map((item) =>
+        Number(item.id) === notificationId ? { ...item, is_read: false } : item
+      ));
+      console.warn("Could not mark the human request notification as read:", cause);
+    }
+  };
 
   const refreshVisitorNotifications = () => {
     if (!token) return;
@@ -3635,7 +3654,7 @@ function Dashboard() {
           </button>
           {expandedNavGroups.manage && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
-            <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {pendingHumanRequestCount > 0 && <span>{pendingHumanRequestCount}</span>}</button>
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadHumanRequestNotificationCount > 0 && <span>{unreadHumanRequestNotificationCount}</span>}</button>
           </div>}
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)} data-tooltip="Build">
             <span className="aichat-nav-icon">⌘</span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret">{expandedNavGroups.build ? "⌄" : "›"}</span>
@@ -3852,16 +3871,16 @@ function Dashboard() {
           </button>
           <button
             type="button"
-            className={`aichat-notification-trigger${pendingHumanRequestCount > 0 ? " has-unread" : ""}`}
+            className={`aichat-notification-trigger${unreadHumanRequestNotificationCount > 0 ? " has-unread" : ""}`}
             onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}
-            aria-label={pendingHumanRequestCount > 0 ? `Notifications, ${pendingHumanRequestCount} pending human requests` : "Human request notifications"}
+            aria-label={unreadHumanRequestNotificationCount > 0 ? `Notifications, ${unreadHumanRequestNotificationCount} unread human requests` : "Human request notifications"}
             title="Website visitor notifications"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
               <path d="M10 21h4" />
             </svg>
-            {pendingHumanRequestCount > 0 && <span className="aichat-notification-count">{pendingHumanRequestCount > 99 ? "99+" : pendingHumanRequestCount}</span>}
+            {unreadHumanRequestNotificationCount > 0 && <span className="aichat-notification-count">{unreadHumanRequestNotificationCount > 99 ? "99+" : unreadHumanRequestNotificationCount}</span>}
           </button>
         </header>
 
@@ -5255,8 +5274,8 @@ function Dashboard() {
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
-                <h2>Human request notifications {pendingHumanRequestCount > 0 ? `(${pendingHumanRequestCount} pending)` : ""}</h2>
-                <p>Only visitors who asked to speak with a person appear here. Select a request to open its conversation.</p>
+                <h2>Human request notifications {unreadHumanRequestNotificationCount > 0 ? `(${unreadHumanRequestNotificationCount} unread)` : ""}</h2>
+                <p>Each request is listed under the visitor's name. Open one to view the contact details and message they submitted.</p>
               </div>
               <div className="aichat-card">
                 <h3>Human handoff requests ({allNotifications.length})</h3>
@@ -5268,17 +5287,46 @@ function Dashboard() {
                   </div>
                 ) : (
                   <div className="aichat-notifications-list">
-                    {allNotifications.map((item) => (
-                      <button type="button" key={item.id} className={`aichat-notification-item${item.is_read ? " is-read" : ""}`} onClick={() => item.conversation_id ? void selectConversation(Number(item.conversation_id)) : item.human_request_id ? setActiveTab("customers") : void 0}>
-                        <span className="aichat-notification-item-icon" aria-hidden="true">♙</span>
-                        <span className="aichat-notification-item-copy">
-                          <strong>{item.title}</strong>
-                          <small>{item.created_at ? new Date(item.created_at).toLocaleString() : "Human request"}</small>
-                          <span>{item.body || "A visitor requested a human agent."}</span>
-                        </span>
-                        <span className="aichat-notification-open">{item.is_read ? "Read" : "New"}</span>
-                      </button>
-                    ))}
+                    {allNotifications.map((item) => {
+                      const request = humanHandoffs.find((entry) => Number(entry.id) === Number(item.human_request_id));
+                      const website = connectedWebsites.find((entry) => Number(entry.id) === Number(item.website_connection_id));
+                      const visitorName = String(request?.visitor_name || (item.title && !/requested a human|human request/i.test(item.title) ? item.title : "Website visitor"));
+                      const isExpanded = selectedHumanRequestNotificationId === Number(item.id);
+                      return (
+                        <div key={item.id} className="aichat-human-request-entry">
+                          <button
+                            type="button"
+                            className={`aichat-notification-item${item.is_read ? " is-read" : ""}`}
+                            aria-expanded={isExpanded}
+                            onClick={() => void openHumanRequestNotification(item)}
+                          >
+                            <span className="aichat-notification-item-icon" aria-hidden="true">♙</span>
+                            <span className="aichat-notification-item-copy">
+                              <strong>{visitorName}</strong>
+                              <small>{website?.domain || website?.name || "Website visitor"} · {item.created_at ? new Date(item.created_at).toLocaleString() : "Human request"}</small>
+                              <span>{request?.reason || "Requested to speak with a person"}</span>
+                            </span>
+                            <span className="aichat-notification-open">{item.is_read ? "Opened" : "New"}</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="aichat-human-request-details">
+                              <div><strong>Name</strong><span>{request?.visitor_name || visitorName}</span></div>
+                              <div><strong>Email</strong><span>{request?.visitor_email || "Not provided"}</span></div>
+                              <div><strong>Phone</strong><span>{request?.visitor_phone || "Not provided"}</span></div>
+                              <div className="aichat-human-request-message"><strong>Message</strong><p>{request?.reason || "No message provided."}</p></div>
+                              <div><strong>Website</strong><span>{website?.domain || website?.name || "Website visitor"}</span></div>
+                              <div><strong>Requested</strong><span>{request?.created_at ? new Date(request.created_at).toLocaleString() : item.created_at ? new Date(item.created_at).toLocaleString() : "Unknown"}</span></div>
+                              <div><strong>Status</strong><span>{request?.status === "handled" ? "Handled" : "Pending"}</span></div>
+                              {item.conversation_id && (
+                                <button type="button" className="aichat-action-btn secondary" onClick={() => void selectConversation(Number(item.conversation_id))}>
+                                  Open conversation
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
