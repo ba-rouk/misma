@@ -1853,6 +1853,19 @@ function Dashboard() {
     selectedComposerFilesRef.current = selectedFiles;
   }, [selectedFiles]);
 
+  const releaseComposerPreviewUrl = (file: File) => {
+    const url = composerPreviewUrlsRef.current.get(file);
+    if (url) URL.revokeObjectURL(url);
+    composerPreviewUrlsRef.current.delete(file);
+  };
+
+  useEffect(() => () => {
+    uploadAbortControllersRef.current.forEach((controller) => controller.abort());
+    composerPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    composerPreviewUrlsRef.current.clear();
+    if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+  }, []);
+
   // Sending, retrying, or editing a user message.
   const uploadSelectedAttachments = async (
     filesToUpload: File[] = selectedFiles,
@@ -2711,9 +2724,9 @@ function Dashboard() {
   const addSelectedFiles = (files: FileList | File[] | null) => {
     if (!files?.length) return;
     const additions = Array.from(files).map(normalizeComposerAttachment);
-    const next = [...selectedFiles, ...additions];
-    if (next.length > 4) {
-      setChatError("Attach up to four files per message.");
+    const next = [...selectedComposerFilesRef.current, ...additions];
+    if (next.length > 5) {
+      setChatError("Attach up to five files per message.");
       return;
     }
     const isVideoFile = (file: File) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
@@ -2721,20 +2734,42 @@ function Dashboard() {
       setChatError("Upload one video per message so Misma can sample its keyframes.");
       return;
     }
-    const oversized = additions.find((file) => file.size > 25 * 1024 * 1024);
-    if (oversized) {
-      setChatError(`${oversized.name} is larger than the 25 MB upload limit.`);
+    const oversizedImageOrVideo = additions.find((file) =>
+      (file.type.startsWith("image/") || isVideoFile(file)) && file.size > 25 * 1024 * 1024
+    );
+    if (oversizedImageOrVideo) {
+      setChatError(`${oversizedImageOrVideo.name} is larger than the 25 MB media limit.`);
       return;
     }
-    const oversizedPdf = additions.find((file) =>
-      (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) &&
-      file.size > 12 * 1024 * 1024
+    const oversizedDocument = additions.find((file) =>
+      !(file.type.startsWith("image/") || isVideoFile(file)) && file.size > 10 * 1024 * 1024
     );
-    if (oversizedPdf) {
-      setChatError("PDF files must be 12 MB or smaller for AI analysis.");
+    if (oversizedDocument) {
+      setChatError(`${oversizedDocument.name} is larger than the 10 MB document limit.`);
+      return;
+    }
+    const allowedDocument = /\.(pdf|docx|txt|csv|md|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i;
+    const unsupported = additions.find((file) => !file.type.startsWith("image/") && !isVideoFile(file) && !allowedDocument.test(file.name));
+    if (unsupported) {
+      setChatError(`${unsupported.name}: supported files are images, PDF, DOCX, TXT, CSV, and common text/code files.`);
       return;
     }
     setChatError("");
+    for (const file of additions) {
+      if (file.type.startsWith("image/") || isVideoFile(file)) {
+        composerPreviewUrlsRef.current.set(file, URL.createObjectURL(file));
+      }
+    }
+    setComposerUploadStatuses((current) => {
+      const nextStatus = new Map(current);
+      additions.forEach((file) => nextStatus.set(file, "uploading"));
+      return nextStatus;
+    });
+    setComposerUploadProgress((current) => {
+      const nextProgress = new Map(current);
+      additions.forEach((file) => nextProgress.set(file, 0));
+      return nextProgress;
+    });
     selectedComposerFilesRef.current = next;
     setSelectedFiles(next);
     void queueComposerAttachmentUpload(additions).catch((cause) => {
@@ -2745,9 +2780,14 @@ function Dashboard() {
   const removeSelectedComposerFile = (index: number) => {
     const removed = selectedComposerFilesRef.current[index];
     if (!removed) return;
+    uploadAbortControllersRef.current.get(removed)?.abort();
+    uploadAbortControllersRef.current.delete(removed);
     const next = selectedComposerFilesRef.current.filter((_, itemIndex) => itemIndex !== index);
     selectedComposerFilesRef.current = next;
     setSelectedFiles(next);
+    releaseComposerPreviewUrl(removed);
+    setComposerUploadStatuses((current) => { const nextStatus = new Map(current); nextStatus.delete(removed); return nextStatus; });
+    setComposerUploadProgress((current) => { const nextProgress = new Map(current); nextProgress.delete(removed); return nextProgress; });
     const uploaded = uploadedComposerAttachmentsRef.current.get(removed);
     uploadedComposerAttachmentsRef.current.delete(removed);
     const paths = (uploaded || []).map((item) => item.path).filter((path): path is string => Boolean(path));
