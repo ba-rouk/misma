@@ -332,6 +332,9 @@ $(".close").addEventListener("click",function(){
       if(result.deleted===true&&conversation===closingConversation&&visitor===closingVisitor){
         conversation=null;
         try{sessionStorage.removeItem(conversationStore);}catch(error){}
+        messages.innerHTML="";
+        bubble("Hello! I am Misma. How can I help you today?","ai");
+        setStatus("");
       }
       return result;
     });
