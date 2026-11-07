@@ -954,15 +954,19 @@ function Dashboard() {
   };
 
   const toggleChatActivityNotifications = async () => {
-    const enabling = !notificationPreferences.chatActivity;
+    const currentlyEnabled = notificationPreferences.chatActivity;
+    const supported = typeof window !== "undefined" && "Notification" in window;
+    const needsPermissionPrompt = currentlyEnabled && supported && window.Notification.permission === "default";
+    const enabling = !currentlyEnabled || needsPermissionPrompt;
     if (enabling) {
-      if (typeof window === "undefined" || !("Notification" in window)) {
+      if (!supported) {
         setNotificationPermissionMessage("This browser does not support desktop notifications. Your preference is saved, but alerts will not appear here.");
       } else {
         let permission = window.Notification.permission;
         if (permission === "default") permission = await window.Notification.requestPermission();
         if (permission !== "granted") {
           setNotificationPermissionMessage("Allow Misma notifications in your browser's site settings to receive new chat alerts.");
+          setNotificationPreferences((current) => ({ ...current, chatActivity: false }));
           return;
         }
         setNotificationPermissionMessage("Browser notifications are enabled for new visitor messages.");
