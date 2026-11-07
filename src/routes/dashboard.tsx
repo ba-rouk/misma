@@ -513,6 +513,51 @@ async function createComposerImageThumbnail(file: File): Promise<string> {
   }
 }
 
+async function prepareProfileAvatarForUpload(file: File): Promise<{ file: File; previewUrl: string }> {
+  let source: CanvasImageSource;
+  let sourceWidth = 0;
+  let sourceHeight = 0;
+  let bitmap: ImageBitmap | null = null;
+  try {
+    try {
+      bitmap = await createImageBitmap(file);
+      source = bitmap;
+      sourceWidth = bitmap.width;
+      sourceHeight = bitmap.height;
+    } catch {
+      const imageDataUrl = await readComposerFileAsDataUrl(file);
+      const fallbackImage = new Image();
+      fallbackImage.src = imageDataUrl;
+      await fallbackImage.decode();
+      source = fallbackImage;
+      sourceWidth = fallbackImage.naturalWidth;
+      sourceHeight = fallbackImage.naturalHeight;
+    }
+    if (!sourceWidth || !sourceHeight) throw new Error("The selected profile photo could not be decoded.");
+    const scale = Math.min(1, 1200 / Math.max(sourceWidth, sourceHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Your browser could not prepare the profile photo.");
+    context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const outputType = file.type.toLowerCase() === "image/png" ? "image/png" : "image/jpeg";
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (value) => value ? resolve(value) : reject(new Error("Could not encode the selected profile photo.")),
+        outputType,
+        0.9,
+      );
+    });
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "misma-profile";
+    const outputName = baseName + (outputType === "image/png" ? ".png" : ".jpg");
+    const normalizedFile = new File([blob], outputName, { type: outputType, lastModified: file.lastModified });
+    return { file: normalizedFile, previewUrl: URL.createObjectURL(normalizedFile) };
+  } finally {
+    bitmap?.close();
+  }
+}
+
 function ComposerAttachmentPreview({
   file, previewUrl, uploadStatus, uploadProgress, onRemove, onRetry,
 }: {
@@ -1067,6 +1112,7 @@ function Dashboard() {
   const profileAvatarPathRef = useRef<string | null>(null);
   const profileAvatarPreviewUrlRef = useRef<string | null>(null);
   const profileAvatarFallbackUrlRef = useRef<string | null>(null);
+  const profileAvatarSelectionRef = useRef(0);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
@@ -1413,17 +1459,9 @@ function Dashboard() {
           if (avatarPath) {
             void (async () => {
               const storage = getSupabaseClient().storage.from("misma-media");
-              const { data: signed, error: signedError } = await storage.createSignedUrl(avatarPath, 604800);
-              if (!active) return;
-              if (!signedError && signed?.signedUrl) {
-                setProfileImage(signed.signedUrl);
-                return;
-              }
-              // A direct download is a resilient fallback for browsers that fail to render
-              // a signed Storage URL even though the authenticated user can read the object.
               const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
               if (!active) return;
-              if (!downloadError && avatarBlob) {
+              if (!downloadError && avatarBlob && avatarBlob.type.startsWith("image/")) {
                 const fallbackUrl = URL.createObjectURL(avatarBlob);
                 if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
                 profileAvatarFallbackUrlRef.current = fallbackUrl;
@@ -2062,22 +2100,18 @@ function Dashboard() {
       if (avatarPath) {
         profileAvatarPathRef.current = avatarPath;
         const storage = client.storage.from("misma-media");
-        const { data: signed, error: signedError } = await storage.createSignedUrl(avatarPath, 604800);
-        if (!signedError && signed?.signedUrl) {
-          setProfileImage(signed.signedUrl);
-        } else {
-          const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
-          if (downloadError || !avatarBlob) {
-            throw new Error("Your profile photo was uploaded, but Misma could not load its preview. Check the storage permissions and try again.");
-          }
+        const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
+        if (!downloadError && avatarBlob && avatarBlob.type.startsWith("image/")) {
           const fallbackUrl = URL.createObjectURL(avatarBlob);
           if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
           profileAvatarFallbackUrlRef.current = fallbackUrl;
           setProfileImage(fallbackUrl);
+          if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+          profileAvatarPreviewUrlRef.current = null;
+        } else if (profileAvatarPreviewUrlRef.current) {
+          setProfileImage(profileAvatarPreviewUrlRef.current);
         }
       }
-      if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
-      profileAvatarPreviewUrlRef.current = null;
       setProfileAvatarFile(null);
       setProfileSaved(true);
       window.setTimeout(() => setProfileSaved(false), 3000);
@@ -2093,13 +2127,10 @@ function Dashboard() {
     if (!path) { setProfileImage(""); return; }
     try {
       const storage = getSupabaseClient().storage.from("misma-media");
-      const { data, error } = await storage.createSignedUrl(path, 604800);
-      if (!error && data?.signedUrl) {
-        setProfileImage(data.signedUrl);
-        return;
-      }
       const { data: avatarBlob, error: downloadError } = await storage.download(path);
-      if (downloadError || !avatarBlob) throw downloadError || new Error("Could not load the profile photo.");
+      if (downloadError || !avatarBlob || !avatarBlob.type.startsWith("image/")) {
+        throw downloadError || new Error("Could not load the profile photo.");
+      }
       const fallbackUrl = URL.createObjectURL(avatarBlob);
       if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
       profileAvatarFallbackUrlRef.current = fallbackUrl;
@@ -2578,6 +2609,7 @@ function Dashboard() {
     const editId = editingMessageId;
     const tempUserId = isRetry ? failedMessageId : `user-${Date.now()}`;
     const filesToSend = editId ? [] : [...selectedFiles];
+    let sendConversationId = currentConversationId;
 
     if (!editId && !isRetry) {
       const tempUserMsg: Message = {
@@ -2620,6 +2652,19 @@ function Dashboard() {
         return null;
       }
       const attachments = editId ? [] : await ensureComposerAttachmentsUploaded(filesToSend);
+      if (!editId && filesToSend.length && !sendConversationId) {
+        const created = await createConversation({
+          data: { token, title: textToSend.slice(0, 72) || "Attachment chat" },
+        });
+        const createdId = Number(created.conversation.id);
+        if (!Number.isSafeInteger(createdId) || createdId < 1) {
+          throw new Error("Misma could not create a conversation for this attachment.");
+        }
+        sendConversationId = createdId;
+        activeConversationIdRef.current = createdId;
+        setCurrentConversationId(createdId);
+        loadData();
+      }
       if (!editId && filesToSend.length && tempUserId) {
         setMessages((prev) => prev.map((item) =>
           item.id === tempUserId ? { ...item, attachments } : item
@@ -2631,16 +2676,17 @@ function Dashboard() {
       const res = await postChatAction({
         action: "chat",
         message: textToSend,
-        conversationId: currentConversationId,
+        conversationId: sendConversationId,
         workspaceId: workspace?.id,
         attachments,
+        ...(isRetry && filesToSend.length ? { retryExistingMessage: true } : {}),
         thinkHarder,
         ...(options.voice ? { voice: true } : {}),
         ...(editId ? { editMessageId: Number(editId) } : {}),
       }, requestController.signal);
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
-      if (!currentConversationId && res.conversationId) {
+      if (!sendConversationId && res.conversationId) {
         activeConversationIdRef.current = Number(res.conversationId);
         setCurrentConversationId(res.conversationId);
       }
@@ -2687,6 +2733,9 @@ function Dashboard() {
       setFailedAction(editId ? "edit" : "send");
       setFailedMessageId(tempUserId);
       if (filesToSend.length) {
+        setMessages((current) => current.map((item) =>
+          item.id === tempUserId ? { ...item, attachments: [] } : item
+        ));
         selectedComposerFilesRef.current = filesToSend;
         setSelectedFiles(filesToSend);
       }
@@ -3057,8 +3106,32 @@ function Dashboard() {
 
   const addSelectedFiles = (files: FileList | File[] | null) => {
     if (!files?.length) return;
-    const additions = Array.from(files).map(normalizeComposerAttachment);
-    const next = [...selectedComposerFilesRef.current, ...additions];
+    const picked = Array.from(files).map(normalizeComposerAttachment);
+    const current = selectedComposerFilesRef.current;
+    const fingerprint = (file: File) =>
+      [file.name.trim().toLowerCase(), file.size, file.lastModified, file.type.toLowerCase()].join("::");
+    const retryFiles: File[] = [];
+    const additions: File[] = [];
+    const seen = new Set(current.map(fingerprint));
+
+    for (const file of picked) {
+      const key = fingerprint(file);
+      const existing = current.find((item) => fingerprint(item) === key);
+      if (existing) {
+        if (composerUploadStatuses.get(existing) === "error" && !retryFiles.includes(existing)) retryFiles.push(existing);
+        continue;
+      }
+      if (!seen.has(key)) {
+        seen.add(key);
+        additions.push(file);
+      }
+    }
+    if (!additions.length && !retryFiles.length) {
+      setChatError("");
+      return;
+    }
+
+    const next = [...current, ...additions];
     if (next.length > MAX_COMPOSER_FILES) {
       setChatError("Attach up to five files per message.");
       return;
@@ -3068,47 +3141,47 @@ function Dashboard() {
       setChatError("Upload one video per message so Misma can sample its keyframes.");
       return;
     }
-    const oversizedImageOrVideo = additions.find((file) =>
+    const candidates = [...retryFiles, ...additions];
+    const oversizedImageOrVideo = candidates.find((file) =>
       (file.type.startsWith("image/") || isVideoFile(file)) && file.size > MAX_IMAGE_UPLOAD_MB * 1024 * 1024
     );
     if (oversizedImageOrVideo) {
-      setChatError(`${oversizedImageOrVideo.name} is larger than the 25 MB media limit.`);
+      setChatError(oversizedImageOrVideo.name + " is larger than the 25 MB media limit.");
       return;
     }
-    const oversizedDocument = additions.find((file) =>
+    const oversizedDocument = candidates.find((file) =>
       !(file.type.startsWith("image/") || isVideoFile(file)) && file.size > MAX_DOCUMENT_UPLOAD_MB * 1024 * 1024
     );
     if (oversizedDocument) {
-      setChatError(`${oversizedDocument.name} is larger than the 10 MB document limit.`);
+      setChatError(oversizedDocument.name + " is larger than the 10 MB document limit.");
       return;
     }
     const allowedDocument = /\.(pdf|docx|txt|csv|md|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i;
-    const unsupported = additions.find((file) => !file.type.startsWith("image/") && !isVideoFile(file) && !allowedDocument.test(file.name));
+    const unsupported = candidates.find((file) => !file.type.startsWith("image/") && !isVideoFile(file) && !allowedDocument.test(file.name));
     if (unsupported) {
-      setChatError(`${unsupported.name}: supported files are images, PDF, DOCX, TXT, CSV, and common text/code files.`);
+      setChatError(unsupported.name + ": supported files are images, PDF, DOCX, TXT, CSV, and common text/code files.");
       return;
     }
+
     setChatError("");
-    for (const file of additions) {
-      composerPreviewUrlsRef.current.set(file, URL.createObjectURL(file));
-    }
-    setComposerUploadStatuses((current) => {
-      const nextStatus = new Map(current);
-      additions.forEach((file) => nextStatus.set(file, "uploading"));
+    for (const file of additions) composerPreviewUrlsRef.current.set(file, URL.createObjectURL(file));
+    const uploadingFiles = [...retryFiles, ...additions];
+    setComposerUploadStatuses((currentStatuses) => {
+      const nextStatus = new Map(currentStatuses);
+      uploadingFiles.forEach((file) => nextStatus.set(file, "uploading"));
       return nextStatus;
     });
-    setComposerUploadProgress((current) => {
-      const nextProgress = new Map(current);
-      additions.forEach((file) => nextProgress.set(file, 0));
+    setComposerUploadProgress((currentProgress) => {
+      const nextProgress = new Map(currentProgress);
+      uploadingFiles.forEach((file) => nextProgress.set(file, 0));
       return nextProgress;
     });
     selectedComposerFilesRef.current = next;
     setSelectedFiles(next);
-    void queueComposerAttachmentUpload(additions).catch((cause) => {
+    void queueComposerAttachmentUpload(uploadingFiles).catch((cause) => {
       setChatError(cause instanceof Error ? cause.message : "Could not upload the selected attachment.");
     });
   };
-
   const removeSelectedComposerFile = (index: number) => {
     const removed = selectedComposerFilesRef.current[index];
     if (!removed) return;
@@ -4721,19 +4794,29 @@ function Dashboard() {
                   </div>
                   <input ref={profileAvatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
                     const file = event.target.files?.[0] || null;
-                    if (file) {
-                      if (file.size > 5 * 1024 * 1024) {
-                        setProfileError("Profile photos must be 5 MB or smaller.");
-                      } else {
-                        if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
-                        const previewUrl = URL.createObjectURL(file);
-                        profileAvatarPreviewUrlRef.current = previewUrl;
-                        setProfileAvatarFile(file);
-                        setProfileImage(previewUrl);
-                        setProfileError("");
-                      }
-                    }
                     event.target.value = "";
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) {
+                      setProfileError("Profile photos must be 5 MB or smaller.");
+                      return;
+                    }
+                    const selectionId = profileAvatarSelectionRef.current + 1;
+                    profileAvatarSelectionRef.current = selectionId;
+                    setProfileError("");
+                    void prepareProfileAvatarForUpload(file).then(({ file: preparedFile, previewUrl }) => {
+                      if (selectionId !== profileAvatarSelectionRef.current) {
+                        URL.revokeObjectURL(previewUrl);
+                        return;
+                      }
+                      if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+                      profileAvatarPreviewUrlRef.current = previewUrl;
+                      setProfileAvatarFile(preparedFile);
+                      setProfileImage(previewUrl);
+                    }).catch((cause) => {
+                      if (selectionId === profileAvatarSelectionRef.current) {
+                        setProfileError(cause instanceof Error ? cause.message : "Could not prepare the selected profile photo.");
+                      }
+                    });
                   }} />
                 </div>
                 <div className="aichat-profile-edit-row">

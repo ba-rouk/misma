@@ -8011,3 +8011,41 @@ html, body, #app-root {
     max-width: 352px;
   }
 }
+
+
+/* Attachment tray stays left-aligned; sent media shares the user's bubble right edge. */
+.aichat-composer-attachments {
+  justify-content: flex-start !important;
+  align-items: flex-start;
+  margin-left: 0;
+  margin-right: auto;
+}
+.aichat-message-row.is-user .aichat-message-content {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  width: min(85%, 560px);
+  max-width: min(85%, 560px);
+  min-width: 0;
+  margin-left: auto;
+  margin-right: 0;
+  align-self: flex-end;
+}
+.aichat-message-row.is-user .aichat-message-content > .aichat-message-attachments.is-user-attachments,
+.aichat-message-row.is-user .aichat-message-content > .aichat-bubble {
+  align-self: flex-end;
+}
+.aichat-message-attachments.is-user-attachments {
+  width: min(100%, 352px);
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: 0;
+  justify-content: flex-end;
+}
+@media (max-width: 767px) {
+  .aichat-message-row.is-user .aichat-message-content {
+    width: min(90%, 560px);
+    max-width: min(90%, 560px);
+  }
+}
