@@ -480,6 +480,39 @@ async function readDocxComposerPreview(file: File): Promise<string> {
     .replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 1_600);
 }
 
+function readComposerFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read " + file.name + " for preview."));
+    reader.onabort = () => reject(new Error("Preview reading was cancelled."));
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("The browser returned an invalid file preview."));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function createComposerImageThumbnail(file: File): Promise<string> {
+  // Decode the browser File and draw a small thumbnail. This avoids depending
+  // on Android's temporary picker/blob URL after the upload request completes.
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxSide = 512;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Your browser could not prepare an image preview.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+    return canvas.toDataURL(outputType, 0.82);
+  } finally {
+    bitmap.close();
+  }
+}
+
 function ComposerAttachmentPreview({
   file, previewUrl, uploadStatus, uploadProgress, onRemove, onRetry,
 }: {
@@ -503,9 +536,39 @@ function ComposerAttachmentPreview({
     : (file.size / (1024 * 1024)).toFixed(1) + " MB";
   const isUploading = uploadStatus === "uploading";
   const isError = uploadStatus === "error";
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreviewError, setImagePreviewError] = useState(false);
   const [textPreview, setTextPreview] = useState<string | null>(null);
+  const [videoPreviewError, setVideoPreviewError] = useState(false);
   const className = "aichat-composer-attachment-card" +
     (isImage ? " is-image" : isVideo ? " is-video" : " is-file") + (isError ? " is-error" : "");
+
+  useEffect(() => {
+    let active = true;
+    if (!isImage) {
+      setImagePreview(null);
+      setImagePreviewError(false);
+      return () => { active = false; };
+    }
+    setImagePreview(null);
+    setImagePreviewError(false);
+    void (async () => {
+      try {
+        let preview: string;
+        try {
+          preview = await createComposerImageThumbnail(file);
+        } catch {
+          // FileReader is the compatibility fallback for browsers whose image
+          // decoder cannot create an ImageBitmap for a selected format.
+          preview = await readComposerFileAsDataUrl(file);
+        }
+        if (active) setImagePreview(preview);
+      } catch {
+        if (active) setImagePreviewError(true);
+      }
+    })();
+    return () => { active = false; };
+  }, [file, isImage]);
 
   useEffect(() => {
     let active = true;
@@ -516,7 +579,9 @@ function ComposerAttachmentPreview({
     setTextPreview(null);
     void (async () => {
       try {
-        const content = isDocx ? await readDocxComposerPreview(file) : await file.slice(0, 6_000).text();
+        const content = isDocx
+          ? await readDocxComposerPreview(file)
+          : await file.slice(0, 6_000).text();
         if (active) setTextPreview(content.trim() || "This file contains no readable text.");
       } catch {
         if (active) setTextPreview("A text preview is not available for this file.");
@@ -528,39 +593,91 @@ function ComposerAttachmentPreview({
   return (
     <div className={className} title={file.name} aria-busy={isUploading}>
       <div className={"aichat-composer-attachment-square" + (!isImage && !isVideo ? " is-file" : "")}>
-        {isImage && previewUrl ? (
-          <img className="aichat-composer-attachment-content-image" src={previewUrl} alt={file.name} decoding="async" loading="eager" fetchPriority="high" />
-        ) : isVideo && previewUrl ? (
-          <video className="aichat-composer-attachment-content-video" src={previewUrl} muted playsInline preload="metadata" aria-label={file.name} />
+        {isImage ? (
+          imagePreview ? (
+            <img
+              className="aichat-composer-attachment-content-image"
+              src={imagePreview}
+              alt={file.name}
+              decoding="async"
+              loading="eager"
+              fetchPriority="high"
+              onError={() => setImagePreviewError(true)}
+            />
+          ) : (
+            <div className="aichat-composer-preview-placeholder" role="status">
+              {imagePreviewError ? extension : "Preparing image…"}
+            </div>
+          )
+        ) : isVideo && previewUrl && !videoPreviewError ? (
+          <video
+            className="aichat-composer-attachment-content-video"
+            src={previewUrl}
+            muted
+            playsInline
+            preload="metadata"
+            aria-label={file.name}
+            onError={() => setVideoPreviewError(true)}
+          />
         ) : isPdf && previewUrl ? (
           <iframe className="aichat-composer-file-preview-pdf" src={previewUrl} title={"PDF preview: " + file.name} />
         ) : isTextPreviewable || isDocx ? (
-          <pre className="aichat-composer-file-preview-text">{textPreview === null ? "Loading file content…" : textPreview}</pre>
+          <pre className="aichat-composer-file-preview-text">
+            {textPreview === null ? "Loading file content…" : textPreview}
+          </pre>
         ) : (
           <div className="aichat-composer-file-card-copy">
             <span className="aichat-composer-file-icon" aria-hidden="true">{extension}</span>
-            <span className="aichat-composer-file-details"><strong>{file.name}</strong><small>{extension} · {sizeLabel}</small></span>
+            <span className="aichat-composer-file-details">
+              <strong>{file.name}</strong>
+              <small>{extension} · {sizeLabel}</small>
+            </span>
           </div>
         )}
+
         {isUploading && (
-          <div className={"aichat-composer-upload-state is-uploading" + (uploadProgress > 0 ? " is-determinate" : "")}
-            role="progressbar" aria-label={"Uploading " + file.name} aria-valuemin={0} aria-valuemax={100}
-            aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}>
+          <div
+            className={"aichat-composer-upload-state is-uploading" + (uploadProgress > 0 ? " is-determinate" : "")}
+            role="progressbar"
+            aria-label={"Uploading " + file.name}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}
+          >
             <svg className="aichat-composer-upload-ring" viewBox="0 0 28 28" aria-hidden="true">
               <circle className="aichat-composer-upload-track" cx="14" cy="14" r="11" />
-              <circle className="aichat-composer-upload-progress" cx="14" cy="14" r="11"
-                style={{ strokeDashoffset: 69.12 * (1 - Math.max(0, Math.min(1, uploadProgress))) }} />
+              <circle
+                className="aichat-composer-upload-progress"
+                cx="14"
+                cy="14"
+                r="11"
+                style={{ strokeDashoffset: 69.12 * (1 - Math.max(0, Math.min(1, uploadProgress))) }}
+              />
             </svg>
           </div>
         )}
-        {uploadStatus === "ready" && <span className="aichat-composer-upload-state is-ready" role="status" aria-label={file.name + " uploaded"}><i>✓</i></span>}
+        {uploadStatus === "ready" && (
+          <span className="aichat-composer-upload-state is-ready" role="status" aria-label={file.name + " uploaded"}>
+            <i>✓</i>
+          </span>
+        )}
       </div>
+
       <span className="aichat-composer-attachment-name" title={file.name}>{file.name} · {sizeLabel}</span>
       <button type="button" className="aichat-composer-attachment-remove" aria-label={"Remove " + file.name} onClick={onRemove}>×</button>
-      {isError && <button type="button" className="aichat-composer-attachment-retry" aria-label={"Retry upload of " + file.name}
-        title="Retry upload" onClick={onRetry}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" /></svg>
-      </button>}
+      {isError && (
+        <button
+          type="button"
+          className="aichat-composer-attachment-retry"
+          aria-label={"Retry upload of " + file.name}
+          title="Retry upload"
+          onClick={onRetry}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 7v5h-5M4 17v-5h5M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
