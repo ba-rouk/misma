@@ -342,6 +342,7 @@ export function createDictation({
 type VoiceModeOptions = {
   send: (text: string, signal: AbortSignal) => Promise<string | null | undefined>;
   lang?: string;
+  voicePreset?: "girl" | "woman" | "boy" | "man";
   onState?: (state: VoiceModeState) => void;
   onUser?: (text: string, isFinal: boolean) => void;
   onReply?: (replyText: string) => void;
@@ -352,6 +353,7 @@ type VoiceModeOptions = {
 export function createVoiceMode({
   send,
   lang = typeof navigator === "undefined" ? "en-US" : navigator.language || "en-US",
+  voicePreset = "woman",
   onState,
   onUser,
   onReply,
@@ -480,6 +482,14 @@ export function createVoiceMode({
       }
       const utterance = new SpeechSynthesisUtterance(chunks[index++]);
       utterance.lang = lang;
+      utterance.pitch = voicePreset === "girl" ? 1.28 : voicePreset === "boy" ? 1.18 : voicePreset === "woman" ? 1 : 0.9;
+      const available = synth.getVoices();
+      const female = available.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
+      const male = available.filter((voice) => /male|man|boy|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
+      const matching = voicePreset === "girl" || voicePreset === "woman" ? female : male;
+      const preferredIndex = voicePreset === "girl" || voicePreset === "boy" ? 0 : 1;
+      const preferredVoice = matching[preferredIndex] || matching[0] || available.find((voice) => voice.default);
+      if (preferredVoice) utterance.voice = preferredVoice;
       utterance.onend = speakNext;
       utterance.onerror = speakNext;
       synth.speak(utterance);
