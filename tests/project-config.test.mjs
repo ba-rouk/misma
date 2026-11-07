@@ -480,6 +480,20 @@ test("dashboard chat scrolls in a full-width pane with the scrollbar at the far 
 });
 
 
+
+test("human request notification details toggle closed when the same customer is clicked again", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /setSelectedHumanRequestNotificationId\(\(current\) => current === notificationId \? null : notificationId\)/);
+});
+
+test("dictation cancel button is placed to the left of the waveform", async () => {
+  const component = await read("../src/components/voice-input-bar.tsx");
+  const styles = await read("../src/components/voice-input.css");
+  assert.match(component, /className="misma-voice-recording-row"[\s\S]*?className="misma-voice-dictation-btn is-cancel"[\s\S]*?className="misma-voice-waveform"/);
+  assert.match(styles, /\.misma-voice-recording-row\s*\{[\s\S]*?display: flex/);
+  assert.match(styles, /\.misma-voice-recording-row \.misma-voice-waveform\s*\{[\s\S]*?flex: 1 1 auto/);
+});
+
 test("voice integration has no audio recording or transcription endpoint", async () => {
   const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
