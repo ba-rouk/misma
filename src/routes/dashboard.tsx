@@ -4558,7 +4558,7 @@ function Dashboard() {
                         const next = [...current, file];
                         selectedComposerFilesRef.current = next;
                         setSelectedFiles(next);
-                        void queueComposerAttachmentUpload([file]).catch((cause) => {
+                        return queueComposerAttachmentUpload([file]).catch((cause) => {
                           setChatError(cause instanceof Error ? cause.message : "Could not upload the voice note.");
                         });
                       }}
