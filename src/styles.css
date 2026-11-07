@@ -8049,3 +8049,31 @@ html, body, #app-root {
     max-width: min(90%, 560px);
   }
 }
+
+/* Sent files and images follow the user's right-aligned message edge; composer remains left-aligned. */
+.aichat-message-row.is-user .aichat-message-content {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: 0;
+  align-self: stretch;
+}
+.aichat-message-row.is-user .aichat-message-content > .aichat-message-attachments.is-user-attachments {
+  display: flex;
+  flex: 0 0 auto;
+  align-self: flex-end;
+  justify-content: flex-end;
+  width: fit-content !important;
+  max-width: min(352px, 100%) !important;
+  margin-left: auto;
+  margin-right: 0;
+}
+.aichat-message-row.is-user .aichat-message-content > .aichat-bubble {
+  align-self: flex-end;
+  max-width: min(88%, 560px);
+}

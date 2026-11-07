@@ -493,6 +493,18 @@ function readComposerFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+async function readStoredProfileImage(blob: Blob, storagePath: string): Promise<string> {
+  const path = storagePath.toLowerCase();
+  const mimeType = blob.type.startsWith("image/")
+    ? blob.type
+    : path.endsWith(".png") ? "image/png"
+    : path.endsWith(".webp") ? "image/webp"
+    : "image/jpeg";
+  const typedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+  const fileName = storagePath.split("/").pop() || "misma-profile.jpg";
+  return readComposerFileAsDataUrl(new File([typedBlob], fileName, { type: mimeType }));
+}
+
 async function createComposerImageThumbnail(file: File): Promise<string> {
   // Decode the browser File and draw a small thumbnail. This avoids depending
   // on Android's temporary picker/blob URL after the upload request completes.
@@ -513,7 +525,7 @@ async function createComposerImageThumbnail(file: File): Promise<string> {
   }
 }
 
-async function prepareProfileAvatarForUpload(file: File): Promise<{ file: File; previewUrl: string }> {
+async function prepareProfileAvatarForUpload(file: File): Promise<{ file: File; previewDataUrl: string }> {
   let source: CanvasImageSource;
   let sourceWidth = 0;
   let sourceHeight = 0;
@@ -552,7 +564,7 @@ async function prepareProfileAvatarForUpload(file: File): Promise<{ file: File; 
     const baseName = file.name.replace(/\.[^.]+$/, "") || "misma-profile";
     const outputName = baseName + (outputType === "image/png" ? ".png" : ".jpg");
     const normalizedFile = new File([blob], outputName, { type: outputType, lastModified: file.lastModified });
-    return { file: normalizedFile, previewUrl: URL.createObjectURL(normalizedFile) };
+    return { file: normalizedFile, previewDataUrl: await readComposerFileAsDataUrl(normalizedFile) };
   } finally {
     bitmap?.close();
   }
@@ -1110,6 +1122,8 @@ function Dashboard() {
   const [profileEmail, setProfileEmail] = useState("");
   const [profileImage, setProfileImage] = useState("");
   const profileAvatarPathRef = useRef<string | null>(null);
+  const [profileAvatarStoragePath, setProfileAvatarStoragePath] = useState<string | null>(null);
+  const [profileAvatarPreparing, setProfileAvatarPreparing] = useState(false);
   const profileAvatarPreviewUrlRef = useRef<string | null>(null);
   const profileAvatarFallbackUrlRef = useRef<string | null>(null);
   const profileAvatarSelectionRef = useRef(0);
@@ -1456,23 +1470,8 @@ function Dashboard() {
           setProfileNameDraft(resolvedName);
           const avatarPath = typeof metadata.avatar_path === "string" && metadata.avatar_path.length > 0 ? metadata.avatar_path : null;
           profileAvatarPathRef.current = avatarPath;
-          if (avatarPath) {
-            void (async () => {
-              const storage = getSupabaseClient().storage.from("misma-media");
-              const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
-              if (!active) return;
-              if (!downloadError && avatarBlob && avatarBlob.type.startsWith("image/")) {
-                const fallbackUrl = URL.createObjectURL(avatarBlob);
-                if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
-                profileAvatarFallbackUrlRef.current = fallbackUrl;
-                setProfileImage(fallbackUrl);
-              } else {
-                setProfileImage(image ?? "");
-              }
-            })().catch(() => { if (active) setProfileImage(image ?? ""); });
-          } else {
-            setProfileImage(image ?? "");
-          }
+          setProfileAvatarStoragePath(avatarPath);
+          setProfileImage(avatarPath ? "" : (image ?? ""));
           setToken(s.access_token);
           setAuthChecked(true);
         },
@@ -1485,6 +1484,22 @@ function Dashboard() {
       if (active) navigate({ to: "/login", replace: true });
     }
   }, [navigate]);
+
+  useEffect(() => {
+    const path = profileAvatarStoragePath;
+    if (!path) return;
+    let active = true;
+    void (async () => {
+      const { data: avatarBlob, error } = await getSupabaseClient().storage.from("misma-media").download(path);
+      if (error || !avatarBlob) throw error || new Error("The saved profile photo could not be downloaded.");
+      const dataUrl = await readStoredProfileImage(avatarBlob, path);
+      if (active) setProfileImage(dataUrl);
+    })().catch((cause) => {
+      console.warn("[misma] Could not load the saved profile photo.", cause);
+      // Keep a newly selected preview visible if the persisted copy is temporarily unavailable.
+    });
+    return () => { active = false; };
+  }, [profileAvatarStoragePath]);
 
   const isAuthenticated = Boolean(token);
 
@@ -2065,7 +2080,7 @@ function Dashboard() {
 
   const saveAccountProfile = async () => {
     const name = profileNameDraft.trim();
-    if (!token || profileSaving) return;
+    if (!token || profileSaving || profileAvatarPreparing) return;
     if (name.length < 2 || name.length > 80) {
       setProfileError("Enter a profile name between 2 and 80 characters.");
       return;
@@ -2099,20 +2114,11 @@ function Dashboard() {
       setProfileName(name);
       if (avatarPath) {
         profileAvatarPathRef.current = avatarPath;
-        const storage = client.storage.from("misma-media");
-        const { data: avatarBlob, error: downloadError } = await storage.download(avatarPath);
-        if (!downloadError && avatarBlob && avatarBlob.type.startsWith("image/")) {
-          const fallbackUrl = URL.createObjectURL(avatarBlob);
-          if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
-          profileAvatarFallbackUrlRef.current = fallbackUrl;
-          setProfileImage(fallbackUrl);
-          if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
-          profileAvatarPreviewUrlRef.current = null;
-        } else if (profileAvatarPreviewUrlRef.current) {
-          setProfileImage(profileAvatarPreviewUrlRef.current);
-        }
+        setProfileAvatarStoragePath(avatarPath);
       }
       setProfileAvatarFile(null);
+      setProfileAvatarPreparing(false);
+      profileAvatarPreviewUrlRef.current = null;
       setProfileSaved(true);
       window.setTimeout(() => setProfileSaved(false), 3000);
     } catch (cause) {
@@ -2128,13 +2134,8 @@ function Dashboard() {
     try {
       const storage = getSupabaseClient().storage.from("misma-media");
       const { data: avatarBlob, error: downloadError } = await storage.download(path);
-      if (downloadError || !avatarBlob || !avatarBlob.type.startsWith("image/")) {
-        throw downloadError || new Error("Could not load the profile photo.");
-      }
-      const fallbackUrl = URL.createObjectURL(avatarBlob);
-      if (profileAvatarFallbackUrlRef.current) URL.revokeObjectURL(profileAvatarFallbackUrlRef.current);
-      profileAvatarFallbackUrlRef.current = fallbackUrl;
-      setProfileImage(fallbackUrl);
+      if (downloadError || !avatarBlob) throw downloadError || new Error("Could not load the profile photo.");
+      setProfileImage(await readStoredProfileImage(avatarBlob, path));
     } catch { setProfileImage(""); }
   };
 
@@ -4802,18 +4803,17 @@ function Dashboard() {
                     }
                     const selectionId = profileAvatarSelectionRef.current + 1;
                     profileAvatarSelectionRef.current = selectionId;
+                    setProfileAvatarFile(null);
+                    setProfileAvatarPreparing(true);
                     setProfileError("");
-                    void prepareProfileAvatarForUpload(file).then(({ file: preparedFile, previewUrl }) => {
-                      if (selectionId !== profileAvatarSelectionRef.current) {
-                        URL.revokeObjectURL(previewUrl);
-                        return;
-                      }
-                      if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
-                      profileAvatarPreviewUrlRef.current = previewUrl;
+                    void prepareProfileAvatarForUpload(file).then(({ file: preparedFile, previewDataUrl }) => {
+                      if (selectionId !== profileAvatarSelectionRef.current) return;
                       setProfileAvatarFile(preparedFile);
-                      setProfileImage(previewUrl);
+                      setProfileImage(previewDataUrl);
+                      setProfileAvatarPreparing(false);
                     }).catch((cause) => {
                       if (selectionId === profileAvatarSelectionRef.current) {
+                        setProfileAvatarPreparing(false);
                         setProfileError(cause instanceof Error ? cause.message : "Could not prepare the selected profile photo.");
                       }
                     });
@@ -4824,13 +4824,14 @@ function Dashboard() {
                     <label htmlFor="misma-profile-name">Profile name</label>
                     <input id="misma-profile-name" className="aichat-input" value={profileNameDraft} maxLength={80} onChange={(event) => setProfileNameDraft(event.target.value)} placeholder="Your name" />
                   </div>
-                  <button type="button" className="aichat-action-btn" onClick={() => void saveAccountProfile()} disabled={profileSaving}>
-                    {profileSaving ? "Saving…" : "Save changes"}
+                  <button type="button" className="aichat-action-btn" onClick={() => void saveAccountProfile()} disabled={profileSaving || profileAvatarPreparing}>
+                    {profileSaving ? "Saving…" : profileAvatarPreparing ? "Preparing photo…" : "Save changes"}
                   </button>
                 </div>
                 {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
                 {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
-                {profileAvatarFile && <p className="aichat-settings-hint">New profile photo selected. Save changes to upload it.</p>}
+                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
+                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
               </section>
               <div className="aichat-settings-divider-label" id="settings-general">General</div>
               <div className="aichat-settings-intro">

@@ -627,3 +627,31 @@ test("composer attachment tray aligns left and sent user attachments align to th
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content\s*\{[\s\S]*?width:\s*min\(85%, 560px\)[\s\S]*?margin-left:\s*auto/);
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments\s*\{[^}]*justify-content:\s*flex-end/);
 });
+
+
+test("sent user attachments align to the right edge while composer files remain left", async () => {
+  const styles = await read("../src/styles.css");
+  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-start !important/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content\s*\{[\s\S]*?width:\s*100% !important[\s\S]*?align-items:\s*flex-end/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content > \.aichat-message-attachments\.is-user-attachments\s*\{[\s\S]*?align-self:\s*flex-end[\s\S]*?justify-content:\s*flex-end/);
+});
+
+test("profile avatar downloads happen outside the Supabase auth callback and render as typed data URLs", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const authCallback = dashboard.slice(
+    dashboard.indexOf("onAuthStateChange("),
+    dashboard.indexOf("}, [navigate]);")
+  );
+  assert.doesNotMatch(authCallback, /storage\.download/);
+  assert.match(dashboard, /useEffect\(\(\) => \{[\s\S]*?profileAvatarStoragePath[\s\S]*?storage\.from\("misma-media"\)\.download\(path\)/);
+  assert.match(dashboard, /function readStoredProfileImage\(blob: Blob, storagePath: string\)/);
+  assert.match(dashboard, /setProfileImage\(dataUrl\)/);
+});
+
+test("profile photo save waits for image preparation and persists the selected storage path", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /profileAvatarPreparing/);
+  assert.match(dashboard, /disabled=\{profileSaving \|\| profileAvatarPreparing\}/);
+  assert.match(dashboard, /setProfileAvatarStoragePath\(avatarPath\)/);
+  assert.match(dashboard, /contentType: profileAvatarFile\.type \|\| "image\/jpeg"/);
+});
