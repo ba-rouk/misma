@@ -2233,8 +2233,9 @@ function Dashboard() {
   ): Promise<string | null> => {
     let textToSend = (customPrompt ?? draft).trim();
     if ((!textToSend && !selectedFiles.length) || isSending || !token || options.signal?.aborted) return null;
-    if (!textToSend) {
-      textToSend = "Please inspect the attached files and explain the important details.";
+    if (selectedFiles.some((file) => composerUploadStatuses.get(file) !== "ready")) {
+      setChatError("Wait for every attachment to finish uploading, or retry/remove the failed file.");
+      return null;
     }
 
     const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
@@ -2338,7 +2339,10 @@ function Dashboard() {
 
       setSelectedFiles([]);
       selectedComposerFilesRef.current = [];
+      for (const file of filesToSend) releaseComposerPreviewUrl(file);
       uploadedComposerAttachmentsRef.current.clear();
+      setComposerUploadStatuses((current) => { const nextStatus = new Map(current); filesToSend.forEach((file) => nextStatus.delete(file)); return nextStatus; });
+      setComposerUploadProgress((current) => { const nextProgress = new Map(current); filesToSend.forEach((file) => nextProgress.delete(file)); return nextProgress; });
       setThinkHarder(false);
       setFailedMessageId(null);
       setFailedAction(null);
