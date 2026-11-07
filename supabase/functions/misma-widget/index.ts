@@ -1005,30 +1005,31 @@ Deno.serve(async (request: Request) => {
     try { return await handlePhoneWebhook(request, db); }
     catch (error) {
       console.error("[misma-widget] Phone webhook error:", error instanceof Error ? error.name : "unknown");
-      return new Response("<Response><Say>Sor      if (input.action === "widget-config") {
-        return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) });
-      }
-est);
+      return new Response("<Response><Say>Sorry, this call could not be completed.</Say><Hangup/></Response>", { status: 500, headers: { "Content-Type": "text/xml" } });
+    }
+  }
+  if (request.method === "POST" && (url.searchParams.get("channel") === "whatsapp" || request.headers.get("x-hub-signature-256"))) {
+    try { return await handleWhatsAppWebhook(request, db); }
+    catch (error) {
+      console.error("[misma-widget] WhatsApp webhook error:", error instanceof Error ? error.name : "unknown");
+      return new Response("EVENT_RECEIVED", { status: 200, headers: cors });
+    }
+  }
+  if (request.method !== "POST") return respond(405, { error: "Use POST for Misma widget actions." });
+
+  let input: AnyRecord;
+  try {
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > 120000) return respond(413, { error: "Request body is too large." });
+    input = JSON.parse(raw);
+  } catch { return respond(400, { error: "Request body must be valid JSON." }); }
+  if (!isRecord(input)) return respond(400, { error: "Invalid request." });
+
+  try {
+    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "widget-config") {
+      const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
-        const countryCode = safeString(site.whatsapp_country_code, 8).replace(/\D/g, "");
-        const subscriberNumber = safeString(site.whatsapp_number, 24).replace(/\D/g, "").replace(/^0+/, "");
-        const fullNumber = countryCode + subscriberNumber;
-        const message = safeString(site.whatsapp_message, 1000);
-        const whatsappUrl = countryCode && subscriberNumber && fullNumber.length >= 7 && fullNumber.length <= 15 && message
-          ? "https://wa.me/" + fullNumber + "?text=" + encodeURIComponent(message)
-          : null;
-        let instagramUrl: string | null = null;
-        try {
-          const parsedInstagram = new URL(safeString(site.instagram_url, 2048));
-          const instagramHost = parsedInstagram.hostname.toLowerCase().replace(/^www\./, "");
-          const instagramHandle = parsedInstagram.pathname.split("/").filter(Boolean)[0] || "";
-          if (parsedInstagram.protocol === "https:" && instagramHost === "instagram.com" && /^[A-Za-z0-9._]{1,30}$/.test(instagramHandle)) {
-            instagramUrl = "https://instagram.com/" + instagramHandle;
-          }
-        } catch {
-          instagramUrl = null;
-        }
-        return respond(200, { ok: true, whatsapp_url: whatsappUrl, instagram_url: instagramUrl });
+        return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) });
       }
       await db.from("website_connections").update({
         status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
