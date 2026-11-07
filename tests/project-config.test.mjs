@@ -735,7 +735,8 @@ test("website widget resize handle is in the top-right header and drag-resizes f
   const handle = widget.indexOf("class='resize-handle'");
   const headerEnd = widget.indexOf("</header>", handle);
   assert.ok(handle >= 0 && headerEnd > handle, "resize control should be inside the widget header");
-  assert.match(widget, /resizeState\.width\+resizeState\.x-event\.clientX/);
+  assert.match(widget, /resizeState\.width\+event\.clientX-resizeState\.x/);
+  assert.match(widget, /resizeState\.height\+resizeState\.y-event\.clientY/);
   assert.match(widget, /localStorage\.setItem\(sizeStore/);
 });
 
