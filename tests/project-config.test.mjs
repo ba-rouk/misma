@@ -855,13 +855,19 @@ test("dashboard notification feed shows named human requests and counts unread n
 });
 
 
-test("widget microphone and speech talk start from the click and stay visible on permission errors", async () => {
+test("widget microphone and speech talk show an explicit permission dialog and use dashboard female voice selection", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.doesNotMatch(widget, /requestMicPermission/);
-  assert.match(widget, /micButton\.addEventListener\("click",[\s\S]*?listen\(false\)/);
-  assert.match(widget, /function startVoiceSession\(\)[\s\S]*?voiceView\.classList\.add\("open"\)[\s\S]*?listen\(true\)/);
-  assert.match(widget, /setVoiceState\("idle",errorMessage\)/);
-  assert.match(widget, /Allow microphone access for this website in your browser settings/);
+  assert.match(widget, /class='mic-permission-backdrop'/);
+  assert.match(widget, /Allow microphone access\\?/);
+  assert.match(widget, /micPermissionContinue\\.addEventListener\\("click",requestMicPermissionAndStart\\)/);
+  assert.match(widget, /navigator\\.mediaDevices\\.getUserMedia\\(\\{audio:true\\}\\)/);
+  assert.match(widget, /showMicPermissionPrompt\\("dictation"\\)/);
+  assert.match(widget, /showMicPermissionPrompt\\("speech"\\)/);
+  assert.match(widget, /function beginVoiceSessionAfterPermission\\(\\)[\\s\\S]*?listen\\(true\\)/);
+  assert.match(widget, /function getFemaleVoice\\(\\)[\\s\\S]*?return female\\[1\\]\\|\\|female\\[0\\]/);
+  assert.match(widget, /synth\\.resume\\(\\)/);
+  assert.match(widget, /setVoiceState\\("idle",errorMessage\\)/);
+  assert.match(widget, /Microphone access is blocked for this website/);
   assert.match(widget, /error==="audio-capture"/);
   assert.doesNotMatch(widget, /minimized/);
   assert.doesNotThrow(() => new Function(widget), "widget microphone code must parse");
