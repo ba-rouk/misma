@@ -8356,6 +8356,7 @@ html, body, #app-root {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+.aichat-website-scan-feedback.is-loading { color: #cbd5e1; }
 .aichat-website-scan-feedback.is-success { color: #86efac; }
 .aichat-website-scan-feedback.is-error { color: #fca5a5; }
 .aichat-whatsapp-number-row {
