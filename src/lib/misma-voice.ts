@@ -190,17 +190,19 @@ type DictationOptions = {
   lang?: string;
   onText?: (transcript: string) => void;
   onDone?: (finalTranscript: string) => void;
+  onAudioRecordingReady?: (file: File) => void;
   onState?: (state: DictationState) => void;
   onAmplitude?: (level: number) => void;
   onError?: (code: string) => void;
 };
 
-/** Browser-native text dictation. It briefly requests mic permission, releases the stream,
- * then lets SpeechRecognition own the microphone. No analyser, recording, or audio upload. */
+/** Browser-native live dictation plus an audio note captured from the same user gesture.
+ * The caller receives a typed audio File only after the visitor presses Stop/Send. */
 export function createDictation({
   lang = typeof navigator === "undefined" ? "en-US" : navigator.language || "en-US",
   onText,
   onDone,
+  onAudioRecordingReady,
   onState,
   onAmplitude,
   onError,
@@ -212,12 +214,45 @@ export function createDictation({
   let restartTimer: number | null = null;
   let finishTimer: number | null = null;
   let generation = 0;
+  let audioStream: MediaStream | null = null;
+  let mediaRecorder: MediaRecorder | null = null;
+  let audioChunks: Blob[] = [];
 
   const clearTimers = () => {
     if (restartTimer !== null) window.clearTimeout(restartTimer);
     if (finishTimer !== null) window.clearTimeout(finishTimer);
     restartTimer = null;
     finishTimer = null;
+  };
+
+  const finishAudioRecording = (keep: boolean) => {
+    const recorder = mediaRecorder;
+    const stream = audioStream;
+    mediaRecorder = null;
+    audioStream = null;
+    const complete = () => {
+      const mimeType = (recorder?.mimeType || audioChunks[0]?.type || "audio/webm").toLowerCase();
+      const blob = new Blob(audioChunks, { type: mimeType });
+      audioChunks = [];
+      stopTracks(stream);
+      if (!keep || blob.size < 256) return;
+      const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+      const file = new File([blob], "misma-voice-note-" + Date.now() + "." + extension, {
+        type: mimeType.split(";")[0],
+        lastModified: Date.now(),
+      });
+      onAudioRecordingReady?.(file);
+    };
+    if (!recorder || recorder.state === "inactive") {
+      complete();
+      return;
+    }
+    recorder.addEventListener("stop", complete, { once: true });
+    try {
+      recorder.stop();
+    } catch {
+      complete();
+    }
   };
 
   const finishResources = (notifyDone: boolean) => {
@@ -232,6 +267,7 @@ export function createDictation({
       current.onspeechend = null;
       try { current.abort(); } catch { /* Recognition may already have stopped. */ }
     }
+    finishAudioRecording(notifyDone);
     active = false;
     onAmplitude?.(0);
     onState?.("idle");
@@ -299,7 +335,8 @@ export function createDictation({
   return {
     async start(): Promise<boolean> {
       if (active) return true;
-      if (!getSpeechRecognition()) {
+      const Recognition = getSpeechRecognition();
+      if (!Recognition && typeof MediaRecorder === "undefined") {
         onError?.("unsupported");
         return false;
       }
@@ -308,13 +345,42 @@ export function createDictation({
       const startGeneration = generation;
       finalText = "";
       interimText = "";
+      audioChunks = [];
       clearTimers();
       onState?.("requesting");
       try {
-        await ensureMicPermission();
-        if (!active || startGeneration !== generation) return false;
+        // getUserMedia is invoked synchronously inside the microphone click path
+        // before the first await, so the browser can present its permission prompt.
+        const stream = await requestMicrophoneStream();
+        if (!active || startGeneration !== generation) {
+          stopTracks(stream);
+          return false;
+        }
+        if (typeof MediaRecorder !== "undefined") {
+          const preferredTypes = [
+            "audio/mp4",
+            "audio/webm;codecs=opus",
+            "audio/webm",
+            "audio/ogg;codecs=opus",
+            "audio/ogg",
+          ];
+          const supportedType = preferredTypes.find((type) => {
+            try { return MediaRecorder.isTypeSupported(type); } catch { return false; }
+          });
+          const recorder = supportedType
+            ? new MediaRecorder(stream, { mimeType: supportedType })
+            : new MediaRecorder(stream);
+          audioStream = stream;
+          mediaRecorder = recorder;
+          recorder.addEventListener("dataavailable", (event) => {
+            if (event.data && event.data.size > 0) audioChunks.push(event.data);
+          });
+          recorder.start(250);
+        } else {
+          stopTracks(stream);
+        }
         onState?.("listening");
-        beginRecognition();
+        if (Recognition) beginRecognition();
         return true;
       } catch (cause) {
         if (startGeneration !== generation) return false;
@@ -327,7 +393,7 @@ export function createDictation({
     },
 
     stop(): void {
-      if (!active && !recognition) return;
+      if (!active && !recognition && !mediaRecorder) return;
       generation += 1;
       active = false;
       clearTimers();
@@ -353,7 +419,7 @@ export function createDictation({
 
     get active(): boolean { return active; },
   };
-};
+}
 
 type VoiceModeOptions = {
   send: (text: string, signal: AbortSignal) => Promise<string | null | undefined>;
