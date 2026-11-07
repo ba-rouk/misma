@@ -7327,7 +7327,9 @@ html, body, #app-root {
   height: 29px;
   overflow: visible;
   transform: rotate(-90deg);
+  animation: misma-upload-spin .85s linear infinite;
 }
+.aichat-composer-upload-state.is-determinate .aichat-composer-upload-ring { animation: none; }
 .aichat-composer-upload-track,
 .aichat-composer-upload-progress {
   fill: none;
@@ -7534,8 +7536,10 @@ html, body, #app-root {
 }
 @keyframes misma-attachment-ready {
   0% { opacity: 0; transform: scale(.55); }
-  65% { opacity: 1; transform: scale(1.16); }
-  100% { opacity: 1; transform: scale(1); }
+  20% { opacity: 1; transform: scale(1.16); }
+  35% { opacity: 1; transform: scale(1); }
+  75% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.9); }
 }
 @media (max-width: 600px) {
   .aichat-composer-attachment-card { flex-basis: 80px; width: 80px; min-width: 80px; }
