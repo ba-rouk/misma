@@ -298,7 +298,7 @@ try{
 }catch(error){}
 var resizeState=null;
 resizeHandle.addEventListener("pointerdown",function(event){if(panel.classList.contains("minimized"))return;event.preventDefault();resizeState={x:event.clientX,y:event.clientY,width:panel.offsetWidth,height:panel.offsetHeight};try{resizeHandle.setPointerCapture(event.pointerId);}catch(error){}});
-resizeHandle.addEventListener("pointermove",function(event){if(!resizeState)return;var width=Math.max(270,Math.min(window.innerWidth-28,resizeState.width+resizeState.x-event.clientX));var height=Math.max(350,Math.min(window.innerHeight-96,resizeState.height+event.clientY-resizeState.y));panel.style.width=width+"px";panel.style.height=height+"px";});
+resizeHandle.addEventListener("pointermove",function(event){if(!resizeState)return;var width=Math.max(270,Math.min(window.innerWidth-28,resizeState.width+event.clientX-resizeState.x));var height=Math.max(350,Math.min(window.innerHeight-96,resizeState.height+resizeState.y-event.clientY));panel.style.width=width+"px";panel.style.height=height+"px";});
 function finishResize(){if(!resizeState)return;resizeState=null;saveSize();}
 resizeHandle.addEventListener("pointerup",finishResize);resizeHandle.addEventListener("pointercancel",finishResize);
 
