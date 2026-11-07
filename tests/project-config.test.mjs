@@ -702,7 +702,7 @@ test("website widget connections support shared keys and safe removal", async ()
   assert.match(dashboard, /Use one widget for all connected websites/);
   assert.match(dashboard, /Delete connection/);
   assert.match(dashboard, /minimizedWebsiteIds/);
-  assert.match(dashboard, /aichat-website-minimize/);
+  assert.match(dashboard, /aichat-website-expand/);
   assert.match(dashboard, /aichat-website-card-details/);
   assert.match(widget, /function initWidget\(\)/);
   assert.match(widget, /action:"heartbeat"/);
@@ -722,14 +722,14 @@ test("embedded chat widget has in-field green send, microphone dictation and fem
   assert.doesNotThrow(() => new Function(widget), "the hosted widget must parse before deployment");
 });
 
-test("embedded chat widget has no header minimize control and still supports resizing and saved size", async () => {
+test("embedded chat widget header has no minimize or expand/resize controls", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.doesNotMatch(widget, /class='minimize'/);
   assert.doesNotMatch(widget, /minimizeButton\.addEventListener/);
   assert.doesNotMatch(widget, /minimized/);
-  assert.match(widget, /class='resize-handle'/);
-  assert.match(widget, /pointermove/);
-  assert.match(widget, /localStorage\.setItem\(sizeStore/);
+  assert.doesNotMatch(widget, /resize-handle|sizeStore|Resize widget|saveSize|resizeState/);
+  assert.match(widget, /class='human'/);
+  assert.match(widget, /class='close'/);
 });
 
 test("shared installation script uses the same widget key while the server checks each registered host", async () => {
@@ -746,14 +746,15 @@ test("shared installation script uses the same widget key while the server check
 });
 
 
-test("website widget resize handle is in the top-right header and drag-resizes from that corner", async () => {
+test("website widget header uses social controls instead of expand and resize actions", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  const handle = widget.indexOf("class='resize-handle'");
-  const headerEnd = widget.indexOf("</header>", handle);
-  assert.ok(handle >= 0 && headerEnd > handle, "resize control should be inside the widget header");
-  assert.match(widget, /resizeState\.width\+event\.clientX-resizeState\.x/);
-  assert.match(widget, /resizeState\.height\+resizeState\.y-event\.clientY/);
-  assert.match(widget, /localStorage\.setItem\(sizeStore/);
+  const whatsapp = widget.indexOf("class='social-link whatsapp-link'");
+  const instagram = widget.indexOf("class='social-link instagram-link'");
+  const person = widget.indexOf("class='human'");
+  const close = widget.indexOf("class='close'");
+  const headerEnd = widget.indexOf("</header>", close);
+  assert.ok(whatsapp >= 0 && instagram > whatsapp && person > instagram && close > person && headerEnd > close);
+  assert.doesNotMatch(widget, /resizeState|sizeStore|resize-handle/);
 });
 
 test("website widget dictation shows a recording waveform and waits for Send to submit", async () => {
@@ -873,4 +874,37 @@ test("embedded speech talk is English-only and does not display transcripts or r
   assert.ok(widget.includes('instance.lang=isVoiceChat?"en-US"'));
   assert.ok(widget.includes("^en(?:-|$)"));
   assert.ok(edge.includes("Always understand and respond in English"));
+});
+
+
+test("website social links are owner-scoped and WhatsApp links are composed from stored parts", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const migration = await read("../supabase/migrations/20261108100000_website_social_links.sql");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(api, /saveWebsiteSocialLinks/);
+  assert.match(api, /Only the workspace owner can edit website social links/);
+  assert.match(api, /whatsappCountryCode: z\.string\(\)\.regex\(\/\^\\d\{1,4\}\$\/\)/);
+  assert.match(edge, /input\.action === "widget-config"/);
+  assert.match(edge, /"https:\/\/wa\.me\/" \+ fullNumber \+ "\?text=" \+ encodeURIComponent\(message\)/);
+  assert.match(dashboard, /Only instagram\.com profile URLs are accepted/);
+  assert.match(dashboard, /totalDigits < 7 \|\| totalDigits > 15/);
+  assert.match(migration, /website_connections_update_owner/);
+  assert.match(migration, /workspace\.owner_id = \(select auth\.uid\(\)\)/);
+});
+
+test("connected website settings and social widget controls stay accessible on mobile", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  const css = await read("../src/styles.css");
+  assert.match(dashboard, /className="aichat-website-expand"/);
+  assert.match(dashboard, /aria-expanded=\{!minimizedWebsiteIds\.includes\(site\.id\)\}/);
+  assert.match(dashboard, /Add websites/);
+  assert.match(runtime, /class='social-link whatsapp-link'/);
+  assert.match(runtime, /class='social-link instagram-link'/);
+  assert.match(runtime, /target='_blank' rel='noopener noreferrer'/);
+  assert.doesNotMatch(runtime, /resize-handle|sizeStore|Resize widget|saveSize|resizeState/);
+  assert.match(css, /\.aichat-website-expand[\s\S]*?width: 40px/);
+  assert.match(css, /@media \(max-width: 560px\)[\s\S]*?aichat-website-row-heading/);
+  assert.doesNotThrow(() => new Function(runtime), "widget runtime must parse");
 });
