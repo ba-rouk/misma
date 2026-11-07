@@ -580,11 +580,50 @@ test("composer image previews decode selected files and show a centered upload i
   assert.match(styles, /\.aichat-composer-upload-ring\s*\{[^}]*width:\s*30px/);
 });
 
-test("composer and sent attachments use compact right-aligned square previews", async () => {
+test("composer previews align left while sent attachments stay compact and right-aligned", async () => {
   const styles = await read("../src/styles.css");
 
-  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-end/);
+  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-start !important/);
   assert.match(styles, /\.aichat-composer-attachment-square,\s*\.aichat-composer-attachment-square\.is-file\s*\{[^}]*width:\s*88px/);
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-attachments\.is-user-attachments\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?max-width:\s*352px/);
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments \.aichat-attachment-image-link\s*\{[^}]*width:\s*112px[^}]*height:\s*112px/);
+});
+
+
+test("composer re-selection retries the existing file card rather than appending a duplicate", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /const fingerprint = \(file: File\)/);
+  assert.match(dashboard, /const existing = current\.find\(\(item\) => fingerprint\(item\) === key\)/);
+  assert.match(dashboard, /composerUploadStatuses\.get\(existing\) === "error"/);
+  assert.match(dashboard, /retryFiles\.push\(existing\)/);
+});
+
+test("attachment send retries reuse the same conversation and existing saved message", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+  assert.match(dashboard, /let sendConversationId = currentConversationId/);
+  assert.match(dashboard, /if \(!editId && filesToSend\.length && !sendConversationId\)/);
+  assert.match(dashboard, /retryExistingMessage:\s*true/);
+  assert.match(dashboard, /item\.id === tempUserId \? \{ \.\.\.item, attachments: \[\] \}/);
+  assert.match(edgeFunction, /const retryExistingMessage = input\.retryExistingMessage === true/);
+  assert.match(edgeFunction, /sameAttachmentPaths\(lastUserMessage\.attachments\)/);
+  assert.match(edgeFunction, /provider: "retry-existing"/);
+  assert.match(edgeFunction, /let userMessage: JsonRecord \| null = retryExistingUserMessage/);
+});
+
+test("profile photos are decoded and normalized before preview and stored avatars load from private Storage", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /prepareProfileAvatarForUpload/);
+  assert.match(dashboard, /canvas\.toBlob/);
+  assert.match(dashboard, /setProfileAvatarFile\(preparedFile\)/);
+  assert.match(dashboard, /await storage\.download\(avatarPath\)/);
+  assert.match(dashboard, /await storage\.download\(path\)/);
+  assert.match(dashboard, /profileAvatarSelectionRef/);
+});
+
+test("composer attachment tray aligns left and sent user attachments align to the message right edge", async () => {
+  const styles = await read("../src/styles.css");
+  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-start !important/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content\s*\{[\s\S]*?width:\s*min\(85%, 560px\)[\s\S]*?margin-left:\s*auto/);
+  assert.match(styles, /\.aichat-message-attachments\.is-user-attachments\s*\{[^}]*justify-content:\s*flex-end/);
 });

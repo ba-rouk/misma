@@ -877,6 +877,7 @@ Deno.serve(async (request) => {
   const regenerate = input.regenerate === true;
   const regenerateMedia = input.regenerateMedia === true;
   const retryMedia = input.retryMedia === true;
+  const retryExistingMessage = input.retryExistingMessage === true;
   const thinkHarder = input.thinkHarder === true;
   const voice = input.voice === true;
   const editMessageId = input.editMessageId ?? null;
@@ -1581,6 +1582,7 @@ Deno.serve(async (request) => {
 
     let history: ChatMessage[] = [];
     let pivotMessage: { id: number } | null = null;
+    let retryExistingUserMessage: JsonRecord | null = null;
     if (conversationId !== null) {
       const { data: conversation, error: conversationError } = await db
         .from("conversations")
@@ -1590,6 +1592,55 @@ Deno.serve(async (request) => {
         .maybeSingle();
       if (conversationError) throw new Error("Could not load conversation.");
       if (!conversation) return jsonResponse(404, { error: "Conversation not found." });
+
+      if (retryExistingMessage && action === "chat" && editMessageId === null && !regenerate) {
+        const { data: recentMessages, error: recentMessagesError } = await db.from("messages")
+          .select("id,role,text,attachments,created_at")
+          .eq("conversation_id", conversationId)
+          .order("id", { ascending: false })
+          .limit(8);
+        if (recentMessagesError) throw new Error("Could not verify the message being retried.");
+        const lastUserMessage = (recentMessages ?? []).find((row) =>
+          row.role === "human" || row.role === "customer"
+        );
+        const sameAttachmentPaths = (stored: unknown): boolean => {
+          const paths = Array.isArray(stored)
+            ? stored.filter((item): item is JsonRecord => isRecord(item) && typeof item.path === "string").map((item) => item.path as string)
+            : [];
+          return paths.length === requestedAttachments.length &&
+            paths.every((path, index) => path === requestedAttachments[index]?.path);
+        };
+        const isRecent = typeof lastUserMessage?.created_at === "string" &&
+          Date.now() - new Date(lastUserMessage.created_at).getTime() <= 10 * 60 * 1000;
+        if (lastUserMessage && isRecent && lastUserMessage.text === message &&
+            sameAttachmentPaths(lastUserMessage.attachments)) {
+          retryExistingUserMessage = {
+            id: String(lastUserMessage.id),
+            role: "human",
+            text: lastUserMessage.text,
+            created_at: lastUserMessage.created_at,
+            attachments: prepared.stored,
+          };
+          pivotMessage = { id: Number(lastUserMessage.id) };
+          const newestMessage = recentMessages?.[0];
+          if (newestMessage && newestMessage.role === "ai" &&
+              Number(newestMessage.id) > Number(lastUserMessage.id)) {
+            return jsonResponse(200, {
+              conversationId,
+              userMessage: retryExistingUserMessage,
+              aiMessage: {
+                id: String(newestMessage.id),
+                role: "ai",
+                text: newestMessage.text,
+                created_at: newestMessage.created_at,
+                attachments: Array.isArray(newestMessage.attachments) ? newestMessage.attachments : [],
+              },
+              provider: "retry-existing",
+              usedFallback: false,
+            });
+          }
+        }
+      }
 
       if (regenerate) {
         const { data: lastUserMessage, error: lastUserError } = await db
@@ -1827,7 +1878,7 @@ Deno.serve(async (request) => {
       if (editError || !editedRow) throw new Error("Could not update the selected message.");
     }
 
-    let userMessage: JsonRecord | null = null;
+    let userMessage: JsonRecord | null = retryExistingUserMessage;
     let aiMessage: JsonRecord | null = null;
     if (pivotMessage) {
       // The database function locks the conversation and replaces its latest answer atomically.
