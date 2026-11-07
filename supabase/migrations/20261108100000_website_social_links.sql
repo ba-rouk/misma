@@ -8,7 +8,7 @@ alter table public.website_connections
 alter table public.website_connections
   drop constraint if exists website_connections_instagram_url_check,
   add constraint website_connections_instagram_url_check
-    check (instagram_url is null or instagram_url ~ '^https://instagram\\.com/[A-Za-z0-9._]{1,30}$'),
+    check (instagram_url is null or instagram_url ~ '^https://instagram[.]com/[A-Za-z0-9._]{1,30}$'),
   drop constraint if exists website_connections_whatsapp_country_code_check,
   add constraint website_connections_whatsapp_country_code_check
     check (whatsapp_country_code is null or whatsapp_country_code ~ '^[0-9]{1,4}$'),
