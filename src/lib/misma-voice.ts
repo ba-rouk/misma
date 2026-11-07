@@ -362,6 +362,7 @@ export function createVoiceMode({
   let on = false;
   let muted = false;
   let mode: VoiceConversationMode = "hands-free";
+  let currentVoicePreset = voicePreset;
   let state: VoiceModeState = "idle";
   let recognition: SpeechRecognitionLike | null = null;
   let controller: AbortController | null = null;
@@ -482,12 +483,12 @@ export function createVoiceMode({
       }
       const utterance = new SpeechSynthesisUtterance(chunks[index++]);
       utterance.lang = lang;
-      utterance.pitch = voicePreset === "girl" ? 1.28 : voicePreset === "boy" ? 1.18 : voicePreset === "woman" ? 1 : 0.9;
+      utterance.pitch = currentVoicePreset === "girl" ? 1.28 : currentVoicePreset === "boy" ? 1.18 : currentVoicePreset === "woman" ? 1 : 0.9;
       const available = synth.getVoices();
       const female = available.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
-      const male = available.filter((voice) => /(?:^|[\\s_-])(male|man|boy)(?:$|[\\s_-])|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
-      const matching = voicePreset === "girl" || voicePreset === "woman" ? female : male;
-      const preferredIndex = voicePreset === "girl" || voicePreset === "boy" ? 0 : 1;
+      const male = available.filter((voice) => /(^|[^A-Za-z])(male|man|boy)(?=$|[^A-Za-z])|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
+      const matching = currentVoicePreset === "girl" || currentVoicePreset === "woman" ? female : male;
+      const preferredIndex = currentVoicePreset === "girl" || currentVoicePreset === "boy" ? 0 : 1;
       const preferredVoice = matching[preferredIndex] || matching[0] || available.find((voice) => voice.default);
       if (preferredVoice) utterance.voice = preferredVoice;
       utterance.onend = speakNext;
@@ -680,6 +681,9 @@ export function createVoiceMode({
   return {
     start,
     stop,
+    setVoicePreset(nextPreset: "girl" | "woman" | "boy" | "man") {
+      currentVoicePreset = nextPreset;
+    },
     interrupt,
     setMuted,
     setMode,
