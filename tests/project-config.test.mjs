@@ -521,6 +521,8 @@ test("attachments stay private, show per-file progress, and are separate from us
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments/);
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments\s*\{[^}]*flex-wrap:\s*wrap/);
   assert.match(edgeFunction, /userVisibleMessage/);
+  assert.match(edgeFunction, /extractDocxText/);
+  assert.match(edgeFunction, /word\/document\.xml/);
   assert.match(edgeFunction, /ask what they would like you to do with it/i);
   assert.match(api, /createSignedUrl\(item\.path, 3600\)/);
 });
