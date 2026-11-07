@@ -178,13 +178,13 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
   let result = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at")
+    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
   if (!result.error && !result.data?.length) {
     // Keep older installs working when they still embed the original public_key.
     result = await db.from("website_connections")
-      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at")
+      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message")
       .eq("public_key", key)
       .is("widget_deleted_at", null);
   }
@@ -970,8 +970,29 @@ Deno.serve(async (request: Request) => {
   if (!isRecord(input)) return respond(400, { error: "Invalid request." });
 
   try {
-    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request") {
+    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "widget-config") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
+      if (input.action === "widget-config") {
+        const countryCode = safeString(site.whatsapp_country_code, 8).replace(/\D/g, "");
+        const subscriberNumber = safeString(site.whatsapp_number, 24).replace(/\D/g, "").replace(/^0+/, "");
+        const fullNumber = countryCode + subscriberNumber;
+        const message = safeString(site.whatsapp_message, 1000);
+        const whatsappUrl = countryCode && subscriberNumber && fullNumber.length >= 7 && fullNumber.length <= 15 && message
+          ? "https://wa.me/" + fullNumber + "?text=" + encodeURIComponent(message)
+          : null;
+        let instagramUrl: string | null = null;
+        try {
+          const parsedInstagram = new URL(safeString(site.instagram_url, 2048));
+          const instagramHost = parsedInstagram.hostname.toLowerCase().replace(/^www\./, "");
+          const instagramHandle = parsedInstagram.pathname.split("/").filter(Boolean)[0] || "";
+          if (parsedInstagram.protocol === "https:" && instagramHost === "instagram.com" && /^[A-Za-z0-9._]{1,30}$/.test(instagramHandle)) {
+            instagramUrl = "https://instagram.com/" + instagramHandle;
+          }
+        } catch {
+          instagramUrl = null;
+        }
+        return respond(200, { ok: true, whatsapp_url: whatsappUrl, instagram_url: instagramUrl });
+      }
       await db.from("website_connections").update({
         status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq("id", site.id);
