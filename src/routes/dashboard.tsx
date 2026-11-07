@@ -619,6 +619,16 @@ function AttachmentImageLightbox({ attachment, onClose }: { attachment: MessageA
     <span className="aichat-attachment-lightbox-caption">{attachment.name}</span>
   </div>;
 }
+type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
+
+function getVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
+  const female = voices.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
+  const male = voices.filter((voice) => /male|man|boy|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
+  const other = voices.filter((voice) => !female.includes(voice) && !male.includes(voice));
+  const pool = preset === "girl" || preset === "woman" ? female : male;
+  const index = preset === "girl" || preset === "boy" ? 0 : 1;
+  return pool[index] || pool[0] || (preset === "girl" || preset === "boy" ? other[0] : other.find((voice) => voice.default)) || voices.find((voice) => voice.default) || voices[0];
+}
 function getLoginGreeting(): string {
   const hour = new Date().getHours();
   const choices = hour < 12
@@ -818,6 +828,8 @@ function Dashboard() {
   const [profileName, setProfileName] = useState("Your account");
   const [profileEmail, setProfileEmail] = useState("");
   const [profileImage, setProfileImage] = useState("");
+  const profileAvatarPathRef = useRef<string | null>(null);
+  const profileAvatarPreviewUrlRef = useRef<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
@@ -832,8 +844,9 @@ function Dashboard() {
     securityAlerts: true,
     chatActivity: true,
   });
+  const [privacyPreferences, setPrivacyPreferences] = useState({ useConversationHistory: true });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
+  const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -865,14 +878,14 @@ function Dashboard() {
     try {
       const savedAccent = localStorage.getItem("misma_accent_color");
       const savedNotifications = localStorage.getItem("misma_notification_preferences");
-      const savedVoice = localStorage.getItem("misma_voice_uri");
+      const savedVoice = localStorage.getItem("misma_voice_preset") || localStorage.getItem("misma_voice_uri");
       const savedAutoSpeak = localStorage.getItem("misma_auto_speak_replies");
       if (savedAccent && /^#[0-9a-f]{6}$/i.test(savedAccent)) setAccentColor(savedAccent);
       if (savedNotifications) {
         const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
         setNotificationPreferences((current) => ({ ...current, ...parsed }));
       }
-      if (savedVoice) setSelectedVoiceUri(savedVoice);
+      if (savedVoice && ["girl", "woman", "boy", "man"].includes(savedVoice)) setSelectedVoicePreset(savedVoice as MismaVoicePreset);
       if (savedAutoSpeak === "true") setAutoSpeakReplies(true);
     } catch {
       // Keep accessible defaults if browser preferences cannot be read.
@@ -889,12 +902,25 @@ function Dashboard() {
     try {
       localStorage.setItem("misma_accent_color", accentColor);
       localStorage.setItem("misma_notification_preferences", JSON.stringify(notificationPreferences));
-      localStorage.setItem("misma_voice_uri", selectedVoiceUri);
+      localStorage.setItem("misma_voice_preset", selectedVoicePreset);
       localStorage.setItem("misma_auto_speak_replies", String(autoSpeakReplies));
+      localStorage.setItem("misma_privacy_preferences", JSON.stringify(privacyPreferences));
     } catch {
       // Preferences remain active for this session when storage is unavailable.
     }
-  }, [accentColor, notificationPreferences, selectedVoiceUri, autoSpeakReplies, appearanceLoaded]);
+  }, [accentColor, notificationPreferences, selectedVoicePreset, autoSpeakReplies, privacyPreferences, appearanceLoaded]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("misma_privacy_preferences");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<typeof privacyPreferences>;
+        setPrivacyPreferences((current) => ({ ...current, ...parsed }));
+      }
+    } catch {
+      // Keep privacy-preserving defaults when saved preferences cannot be read.
+    }
+  }, []);
 
   useEffect(() => {
     if (!("speechSynthesis" in window)) return;
@@ -972,8 +998,13 @@ function Dashboard() {
   const [thinkHarder, setThinkHarder] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
+  const composerPreviewUrlsRef = useRef<Map<File, string>>(new Map());
+  const uploadAbortControllersRef = useRef<Map<File, AbortController>>(new Map());
   const uploadedComposerAttachmentsRef = useRef<Map<File, MessageAttachment[]>>(new Map());
   const attachmentUploadQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [composerUploadStatuses, setComposerUploadStatuses] = useState<Map<File, "uploading" | "ready" | "error">>(new Map());
+  const [composerUploadProgress, setComposerUploadProgress] = useState<Map<File, number>>(new Map());
+  const [lightboxAttachment, setLightboxAttachment] = useState<MessageAttachment | null>(null);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
@@ -1109,9 +1140,11 @@ function Dashboard() {
           }
           setProfileName(resolvedName);
           setProfileNameDraft(resolvedName);
-          const avatarPath = metadata.avatar_path;
-          if (typeof avatarPath === "string" && avatarPath.length > 0) {
-            void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 3600).then(({ data, error }) => {
+          const avatarPath = typeof metadata.avatar_path === "string" && metadata.avatar_path.length > 0 ? metadata.avatar_path : null;
+          profileAvatarPathRef.current = avatarPath;
+          if (avatarPath) {
+            void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 604800).then(({ data, error }) => {
+              if (!active) return;
               if (!error && data?.signedUrl) setProfileImage(data.signedUrl);
               else setProfileImage(image ?? "");
             });
@@ -1660,7 +1693,7 @@ function Dashboard() {
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(msg.text);
-    const selectedVoice = availableVoices.find((voice) => voice.voiceURI === selectedVoiceUri);
+    const selectedVoice = getVoiceForPreset(availableVoices, selectedVoicePreset);
     if (selectedVoice) utterance.voice = selectedVoice;
     utterance.onend = () => setSpeakingMessageId(null);
     utterance.onerror = () => setSpeakingMessageId(null);
@@ -1677,7 +1710,7 @@ function Dashboard() {
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance("Hello, this is your selected Misma voice.");
-    const voice = availableVoices.find((item) => item.voiceURI === selectedVoiceUri);
+    const voice = getVoiceForPreset(availableVoices, selectedVoicePreset);
     if (voice) utterance.voice = voice;
     window.speechSynthesis.speak(utterance);
   };
@@ -1705,7 +1738,8 @@ function Dashboard() {
         const extension = profileAvatarFile.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "jpg";
         avatarPath = workspace.id + "/" + userData.user.id + "/avatar-" + crypto.randomUUID() + "." + extension;
         const { error: uploadError } = await client.storage.from("misma-media").upload(avatarPath, profileAvatarFile, {
-          upsert: true,
+          upsert: false,
+          cacheControl: "604800",
           contentType: profileAvatarFile.type || "image/jpeg",
         });
         if (uploadError) throw new Error("Could not save the profile photo: " + uploadError.message);
@@ -1716,9 +1750,13 @@ function Dashboard() {
       if (updateError) throw new Error(updateError.message);
       setProfileName(name);
       if (avatarPath) {
-        const { data: signed, error: signedError } = await client.storage.from("misma-media").createSignedUrl(avatarPath, 3600);
-        if (!signedError && signed?.signedUrl) setProfileImage(signed.signedUrl);
+        profileAvatarPathRef.current = avatarPath;
+        const { data: signed, error: signedError } = await client.storage.from("misma-media").createSignedUrl(avatarPath, 604800);
+        if (signedError || !signed?.signedUrl) throw new Error("Your profile photo was uploaded but its preview could not be refreshed. Reopen Settings to retry.");
+        setProfileImage(signed.signedUrl);
       }
+      if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+      profileAvatarPreviewUrlRef.current = null;
       setProfileAvatarFile(null);
       setProfileSaved(true);
       window.setTimeout(() => setProfileSaved(false), 3000);
@@ -1727,6 +1765,16 @@ function Dashboard() {
     } finally {
       setProfileSaving(false);
     }
+  };
+
+  const refreshProfileAvatar = async () => {
+    const path = profileAvatarPathRef.current;
+    if (!path) { setProfileImage(""); return; }
+    try {
+      const { data, error } = await getSupabaseClient().storage.from("misma-media").createSignedUrl(path, 604800);
+      if (error || !data?.signedUrl) throw error || new Error("Could not refresh avatar.");
+      setProfileImage(data.signedUrl);
+    } catch { setProfileImage(""); }
   };
 
   const exportCurrentChat = () => {
@@ -1947,7 +1995,10 @@ function Dashboard() {
         apikey: config.publishableKey,
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        ...(body.action === "chat" ? { aiSettings, privacySettings: privacyPreferences } : {}),
+      }),
       signal,
     });
     const result = await response.json() as Record<string, any>;
@@ -3248,7 +3299,7 @@ function Dashboard() {
             title="Settings"
           >
             {profileImage ? (
-              <img className="aichat-user-avatar" src={profileImage} alt="" />
+              <img className="aichat-user-avatar" src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} />
             ) : (
               <span className="aichat-user-avatar">
                 {profileName[0]?.toUpperCase() ?? "M"}
@@ -4267,7 +4318,7 @@ function Dashboard() {
               <section id="settings-profile" className="aichat-card aichat-settings-card aichat-profile-settings">
                 <div className="aichat-settings-profile-head">
                   <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
-                    {profileImage ? <img src={profileImage} alt="" /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
+                    {profileImage ? <img src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
                     <span className="aichat-settings-avatar-edit" aria-hidden="true">✎</span>
                   </button>
                   <div>
@@ -4281,8 +4332,11 @@ function Dashboard() {
                       if (file.size > 5 * 1024 * 1024) {
                         setProfileError("Profile photos must be 5 MB or smaller.");
                       } else {
+                        if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+                        const previewUrl = URL.createObjectURL(file);
+                        profileAvatarPreviewUrlRef.current = previewUrl;
                         setProfileAvatarFile(file);
-                        setProfileImage(URL.createObjectURL(file));
+                        setProfileImage(previewUrl);
                         setProfileError("");
                       }
                     }
@@ -4390,10 +4444,7 @@ function Dashboard() {
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-voice-choice">Reply voice</label>
-                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoiceUri} onChange={(event) => setSelectedVoiceUri(event.target.value)}>
-                      <option value="">Device default voice</option>
-                      {availableVoices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang}){voice.default ? " — default" : ""}</option>)}
-                    </select>
+                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option><option value="boy">Boy</option><option value="man">Man</option></select>
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
@@ -4409,6 +4460,19 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
                 <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
                 <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Settings microphone testing is analysed locally and is never recorded or uploaded.</span></div>
+                <SettingsToggle title="Use recent conversation context" description="When enabled, Misma can use earlier messages in this chat for follow-up questions. Turn it off to send only the current request and workspace context." checked={privacyPreferences.useConversationHistory} onToggle={() => setPrivacyPreferences((current) => ({ ...current, useConversationHistory: !current.useConversationHistory }))} />
+                <div className="aichat-settings-action-row">
+                  <div><strong>Reset preferences on this device</strong><small>Restore the default voice, appearance, notifications, privacy, and assistant choices.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => {
+                    ["misma_ai_settings", "misma_accent_color", "misma_notification_preferences", "misma_voice_preset", "misma_voice_uri", "misma_auto_speak_replies", "misma_privacy_preferences"].forEach((key) => localStorage.removeItem(key));
+                    setAiSettings(DEFAULT_MISMA_AI_SETTINGS);
+                    setAccentColor("#8ab4ff");
+                    setNotificationPreferences({ productUpdates: true, securityAlerts: true, chatActivity: true });
+                    setSelectedVoicePreset("woman");
+                    setAutoSpeakReplies(false);
+                    setPrivacyPreferences({ useConversationHistory: true });
+                  }}>Reset preferences</button>
+                </div>
               </section>
 
               <section id="settings-history" className="aichat-card aichat-settings-card">
