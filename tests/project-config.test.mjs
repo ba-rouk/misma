@@ -728,3 +728,38 @@ test("shared installation script uses the same widget key while the server check
   assert.match(migration, /widget_public_key/);
   assert.match(migration, /widget_deleted_at/);
 });
+
+
+test("website widget resize handle is in the top-right header and drag-resizes from that corner", async () => {
+  const widget = await read("../public/assets/misma-widget.js");
+  const handle = widget.indexOf("class='resize-handle'");
+  const headerEnd = widget.indexOf("</header>", handle);
+  assert.ok(handle >= 0 && headerEnd > handle, "resize control should be inside the widget header");
+  assert.match(widget, /resizeState\.width\+resizeState\.x-event\.clientX/);
+  assert.match(widget, /localStorage\.setItem\(sizeStore/);
+});
+
+test("website widget dictation shows a recording waveform and waits for Send to submit", async () => {
+  const widget = await read("../public/assets/misma-widget.js");
+  assert.match(widget, /class='recording-waveform'/);
+  assert.match(widget, /composer\.classList\.add\("recording"\)/);
+  assert.match(widget, /function finishDictationAndSend\(\)/);
+  assert.match(widget, /dictationSendAfterStop=true/);
+  assert.match(widget, /if\(dictationSendAfterStop\)[\s\S]*?sendMessage\(transcript,false\)/);
+  assert.match(widget, /if\(dictating\)\{finishDictationAndSend\(\);return;\}/);
+});
+
+test("website widget speech talk provides the dashboard voice controls and spoken-reply context", async () => {
+  const widget = await read("../public/assets/misma-widget.js");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(widget, /class='voice-view'/);
+  assert.match(widget, /data-mode='hands-free'/);
+  assert.match(widget, /data-mode='push-to-talk'/);
+  assert.match(widget, /class='voice-control voice-mute'/);
+  assert.match(widget, /class='voice-control voice-stop/);
+  assert.match(widget, /class='voice-control voice-end/);
+  assert.match(widget, /voice:speakReply===true/);
+  assert.match(edge, /async function answerCustomer\(db: Db, workspaceId: string, message: string, voice = false\)/);
+  assert.match(edge, /input\.voice === true/);
+  assert.match(edge, /VOICE CONVERSATION/);
+});
