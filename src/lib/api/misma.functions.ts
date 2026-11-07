@@ -586,19 +586,19 @@ export const createWebsiteConnection = createServerFn({ method: "POST" })
     token: auth,
     name: z.string().trim().max(120).optional(),
     websiteUrl: z.string().url().max(2048),
-    sharedWidgetKey: z.string().trim().min(8).max(120).optional(),
+    sharedWidgetKey: z.string().uuid().optional(),
   }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
     const parsed = new URL(data.websiteUrl);
     if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use an HTTP or HTTPS website URL.");
-    let widgetPublicKey = crypto.randomUUID();
+    let widgetPublicKey: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
     if (data.sharedWidgetKey) {
       const existingWidget = await db.from("website_connections").select("id")
         .eq("workspace_id", workspaceId).eq("widget_public_key", data.sharedWidgetKey)
         .is("widget_deleted_at", null).limit(1).maybeSingle();
       if (existingWidget.error || !existingWidget.data) throw new Error("Choose an active shared widget from this workspace.");
-      widgetPublicKey = data.sharedWidgetKey;
+      widgetPublicKey = data.sharedWidgetKey as typeof widgetPublicKey;
     }
     const result = await db.from("website_connections").insert({
       workspace_id: workspaceId,

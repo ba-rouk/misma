@@ -2,7 +2,8 @@
 "use strict";
 var tag=document.currentScript,key=tag&&tag.dataset.siteKey,api=tag&&tag.dataset.endpoint;
 if(!key||!api){console.warn("[Misma] Missing site key or API endpoint.");return;}
-var store="misma_visitor_"+key,conversationStore="misma_conversation_"+key,sizeStore="misma_widget_size_"+key;
+var siteSessionKey=key+"_"+location.hostname.toLowerCase();
+var store="misma_visitor_"+siteSessionKey,conversationStore="misma_conversation_"+siteSessionKey,sizeStore="misma_widget_size_"+key;
 var visitor="",conversation=null;
 try{visitor=sessionStorage.getItem(store)||crypto.randomUUID();sessionStorage.setItem(store,visitor);conversation=sessionStorage.getItem(conversationStore)||null;}
 catch(error){visitor="v-"+Date.now()+"-"+Math.random().toString(36).slice(2);}

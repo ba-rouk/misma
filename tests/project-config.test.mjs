@@ -709,10 +709,12 @@ test("embedded chat widget supports minimizing, resizing and saved size", async 
 test("shared installation script uses the same widget key while the server checks each registered host", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const widget = await read("../public/assets/misma-widget.js");
   const migration = await read("../supabase/migrations/20261107110000_website_widget_groups.sql");
   assert.match(dashboard, /General shared website script/);
   assert.match(dashboard, /data-site-key="\$\{sharedWidgetPublicKey\}"/);
   assert.match(edge, /candidate\.domain/);
+  assert.match(widget, /siteSessionKey=key\+"_"\+location\.hostname\.toLowerCase\(\)/);
   assert.match(migration, /widget_public_key/);
   assert.match(migration, /widget_deleted_at/);
 });
