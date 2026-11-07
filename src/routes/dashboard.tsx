@@ -36,6 +36,10 @@ import { VoiceInputBar } from "../components/voice-input-bar";
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
+const MAX_COMPOSER_FILES = 5;
+const MAX_DOCUMENT_UPLOAD_MB = 10;
+const MAX_IMAGE_UPLOAD_MB = 25;
+
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
 type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "settings";
@@ -1018,7 +1022,7 @@ function Dashboard() {
   const [composerUploadStatuses, setComposerUploadStatuses] = useState<Map<File, "uploading" | "ready" | "error">>(new Map());
   const [composerUploadProgress, setComposerUploadProgress] = useState<Map<File, number>>(new Map());
   const [lightboxAttachment, setLightboxAttachment] = useState<MessageAttachment | null>(null);
-  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [, setUploadingAttachments] = useState(false);
   const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
   const [mediaProgressPercent, setMediaProgressPercent] = useState(0);
@@ -2739,7 +2743,7 @@ function Dashboard() {
     if (!files?.length) return;
     const additions = Array.from(files).map(normalizeComposerAttachment);
     const next = [...selectedComposerFilesRef.current, ...additions];
-    if (next.length > 5) {
+    if (next.length > MAX_COMPOSER_FILES) {
       setChatError("Attach up to five files per message.");
       return;
     }
@@ -2749,14 +2753,14 @@ function Dashboard() {
       return;
     }
     const oversizedImageOrVideo = additions.find((file) =>
-      (file.type.startsWith("image/") || isVideoFile(file)) && file.size > 25 * 1024 * 1024
+      (file.type.startsWith("image/") || isVideoFile(file)) && file.size > MAX_IMAGE_UPLOAD_MB * 1024 * 1024
     );
     if (oversizedImageOrVideo) {
       setChatError(`${oversizedImageOrVideo.name} is larger than the 25 MB media limit.`);
       return;
     }
     const oversizedDocument = additions.find((file) =>
-      !(file.type.startsWith("image/") || isVideoFile(file)) && file.size > 10 * 1024 * 1024
+      !(file.type.startsWith("image/") || isVideoFile(file)) && file.size > MAX_DOCUMENT_UPLOAD_MB * 1024 * 1024
     );
     if (oversizedDocument) {
       setChatError(`${oversizedDocument.name} is larger than the 10 MB document limit.`);
