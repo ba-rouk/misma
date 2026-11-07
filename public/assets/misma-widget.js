@@ -79,10 +79,29 @@ function requestMicPermission(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return Promise.resolve();
   return navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){stream.getTracks().forEach(function(track){track.stop();});});
 }
+function setVoiceState(nextState,message){
+  voiceState=nextState;
+  voiceOrb.setAttribute("data-state",nextState);
+  var labels={idle:"Voice mode ended",starting:"Connecting to your microphone…",ready:"Tap the orb to speak",listening:"Listening…",thinking:"Thinking…",speaking:"Speaking · tap Stop to interrupt",muted:"Microphone muted"};
+  voiceStatus.textContent=message||labels[nextState]||"";
+  voiceStopButton.hidden=nextState!=="thinking"&&nextState!=="speaking";
+  voiceMuteButton.textContent=voiceMuted?"Unmute":"Mute";
+  voiceMuteButton.setAttribute("aria-pressed",String(voiceMuted));
+  voiceOrb.setAttribute("aria-label",voiceModeChoice==="push-to-talk"?(nextState==="listening"?"Finish speaking turn":"Start speaking turn"):(nextState==="speaking"||nextState==="thinking"?"Interrupt Misma and listen":"Voice conversation is active"));
+}
+function updateVoiceModeChoice(){
+  voiceModeButtons.forEach(function(button){
+    var selected=button.getAttribute("data-mode")===voiceModeChoice;
+    button.classList.toggle("is-selected",selected);
+    button.setAttribute("aria-pressed",String(selected));
+  });
+}
 function listen(isVoiceChat){
   var Recognition=recognitionConstructor();
-  if(!Recognition){setStatus("Voice input is not supported in this browser. Try Chrome on HTTPS.");if(isVoiceChat)stopVoiceSession();else{dictating=false;micButton.classList.remove("is-active");}return;}
-  stopRecognition();finalTranscript="";interimTranscript="";
+  if(!Recognition){setStatus("Voice input is not supported in this browser. Try Chrome on HTTPS.");if(isVoiceChat)stopVoiceSession();else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();}return;}
+  stopRecognition();
+  if(isVoiceChat){finalTranscript="";interimTranscript="";setVoiceState("listening");}
+  else{interimTranscript="";}
   var instance=new Recognition();recognition=instance;instance.lang=navigator.language||"en-US";instance.interimResults=true;instance.continuous=false;instance.maxAlternatives=1;
   instance.onresult=function(event){
     var finalText="",interim="";
@@ -92,24 +111,44 @@ function listen(isVoiceChat){
     }
     if(finalText)finalTranscript=(finalTranscript+" "+finalText).trim();interimTranscript=interim;
     if(!isVoiceChat){input.value=[finalTranscript,interimTranscript].filter(Boolean).join(" ");resizeInput();updatePrimary();}
-    setStatus(isVoiceChat?"Listening…":"Listening · your words will appear in the message field.");
+    else{voiceTranscript.textContent=[finalTranscript,interimTranscript].filter(Boolean).join(" ");setVoiceState("listening");}
+    if(!isVoiceChat)setStatus("Listening · tap Send when you are finished.");
   };
   instance.onerror=function(event){
     var error=event&&event.error?event.error:"recognition";if(recognition===instance)recognition=null;
-    if(error==="no-speech"&&isVoiceChat&&voiceSession){window.setTimeout(function(){if(voiceSession&&!busy)listen(true);},250);return;}
+    if(error==="no-speech"&&((isVoiceChat&&voiceSession&&voiceModeChoice==="hands-free")||(!isVoiceChat&&dictating)))return;
     setStatus(error==="not-allowed"||error==="service-not-allowed"?"Allow microphone access in your browser settings, then try again.":"Voice input stopped. Tap the microphone to try again.");
-    if(isVoiceChat)stopVoiceSession();else{dictating=false;micButton.classList.remove("is-active");}
+    if(isVoiceChat)stopVoiceSession();
+    else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();}
   };
   instance.onend=function(){
     if(recognition===instance)recognition=null;
-    if(isVoiceChat){var spoken=finalTranscript.trim();if(voiceSession&&spoken&&!busy)sendMessage(spoken,true);else if(voiceSession&&!busy)window.setTimeout(function(){if(voiceSession)listen(true);},250);}
-    else{dictating=false;micButton.classList.remove("is-active");input.value=[finalTranscript,interimTranscript].filter(Boolean).join(" ");resizeInput();updatePrimary();setStatus("");}
+    if(isVoiceChat){
+      var spoken=finalTranscript.trim();
+      if(voiceSession&&spoken&&!busy){voiceTranscript.textContent="You: "+spoken;sendMessage(spoken,true);}
+      else if(voiceSession&&!voiceMuted&&voiceModeChoice==="hands-free"&&!busy){window.setTimeout(function(){if(voiceSession&&!voiceMuted&&voiceModeChoice==="hands-free")listen(true);},220);}
+      else if(voiceSession)setVoiceState(voiceMuted?"muted":"ready");
+    }else{
+      input.value=[finalTranscript,interimTranscript].filter(Boolean).join(" ");resizeInput();
+      if(dictating){
+        updatePrimary();
+        window.setTimeout(function(){if(dictating&&!recognition)listen(false);},180);
+      }else{
+        composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();
+        if(dictationSendAfterStop){
+          dictationSendAfterStop=false;
+          var transcript=input.value.trim();finalTranscript="";interimTranscript="";
+          if(transcript)sendMessage(transcript,false);else setStatus("No speech was detected. Try again.");
+        }else{setStatus("");}
+      }
+    }
   };
-  try{instance.start();}catch(error){if(recognition===instance)recognition=null;setStatus("Microphone could not start. Check browser microphone permission.");if(isVoiceChat)stopVoiceSession();else{dictating=false;micButton.classList.remove("is-active");}}
+  try{instance.start();}
+  catch(error){if(recognition===instance)recognition=null;setStatus("Microphone could not start. Check browser microphone permission.");if(isVoiceChat)stopVoiceSession();else{dictating=false;composer.classList.remove("recording");micButton.classList.remove("is-active");updatePrimary();}}
 }
 function speakAsWoman(text){
   var synth=window.speechSynthesis;
-  if(!synth||typeof window.SpeechSynthesisUtterance==="undefined"){setStatus("Speech playback is not supported by this browser.");return Promise.resolve(false);}
+  if(!synth||typeof window.SpeechSynthesisUtterance==="undefined"){setVoiceState("ready","Speech playback is not supported by this browser.");return Promise.resolve(false);}
   var femalePattern=/female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|google us english female|google uk english female/i;
   var malePattern=/(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas/i;
   function getFemaleVoice(){return synth.getVoices().filter(function(voice){var label=voice.name+" "+voice.voiceURI;return femalePattern.test(label)&&!malePattern.test(label);})[0];}
@@ -120,38 +159,100 @@ function speakAsWoman(text){
   var clean=String(text||"").replace(/https?:\/\/\S+/g," ").replace(/[*_~>|#]+/g," ").replace(/\s+/g," ").trim().slice(0,1600);
   if(!clean)return Promise.resolve(true);
   var parts=clean.match(/[^.!?]+[.!?]*\s*/g)||[clean];
+  setVoiceState("speaking");
   return waitForVoice().then(function(womanVoice){
-    if(!womanVoice){setStatus("A woman's speech voice is not installed on this device. Enable a female English voice in device text-to-speech settings.");return false;}
+    if(!womanVoice){setVoiceState("ready","A female English speech voice is not installed on this device.");return false;}
     return new Promise(function(resolve){
-      var index=0,finished=false;function next(){
-        if(finished)return;if(index>=parts.length||!voiceSession){finished=true;resolve(true);return;}
+      var index=0,finished=false;
+      function finish(result){if(finished)return;finished=true;voiceSpeechCancel=null;resolve(result);}
+      function next(){
+        if(finished)return;
+        if(index>=parts.length||!voiceSession){finish(true);return;}
         var utterance=new SpeechSynthesisUtterance(parts[index++].trim());utterance.lang=womanVoice.lang||"en";utterance.voice=womanVoice;utterance.pitch=1.04;utterance.rate=1;
         utterance.onend=next;utterance.onerror=next;synth.speak(utterance);
       }
+      voiceSpeechCancel=function(){if(finished)return;synth.cancel();finish(false);};
       synth.cancel();next();
     });
   });
 }
 function sendMessage(rawText,speakReply){
   var text=String(rawText||"").trim();if(!text||busy)return Promise.resolve();busy=true;
+  var controller=speakReply?new AbortController():null;
+  if(controller)voiceRequestController=controller;
   if(!speakReply){input.value="";resizeInput();updatePrimary();stopDictation();}
+  else{setVoiceState("thinking");voiceTranscript.textContent="You: "+text;}
   bubble(text,"user");showTyping();setStatus("");updatePrimary();
-  return call({action:"chat",message:text}).then(function(data){
+  return call({action:"chat",message:text,voice:speakReply===true},controller?controller.signal:undefined).then(function(data){
     removeTyping();var answer=data.answer||"I could not prepare a reply.";bubble(answer,"ai");
     if(data.handoffPending)setStatus("Your message has been sent to the business team.");
-    if(speakReply&&voiceSession)return speakAsWoman(answer).then(function(played){if(!played)voiceSession=false;});
+    if(speakReply&&voiceSession){voiceTranscript.textContent="Misma: "+answer;return speakAsWoman(answer);}
     return null;
-  }).catch(function(error){removeTyping();bubble(error.message||"Misma could not complete this request.","err");})
-    .then(function(){busy=false;updatePrimary();if(voiceSession&&speakReply)listen(true);});
+  }).catch(function(error){
+    removeTyping();
+    if(!(error&&error.name==="AbortError"))bubble(error.message||"Misma could not complete this request.","err");
+  }).then(function(){
+    if(voiceRequestController===controller)voiceRequestController=null;
+    busy=false;updatePrimary();
+    if(voiceSession&&speakReply){
+      if(voiceMuted)setVoiceState("muted");
+      else if(voiceModeChoice==="hands-free")listen(true);
+      else setVoiceState("ready");
+    }
+  });
 }
-function stopDictation(){dictating=false;micButton.classList.remove("is-active");stopRecognition();}
-function stopVoiceSession(){voiceSession=false;stopRecognition();if(window.speechSynthesis)window.speechSynthesis.cancel();primaryButton.classList.remove("is-active");updatePrimary();if(!busy)setStatus("");}
+function stopDictation(){
+  dictating=false;dictationSendAfterStop=false;composer.classList.remove("recording");micButton.classList.remove("is-active");stopRecognition();updatePrimary();
+}
+function finishDictationAndSend(){
+  if(!dictating)return;
+  dictating=false;dictationSendAfterStop=true;micButton.classList.remove("is-active");setStatus("Finishing recording…");updatePrimary();
+  if(recognition){try{recognition.stop();}catch(error){dictationSendAfterStop=false;composer.classList.remove("recording");setStatus("Could not finish microphone input. Try again.");}}
+  else{
+    dictationSendAfterStop=false;composer.classList.remove("recording");
+    var transcript=input.value.trim();finalTranscript="";interimTranscript="";
+    if(transcript)sendMessage(transcript,false);else{updatePrimary();setStatus("No speech was detected. Try again.");}
+  }
+}
+function stopVoiceSession(){
+  voiceSession=false;voiceMuted=false;
+  stopRecognition();
+  if(voiceRequestController){voiceRequestController.abort();voiceRequestController=null;}
+  if(voiceSpeechCancel){voiceSpeechCancel();voiceSpeechCancel=null;}
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+  voiceView.classList.remove("open");primaryButton.classList.remove("is-active");
+  voiceTranscript.textContent="";setVoiceState("idle");updatePrimary();
+  if(!busy)setStatus("");
+}
 function startVoiceSession(){
   if(voiceSession){stopVoiceSession();return;}if(busy)return;
   if(!recognitionConstructor()){setStatus("Voice chat requires Chrome or another supported browser on HTTPS.");return;}
-  requestMicPermission().then(function(){voiceSession=true;primaryButton.classList.add("is-active");updatePrimary();setStatus("Listening…");listen(true);})
-    .catch(function(){setStatus("Allow microphone access in your browser settings, then try again.");});
+  voiceSession=true;voiceMuted=false;voiceModeChoice="hands-free";updateVoiceModeChoice();voiceView.classList.add("open");voiceTranscript.textContent="";setVoiceState("starting");primaryButton.classList.add("is-active");
+  requestMicPermission().then(function(){
+    if(!voiceSession)return;
+    if(voiceModeChoice==="hands-free")listen(true);else setVoiceState("ready");
+  }).catch(function(){setStatus("Allow microphone access in your browser settings, then try again.");stopVoiceSession();});
 }
+function interruptVoice(){
+  if(!voiceSession)return;
+  if(voiceRequestController){voiceRequestController.abort();voiceRequestController=null;}
+  if(voiceSpeechCancel){voiceSpeechCancel();voiceSpeechCancel=null;}
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+  stopRecognition();
+  if(voiceMuted)setVoiceState("muted");
+  else setVoiceState("ready");
+}
+function changeVoiceMode(nextMode){
+  if(nextMode!=="hands-free"&&nextMode!=="push-to-talk")return;
+  if(voiceModeChoice===nextMode)return;
+  voiceModeChoice=nextMode;updateVoiceModeChoice();
+  if(!voiceSession||voiceState==="thinking"||voiceState==="speaking")return;
+  stopRecognition();
+  if(voiceMuted)setVoiceState("muted");
+  else if(voiceModeChoice==="hands-free")listen(true);
+  else setVoiceState("ready");
+}
+
 
 $(".launch").addEventListener("click",function(){
   var opened=panel.classList.toggle("open");$(".launch").setAttribute("aria-expanded",String(opened));
