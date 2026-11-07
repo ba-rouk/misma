@@ -300,10 +300,15 @@ function normalizeComposerAttachment(file: File): File {
 async function compressImageForUpload(file: File): Promise<File> {
   const supportedOriginal = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
   if (!file.type.startsWith("image/")) return file;
-  if (supportedOriginal && file.size <= 4 * 1024 * 1024) return file;
+  if (supportedOriginal && file.size <= 4 * 1024 * 1024) {
+    const dimensions = await createImageBitmap(file);
+    const alreadySmall = Math.max(dimensions.width, dimensions.height) <= 1600;
+    dimensions.close();
+    if (alreadySmall) return file;
+  }
   const bitmap = await createImageBitmap(file);
   try {
-    const maxSide = 1800;
+    const maxSide = 1600;
     const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
@@ -312,7 +317,7 @@ async function compressImageForUpload(file: File): Promise<File> {
     if (!context) throw new Error("Your browser could not prepare this image.");
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not compress the image.")), "image/jpeg", 0.82);
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not compress the image.")), "image/jpeg", 0.85);
     });
     const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
     return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
@@ -1853,6 +1858,7 @@ function Dashboard() {
     filesToUpload: File[] = selectedFiles,
     videoFrameMode = false,
     signal?: AbortSignal,
+    onProgress?: (file: File, fraction: number) => void,
   ): Promise<MessageAttachment[]> => {
     if (!filesToUpload.length) return [];
     setUploadingAttachments(true);
@@ -1865,23 +1871,18 @@ function Dashboard() {
       const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "audio" | "file"): Promise<MessageAttachment> => {
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
-        if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
-          throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
+        if (!(file.type.startsWith("image/") || file.type.startsWith("video/")) && file.size > 10 * 1024 * 1024) {
+          throw new Error(`${file.name} is larger than the 10 MB document limit.`);
         }
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
         const path = `${workspace.id}/${userData.user.id}/${crypto.randomUUID()}-${safeName}`;
-        const { error } = await getSupabaseClient().storage.from("misma-media").upload(path, file, {
-          upsert: false,
-          cacheControl: "3600",
-          contentType: file.type || "application/octet-stream",
-        });
-        if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+        await uploadStorageObjectWithProgress(file, path, signal, (fraction) => onProgress?.(file, fraction));
         uploadedPaths.push(path);
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         let url: string | undefined;
         if (kind !== "video-frame") {
           const { data: signed, error: signedError } = await getSupabaseClient()
-            .storage.from("misma-media").createSignedUrl(path, 3600);
+            .storage.from("misma-media").createSignedUrl(path, 604800);
           if (signedError || !signed?.signedUrl) {
             throw new Error(`Could not prepare ${file.name} for the chat preview.`);
           }
@@ -1957,19 +1958,37 @@ function Dashboard() {
     }
   };
 
-  // Upload selected files immediately, then reuse these objects when sending.
+  // Upload each selected file immediately; a per-file AbortController cancels an upload when its card is removed.
   const queueComposerAttachmentUpload = (files: File[]) => {
     const task = attachmentUploadQueueRef.current.then(async () => {
+      const failures: string[] = [];
       for (const file of files) {
-        if (uploadedComposerAttachmentsRef.current.has(file)) continue;
-        const uploaded = await uploadSelectedAttachments([file]);
-        if (!selectedComposerFilesRef.current.includes(file)) {
-          const paths = uploaded.map((item) => item.path).filter((path): path is string => Boolean(path));
-          if (paths.length) await getSupabaseClient().storage.from("misma-media").remove(paths).catch(() => undefined);
-          continue;
+        if (!selectedComposerFilesRef.current.includes(file) || uploadedComposerAttachmentsRef.current.has(file)) continue;
+        const controller = new AbortController();
+        uploadAbortControllersRef.current.set(file, controller);
+        setComposerUploadStatuses((current) => new Map(current).set(file, "uploading"));
+        setComposerUploadProgress((current) => new Map(current).set(file, 0));
+        try {
+          const uploaded = await uploadSelectedAttachments([file], false, controller.signal, (_source, fraction) => {
+            setComposerUploadProgress((current) => new Map(current).set(file, fraction));
+          });
+          if (!selectedComposerFilesRef.current.includes(file) || controller.signal.aborted) {
+            const paths = uploaded.map((item) => item.path).filter((path): path is string => Boolean(path));
+            if (paths.length) await getSupabaseClient().storage.from("misma-media").remove(paths).catch(() => undefined);
+            continue;
+          }
+          uploadedComposerAttachmentsRef.current.set(file, uploaded);
+          setComposerUploadStatuses((current) => new Map(current).set(file, "ready"));
+          setComposerUploadProgress((current) => new Map(current).set(file, 1));
+        } catch (cause) {
+          if (controller.signal.aborted || (cause instanceof Error && cause.name === "AbortError")) continue;
+          setComposerUploadStatuses((current) => new Map(current).set(file, "error"));
+          failures.push(cause instanceof Error ? cause.message : "Could not upload " + file.name + ".");
+        } finally {
+          uploadAbortControllersRef.current.delete(file);
         }
-        uploadedComposerAttachmentsRef.current.set(file, uploaded);
       }
+      if (failures.length) throw new Error(failures.join(" "));
     });
     attachmentUploadQueueRef.current = task.then(() => undefined, () => undefined);
     return task;
