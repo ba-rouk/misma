@@ -874,13 +874,14 @@ test("widget microphone and speech talk show an explicit permission dialog and u
   assert.doesNotThrow(() => new Function(widget), "widget microphone code must parse");
 });
 
-test("embedded speech talk is English-only and does not display transcripts or reply text", async () => {
+test("embedded speech talk hides transcripts and uses dashboard-compatible female voice matching", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   assert.ok(!widget.includes("voiceTranscript"));
   assert.ok(!widget.includes("voice-transcript"));
   assert.ok(widget.includes('instance.lang=isVoiceChat?"en-US"'));
-  assert.ok(widget.includes("^en(?:-|$)"));
+  assert.ok(!widget.includes("^en(?:-|$)"));
+  assert.ok(widget.includes("google.*female"));
   assert.ok(edge.includes("Always understand and respond in English"));
 });
 
