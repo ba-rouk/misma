@@ -300,7 +300,7 @@ async function saveHumanRequest(db: Db, site: AnyRecord, conversation: AnyRecord
   const notificationValues = {
     workspace_id: site.workspace_id,
     notification_type: "human_request",
-    title: "Website visitor requested a human",
+    title: name,
     body: notificationBody,
     conversation_id: conversation.id,
     contact_id: contactId,
@@ -1004,9 +1004,19 @@ Deno.serve(async (request: Request) => {
       }
       if (input.action === "human-request") {
         const handoff = await saveHumanRequest(db, site, conversation, visitorId, input);
+        const confirmationText = "Your request to speak with a person has been sent. The business team will follow up here.";
+        const confirmationMessage = await db.from("messages").insert({
+          conversation_id: conversation.id,
+          role: "ai",
+          text: confirmationText,
+        }).select("id").single();
+        if (confirmationMessage.error) {
+          console.error("Could not save the human-request confirmation message:", confirmationMessage.error.message);
+        }
         return respond(200, {
           ok: true, requestId: handoff.requestId, alreadyPending: handoff.alreadyPending,
           visitorId, conversationId: Number(conversation.id),
+          confirmationText, confirmationSaved: Boolean(confirmationMessage.data?.id),
         });
       }
       const message = safeString(input.message, 2000);
