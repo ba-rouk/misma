@@ -562,6 +562,7 @@ function MessageAttachmentViews({
   onShare,
   onCopy,
   onOpenImage,
+  variant = "default",
 }: {
   attachments?: MessageAttachment[];
   onDownload?: (attachment: MessageAttachment) => void;
@@ -569,12 +570,13 @@ function MessageAttachmentViews({
   onShare?: (attachment: MessageAttachment) => void;
   onCopy?: (attachment: MessageAttachment) => void;
   onOpenImage: (attachment: MessageAttachment) => void;
+  variant?: "default" | "user";
 }) {
   if (!attachments?.length) return null;
   const visible = attachments.filter((item) => item.kind !== "video-frame" && item.kind !== "video-job" && item.url);
   if (!visible.length) return null;
   return (
-    <div className="aichat-message-attachments">
+    <div className={"aichat-message-attachments" + (variant === "user" ? " is-user-attachments" : "")}>
       {visible.map((item, index) => {
         const key = item.path || item.videoId || item.url || `${item.name}-${index}`;
         if (item.kind === "image" || item.kind === "generated-image" || item.mimeType?.startsWith("image/")) {
@@ -3505,7 +3507,16 @@ function Dashboard() {
                         </div>
                       )}
                       <div className="aichat-message-content">
-                        <div
+                        {isUserMessage && <MessageAttachmentViews
+                          attachments={msg.attachments}
+                          variant="user"
+                          onDownload={(attachment) => void handleDownloadGeneratedMedia(attachment)}
+                          onCrop={(attachment) => handleOpenImageCrop(attachment)}
+                          onShare={(attachment) => void handleShareImage(attachment)}
+                          onCopy={(attachment) => void handleCopyImage(attachment)}
+                          onOpenImage={(attachment) => setLightboxAttachment(attachment)}
+                        />}
+                        {(!isUserMessage || Boolean(msg.text.trim()) || Boolean(msg.pendingMedia)) && <div
                           className="aichat-bubble"
                           onTouchStart={isUserMessage ? () => startMobileMessageLongPress(msg.id) : undefined}
                           onTouchMove={isUserMessage ? cancelMobileMessageLongPress : undefined}
@@ -3513,13 +3524,14 @@ function Dashboard() {
                           onTouchCancel={isUserMessage ? cancelMobileMessageLongPress : undefined}
                           onContextMenu={isUserMessage ? (event) => openMobileMessageActionsFromContextMenu(event, msg.id) : undefined}
                         >
-                          <MessageAttachmentViews
+                          {!isUserMessage && <MessageAttachmentViews
                             attachments={msg.attachments}
                             onDownload={(attachment) => void handleDownloadGeneratedMedia(attachment)}
                             onCrop={(attachment) => handleOpenImageCrop(attachment)}
                             onShare={(attachment) => void handleShareImage(attachment)}
                             onCopy={(attachment) => void handleCopyImage(attachment)}
-                          />
+                            onOpenImage={(attachment) => setLightboxAttachment(attachment)}
+                          />}
                           {msg.pendingMedia === "image" ? (
                             <div
                               className="aichat-image-generation-loading"
@@ -3546,7 +3558,7 @@ function Dashboard() {
                               </div>
                             </div>
                           ) : <MarkdownContent content={msg.text} /> }
-                        </div>
+                        </div>}
                         {!msg.pendingMedia && (
                         <div
                           className={`aichat-message-actions${isUserMessage && mobileActionMessageId === msg.id ? " is-mobile-open" : ""}`}
