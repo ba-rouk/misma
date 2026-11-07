@@ -592,6 +592,7 @@ export const createWebsiteConnection = createServerFn({ method: "POST" })
     const { db, workspaceId } = await ensureWorkspace(data.token);
     const parsed = new URL(data.websiteUrl);
     if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use an HTTP or HTTPS website URL.");
+    const websiteUrl = parsed.origin;
     let widgetPublicKey: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
     if (data.sharedWidgetKey) {
       const existingWidget = await db.from("website_connections").select("id")
@@ -603,7 +604,7 @@ export const createWebsiteConnection = createServerFn({ method: "POST" })
     const result = await db.from("website_connections").insert({
       workspace_id: workspaceId,
       name: data.name?.trim() || parsed.hostname,
-      website_url: parsed.origin,
+      website_url: websiteUrl,
       domain: parsed.hostname.toLowerCase(),
       widget_public_key: widgetPublicKey,
       status: "pending",
