@@ -318,7 +318,8 @@ test("Ask Misma launcher uses the Misma mark, sits at the bottom-left, and is ic
   assert.match(styles, /@media \(max-width: 600px\)\s*\{[\s\S]*?\.misma-guest-widget\s*\{[^}]*left:\s*14px !important/);
   assert.match(styles, /\.misma-guest-launcher-label\s*\{\s*display:\s*none/);
   assert.match(embed, /position:fixed;left:20px;bottom:20px/);
-  assert.match(embed, /class="launch-logo"/);
+  assert.match(embed, /class='launch-logo'/);
+  assert.doesNotThrow(() => new Function(embed), "the hosted widget must be valid JavaScript");
   assert.match(embed, /Ask Misma/);
   assert.match(embed, /@media\(max-width:520px\)\{\.launch\{/);
   assert.match(embed, /\.launch-label\{display:none\}/);
@@ -677,13 +678,21 @@ test("website widget connections support shared keys and safe removal", async ()
   const api = await read("../src/lib/api/misma.functions.ts");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
+  const widget = await read("../public/assets/misma-widget.js");
   assert.match(api, /shareWebsiteWidgetAcrossWorkspace/);
   assert.match(api, /sharedWidgetKey/);
   assert.match(api, /deleteWebsiteConnection/);
+  assert.match(api, /widget_deleted_at: new Date\(\)\.toISOString\(\),\s*widget_public_key: crypto\.randomUUID\(\)/);
   assert.match(edge, /\.eq\("widget_public_key", key\)/);
   assert.match(edge, /\.is\("widget_deleted_at", null\)/);
   assert.match(dashboard, /Use one widget for all connected websites/);
-  assert.match(dashboard, /Remove widget/);
+  assert.match(dashboard, /Delete connection/);
+  assert.match(dashboard, /minimizedWebsiteIds/);
+  assert.match(dashboard, /aichat-website-minimize/);
+  assert.match(dashboard, /aichat-website-card-details/);
+  assert.match(widget, /function initWidget\(\)/);
+  assert.match(widget, /action:"heartbeat"/);
+  assert.match(widget, /\.then\(initWidget\)/);
 });
 
 
@@ -696,6 +705,7 @@ test("embedded chat widget has in-field green send, microphone dictation and fem
   assert.match(widget, /femalePattern/);
   assert.match(widget, /showTyping/);
   assert.match(widget, /Misma is typing/);
+  assert.doesNotThrow(() => new Function(widget), "the hosted widget must parse before deployment");
 });
 
 test("embedded chat widget supports minimizing, resizing and saved size", async () => {
