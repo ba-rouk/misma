@@ -53,7 +53,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("knowledge_entries").select("id,question,answer,source_type,source_ref").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
         db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
-        db.from("website_connections").select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("website_connections").select("id,name,website_url,domain,public_key,widget_public_key,widget_deleted_at,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: false }),
         db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -586,22 +586,62 @@ export const createWebsiteConnection = createServerFn({ method: "POST" })
     token: auth,
     name: z.string().trim().max(120).optional(),
     websiteUrl: z.string().url().max(2048),
+    sharedWidgetKey: z.string().uuid().optional(),
   }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
     const parsed = new URL(data.websiteUrl);
     if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use an HTTP or HTTPS website URL.");
     const websiteUrl = parsed.origin;
+    let widgetPublicKey: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
+    if (data.sharedWidgetKey) {
+      const existingWidget = await db.from("website_connections").select("id")
+        .eq("workspace_id", workspaceId).eq("widget_public_key", data.sharedWidgetKey)
+        .is("widget_deleted_at", null).limit(1).maybeSingle();
+      if (existingWidget.error || !existingWidget.data) throw new Error("Choose an active shared widget from this workspace.");
+      widgetPublicKey = data.sharedWidgetKey as typeof widgetPublicKey;
+    }
     const result = await db.from("website_connections").insert({
       workspace_id: workspaceId,
       name: data.name?.trim() || parsed.hostname,
       website_url: websiteUrl,
       domain: parsed.hostname.toLowerCase(),
+      widget_public_key: widgetPublicKey,
       status: "pending",
-    }).select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at").single();
+    }).select("id,name,website_url,domain,public_key,widget_public_key,status,last_seen_at,last_scanned_at,created_at").single();
     const website = check(result.data, result.error);
-    await recordAudit(db, workspaceId, "website.connection_created", website.id, { domain: website.domain });
+    await recordAudit(db, workspaceId, "website.connection_created", website.id, { domain: website.domain, sharedWidget: Boolean(data.sharedWidgetKey) });
     return { website };
+  });
+
+export const shareWebsiteWidgetAcrossWorkspace = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const websites = await db.from("website_connections").select("id,public_key,widget_public_key")
+      .eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: true });
+    if (websites.error) throw new Error("Could not load connected websites.");
+    if (!websites.data?.length) throw new Error("Register at least one website first.");
+    const sharedKey = websites.data[0].widget_public_key || websites.data[0].public_key;
+    if (!sharedKey) throw new Error("The first website has no widget key.");
+    const update = await db.from("website_connections").update({ widget_public_key: sharedKey })
+      .eq("workspace_id", workspaceId).is("widget_deleted_at", null);
+    if (update.error) throw new Error("Could not apply the shared widget to every website: " + update.error.message);
+    await recordAudit(db, workspaceId, "website.widget_shared", sharedKey, { websiteCount: websites.data.length });
+    return { widgetPublicKey: sharedKey, websiteCount: websites.data.length };
+  });
+
+export const deleteWebsiteConnection = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, websiteId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const result = await db.from("website_connections").update({
+      status: "paused", widget_deleted_at: new Date().toISOString(),
+    }).eq("id", data.websiteId).eq("workspace_id", workspaceId)
+      .is("widget_deleted_at", null).select("id,domain").maybeSingle();
+    if (result.error || !result.data) throw new Error("Could not remove this website widget.");
+    await recordAudit(db, workspaceId, "website.widget_removed", result.data.id, { domain: result.data.domain });
+    return { ok: true, websiteId: result.data.id };
   });
 
 export const createProductService = createServerFn({ method: "POST" })

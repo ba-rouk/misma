@@ -22,6 +22,8 @@ import {
   saveWorkspaceProfile,
   markVisitorMessagesRead,
   createWebsiteConnection,
+  shareWebsiteWidgetAcrossWorkspace,
+  deleteWebsiteConnection,
   createProductService,
   updateHumanRequestStatus,
   updateProductServiceStatus,
@@ -32,6 +34,7 @@ import {
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 import { MicrophoneAccessPanel } from "../components/microphone-access-panel";
 import { VoiceInputBar } from "../components/voice-input-bar";
+import { getSpeechVoiceForPreset } from "../lib/misma-voice";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -915,12 +918,7 @@ function AttachmentImageLightbox({ attachment, onClose }: { attachment: MessageA
 type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
 
 function getVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
-  const female = voices.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
-  const male = voices.filter((voice) => /(^|[^A-Za-z])(male|man|boy)(?=$|[^A-Za-z])|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
-  const other = voices.filter((voice) => !female.includes(voice) && !male.includes(voice));
-  const pool = preset === "girl" || preset === "woman" ? female : male;
-  const index = preset === "girl" || preset === "boy" ? 0 : 1;
-  return pool[index] || pool[0] || (preset === "girl" || preset === "boy" ? other[0] : other.find((voice) => voice.default)) || voices.find((voice) => voice.default) || voices[0];
+  return getSpeechVoiceForPreset(voices, preset);
 }
 function getLoginGreeting(): string {
   const hour = new Date().getHours();
@@ -1108,11 +1106,21 @@ function Dashboard() {
   const [whatsappPhoneNumber, setWhatsappPhoneNumber] = useState("");
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
+  const sharedWidgetPublicKey = connectedWebsites.length
+    ? connectedWebsites[0].widget_public_key || connectedWebsites[0].public_key
+    : "";
+  const everyWebsiteUsesSharedWidget = Boolean(sharedWidgetPublicKey) &&
+    connectedWebsites.every((site) => (site.widget_public_key || site.public_key) === sharedWidgetPublicKey);
   const [knowledgeUploadBusy, setKnowledgeUploadBusy] = useState(false);
   const [recommendationBusy, setRecommendationBusy] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [websiteDraftUrl, setWebsiteDraftUrl] = useState("");
   const [websiteDraftName, setWebsiteDraftName] = useState("");
+  const [sharedWebsiteWidget, setSharedWebsiteWidget] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.localStorage.getItem("misma_shared_website_widget") === "true"; }
+    catch { return false; }
+  });
   const [productDraft, setProductDraft] = useState({ kind: "product", name: "", description: "", price: "" });
   const [unreadVisitorMessages, setUnreadVisitorMessages] = useState<UnreadVisitorMessage[]>([]);
   const [unreadVisitorCount, setUnreadVisitorCount] = useState(0);
@@ -2062,10 +2070,14 @@ function Dashboard() {
       return;
     }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(msg.text);
     const selectedVoice = getVoiceForPreset(availableVoices, selectedVoicePreset);
-    if (selectedVoice) utterance.voice = selectedVoice;
-    utterance.pitch = selectedVoicePreset === "girl" ? 1.28 : selectedVoicePreset === "boy" ? 1.18 : selectedVoicePreset === "woman" ? 1 : 0.9;
+    if (!selectedVoice) {
+      setChatError("This device does not have a matching " + (selectedVoicePreset === "boy" || selectedVoicePreset === "man" ? "male" : "female") + " speech voice installed. Add one in your device text-to-speech settings.");
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(msg.text);
+    utterance.voice = selectedVoice;
+    utterance.pitch = selectedVoicePreset === "girl" ? 1.2 : selectedVoicePreset === "boy" ? 0.88 : selectedVoicePreset === "woman" ? 1 : 0.82;
     utterance.onend = () => setSpeakingMessageId(null);
     utterance.onerror = () => setSpeakingMessageId(null);
     setSpeakingMessageId(msg.id);
@@ -2080,10 +2092,14 @@ function Dashboard() {
       return;
     }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance("Hello, this is your selected Misma voice.");
     const voice = getVoiceForPreset(availableVoices, selectedVoicePreset);
-    if (voice) utterance.voice = voice;
-    utterance.pitch = selectedVoicePreset === "girl" ? 1.28 : selectedVoicePreset === "boy" ? 1.18 : selectedVoicePreset === "woman" ? 1 : 0.9;
+    if (!voice) {
+      setChatError("This device does not have a matching " + (selectedVoicePreset === "boy" || selectedVoicePreset === "man" ? "male" : "female") + " speech voice installed. Add one in your device text-to-speech settings.");
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance("Hello, this is your selected Misma voice.");
+    utterance.voice = voice;
+    utterance.pitch = selectedVoicePreset === "girl" ? 1.2 : selectedVoicePreset === "boy" ? 0.88 : selectedVoicePreset === "woman" ? 1 : 0.82;
     window.speechSynthesis.speak(utterance);
   };
 
@@ -4926,7 +4942,7 @@ function Dashboard() {
               <section id="settings-voice" className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">♫</span>
-                  <span><h3>Voice</h3><p>Choose your reply voice and test microphone access on this device.</p></span>
+                  <span><h3>Voice</h3><p>Choose the voice used for read-aloud and hands-free speech chat. Boy/Man require a male voice installed on this device; Misma will not substitute a woman's voice.</p></span>
                 </div>
                 <MicrophoneAccessPanel />
                 <div className="aichat-settings-voice-row">
@@ -5038,26 +5054,64 @@ function Dashboard() {
                 const normalizedUrl = parsed.origin;
                 if (!token) return;
                 try {
-                  const result = await createWebsiteConnection({ data: { token, name: websiteDraftName.trim() || parsed.hostname, websiteUrl: normalizedUrl } });
+                  const sharedWidgetKey = sharedWebsiteWidget
+                    ? (connectedWebsites.find((site) => site.widget_public_key)?.widget_public_key || connectedWebsites.find((site) => site.public_key)?.public_key)
+                    : undefined;
+                  const result = await createWebsiteConnection({ data: {
+                    token, name: websiteDraftName.trim() || parsed.hostname, websiteUrl: normalizedUrl,
+                    ...(sharedWidgetKey ? { sharedWidgetKey } : {}),
+                  } });
                   setConnectedWebsites((items) => [result.website, ...items]);
                 } catch (error) { alert(error instanceof Error ? error.message : "Could not add this website."); return; }
                 setWebsiteDraftUrl(""); setWebsiteDraftName("");
               }}>
                 <label>Website or preview URL<input className="aichat-input" type="url" placeholder="https://preview.example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
                 <label>Website name (optional)<input className="aichat-input" placeholder="My business website" value={websiteDraftName} onChange={(event) => setWebsiteDraftName(event.target.value)} /></label>
+                <label className="aichat-shared-widget-option">
+                  <input type="checkbox" checked={sharedWebsiteWidget} onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setSharedWebsiteWidget(enabled);
+                    try { window.localStorage.setItem("misma_shared_website_widget", String(enabled)); } catch { /* Keep this session setting. */ }
+                  }} />
+                  <span><strong>Use one shared widget for all my websites</strong><br />All registered domains use the same widget key and workspace knowledge. Visitor conversations remain separated by website.</span>
+                </label>
                 <p className="aichat-website-setup-note">You do not need to publish the website first. Register its final domain or a preview/staging URL, then copy the general script below. For local testing, use <code>http://localhost:PORT</code>.</p>
                 <button type="submit" className="aichat-action-btn" disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
               </form>
+            </div>
+            <div className="aichat-card">
+              <div className="aichat-panel-heading"><div><h3>One widget across your websites</h3><small>Use one installation key and the same workspace knowledge on every registered domain.</small></div><span className="aichat-status-pill is-connected">{sharedWebsiteWidget ? "Shared" : "Separate"}</span></div>
+              <p>Each domain is still validated against its registered hostname. Removing one domain does not remove the shared widget from other registered domains.</p>
+              <button type="button" className="aichat-action-btn secondary" disabled={!connectedWebsites.length} onClick={async () => {
+                if (!token) return;
+                try {
+                  const result = await shareWebsiteWidgetAcrossWorkspace({ data: { token } });
+                  setSharedWebsiteWidget(true);
+                  try { window.localStorage.setItem("misma_shared_website_widget", "true"); } catch { /* Keep session setting. */ }
+                  await loadData();
+                  alert("One widget is now shared across " + result.websiteCount + " connected websites.");
+                } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not share the widget."); }
+              }}>Use one widget for all connected websites</button>
+              {everyWebsiteUsesSharedWidget && (
+                <div className="aichat-shared-script">
+                  <label className="aichat-widget-script-label">General shared website script — paste this same script on every registered website</label>
+                  <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                  <button type="button" className="aichat-action-btn" onClick={() => {
+                    const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    void navigator.clipboard.writeText(script).then(() => alert("Shared website widget script copied."));
+                  }}>Copy general script</button>
+                </div>
+              )}
             </div>
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
               {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className="aichat-website-card" key={site.id}>
                 <div className="aichat-panel-heading"><div><strong>{site.name || site.domain}</strong><small>{site.website_url}</small></div><span className={`aichat-status-pill is-${site.status}`}>{site.status}</span></div>
                 <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
                 <label className="aichat-widget-script-label">General website installation script</label>
-                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261105-ask-misma" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261105-ask-misma" data-site-key="${site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
@@ -5071,6 +5125,13 @@ function Dashboard() {
                       alert(cause instanceof Error ? cause.message : "Website scan failed.");
                     } finally { setWebsiteActionId(null); }
                   }}>{websiteActionId === site.id ? "Scanning…" : "Scan website"}</button>
+                  <button type="button" className="aichat-action-btn secondary is-danger" onClick={async () => {
+                    if (!token || !window.confirm("Remove the Misma widget from " + (site.domain || site.website_url) + "? It will be disabled on this domain; visitor history is preserved.")) return;
+                    try {
+                      await deleteWebsiteConnection({ data: { token, websiteId: site.id } });
+                      setConnectedWebsites((items) => items.filter((item) => item.id !== site.id));
+                    } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not remove the widget."); }
+                  }}>Remove widget</button>
                 </div>
                 <small>Last verified: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
                 <small>Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
