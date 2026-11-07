@@ -1419,7 +1419,7 @@ function Dashboard() {
   const [whatsappPhoneNumber, setWhatsappPhoneNumber] = useState("");
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
-  const [websiteScanFeedback, setWebsiteScanFeedback] = useState<Record<string, { kind: "success" | "error"; message: string }>>({});
+  const [websiteScanFeedback, setWebsiteScanFeedback] = useState<Record<string, { kind: "loading" | "success" | "error"; message: string }>>({});
   const [minimizedWebsiteIds, setMinimizedWebsiteIds] = useState<string[]>([]);
   const sharedWidgetPublicKey = connectedWebsites.length
     ? connectedWebsites[0].widget_public_key || connectedWebsites[0].public_key
@@ -5490,7 +5490,7 @@ function Dashboard() {
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId !== null} onClick={async () => {
                     if (!workspace?.id) return;
                     setWebsiteActionId(site.id);
-                    setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "success", message: "Scanning website pages…" } }));
+                    setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "loading", message: "Scanning website pages…" } }));
                     const controller = new AbortController();
                     const timeoutId = window.setTimeout(() => controller.abort(), 80_000);
                     try {
