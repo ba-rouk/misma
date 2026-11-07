@@ -507,7 +507,7 @@ test("attachments stay private, show per-file progress, and are separate from us
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
   const api = await read("../src/lib/api/misma.functions.ts");
 
-  assert.match(dashboard, /MAX_FILES|next\.length > 5/);
+  assert.match(dashboard, /MAX_COMPOSER_FILES|next\.length > 5/);
   assert.match(dashboard, /file\.size > 10 \* 1024 \* 1024/);
   assert.match(dashboard, /uploadStorageObjectWithProgress/);
   assert.match(dashboard, /xhr\.upload\.onprogress/);
@@ -521,7 +521,7 @@ test("attachments stay private, show per-file progress, and are separate from us
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments/);
   assert.match(styles, /grid-template-columns:\s*repeat\(3, 112px\)/);
   assert.match(edgeFunction, /userVisibleMessage/);
-  assert.match(edgeFunction, /ask what the user would like you to do with it/i);
+  assert.match(edgeFunction, /ask what they would like you to do with it/i);
   assert.match(api, /createSignedUrl\(item\.path, 3600\)/);
 });
 
