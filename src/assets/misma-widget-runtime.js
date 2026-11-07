@@ -5,7 +5,7 @@ if(!key||!api){console.warn("[Misma] Missing site key or API endpoint.");return;
 function initWidget(initialConfig){
 var siteSessionKey=key+"_"+location.hostname.toLowerCase();
 var store="misma_visitor_"+siteSessionKey,conversationStore="misma_conversation_"+siteSessionKey;
-var visitor="",conversation=null;
+var visitor="",conversation=null,pendingClose=null;
 try{visitor=sessionStorage.getItem(store)||crypto.randomUUID();sessionStorage.setItem(store,visitor);conversation=sessionStorage.getItem(conversationStore)||null;}
 catch(error){visitor="v-"+Date.now()+"-"+Math.random().toString(36).slice(2);}
 var host=document.createElement("div");
@@ -47,7 +47,13 @@ var panel=$(".panel"),messages=$(".messages"),input=$(".composer textarea"),stat
 var micButton=$(".mic"),primaryButton=$(".primary"),whatsappLink=$(".whatsapp-link"),instagramLink=$(".instagram-link");
 
 function applySocialLink(link, rawUrl, expectedHost) {
-  if (!link || typeof rawUrl !== "string" || !rawUrl) return;
+  if (!link) return;
+  link.hidden = true;
+  link.setAttribute("hidden", "");
+  link.classList.remove("is-visible");
+  link.style.display = "none";
+  link.removeAttribute("href");
+  if (typeof rawUrl !== "string" || !rawUrl) return;
   try {
     var parsed = new URL(rawUrl);
     var hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
@@ -87,8 +93,33 @@ function updatePrimary(){
 function call(payload,signal){
   return fetch(api,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({siteKey:key,visitorId:visitor,conversationId:conversation,pageUrl:location.href},payload)),signal:signal})
     .then(function(response){return response.json().then(function(data){if(!response.ok||data.error)throw Error(data.error||"Misma could not complete this request.");return data;});})
-    .then(function(data){if(data.conversationId){conversation=data.conversationId;try{sessionStorage.setItem(conversationStore,String(conversation));}catch(error){}}
-      if(data.visitorId){visitor=data.visitorId;try{sessionStorage.setItem(store,visitor);}catch(error){}}return data;});
+    .then(function(data){
+      if(Object.prototype.hasOwnProperty.call(data,"whatsapp_url")||Object.prototype.hasOwnProperty.call(data,"instagram_url"))applyWebsiteSocialLinks(data);
+      if(data.conversationId){conversation=data.conversationId;try{sessionStorage.setItem(conversationStore,String(conversation));}catch(error){}}
+      if(data.visitorId){visitor=data.visitorId;try{sessionStorage.setItem(store,visitor);}catch(error){}}
+      return data;
+    });
+}
+function closeWidget(){
+  panel.classList.remove("open");
+  stopVoiceSession();
+  stopDictation();
+  $(".launch").setAttribute("aria-expanded","false");
+  messages.innerHTML="";
+  bubble("Hello! I am Misma. How can I help you today?","ai");
+  if(!conversation)return;
+  var closingConversation=conversation;
+  var closingVisitor=visitor;
+  pendingClose=call({action:"close",conversationId:closingConversation,visitorId:closingVisitor}).then(function(data){
+    if(data.historyDeleted&&conversation===closingConversation){
+      conversation=null;
+      try{sessionStorage.removeItem(conversationStore);}catch(error){}
+    }
+    return data;
+  }).catch(function(error){
+    console.warn("[Misma widget] Session history cleanup could not be confirmed:",error&&error.message?error.message:"unknown");
+    return null;
+  }).finally(function(){pendingClose=null;});
 }
 function refreshHistory(){
   if(!conversation||busy)return Promise.resolve(null);
@@ -303,9 +334,17 @@ function changeVoiceMode(nextMode){
 
 $(".launch").addEventListener("click",function(){
   var opened=panel.classList.toggle("open");$(".launch").setAttribute("aria-expanded",String(opened));
-  if(opened){input.focus();call({action:"heartbeat"}).catch(function(error){setStatus(error.message);});refreshHistory().catch(function(error){setStatus(error.message);});}
+  if(opened){
+    input.focus();
+    var refreshPanel=function(){
+      if(!panel.classList.contains("open"))return;
+      call({action:"heartbeat"}).catch(function(error){setStatus(error.message);});
+      refreshHistory().catch(function(error){setStatus(error.message);});
+    };
+    if(pendingClose)pendingClose.finally(refreshPanel);else refreshPanel();
+  }else closeWidget();
 });
-$(".close").addEventListener("click",function(){panel.classList.remove("open");stopVoiceSession();stopDictation();$(".launch").setAttribute("aria-expanded","false");});
+$(".close").addEventListener("click",closeWidget);
 
 $(".human").addEventListener("click",function(){handoff.classList.toggle("open");if(handoff.classList.contains("open"))handoff.querySelector("[name='name']").focus();});
 input.addEventListener("input",function(){resizeInput();updatePrimary();});
