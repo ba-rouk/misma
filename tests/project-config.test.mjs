@@ -702,7 +702,7 @@ test("website widget connections support shared keys and safe removal", async ()
   assert.match(dashboard, /Use one widget for all connected websites/);
   assert.match(dashboard, /Delete connection/);
   assert.match(dashboard, /minimizedWebsiteIds/);
-  assert.match(dashboard, /aichat-website-minimize/);
+  assert.match(dashboard, /aichat-website-expand/);
   assert.match(dashboard, /aichat-website-card-details/);
   assert.match(widget, /function initWidget\(\)/);
   assert.match(widget, /action:"heartbeat"/);
@@ -722,14 +722,14 @@ test("embedded chat widget has in-field green send, microphone dictation and fem
   assert.doesNotThrow(() => new Function(widget), "the hosted widget must parse before deployment");
 });
 
-test("embedded chat widget has no header minimize control and still supports resizing and saved size", async () => {
+test("embedded chat widget header has no minimize or expand/resize controls", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.doesNotMatch(widget, /class='minimize'/);
   assert.doesNotMatch(widget, /minimizeButton\.addEventListener/);
   assert.doesNotMatch(widget, /minimized/);
-  assert.match(widget, /class='resize-handle'/);
-  assert.match(widget, /pointermove/);
-  assert.match(widget, /localStorage\.setItem\(sizeStore/);
+  assert.doesNotMatch(widget, /resize-handle|sizeStore|Resize widget|saveSize|resizeState/);
+  assert.match(widget, /class='human'/);
+  assert.match(widget, /class='close'/);
 });
 
 test("shared installation script uses the same widget key while the server checks each registered host", async () => {
@@ -746,14 +746,15 @@ test("shared installation script uses the same widget key while the server check
 });
 
 
-test("website widget resize handle is in the top-right header and drag-resizes from that corner", async () => {
+test("website widget header uses social controls instead of expand and resize actions", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  const handle = widget.indexOf("class='resize-handle'");
-  const headerEnd = widget.indexOf("</header>", handle);
-  assert.ok(handle >= 0 && headerEnd > handle, "resize control should be inside the widget header");
-  assert.match(widget, /resizeState\.width\+event\.clientX-resizeState\.x/);
-  assert.match(widget, /resizeState\.height\+resizeState\.y-event\.clientY/);
-  assert.match(widget, /localStorage\.setItem\(sizeStore/);
+  const whatsapp = widget.indexOf("class='social-link whatsapp-link'");
+  const instagram = widget.indexOf("class='social-link instagram-link'");
+  const person = widget.indexOf("class='human'");
+  const close = widget.indexOf("class='close'");
+  const headerEnd = widget.indexOf("</header>", close);
+  assert.ok(whatsapp >= 0 && instagram > whatsapp && person > instagram && close > person && headerEnd > close);
+  assert.doesNotMatch(widget, /resizeState|sizeStore|resize-handle/);
 });
 
 test("website widget dictation shows a recording waveform and waits for Send to submit", async () => {
