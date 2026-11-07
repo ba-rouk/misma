@@ -910,7 +910,7 @@ test("connected website settings and social widget controls stay accessible on m
   const css = await read("../src/styles.css");
   assert.match(dashboard, /className="aichat-website-expand"/);
   assert.match(dashboard, /aria-expanded=\{!minimizedWebsiteIds\.includes\(site\.id\)\}/);
-  assert.match(dashboard, /Add websites/);
+  assert.match(dashboard, /Add channels/);
   assert.match(runtime, /class='social-link whatsapp-link'/);
   assert.match(runtime, /class='social-link instagram-link'/);
   assert.match(runtime, /target='_blank' rel='noopener noreferrer'/);
