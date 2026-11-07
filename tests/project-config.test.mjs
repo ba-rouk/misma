@@ -708,9 +708,10 @@ test("embedded chat widget has in-field green send, microphone dictation and fem
   assert.doesNotThrow(() => new Function(widget), "the hosted widget must parse before deployment");
 });
 
-test("embedded chat widget supports minimizing, resizing and saved size", async () => {
+test("embedded chat widget has no header minimize control and still supports resizing and saved size", async () => {
   const widget = await read("../public/assets/misma-widget.js");
-  assert.match(widget, /class='minimize'/);
+  assert.doesNotMatch(widget, /class='minimize'/);
+  assert.doesNotMatch(widget, /minimizeButton\.addEventListener/);
   assert.match(widget, /class='resize-handle'/);
   assert.match(widget, /pointermove/);
   assert.match(widget, /localStorage\.setItem\(sizeStore/);
@@ -785,5 +786,43 @@ test("website human handoff always creates an owner notification with the visito
   assert.match(edge, /action === "human-request" \? 500/);
   assert.match(widget, /call\(Object\.assign\(\{action:"human-request"\},data\)\)/);
   assert.match(dashboard, /refreshVisitorNotifications\(\); setActiveTab\("notifications"\)/);
-  assert.match(dashboard, /20261107-widget-voice-talk-resize-human-notifications/);
+  assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
+});
+
+
+test("website widget reloads fetch the latest public asset without changing site keys", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const widget = await read("../public/assets/misma-widget.js");
+  const security = await read("../src/lib/security-headers.server.ts");
+  const server = await read("../src/server.ts");
+  assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
+  assert.ok(!dashboard.includes("misma-widget.js?v="));
+  assert.ok(security.includes("Cache-Control"));
+  assert.ok(security.includes("CDN-Cache-Control"));
+  assert.ok(security.includes("/assets/misma-widget.js"));
+  assert.ok(server.includes("applySecurityHeaders(await normalizeCatastrophicSsrResponse(response), request)"));
+  assert.ok(widget.includes("data-site-key"));
+});
+
+test("dashboard notification feed and badge count only pending human handoffs", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 2);
+  assert.ok(dashboard.includes('const pendingHumanRequestCount = humanHandoffs.filter((request) => request.status === "pending").length;'));
+  assert.ok(dashboard.includes("Human handoff requests ({allNotifications.length})"));
+  assert.ok(dashboard.includes("Only visitors who asked to speak with a person appear here"));
+  const start = dashboard.indexOf('{activeTab === "notifications" && (');
+  const end = dashboard.indexOf("\n\n        {deleteChatTarget && (", start);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(!dashboard.slice(start, end).includes("unreadVisitorMessages.map"));
+});
+
+test("embedded speech talk is English-only and does not display transcripts or reply text", async () => {
+  const widget = await read("../public/assets/misma-widget.js");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.ok(!widget.includes("voiceTranscript"));
+  assert.ok(!widget.includes("voice-transcript"));
+  assert.ok(widget.includes('instance.lang=isVoiceChat?"en-US"'));
+  assert.ok(widget.includes("^en(?:-|$)"));
+  assert.ok(edge.includes("Always understand and respond in English"));
 });
