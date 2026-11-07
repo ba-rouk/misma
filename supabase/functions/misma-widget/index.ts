@@ -186,11 +186,11 @@ async function generateText(systemPrompt: string, prompt: string, structuredOutp
       let answer = "";
       if (provider.kind === "gemini") {
         const parts = result?.candidates?.[0]?.content?.parts;
-        if (Array.isArray(parts)) answer = parts.map((item: AnyRecord) => safeString(item?.text, 12000)).join("");
+        if (Array.isArray(parts)) answer = parts.map((item: AnyRecord) => safeString(item?.text, 32000)).join("");
       } else if (provider.kind === "cohere") {
         const parts = result?.message?.content;
-        if (Array.isArray(parts)) answer = parts.map((item: AnyRecord) => safeString(item?.text, 12000)).join("");
-      } else answer = safeString(result?.choices?.[0]?.message?.content, 12000);
+        if (Array.isArray(parts)) answer = parts.map((item: AnyRecord) => safeString(item?.text, 32000)).join("");
+      } else answer = safeString(result?.choices?.[0]?.message?.content, 32000);
       if (answer) return answer;
     } catch (error) {
       console.warn("[misma-widget] AI fallback after " + provider.name + " failure: " + (error instanceof Error ? error.name : "unknown"));
