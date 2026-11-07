@@ -1112,6 +1112,7 @@ function Dashboard() {
     : "";
   const everyWebsiteUsesSharedWidget = Boolean(sharedWidgetPublicKey) &&
     connectedWebsites.every((site) => (site.widget_public_key || site.public_key) === sharedWidgetPublicKey);
+  const pendingHumanRequestCount = humanHandoffs.filter((request) => request.status === "pending").length;
   const [knowledgeUploadBusy, setKnowledgeUploadBusy] = useState(false);
   const [recommendationBusy, setRecommendationBusy] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
@@ -3634,7 +3635,7 @@ function Dashboard() {
           </button>
           {expandedNavGroups.manage && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
-            <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadVisitorCount > 0 && <span>{unreadVisitorCount}</span>}</button>
+            <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {pendingHumanRequestCount > 0 && <span>{pendingHumanRequestCount}</span>}</button>
           </div>}
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)} data-tooltip="Build">
             <span className="aichat-nav-icon">⌘</span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret">{expandedNavGroups.build ? "⌄" : "›"}</span>
@@ -3851,16 +3852,16 @@ function Dashboard() {
           </button>
           <button
             type="button"
-            className={`aichat-notification-trigger${unreadVisitorCount > 0 ? " has-unread" : ""}`}
+            className={`aichat-notification-trigger${pendingHumanRequestCount > 0 ? " has-unread" : ""}`}
             onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}
-            aria-label={unreadVisitorCount > 0 ? `Notifications, ${unreadVisitorCount} unread visitor messages` : "Notifications"}
+            aria-label={pendingHumanRequestCount > 0 ? `Notifications, ${pendingHumanRequestCount} pending human requests` : "Human request notifications"}
             title="Website visitor notifications"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
               <path d="M10 21h4" />
             </svg>
-            {unreadVisitorCount > 0 && <span className="aichat-notification-count">{unreadVisitorCount > 99 ? "99+" : unreadVisitorCount}</span>}
+            {pendingHumanRequestCount > 0 && <span className="aichat-notification-count">{pendingHumanRequestCount > 99 ? "99+" : pendingHumanRequestCount}</span>}
           </button>
         </header>
 
@@ -5096,9 +5097,9 @@ function Dashboard() {
               {everyWebsiteUsesSharedWidget && (
                 <div className="aichat-shared-script">
                   <label className="aichat-widget-script-label">General shared website script — paste this same script on every registered website</label>
-                  <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-talk-resize-human-notifications" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                  <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-talk-resize-human-notifications" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(script).then(() => alert("Shared website widget script copied."));
                   }}>Copy general script</button>
                 </div>
@@ -5110,10 +5111,10 @@ function Dashboard() {
                 <div className="aichat-website-card-details" hidden={minimizedWebsiteIds.includes(site.id)}>
                 <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
                 <label className="aichat-widget-script-label">General website installation script</label>
-                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-talk-resize-human-notifications" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-voice-talk-resize-human-notifications" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
@@ -5254,45 +5255,31 @@ function Dashboard() {
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
               <div className="aichat-tab-header">
-                <h2>Notifications {unreadVisitorCount > 0 ? `(${unreadVisitorCount} unread)` : ""}</h2>
-                <p>New and previous workspace activity, including visitors asking to speak with a person.</p>
+                <h2>Human request notifications {pendingHumanRequestCount > 0 ? `(${pendingHumanRequestCount} pending)` : ""}</h2>
+                <p>Only visitors who asked to speak with a person appear here. Select a request to open its conversation.</p>
               </div>
               <div className="aichat-card">
-                <h3>All notifications ({allNotifications.length})</h3>
-                {allNotifications.length === 0 ? <p>No saved notifications yet.</p> : <div className="aichat-notifications-list">
-                  {allNotifications.map((item) => <button type="button" key={item.id} className={`aichat-notification-item${item.is_read ? " is-read" : ""}`} onClick={() => item.conversation_id ? void selectConversation(Number(item.conversation_id)) : item.human_request_id ? setActiveTab("customers") : void 0}>
-                    <span className="aichat-notification-item-icon" aria-hidden="true">{item.notification_type === "human_request" ? "♙" : "●"}</span>
-                    <span className="aichat-notification-item-copy"><strong>{item.title}</strong><small>{item.created_at ? new Date(item.created_at).toLocaleString() : "Workspace activity"}</small><span>{item.body || item.notification_type}</span></span>
-                    <span className="aichat-notification-open">{item.is_read ? "Read" : "New"}</span>
-                  </button>)}
-                </div>}
-              </div>
-              <div className="aichat-card aichat-notifications-card">
-                {unreadVisitorMessages.length === 0 ? (
+                <h3>Human handoff requests ({allNotifications.length})</h3>
+                {allNotifications.length === 0 ? (
                   <div className="aichat-notifications-empty">
                     <span className="aichat-notifications-empty-icon" aria-hidden="true">✓</span>
-                    <h3>You're all caught up</h3>
-                    <p>New website visitor messages will appear here.</p>
+                    <h3>No human requests yet</h3>
+                    <p>When a website visitor asks to speak with a person, their request will appear here.</p>
                   </div>
                 ) : (
-                  <>
-                    {unreadVisitorCount > unreadVisitorMessages.length && (
-                      <p className="aichat-notifications-overflow">Showing the latest {unreadVisitorMessages.length} unread messages.</p>
-                    )}
-                    <div className="aichat-notifications-list">
-                      {unreadVisitorMessages.map((item) => (
-                        <button key={item.id} type="button" className="aichat-notification-item" onClick={() => void selectConversation(item.conversationId)}>
-                          <span className="aichat-notification-item-icon" aria-hidden="true">●</span>
-                          <span className="aichat-notification-item-copy">
-                            <strong>{item.conversationTitle}</strong>
-                            <small>{item.channel} · {item.created_at ? new Date(item.created_at).toLocaleString() : "New message"}</small>
-                            <span>{item.text}</span>
-                          </span>
-                          <span className="aichat-notification-open">Open chat ↗</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
+                  <div className="aichat-notifications-list">
+                    {allNotifications.map((item) => (
+                      <button type="button" key={item.id} className={`aichat-notification-item${item.is_read ? " is-read" : ""}`} onClick={() => item.conversation_id ? void selectConversation(Number(item.conversation_id)) : item.human_request_id ? setActiveTab("customers") : void 0}>
+                        <span className="aichat-notification-item-icon" aria-hidden="true">♙</span>
+                        <span className="aichat-notification-item-copy">
+                          <strong>{item.title}</strong>
+                          <small>{item.created_at ? new Date(item.created_at).toLocaleString() : "Human request"}</small>
+                          <span>{item.body || "A visitor requested a human agent."}</span>
+                        </span>
+                        <span className="aichat-notification-open">{item.is_read ? "Read" : "New"}</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
