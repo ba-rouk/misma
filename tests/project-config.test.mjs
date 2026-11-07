@@ -764,3 +764,26 @@ test("website widget speech talk provides the dashboard voice controls and spoke
   assert.match(edge, /input\.voice === true/);
   assert.match(edge, /VOICE CONVERSATION/);
 });
+
+
+test("website human handoff always creates an owner notification with the visitor message", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const widget = await read("../public/assets/misma-widget.js");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+
+  const handoff = edge.slice(edge.indexOf("async function saveHumanRequest"), edge.indexOf("\\nfunction isSafeWebsiteUrl"));
+  assert.match(handoff, /workspace_id: site\.workspace_id/);
+  assert.match(handoff, /notification_type: "human_request"/);
+  assert.match(handoff, /human_request_id: requestId/);
+  assert.match(handoff, /Message: " \+ reason/);
+  assert.match(handoff, /Email: " \+ email/);
+  assert.match(handoff, /Phone: " \+ phone/);
+  assert.match(handoff, /existingNotification\.data/);
+  assert.match(handoff, /createdNotification\.error/);
+  assert.doesNotMatch(handoff, /notification\.error\) console\.warn/);
+  assert.match(edge, /Action failed:\", action, message/);
+  assert.match(edge, /action === "human-request" \? 500/);
+  assert.match(widget, /call\(Object\.assign\(\{action:"human-request"\},data\)\)/);
+  assert.match(dashboard, /refreshVisitorNotifications\(\); setActiveTab\("notifications"\)/);
+  assert.match(dashboard, /20261107-widget-voice-talk-resize-human-notifications/);
+});
