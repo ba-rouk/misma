@@ -564,3 +564,27 @@ test("attachment preparation is concurrent and skipped for attachment-only clari
   assert.match(edgeFunction, /historyWindow = requestedAttachments\.length \? 4 : 10/);
   assert.match(edgeFunction, /historyTextLimit = requestedAttachments\.length \? 1_800 : 4_000/);
 });
+
+
+test("composer image previews decode selected files and show a centered upload indicator", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /createComposerImageThumbnail/);
+  assert.match(dashboard, /createImageBitmap\(file\)/);
+  assert.match(dashboard, /readComposerFileAsDataUrl\(file\)/);
+  assert.match(dashboard, /aichat-composer-attachment-content-image/);
+  assert.match(dashboard, /imagePreview && !imagePreviewError/);
+  assert.match(dashboard, /onError=\{\(\) => setImagePreviewError\(true\)\}/);
+  assert.match(styles, /\.aichat-composer-upload-state\.is-uploading\s*\{[^}]*place-items:\s*center/);
+  assert.match(styles, /\.aichat-composer-upload-ring\s*\{[^}]*width:\s*30px/);
+});
+
+test("composer and sent attachments use compact right-aligned square previews", async () => {
+  const styles = await read("../src/styles.css");
+
+  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-end/);
+  assert.match(styles, /\.aichat-composer-attachment-square,\s*\.aichat-composer-attachment-square\.is-file\s*\{[^}]*width:\s*88px/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-attachments\.is-user-attachments\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?max-width:\s*352px/);
+  assert.match(styles, /\.aichat-message-attachments\.is-user-attachments \.aichat-attachment-image-link\s*\{[^}]*width:\s*112px[^}]*height:\s*112px/);
+});
