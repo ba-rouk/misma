@@ -152,12 +152,12 @@
 }
 
 .misma-voice-dictation-btn.is-finish {
-  color: #0c1119;
-  background: #f4f7fb;
+  color: #06200f;
+  background: var(--misma-control-green, #22c55e);
 }
 
 .misma-voice-dictation-btn.is-finish:hover {
-  background: #dce8fb;
+  background: #4ade80;
 }
 
 .misma-voice-primary {
