@@ -445,6 +445,82 @@ function validateAttachmentList(value: unknown): AttachmentInput[] {
   });
 }
 
+async function extractDocxText(bytes: Uint8Array): Promise<string> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const minimumOffset = Math.max(0, bytes.length - 65_557);
+  let endRecord = -1;
+  for (let offset = bytes.length - 22; offset >= minimumOffset; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      endRecord = offset;
+      break;
+    }
+  }
+  if (endRecord < 0) throw new Error("This DOCX file is not a valid Word document.");
+  const entryCount = view.getUint16(endRecord + 10, true);
+  const centralDirectoryOffset = view.getUint32(endRecord + 16, true);
+  let cursor = centralDirectoryOffset;
+  let documentXml: Uint8Array | null = null;
+
+  for (let index = 0; index < entryCount && cursor + 46 <= bytes.length; index += 1) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) break;
+    const compressionMethod = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const uncompressedSize = view.getUint32(cursor + 24, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localHeaderOffset = view.getUint32(cursor + 42, true);
+    const nameStart = cursor + 46;
+    const nameEnd = nameStart + nameLength;
+    const entryName = new TextDecoder().decode(bytes.subarray(nameStart, nameEnd));
+    if (entryName === "word/document.xml") {
+      if (uncompressedSize > 10 * 1024 * 1024 || compressedSize > bytes.length) {
+        throw new Error("The Word document contains too much text to analyze safely.");
+      }
+      if (localHeaderOffset + 30 > bytes.length || view.getUint32(localHeaderOffset, true) !== 0x04034b50) {
+        throw new Error("The Word document is missing its document content.");
+      }
+      const localNameLength = view.getUint16(localHeaderOffset + 26, true);
+      const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+      const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+      const dataEnd = dataStart + compressedSize;
+      if (dataEnd > bytes.length) throw new Error("The Word document is incomplete.");
+      const compressed = bytes.subarray(dataStart, dataEnd);
+      if (compressionMethod === 0) {
+        documentXml = compressed.slice();
+      } else if (compressionMethod === 8) {
+        const stream = new Blob([compressed]).stream().pipeThrough(
+          new DecompressionStream("deflate-raw" as CompressionFormat),
+        );
+        documentXml = new Uint8Array(await new Response(stream).arrayBuffer());
+      } else {
+        throw new Error("This Word document uses an unsupported compression method.");
+      }
+      break;
+    }
+    cursor = nameEnd + extraLength + commentLength;
+  }
+
+  if (!documentXml) throw new Error("The Word document does not contain readable document text.");
+  const xml = new TextDecoder().decode(documentXml);
+  const plainText = xml
+    .replace(/<w:tab\b[^>]*\/>/gi, "\t")
+    .replace(/<w:(?:br|cr)\b[^>]*\/>/gi, "\n")
+    .replace(/<\/w:p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_match, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)))
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return plainText.slice(0, 35_000);
+}
+
 async function prepareAttachments(
   db: MismaDbClient,
   attachments: AttachmentInput[],
@@ -467,6 +543,7 @@ async function prepareAttachments(
 
     const lowerName = attachment.name.toLowerCase();
     const isPdf = attachment.mimeType === "application/pdf" || lowerName.endsWith(".pdf");
+    const isDocx = attachment.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || lowerName.endsWith(".docx");
     const isTextLike =
       attachment.mimeType.startsWith("text/") ||
       /\.(txt|md|csv|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i.test(lowerName);
@@ -497,6 +574,14 @@ async function prepareAttachments(
         fileName: attachment.name,
         dataUrl: `data:application/pdf;base64,${bytesToBase64(bytes)}`,
       });
+      continue;
+    }
+    if (isDocx) {
+      const { data: blob, error } = await db.storage.from("misma-media").download(attachment.path);
+      if (error || !blob) throw new Error(`Could not read the Word document ${attachment.name}.`);
+      const text = await extractDocxText(new Uint8Array(await blob.arrayBuffer()));
+      if (!text) throw new Error(`No readable text was found in ${attachment.name}.`);
+      textFiles.push(`[Attached Word document: ${attachment.name}]\n${text}`);
       continue;
     }
     if (isTextLike) {
