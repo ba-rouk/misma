@@ -169,8 +169,8 @@ function shouldSearchWeb(message: string): boolean {
 
 async function searchLiveWeb(query: string): Promise<{ configured: boolean; results: LiveSearchResult[] }> {
   const isNews = /\b(news|breaking|headlines|election|press conference|current events|recent development)\b/i.test(query);
-  const isImmediate = /\b(today|right now|breaking|this week|yesterday)\b/i.test(query);
-  const isRecent = /\b(latest|newest|most recent|recent|new update|release notes|new version|current version)\b/i.test(query);
+  const isImmediate = /\b(today|right now|breaking|this week|yesterday|current(?:ly)?|as of today|as of now)\b/i.test(query);
+  const isRecent = /\b(latest|newest|most recent|recent|new|updates?|developments?|release notes|new version|current version)\b/i.test(query);
   const currentTimeRange = isImmediate ? "week" : isRecent ? "month" : "year";
   const results: LiveSearchResult[] = [];
   const tavilyKey = Deno.env.get("TAVILY_API_KEY");
@@ -190,10 +190,11 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
           max_results: 6,
           include_answer: false,
           include_raw_content: false,
-          ...(isNews ? { days: 30 } : { time_range: currentTimeRange }),
+          ...(isNews ? { days: isImmediate ? 7 : 30 } : { time_range: currentTimeRange }),
         }),
       });
       const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) console.warn("[misma-chat] Tavily Search returned HTTP " + response.status + ".");
       if (response.ok && isRecord(payload) && Array.isArray(payload.results)) {
         for (const item of payload.results.slice(0, 6)) {
           if (!isRecord(item) || typeof item.title !== "string" || typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) continue;
