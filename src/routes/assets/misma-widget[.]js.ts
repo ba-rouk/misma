@@ -8,6 +8,8 @@ const widgetHeaders = {
   "Surrogate-Control": "no-store",
   "Pragma": "no-cache",
   "Expires": "0",
+  "X-Content-Type-Options": "nosniff",
+  "X-Misma-Widget-Version": "2026-11-07-ephemeral-retention",
 };
 
 export const Route = createFileRoute("/assets/misma-widget.js")({
