@@ -64,7 +64,7 @@ export function useMicPermission() {
       }
     };
 
-    let cleanupPermissionListener = () => undefined;
+    let cleanupPermissionListener: () => void = () => undefined;
     void readPermission();
 
     return () => {
