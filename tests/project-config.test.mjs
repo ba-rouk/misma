@@ -390,7 +390,7 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(docs, /allow="microphone"/);
 });
 
-test("browser-native dictation and hands-free voice mode send text only", async () => {
+test("browser-native dictation and hands-free voice mode remain available alongside audio notes", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
@@ -418,7 +418,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.ok(voice.includes("new MediaRecorder"));
   assert.doesNotMatch(voiceModeSource, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
   assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
-  assert.match(component, /Stop dictation and send transcript/);
+  assert.match(component, /Stop recording and send voice note/);
   assert.match(component, /finishDictation\(true\)/);
   assert.match(component, /aria-label=\{isDictating \? "Finish voice dictation" : "Start voice dictation"\}/);
   assert.match(component, /Start voice mode/);
