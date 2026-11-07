@@ -636,7 +636,9 @@ export const deleteWebsiteConnection = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
     const result = await db.from("website_connections").update({
-      status: "paused", widget_deleted_at: new Date().toISOString(),
+      status: "paused",
+      widget_deleted_at: new Date().toISOString(),
+      widget_public_key: crypto.randomUUID(),
     }).eq("id", data.websiteId).eq("workspace_id", workspaceId)
       .is("widget_deleted_at", null).select("id,domain").maybeSingle();
     if (result.error || !result.data) throw new Error("Could not remove this website widget.");
