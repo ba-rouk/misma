@@ -327,8 +327,14 @@ resizeHandle.addEventListener("pointerup",finishResize);resizeHandle.addEventLis
 $(".handoff-submit").addEventListener("click",function(){
   if(busy)return;var data={};handoff.querySelectorAll("input,textarea").forEach(function(element){data[element.name]=element.value.trim();});
   if(!data.name){setStatus("Please enter your name.");return;}busy=true;setStatus("Sending your request…");
-  call(Object.assign({action:"human-request"},data)).then(function(){handoff.classList.remove("open");handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});setStatus("Human request sent. A person will reply here.");return refreshHistory();})
-    .catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
+  call(Object.assign({action:"human-request"},data)).then(function(result){
+    handoff.classList.remove("open");
+    handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});
+    setStatus("Human request sent. A person will reply here.");
+    return refreshHistory().then(function(){
+      if(!result.confirmationSaved)bubble(result.confirmationText||"Your request to speak with a person has been sent. The business team will follow up here.","ai");
+    });
+  }).catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
 });
 window.setInterval(function(){if(panel.classList.contains("open")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
 call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
