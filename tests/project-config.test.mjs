@@ -103,9 +103,11 @@ test("media generation has provider fallback and the composer shows ready attach
   assert.doesNotMatch(edgeFunction, /async function isAgnesMediaSafe/);
   assert.match(dashboard, /function ComposerAttachmentPreview/);
   assert.match(dashboard, /setUploadingAttachments\(true\)/);
-  assert.match(dashboard, /aichat-composer-sendrow/);
   assert.match(dashboard, /aichat-composer-input-row/);
-  assert.match(dashboard, /aichat-composer-send-btn.*is-thinking/);
+  assert.match(dashboard, /toolbarStart=/);
+  assert.match(dashboard, /sendDisabled=\{selectedFiles\.some/);
+  assert.match(dashboard, /hasAttachment=\{\(\) => selectedFiles\.length > 0\}/);
+  assert.match(dashboard, /composerUploadProgress\.get\(file\)/);
   assert.match(dashboard, /getLoginGreeting/);
   assert.equal(dashboard.includes("How many orders came in today?"), false);
   assert.equal(dashboard.includes("Show me recent conversations"), false);
@@ -182,11 +184,13 @@ test("user message tools are desktop-hover and mobile-long-press only, with a st
   assert.match(styles, /\.aichat-composer-input-row \.aichat-composer-textarea::-webkit-scrollbar/);
 
   const inputRow = dashboard.indexOf('className="aichat-composer-input-row"');
-  const toolbarRow = dashboard.indexOf('className="aichat-composer-sendrow"', inputRow);
+  const toolbarRow = dashboard.indexOf("toolbarStart=", inputRow);
   assert.ok(inputRow >= 0 && toolbarRow > inputRow, "message input must sit above the icon toolbar");
 
-  assert.match(dashboard, /draft\.trim\(\) \|\| selectedFiles\.length \|\| createMode/);
+  assert.match(dashboard, /hasAttachment=\{\(\) => selectedFiles\.length > 0\}/);
   assert.match(voiceComponent, /Start voice dictation/);
+  assert.match(voiceComponent, /misma-voice-toolbar/);
+  assert.match(voiceComponent, /sendDisabled/);
 });
 
 
@@ -495,4 +499,46 @@ test("voice chat requests receive concise spoken replies and never upload record
   assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
   assert.doesNotMatch(edgeFunction, /transcribeAudioAttachment|audio\/transcriptions|VOICE NOTE:/);
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
+});
+
+test("attachments stay private, show per-file progress, and are separate from user text", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+  const api = await read("../src/lib/api/misma.functions.ts");
+
+  assert.match(dashboard, /MAX_FILES|next\.length > 5/);
+  assert.match(dashboard, /file\.size > 10 \* 1024 \* 1024/);
+  assert.match(dashboard, /uploadStorageObjectWithProgress/);
+  assert.match(dashboard, /xhr\.upload\.onprogress/);
+  assert.match(dashboard, /uploadAbortControllersRef\.current\.get\(removed\)\?\.abort\(\)/);
+  assert.match(dashboard, /URL\.createObjectURL\(file\)/);
+  assert.match(dashboard, /role="progressbar"/);
+  assert.match(dashboard, /aria-valuenow=\{Math\.max/);
+  assert.match(dashboard, /variant="user"/);
+  assert.match(dashboard, /lightboxAttachment && <AttachmentImageLightbox/);
+  assert.match(styles, /--misma-control-green:\s*#22c55e/);
+  assert.match(styles, /\.aichat-message-attachments\.is-user-attachments/);
+  assert.match(styles, /grid-template-columns:\s*repeat\(3, 112px\)/);
+  assert.match(edgeFunction, /userVisibleMessage/);
+  assert.match(edgeFunction, /ask what the user would like you to do with it/i);
+  assert.match(api, /createSignedUrl\(item\.path, 3600\)/);
+});
+
+test("privacy and voice preferences are persisted and used by dashboard voice/chat", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
+  const voice = await read("../src/lib/misma-voice.ts");
+
+  assert.match(dashboard, /misma_privacy_preferences/);
+  assert.match(dashboard, /selectedVoicePreset/);
+  assert.match(dashboard, /<option value="girl">Girl/);
+  assert.match(dashboard, /<option value="woman">Woman/);
+  assert.match(dashboard, /<option value="boy">Boy/);
+  assert.match(dashboard, /<option value="man">Man/);
+  assert.match(dashboard, /privacySettings: privacyPreferences/);
+  assert.match(edgeFunction, /useConversationHistory = privacySettings\.useConversationHistory !== false/);
+  assert.match(edgeFunction, /if \(useConversationHistory\)/);
+  assert.match(edgeFunction, /DASHBOARD ASSISTANT PREFERENCES/);
+  assert.match(voice, /voicePreset === "girl"/);
 });
