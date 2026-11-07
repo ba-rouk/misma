@@ -45,6 +45,7 @@ root.innerHTML=[
 var $=function(selector){return root.querySelector(selector);};
 var panel=$(".panel"),messages=$(".messages"),input=$(".composer textarea"),status=$(".status"),handoff=$(".handoff"),composer=$(".composer");
 var micButton=$(".mic"),primaryButton=$(".primary"),whatsappLink=$(".whatsapp-link"),instagramLink=$(".instagram-link");
+var closeTask=Promise.resolve(),chatTask=Promise.resolve(),handoffTask=Promise.resolve();
 
 function applySocialLink(link, rawUrl, expectedHost) {
   if (!link || typeof rawUrl !== "string" || !rawUrl) return;
@@ -226,7 +227,7 @@ function sendMessage(rawText,speakReply){
   if(!speakReply){input.value="";resizeInput();updatePrimary();stopDictation();}
   else{setVoiceState("thinking");}
   bubble(text,"user");showTyping();setStatus("");updatePrimary();
-  return call({action:"chat",message:text,voice:speakReply===true},controller?controller.signal:undefined).then(function(data){
+  chatTask=call({action:"chat",message:text,voice:speakReply===true},controller?controller.signal:undefined).then(function(data){
     removeTyping();var answer=data.answer||"I could not prepare a reply.";bubble(answer,"ai");
     if(data.handoffPending)setStatus("Your message has been sent to the business team.");
     if(speakReply&&voiceSession){return speakAsWoman(answer);}
@@ -243,6 +244,7 @@ function sendMessage(rawText,speakReply){
       else setVoiceState("ready");
     }
   });
+  return chatTask;
 }
 function stopDictation(){
   dictating=false;dictationSendAfterStop=false;composer.classList.remove("recording");micButton.classList.remove("is-active");stopRecognition();updatePrimary();
@@ -303,9 +305,43 @@ function changeVoiceMode(nextMode){
 
 $(".launch").addEventListener("click",function(){
   var opened=panel.classList.toggle("open");$(".launch").setAttribute("aria-expanded",String(opened));
-  if(opened){input.focus();call({action:"heartbeat"}).catch(function(error){setStatus(error.message);});refreshHistory().catch(function(error){setStatus(error.message);});}
+  if(opened){
+    input.focus();
+    closeTask.then(function(){
+      if(!panel.classList.contains("open"))return;
+      call({action:"heartbeat"}).catch(function(error){setStatus(error.message);});
+      refreshHistory().catch(function(error){setStatus(error.message);});
+    }).catch(function(error){setStatus(error.message||"Misma could not reopen the conversation.");});
+  }
 });
-$(".close").addEventListener("click",function(){panel.classList.remove("open");stopVoiceSession();stopDictation();$(".launch").setAttribute("aria-expanded","false");});
+$(".close").addEventListener("click",function(){
+  var closingConversation=conversation;
+  var closingVisitor=visitor;
+  panel.classList.remove("open");
+  stopVoiceSession();
+  stopDictation();
+  $(".launch").setAttribute("aria-expanded","false");
+  closeTask=Promise.all([
+    Promise.resolve(chatTask).catch(function(){return null;}),
+    Promise.resolve(handoffTask).catch(function(){return null;})
+  ]).then(function(){
+    var closingConversation=conversation;
+    var closingVisitor=visitor;
+    if(!closingConversation||!closingVisitor)return null;
+    return call({action:"close"}).then(function(result){
+      if(result.deleted===true&&conversation===closingConversation&&visitor===closingVisitor){
+        conversation=null;
+        try{sessionStorage.removeItem(conversationStore);}catch(error){}
+        messages.innerHTML="";
+        bubble("Hello! I am Misma. How can I help you today?","ai");
+        setStatus("");
+      }
+      return result;
+    });
+  }).catch(function(error){
+    console.warn("[Misma] Visitor chat cleanup could not be confirmed:",error&&error.message?error.message:"unknown error");
+  });
+});
 
 $(".human").addEventListener("click",function(){handoff.classList.toggle("open");if(handoff.classList.contains("open"))handoff.querySelector("[name='name']").focus();});
 input.addEventListener("input",function(){resizeInput();updatePrimary();});
@@ -342,7 +378,7 @@ voiceModeButtons.forEach(function(button){button.addEventListener("click",functi
 $(".handoff-submit").addEventListener("click",function(){
   if(busy)return;var data={};handoff.querySelectorAll("input,textarea").forEach(function(element){data[element.name]=element.value.trim();});
   if(!data.name){setStatus("Please enter your name.");return;}busy=true;setStatus("Sending your request…");
-  call(Object.assign({action:"human-request"},data)).then(function(result){
+  handoffTask=call(Object.assign({action:"human-request"},data)).then(function(result){
     handoff.classList.remove("open");
     handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});
     setStatus("Human request sent. A person will reply here.");

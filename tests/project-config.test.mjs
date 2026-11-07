@@ -390,7 +390,7 @@ test("microphone access is user initiated, permission aware, accessible, and nev
   assert.match(docs, /allow="microphone"/);
 });
 
-test("browser-native dictation and hands-free voice mode send text only", async () => {
+test("browser-native dictation and hands-free voice mode remain available alongside audio notes", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
@@ -414,9 +414,11 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /new SpeechSynthesisUtterance/);
   assert.match(voice, /shortenForSpeech\(cleanForSpeech\(rawText\), 320\)/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
-  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
+  const voiceModeSource = voice.slice(voice.indexOf("export function createVoiceMode"));
+  assert.ok(voice.includes("new MediaRecorder"));
+  assert.doesNotMatch(voiceModeSource, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
   assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
-  assert.match(component, /Stop dictation and send transcript/);
+  assert.match(component, /Stop recording and send voice note/);
   assert.match(component, /finishDictation\(true\)/);
   assert.match(component, /aria-label=\{isDictating \? "Finish voice dictation" : "Start voice dictation"\}/);
   assert.match(component, /Start voice mode/);
@@ -494,26 +496,37 @@ test("dictation cancel button is placed to the left of the waveform", async () =
   assert.match(styles, /\.misma-voice-recording-row \.misma-voice-waveform\s*\{[\s\S]*?flex: 1 1 auto/);
 });
 
-test("voice integration has no audio recording or transcription endpoint", async () => {
+test("voice input records typed audio files while live dictation remains text-first", async () => {
   const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
   assert.ok(voice.includes("createDictation"));
   assert.ok(voice.includes("createVoiceMode"));
-  assert.ok(component.includes("VoiceInputBar"));
+  assert.match(voice, /new MediaRecorder/);
+  assert.ok(voice.includes('"audio/mp4"'));
+  assert.ok(voice.includes('"audio/webm;codecs=opus"'));
+  assert.match(voice, /onAudioRecordingReady/);
+  assert.match(component, /onAudioRecordingReady/);
+  assert.match(component, /Stop recording and send voice note/);
+  assert.match(dashboard, /onAudioRecordingReady=\{/);
+  assert.match(dashboard, /kind === "audio"/);
   await assert.rejects(read("../src/routes/api.transcribe.ts"));
   await assert.rejects(read("../supabase/functions/misma-transcribe/index.ts"));
 });
 
 
-test("voice chat requests receive concise spoken replies and never upload recorded audio", async () => {
+test("voice notes are uploaded as audio and transcribed by Groq before the AI reply", async () => {
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
   const voice = await read("../src/lib/misma-voice.ts");
   assert.match(dashboard, /voice: options\?\.voice === true/);
+  assert.match(dashboard, /misma-voice-note-/);
   assert.match(edgeFunction, /const voice = input\.voice === true/);
   assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
-  assert.doesNotMatch(edgeFunction, /transcribeAudioAttachment|audio\/transcriptions|VOICE NOTE:/);
-  assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/);
+  assert.ok(edgeFunction.includes("/audio/transcriptions"));
+  assert.match(edgeFunction, /whisper-large-v3-turbo/);
+  assert.match(edgeFunction, /kind === "audio"/);
+  assert.match(voice, /requestMicrophoneStream\(\)/);
 });
 
 test("attachments stay private, show per-file progress, and are separate from user text", async () => {
@@ -899,7 +912,7 @@ test("connected website settings and social widget controls stay accessible on m
   const css = await read("../src/styles.css");
   assert.match(dashboard, /className="aichat-website-expand"/);
   assert.match(dashboard, /aria-expanded=\{!minimizedWebsiteIds\.includes\(site\.id\)\}/);
-  assert.match(dashboard, /Add websites/);
+  assert.match(dashboard, /Add channels/);
   assert.match(runtime, /class='social-link whatsapp-link'/);
   assert.match(runtime, /class='social-link instagram-link'/);
   assert.match(runtime, /target='_blank' rel='noopener noreferrer'/);
@@ -930,4 +943,33 @@ test("website visitor history reuses the existing conversation by site and visit
   assert.match(resolver, /\.eq\("website_connection_id", site\.id\)[\s\S]*?\.eq\("visitor_session_id", sessionId\)/);
   assert.match(resolver, /byVisitorSession\.data\) return \{ conversation: byVisitorSession\.data, visitorId: sessionId \}/);
   assert.match(resolver, /Could not look up the visitor's existing conversation/);
+});
+
+test("website visitor chats are deleted on close only when no human request exists", async () => {
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const migration = await read("../supabase/migrations/20261107160000_widget_ephemeral_retention.sql");
+  assert.match(runtime, /call\(\{action:"close"\}\)/);
+  assert.match(runtime, /sessionStorage\.removeItem\(conversationStore\)/);
+  assert.match(edge, /input\.action === "close"/);
+  assert.match(edge, /delete_website_visitor_conversation_if_ephemeral/);
+  assert.match(migration, /public\.human_requests/);
+  assert.match(migration, /public\.human_handoff_requests/);
+  assert.ok(migration.includes("REVOKE ALL ON FUNCTION") && migration.includes("FROM anon, authenticated"));
+  assert.ok(migration.includes("GRANT EXECUTE") && migration.includes("TO service_role"));
+});
+
+test("website scanning uses structured bounded JSON with schema validation and inline status", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.ok(edge.includes('responseMimeType: "application/json"'));
+  assert.ok(edge.includes("response_format: provider.kind") && edge.includes('type: "json_schema"'));
+  assert.match(edge, /businessExtractionSchema/);
+  assert.match(edge, /generateValidatedBusinessExtraction/);
+  assert.ok(edge.includes("for (let attempt = 0; attempt < 2; attempt += 1)"));
+  assert.ok(edge.includes("rawResponse: answer.slice(0, 1200)"));
+  assert.ok(edge.includes("AbortSignal.timeout(75_000)"));
+  assert.match(dashboard, /websiteScanFeedback/);
+  assert.match(dashboard, /controller\.abort\(\)/);
+  assert.match(dashboard, /aichat-website-scan-feedback/);
 });

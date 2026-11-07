@@ -343,7 +343,7 @@ function WebsiteSocialSettings({
         type="button"
         className="aichat-social-dropdown"
         aria-expanded={open}
-        aria-label={open ? "Close Add websites settings" : "Open Add websites settings"}
+        aria-label={open ? "Close Add channels settings" : "Open Add channels settings"}
         onClick={() => {
           if (!open) {
             setDraft(currentDraft());
@@ -353,7 +353,7 @@ function WebsiteSocialSettings({
           setOpen((current) => !current);
         }}
       >
-        <span>Add websites</span>
+        <span>Add channels</span>
         <svg className={open ? "is-open" : ""} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
       </button>
 
@@ -399,6 +399,7 @@ function WebsiteSocialSettings({
               <label>
                 Country code
                 <select
+                  className="aichat-whatsapp-country-select"
                   value={draft.whatsappCountryCode}
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappCountryCode: event.target.value }))}
                 >
@@ -580,6 +581,7 @@ function ActionIcon({ name }: { name: ActionIconName }) {
 
 function normalizeComposerAttachment(file: File): File {
   const extension = file.name.toLowerCase().split(".").pop() || "";
+  const isMismaVoiceNote = /^misma-voice-note-/i.test(file.name);
   const inferredTypes: Record<string, string> = {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
@@ -594,7 +596,7 @@ function normalizeComposerAttachment(file: File): File {
     mp4: "video/mp4",
     mov: "video/quicktime",
     m4v: "video/x-m4v",
-    webm: "video/webm",
+    webm: isMismaVoiceNote ? "audio/webm" : "video/webm",
     mkv: "video/x-matroska",
     mp3: "audio/mpeg",
     wav: "audio/wav",
@@ -606,6 +608,10 @@ function normalizeComposerAttachment(file: File): File {
   };
   const inferredType = inferredTypes[extension];
   const currentType = file.type.toLowerCase();
+  // Older recorder builds occasionally mislabeled voice-note WebM blobs as video/webm.
+  if (isMismaVoiceNote && extension === "webm" && !currentType.startsWith("audio/")) {
+    return new File([file], file.name, { type: "audio/webm", lastModified: file.lastModified });
+  }
   const shouldInfer = !currentType || currentType === "application/octet-stream";
   if (!shouldInfer || !inferredType || inferredType === currentType) return file;
   return new File([file], file.name, { type: inferredType, lastModified: file.lastModified });
@@ -1413,6 +1419,7 @@ function Dashboard() {
   const [whatsappPhoneNumber, setWhatsappPhoneNumber] = useState("");
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
+  const [websiteScanFeedback, setWebsiteScanFeedback] = useState<Record<string, { kind: "loading" | "success" | "error"; message: string }>>({});
   const [minimizedWebsiteIds, setMinimizedWebsiteIds] = useState<string[]>([]);
   const sharedWidgetPublicKey = connectedWebsites.length
     ? connectedWebsites[0].widget_public_key || connectedWebsites[0].public_key
@@ -2597,7 +2604,8 @@ function Dashboard() {
       const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "audio" | "file"): Promise<MessageAttachment> => {
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
-        if (!(file.type.startsWith("image/") || file.type.startsWith("video/")) && file.size > 10 * 1024 * 1024) {
+        const isAudio = kind === "audio" || file.type.startsWith("audio/");
+        if (!(file.type.startsWith("image/") || file.type.startsWith("video/") || isAudio) && file.size > 10 * 1024 * 1024) {
           throw new Error(`${file.name} is larger than the 10 MB document limit.`);
         }
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
@@ -2641,11 +2649,16 @@ function Dashboard() {
         return frames;
       }
 
-      const videos = filesToUpload.filter((file) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name));
+      const isAudioFile = (file: File) => file.type.startsWith("audio/") || /^misma-voice-note-/i.test(file.name);
+      const videos = filesToUpload.filter((file) => !isAudioFile(file) && (file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)));
       if (videos.length > 1) throw new Error("Upload one video per message so Misma can sample its keyframes.");
 
       const processFile = async (original: File): Promise<MessageAttachment[]> => {
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+        if (isAudioFile(original)) {
+          if (!original.type.startsWith("audio/")) throw new Error("Misma could not identify this voice note as audio. Please record it again.");
+          return [await uploadOne(original, "audio")];
+        }
         if (original.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(original.name)) {
           const uploadedVideo = await uploadOne(original, "video");
           const frames = await extractVideoKeyframes(original);
@@ -2655,9 +2668,6 @@ function Dashboard() {
           const prepared = await compressImageForUpload(original);
           if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
           return [await uploadOne(prepared, "image")];
-        }
-        if (original.type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(original.name)) {
-          throw new Error("Audio recording uploads are no longer supported. Use the microphone for text dictation instead.");
         }
         return [await uploadOne(original, "file")];
       };
@@ -4543,6 +4553,19 @@ function Dashboard() {
                         setChatError("");
                       }}
                       onDictationDone={() => textareaRef.current?.focus()}
+                      onAudioRecordingReady={(file) => {
+                        const current = selectedComposerFilesRef.current;
+                        if (current.length >= 5) {
+                          setChatError("Remove a file before adding this voice note. Misma supports up to five attachments per message.");
+                          return;
+                        }
+                        const next = [...current, file];
+                        selectedComposerFilesRef.current = next;
+                        setSelectedFiles(next);
+                        return queueComposerAttachmentUpload([file]).catch((cause) => {
+                          setChatError(cause instanceof Error ? cause.message : "Could not upload the voice note.");
+                        });
+                      }}
                       onSend={(transcript, signal, options) =>
                         handleSend(transcript, { signal, voice: options?.voice === true })
                       }
@@ -5464,17 +5487,40 @@ function Dashboard() {
                     const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
-                  <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
+                  <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId !== null} onClick={async () => {
                     if (!workspace?.id) return;
                     setWebsiteActionId(site.id);
+                    setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "loading", message: "Scanning website pages…" } }));
+                    const controller = new AbortController();
+                    const timeoutId = window.setTimeout(() => controller.abort(), 80_000);
                     try {
-                      const result = await callWidgetFunction({ action: "scan-website", workspaceId: workspace.id, websiteId: site.id });
-                      alert(`Website scan complete: ${result.pagesScanned} pages scanned, ${result.knowledgeSaved || 0} knowledge answers extracted, and ${result.productSuggestions || 0} product/service suggestions added for review.`);
-                      loadData();
+                      const result = await callWidgetFunction({ action: "scan-website", workspaceId: workspace.id, websiteId: site.id }, controller.signal);
+                      setWebsiteScanFeedback((current) => ({
+                        ...current,
+                        [site.id]: {
+                          kind: "success",
+                          message: `Scan complete: ${result.pagesScanned || 0} pages scanned, ${result.knowledgeSaved || 0} knowledge answers saved, and ${result.productSuggestions || 0} suggestions added for review.`,
+                        },
+                      }));
+                      void loadData();
                     } catch (cause) {
-                      alert(cause instanceof Error ? cause.message : "Website scan failed.");
-                    } finally { setWebsiteActionId(null); }
+                      const message = controller.signal.aborted
+                        ? "The scan timed out. Try again; no partial AI extraction was saved."
+                        : cause instanceof Error ? cause.message : "Website scan failed. Please try again.";
+                      setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "error", message } }));
+                    } finally {
+                      window.clearTimeout(timeoutId);
+                      setWebsiteActionId(null);
+                    }
                   }}>{websiteActionId === site.id ? "Scanning…" : "Scan website"}</button>
+                  {websiteScanFeedback[site.id] && (
+                    <small
+                      className={"aichat-website-scan-feedback is-" + websiteScanFeedback[site.id].kind}
+                      role={websiteScanFeedback[site.id].kind === "error" ? "alert" : "status"}
+                    >
+                      {websiteScanFeedback[site.id].message}
+                    </small>
+                  )}
                   <button type="button" className="aichat-action-btn secondary is-danger" onClick={async () => {
                     if (!token || !window.confirm("Delete the connection for " + (site.domain || site.website_url) + "? This deactivates its widget key on this domain immediately, so the Misma launcher will no longer appear here. Other registered domains using the same shared key remain active. Visitor history is preserved.")) return;
                     try {
@@ -5483,8 +5529,8 @@ function Dashboard() {
                     } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not remove the widget."); }
                   }}>Delete connection</button>
                 </div>
-                <small>Last verified: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
-                <small>Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
+                <small className="aichat-website-timestamps">Last verified: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Not verified yet"} · Last successful scan: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Never"}</small>
+                <small className="aichat-website-install-note">Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
                 </div>
               </article>)}
             </div>

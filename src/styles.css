@@ -8333,3 +8333,48 @@ html, body, #app-root {
   .aichat-social-form { padding: 11px; }
   .aichat-whatsapp-number-row { grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); gap: 7px; }
 }
+
+/* Website integration feedback, metadata spacing, and compact country selector. */
+.aichat-website-timestamps,
+.aichat-website-install-note {
+  display: block;
+  min-width: 0;
+  line-height: 1.5;
+}
+.aichat-website-timestamps {
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.aichat-website-install-note {
+  margin-top: 7px;
+}
+.aichat-website-scan-feedback {
+  display: block;
+  max-width: 680px;
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.aichat-website-scan-feedback.is-loading { color: #cbd5e1; }
+.aichat-website-scan-feedback.is-success { color: #86efac; }
+.aichat-website-scan-feedback.is-error { color: #fca5a5; }
+.aichat-whatsapp-number-row {
+  grid-template-columns: minmax(185px, 1.15fr) minmax(120px, 1fr);
+}
+.aichat-whatsapp-country-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 11px !important;
+  text-overflow: ellipsis;
+}
+@media (max-width: 560px) {
+  .aichat-whatsapp-number-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .aichat-whatsapp-country-select {
+    min-height: 40px;
+    font-size: 12px !important;
+  }
+}
