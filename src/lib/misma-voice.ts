@@ -190,7 +190,7 @@ type DictationOptions = {
   lang?: string;
   onText?: (transcript: string) => void;
   onDone?: (finalTranscript: string) => void;
-  onAudioRecordingReady?: (file: File) => void;
+  onAudioRecordingReady?: (file: File) => Promise<void> | void;
   onState?: (state: DictationState) => void;
   onAmplitude?: (level: number) => void;
   onError?: (code: string) => void;
@@ -217,6 +217,7 @@ export function createDictation({
   let audioStream: MediaStream | null = null;
   let mediaRecorder: MediaRecorder | null = null;
   let audioChunks: Blob[] = [];
+  let finishing = false;
 
   const clearTimers = () => {
     if (restartTimer !== null) window.clearTimeout(restartTimer);
@@ -225,23 +226,29 @@ export function createDictation({
     finishTimer = null;
   };
 
-  const finishAudioRecording = (keep: boolean) => {
+  const finishAudioRecording = (keep: boolean): Promise<void> => new Promise((resolve, reject) => {
     const recorder = mediaRecorder;
     const stream = audioStream;
     mediaRecorder = null;
     audioStream = null;
+    let completed = false;
     const complete = () => {
+      if (completed) return;
+      completed = true;
       const mimeType = (recorder?.mimeType || audioChunks[0]?.type || "audio/webm").toLowerCase();
       const blob = new Blob(audioChunks, { type: mimeType });
       audioChunks = [];
       stopTracks(stream);
-      if (!keep || blob.size < 256) return;
+      if (!keep || blob.size < 256) {
+        resolve();
+        return;
+      }
       const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
       const file = new File([blob], "misma-voice-note-" + Date.now() + "." + extension, {
         type: mimeType.split(";")[0],
         lastModified: Date.now(),
       });
-      onAudioRecordingReady?.(file);
+      Promise.resolve(onAudioRecordingReady?.(file)).then(() => resolve(), reject);
     };
     if (!recorder || recorder.state === "inactive") {
       complete();
@@ -253,9 +260,11 @@ export function createDictation({
     } catch {
       complete();
     }
-  };
+  });
 
   const finishResources = (notifyDone: boolean) => {
+    if (finishing) return;
+    finishing = true;
     clearTimers();
     const current = recognition;
     recognition = null;
@@ -267,11 +276,17 @@ export function createDictation({
       current.onspeechend = null;
       try { current.abort(); } catch { /* Recognition may already have stopped. */ }
     }
-    finishAudioRecording(notifyDone);
     active = false;
-    onAmplitude?.(0);
-    onState?.("idle");
-    if (notifyDone) onDone?.(finalText.trim());
+    // Keep the recorder row visible until the final audio chunk has been uploaded.
+    onState?.("requesting");
+    void finishAudioRecording(notifyDone).catch((cause) => {
+      console.error("[Misma] Could not finish the voice note:", cause);
+    }).finally(() => {
+      onAmplitude?.(0);
+      onState?.("idle");
+      if (notifyDone) onDone?.(finalText.trim());
+      finishing = false;
+    });
   };
 
   const fail = (code: string) => {
@@ -334,6 +349,7 @@ export function createDictation({
 
   return {
     async start(): Promise<boolean> {
+      if (finishing) return false;
       if (active) return true;
       const Recognition = getSpeechRecognition();
       if (!Recognition && typeof MediaRecorder === "undefined") {
