@@ -27,7 +27,7 @@ type VoiceInputBarProps = {
   onPrimaryAction: () => void;
   onTranscript: (text: string) => void;
   onDictationDone?: () => void;
-  onAudioRecordingReady?: (file: File) => void;
+  onAudioRecordingReady?: (file: File) => Promise<void> | void;
   onSend: (
     text: string,
     signal: AbortSignal,
@@ -395,8 +395,8 @@ export function VoiceInputBar({
                 <button
                   type="button"
                   className="misma-voice-dictation-btn is-send"
-                  aria-label="Stop recording"
-                  title="Stop recording"
+                  aria-label="Stop recording and send voice note"
+                  title="Stop and send voice note"
                   disabled={sendDisabled}
                   onClick={() => finishDictation(true)}
                 >
