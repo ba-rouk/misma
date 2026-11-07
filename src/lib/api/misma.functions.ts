@@ -652,8 +652,8 @@ export const saveWebsiteSocialLinks = createServerFn({ method: "POST" })
     token: auth,
     websiteId: z.string().uuid(),
     instagramUrl: z.string().url().max(2048).nullable(),
-    whatsappCountryCode: z.string().regex(/^\\d{1,4}$/).nullable(),
-    whatsappNumber: z.string().regex(/^\\d{6,14}$/).nullable(),
+    whatsappCountryCode: z.string().regex(/^\d{1,4}$/).nullable(),
+    whatsappNumber: z.string().regex(/^\d{6,14}$/).nullable(),
     whatsappMessage: z.string().max(1000).nullable(),
   }))
   .handler(async ({ data }) => {
@@ -666,7 +666,7 @@ export const saveWebsiteSocialLinks = createServerFn({ method: "POST" })
     let instagramUrl: string | null = null;
     if (data.instagramUrl) {
       const parsed = new URL(data.instagramUrl);
-      const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
       const segments = parsed.pathname.split("/").filter(Boolean);
       if (host !== "instagram.com" || parsed.protocol !== "https:" || segments.length !== 1 || !/^[A-Za-z0-9._]{1,30}$/.test(segments[0])) {
         throw new Error("Only a valid https://instagram.com/<handle> profile URL is accepted.");
@@ -674,8 +674,8 @@ export const saveWebsiteSocialLinks = createServerFn({ method: "POST" })
       instagramUrl = "https://instagram.com/" + segments[0];
     }
 
-    const countryCode = data.whatsappCountryCode?.replace(/\\D/g, "") || null;
-    const whatsappNumber = data.whatsappNumber?.replace(/\\D/g, "").replace(/^0+/, "") || null;
+    const countryCode = data.whatsappCountryCode?.replace(/\D/g, "") || null;
+    const whatsappNumber = data.whatsappNumber?.replace(/\D/g, "").replace(/^0+/, "") || null;
     let whatsappMessage: string | null = null;
     if (countryCode || whatsappNumber || data.whatsappMessage?.trim()) {
       if (!countryCode || !whatsappNumber || countryCode.length > 4 || countryCode.length + whatsappNumber.length < 7 || countryCode.length + whatsappNumber.length > 15) {
