@@ -580,10 +580,10 @@ test("composer image previews decode selected files and show a centered upload i
   assert.match(styles, /\.aichat-composer-upload-ring\s*\{[^}]*width:\s*30px/);
 });
 
-test("composer and sent attachments use compact right-aligned square previews", async () => {
+test("composer previews align left while sent attachments stay compact and right-aligned", async () => {
   const styles = await read("../src/styles.css");
 
-  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-end/);
+  assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-start !important/);
   assert.match(styles, /\.aichat-composer-attachment-square,\s*\.aichat-composer-attachment-square\.is-file\s*\{[^}]*width:\s*88px/);
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-attachments\.is-user-attachments\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?max-width:\s*352px/);
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments \.aichat-attachment-image-link\s*\{[^}]*width:\s*112px[^}]*height:\s*112px/);
