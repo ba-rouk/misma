@@ -343,7 +343,7 @@ function WebsiteSocialSettings({
         type="button"
         className="aichat-social-dropdown"
         aria-expanded={open}
-        aria-label={open ? "Close Add websites settings" : "Open Add websites settings"}
+        aria-label={open ? "Close Add channels settings" : "Open Add channels settings"}
         onClick={() => {
           if (!open) {
             setDraft(currentDraft());
@@ -353,7 +353,7 @@ function WebsiteSocialSettings({
           setOpen((current) => !current);
         }}
       >
-        <span>Add websites</span>
+        <span>Add channels</span>
         <svg className={open ? "is-open" : ""} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
       </button>
 
