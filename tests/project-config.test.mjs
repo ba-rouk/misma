@@ -616,15 +616,15 @@ test("profile photos are decoded and normalized before preview and stored avatar
   assert.match(dashboard, /prepareProfileAvatarForUpload/);
   assert.match(dashboard, /canvas\.toBlob/);
   assert.match(dashboard, /setProfileAvatarFile\(preparedFile\)/);
-  assert.match(dashboard, /await storage\.download\(avatarPath\)/);
-  assert.match(dashboard, /await storage\.download\(path\)/);
+  assert.match(dashboard, /readStoredProfileImage\(avatarBlob, path\)/);
+  assert.match(dashboard, /storage\.from\("misma-media"\)\.download\(path\)/);
   assert.match(dashboard, /profileAvatarSelectionRef/);
 });
 
 test("composer attachment tray aligns left and sent user attachments align to the message right edge", async () => {
   const styles = await read("../src/styles.css");
   assert.match(styles, /\.aichat-composer-attachments\s*\{[^}]*justify-content:\s*flex-start !important/);
-  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content\s*\{[\s\S]*?width:\s*min\(85%, 560px\)[\s\S]*?margin-left:\s*auto/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-message-content\s*\{[\s\S]*?width:\s*100% !important[\s\S]*?align-items:\s*flex-end/);
   assert.match(styles, /\.aichat-message-attachments\.is-user-attachments\s*\{[^}]*justify-content:\s*flex-end/);
 });
 

@@ -1469,9 +1469,15 @@ function Dashboard() {
           setProfileName(resolvedName);
           setProfileNameDraft(resolvedName);
           const avatarPath = typeof metadata.avatar_path === "string" && metadata.avatar_path.length > 0 ? metadata.avatar_path : null;
+          const avatarPathChanged = profileAvatarPathRef.current !== avatarPath;
           profileAvatarPathRef.current = avatarPath;
-          setProfileAvatarStoragePath(avatarPath);
-          setProfileImage(avatarPath ? "" : (image ?? ""));
+          if (avatarPathChanged) {
+            setProfileAvatarStoragePath(avatarPath);
+            if (!avatarPath) setProfileImage(image ?? "");
+            else if (!profileAvatarFile) setProfileImage("");
+          } else if (!avatarPath) {
+            setProfileImage(image ?? "");
+          }
           setToken(s.access_token);
           setAuthChecked(true);
         },
