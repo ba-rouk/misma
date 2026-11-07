@@ -1438,6 +1438,10 @@ function Dashboard() {
         (event, session) => {
           if (!active) return;
           if (!session) {
+            profileAvatarPathRef.current = null;
+            profileAvatarPreviewUrlRef.current = null;
+            setProfileAvatarStoragePath(null);
+            setProfileImage("");
             setToken(null);
             setAuthChecked(true);
             if (event === "INITIAL_SESSION" || event === "SIGNED_OUT") {
@@ -1474,7 +1478,6 @@ function Dashboard() {
           if (avatarPathChanged) {
             setProfileAvatarStoragePath(avatarPath);
             if (!avatarPath) setProfileImage(image ?? "");
-            else if (!profileAvatarFile) setProfileImage("");
           } else if (!avatarPath) {
             setProfileImage(image ?? "");
           }
@@ -4814,6 +4817,7 @@ function Dashboard() {
                     setProfileError("");
                     void prepareProfileAvatarForUpload(file).then(({ file: preparedFile, previewDataUrl }) => {
                       if (selectionId !== profileAvatarSelectionRef.current) return;
+                      profileAvatarPreviewUrlRef.current = previewDataUrl;
                       setProfileAvatarFile(preparedFile);
                       setProfileImage(previewDataUrl);
                       setProfileAvatarPreparing(false);

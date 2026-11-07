@@ -8055,9 +8055,9 @@ html, body, #app-root {
   display: flex;
   flex: 1 1 100%;
   flex-direction: column;
-  align-items: flex-end;
   width: 100% !important;
   max-width: 100% !important;
+  align-items: flex-end;
   min-width: 0;
   margin-left: auto;
   margin-right: 0;
