@@ -7576,3 +7576,27 @@ html, body, #app-root {
   .aichat-composer-upload-state.is-ready { animation: none; }
   .aichat-composer-plus, .misma-voice-composer * { transition: none !important; }
 }
+
+
+/* Final composer alignment: prompt on line one, actions on line two. */
+.aichat-composer-input-row { display: block; width: 100%; min-width: 0; }
+.aichat-composer-input-row > .misma-voice-composer { width: 100%; min-width: 0; flex: 1 1 auto; }
+.misma-voice-composer { width: 100%; min-width: 0; flex-direction: column; align-items: stretch; }
+.misma-voice-field { width: 100%; min-width: 0; }
+.misma-voice-toolbar { width: 100%; min-width: 0; justify-content: space-between; }
+.misma-voice-toolbar-start { flex: 0 0 auto; }
+.misma-voice-toolbar-spacer { flex: 1 1 auto; }
+.misma-voice-mic,
+.misma-voice-primary,
+.misma-voice-dictation-btn.is-send { color: #86efac; }
+.misma-voice-primary.is-voice { color: #86efac; }
+.misma-voice-primary.is-send,
+.misma-voice-dictation-btn.is-send { color: #06200f; }
+.aichat-composer-attachments { gap: 8px; }
+.aichat-composer-attachment-card.is-image .aichat-composer-attachment-square { width: 80px; height: 80px; }
+.aichat-composer-attachment-card.is-image { width: 80px; height: 80px; flex-basis: 80px; }
+@media (prefers-reduced-motion: reduce) {
+  .misma-voice-composer *,
+  .aichat-composer-attachment-card *,
+  .aichat-composer-plus { animation: none !important; transition: none !important; }
+}
