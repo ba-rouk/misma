@@ -7181,6 +7181,30 @@ html, body, #app-root {
 
 
 /* Misma green attachment tray and two-line composer overrides. */
+/* Keep the stacked text field and lower control row full width on mobile and desktop. */
+.aichat-composer-input-row {
+  position: static !important;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 !important;
+}
+.aichat-composer-input-row .misma-voice-composer {
+  width: 100%;
+  min-width: 0;
+}
+.aichat-composer-input-row .misma-voice-field {
+  min-width: 0;
+  width: 100%;
+}
+.aichat-composer-input-row .aichat-composer-textarea {
+  min-height: 36px;
+  padding: 7px 2px 5px !important;
+}
+.aichat-composer-attachment-remove { touch-action: manipulation; }
+.aichat-composer-attachment-remove::after { inset: -10px; }
+
 :root {
   --misma-control-green: #22c55e;
   --misma-attachment-green: var(--misma-control-green, #22c55e);
