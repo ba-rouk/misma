@@ -124,7 +124,7 @@ function listen(isVoiceChat){
   instance.onend=function(){
     if(recognition===instance)recognition=null;
     if(isVoiceChat){
-      var spoken=finalTranscript.trim();
+      var spoken=[finalTranscript,interimTranscript].filter(Boolean).join(" ").trim();
       if(voiceSession&&spoken&&!busy){voiceTranscript.textContent="You: "+spoken;sendMessage(spoken,true);}
       else if(voiceSession&&!voiceMuted&&voiceModeChoice==="hands-free"&&!busy){window.setTimeout(function(){if(voiceSession&&!voiceMuted&&voiceModeChoice==="hands-free")listen(true);},220);}
       else if(voiceSession)setVoiceState(voiceMuted?"muted":"ready");
