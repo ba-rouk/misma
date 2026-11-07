@@ -795,11 +795,14 @@ test("website widget reloads fetch the latest public asset without changing site
   const widget = await read("../public/assets/misma-widget.js");
   const security = await read("../src/lib/security-headers.server.ts");
   const server = await read("../src/server.ts");
+  const vite = await read("../vite.config.ts");
   assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
   assert.ok(!dashboard.includes("misma-widget.js?v="));
   assert.ok(security.includes("Cache-Control"));
   assert.ok(security.includes("CDN-Cache-Control"));
   assert.ok(security.includes("/assets/misma-widget.js"));
+  assert.ok(vite.includes('"/assets/misma-widget.js"'));
+  assert.ok(vite.includes('"Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"'));
   assert.ok(server.includes("applySecurityHeaders(await normalizeCatastrophicSsrResponse(response), request)"));
   assert.ok(dashboard.includes("data-site-key="));
 });
