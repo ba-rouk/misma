@@ -497,3 +497,27 @@
 .misma-voice-dictation-btn.is-send:hover {
   filter: brightness(1.08);
 }
+
+
+/* Keep the cancel action visibly to the left of the live dictation waveform. */
+.misma-voice-recording-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+}
+.misma-voice-recording-row .misma-voice-dictation-btn.is-cancel {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  color: #f1a4a8;
+  background: rgba(220, 70, 82, 0.10);
+}
+.misma-voice-recording-row .misma-voice-waveform {
+  flex: 1 1 auto;
+  width: auto;
+}
