@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { z } from "npm:zod@4.4.3";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -79,7 +80,7 @@ function providerList() {
   add("cohere", "COHERE_API_KEY", "COHERE_MODEL", "command-a-plus-05-2026", "https://api.cohere.com/v2/chat", "cohere");
   return providers;
 }
-async function generateText(systemPrompt: string, prompt: string): Promise<string> {
+async function generateText(systemPrompt: string, prompt: string, structuredJson = false, signal?: AbortSignal): Promise<string> {
   const providers = providerList();
   if (!providers.length) throw new Error("No text AI provider is configured.");
   for (const provider of providers) {
@@ -93,14 +94,78 @@ async function generateText(systemPrompt: string, prompt: string): Promise<strin
         payload = {
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 2400, temperature: 0.35 },
+          generationConfig: {
+            maxOutputTokens: structuredJson ? 3200 : 2400,
+            temperature: structuredJson ? 0.1 : 0.35,
+            ...(structuredJson ? {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  summary: { type: "STRING" },
+                  faqs: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                    question: { type: "STRING" }, answer: { type: "STRING" },
+                  }, required: ["question", "answer"] } },
+                  items: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                    type: { type: "STRING", enum: ["product", "service"] },
+                    name: { type: "STRING" }, description: { type: "STRING" }, price: { type: "STRING" },
+                  }, required: ["type", "name", "description", "price"] } },
+                },
+                required: ["summary", "faqs", "items"],
+              },
+            } : {}),
+          },
         };
       } else {
         headers.Authorization = "Bearer " + provider.key;
         payload = {
           model: provider.model,
           temperature: 0.35,
-          max_tokens: 2400,
+          max_tokens: structuredJson ? 3200 : 2400,
+          ...(structuredJson ? {
+            response_format: provider.kind === "cohere"
+              ? { type: "json_object" }
+              : {
+                type: "json_schema",
+                json_schema: {
+                  name: "misma_business_extraction",
+                  strict: true,
+                  schema: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      summary: { type: "string" },
+                      faqs: {
+                        type: "array",
+                        maxItems: 25,
+                        items: {
+                          type: "object",
+                          additionalProperties: false,
+                          properties: { question: { type: "string" }, answer: { type: "string" } },
+                          required: ["question", "answer"],
+                        },
+                      },
+                      items: {
+                        type: "array",
+                        maxItems: 20,
+                        items: {
+                          type: "object",
+                          additionalProperties: false,
+                          properties: {
+                            type: { type: "string", enum: ["product", "service"] },
+                            name: { type: "string" },
+                            description: { type: "string" },
+                            price: { type: "string" },
+                          },
+                          required: ["type", "name", "description", "price"],
+                        },
+                      },
+                    },
+                    required: ["summary", "faqs", "items"],
+                  },
+                },
+              },
+          } : {}),
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: prompt },
@@ -111,7 +176,7 @@ async function generateText(systemPrompt: string, prompt: string): Promise<strin
         method: "POST",
         headers,
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(18000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(structuredJson ? 22000 : 18000)]) : AbortSignal.timeout(structuredJson ? 22000 : 18000),
       });
       if (!response.ok) throw new Error("Provider returned " + response.status);
       const result = await response.json();
@@ -132,14 +197,69 @@ async function generateText(systemPrompt: string, prompt: string): Promise<strin
   }
   throw new Error("All configured AI providers failed.");
 }
+const businessExtractionSchema = z.object({
+  summary: z.string().max(3000),
+  faqs: z.array(z.object({
+    question: z.string().trim().min(2).max(500),
+    answer: z.string().trim().min(2).max(1800),
+  }).strict()).max(25),
+  items: z.array(z.object({
+    type: z.enum(["product", "service"]),
+    name: z.string().trim().min(1).max(200),
+    description: z.string().max(1200),
+    price: z.string().max(160),
+  }).strict()).max(20),
+}).strict();
+
 function parseJsonObject(answer: string): AnyRecord {
-  const trimmed = answer.trim();
+  const trimmed = answer.trim()
+    .replace(/^\uFEFF/, "")
+    .replace(/^\s*```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (isRecord(parsed)) return parsed;
+  } catch {
+    // A provider may add a brief preamble around a complete JSON object.
+  }
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("The extraction response was not valid JSON.");
-  const parsed = JSON.parse(trimmed.slice(start, end + 1));
+  const parsed: unknown = JSON.parse(trimmed.slice(start, end + 1));
   if (!isRecord(parsed)) throw new Error("The extraction response was not an object.");
   return parsed;
+}
+
+async function generateValidatedBusinessExtraction(
+  systemPrompt: string,
+  prompt: string,
+  sourceLabel: string,
+  signal?: AbortSignal,
+): Promise<AnyRecord> {
+  const boundedPrompt = prompt.slice(0, 52_000);
+  let lastIssue = "invalid response";
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const retryInstruction = attempt === 0
+      ? ""
+      : "\n\nRETRY: Your previous response was malformed or failed schema validation. Regenerate the complete object. Output JSON only with exactly the required keys. Use empty strings or arrays when the source has no evidence. Do not truncate the object.";
+    const answer = await generateText(systemPrompt, boundedPrompt + retryInstruction, true, signal);
+    try {
+      return businessExtractionSchema.parse(parseJsonObject(answer)) as AnyRecord;
+    } catch (cause) {
+      lastIssue = cause instanceof Error ? cause.message.slice(0, 300) : "schema validation failed";
+      console.error("[misma-widget] Structured extraction validation failed.", {
+        source: sourceLabel.slice(0, 180),
+        attempt: attempt + 1,
+        issue: lastIssue,
+        rawResponse: answer.slice(0, 1200),
+      });
+      if (attempt === 1) {
+        throw new Error("Misma could not safely read the website scan result. Please try scanning again.");
+      }
+    }
+  }
+  throw new Error("Misma could not validate the website extraction: " + lastIssue);
 }
 async function loadBusinessContext(db: Db, workspaceId: string) {
   const [workspace, knowledge, products, lessons] = await Promise.all([
@@ -448,7 +568,7 @@ function cleanHtml(html: string): string {
     .replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n")
     .trim().slice(0, 18000);
 }
-async function crawlWebsite(startUrl: string, maxPages = 25): Promise<Array<{ url: string; title: string; text: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 12, scanSignal?: AbortSignal): Promise<Array<{ url: string; title: string; text: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
@@ -461,7 +581,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25): Promise<Array<{ ur
     const sitemapResponse = await fetch(sitemapUrl.href, {
       redirect: "manual",
       headers: { "User-Agent": "MismaWebsiteScanner/1.0 (+https://misma.onrender.com)" },
-      signal: AbortSignal.timeout(7000),
+      signal: scanSignal ? AbortSignal.any([scanSignal, AbortSignal.timeout(7000)]) : AbortSignal.timeout(7000),
     });
     if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
       const sitemap = (await sitemapResponse.text()).slice(0, 1000000);
@@ -486,7 +606,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25): Promise<Array<{ ur
       const response = await fetch(parsed.href, {
         redirect: "manual",
         headers: { "User-Agent": "MismaWebsiteScanner/1.0 (+https://misma.onrender.com)" },
-        signal: AbortSignal.timeout(9000),
+        signal: scanSignal ? AbortSignal.any([scanSignal, AbortSignal.timeout(9000)]) : AbortSignal.timeout(9000),
       });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
@@ -517,8 +637,8 @@ async function crawlWebsite(startUrl: string, maxPages = 25): Promise<Array<{ ur
   }
   return pages;
 }
-async function extractBusinessData(inputText: string, sourceName: string) {
-  const clipped = inputText.slice(0, 90000);
+async function extractBusinessData(inputText: string, sourceName: string, scanSignal?: AbortSignal) {
+  const clipped = inputText.slice(0, 50000);
   const system = [
     "You are extracting factual business information for a customer-service knowledge base.",
     "Only extract facts explicitly stated in the supplied source. Never invent prices, policies, hours, products, or guarantees.",
@@ -527,8 +647,7 @@ async function extractBusinessData(inputText: string, sourceName: string) {
     "items is an array of up to 20 {type, name, description, price} objects. type must be product or service. Create an item only when the source clearly describes an offering. Do not infer a price.",
     "Avoid duplicating trivial navigation or promotional slogans. For uncertain facts, omit them.",
   ].join(" ");
-  const answer = await generateText(system, "SOURCE NAME: " + sourceName + "\n\nSOURCE TEXT:\n" + clipped);
-  return parseJsonObject(answer);
+  return generateValidatedBusinessExtraction(system, "SOURCE NAME: " + sourceName.slice(0, 180) + "\n\nSOURCE TEXT:\n" + clipped, sourceName, scanSignal);
 }
 async function persistExtracted(db: Db, workspaceId: string, sourceType: string, sourceRef: string, extracted: AnyRecord) {
   const faqs = Array.isArray(extracted.faqs) ? extracted.faqs.slice(0, 25) : [];
@@ -720,15 +839,15 @@ async function createWebsiteScanRun(db: Db, website: AnyRecord, automatic: boole
   return String(created.data.id);
 }
 
-async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 25) {
+async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 12, scanSignal?: AbortSignal) {
   try {
-    const pages = await crawlWebsite(website.website_url, maxPages);
+    const pages = await crawlWebsite(website.website_url, maxPages, scanSignal);
     if (!pages.length) throw new Error("No readable public HTML pages were found.");
     const sourceText = pages
       .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
       .join("\n\n")
-      .slice(0, 90000);
-    const extracted = await extractBusinessData(sourceText, website.website_url);
+      .slice(0, 50000);
+    const extracted = await extractBusinessData(sourceText, website.website_url, scanSignal);
     const saved = await persistExtracted(db, website.workspace_id, "website", website.website_url, extracted);
     const summary = safeString(extracted.summary, 3000) || "Scanned " + pages.length + " public pages.";
 
@@ -1026,11 +1145,67 @@ Deno.serve(async (request: Request) => {
   if (!isRecord(input)) return respond(400, { error: "Invalid request." });
 
   try {
-    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "widget-config") {
+    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
         return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) });
       }
+      if (input.action === "close") {
+        const visitorId = safeString(input.visitorId, 120);
+        const conversationId = Number(input.conversationId);
+        if (!visitorId || !Number.isSafeInteger(conversationId) || conversationId < 1) {
+          return respond(200, { ok: true, deleted: false });
+        }
+        const conversationResult = await db.from("conversations")
+          .select("id")
+          .eq("id", conversationId)
+          .eq("workspace_id", site.workspace_id)
+          .eq("website_connection_id", site.id)
+          .eq("visitor_session_id", visitorId)
+          .eq("channel", "Website")
+          .maybeSingle();
+        if (conversationResult.error) throw new Error("Could not verify this visitor conversation before closing.");
+        if (!conversationResult.data) return respond(200, { ok: true, deleted: false });
+
+        const messageResult = await db.from("messages")
+          .select("attachments")
+          .eq("conversation_id", conversationId)
+          .limit(500);
+        if (messageResult.error) throw new Error("Could not prepare temporary visitor files for cleanup.");
+        const attachmentPaths = (messageResult.data || []).flatMap((row: AnyRecord) =>
+          Array.isArray(row.attachments)
+            ? row.attachments.flatMap((item: unknown) => {
+              if (!isRecord(item) || typeof item.path !== "string") return [];
+              const path = item.path;
+              return path.startsWith(site.workspace_id + "/") && !path.includes("..") && path.split("/").length >= 3
+                ? [path]
+                : [];
+            })
+            : []
+        );
+        const deletion = await db.rpc("delete_website_visitor_conversation_if_ephemeral", {
+          p_conversation_id: conversationId,
+          p_workspace_id: site.workspace_id,
+          p_website_connection_id: site.id,
+          p_visitor_session_id: visitorId,
+        });
+        if (deletion.error) {
+          console.error("[misma-widget] Visitor conversation cleanup failed:", deletion.error.message);
+          throw new Error("Misma could not securely clear this visitor conversation.");
+        }
+        let storageCleanupFailed = false;
+        if (deletion.data === true && attachmentPaths.length) {
+          for (let index = 0; index < attachmentPaths.length; index += 100) {
+            const result = await db.storage.from("misma-media").remove(attachmentPaths.slice(index, index + 100));
+            if (result.error) {
+              storageCleanupFailed = true;
+              console.error("[misma-widget] Visitor attachment cleanup failed:", result.error.message);
+            }
+          }
+        }
+        return respond(200, { ok: true, deleted: deletion.data === true, storageCleanupFailed });
+      }
+
       await db.from("website_connections").update({
         status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq("id", site.id);
@@ -1207,7 +1382,8 @@ Deno.serve(async (request: Request) => {
       if (websiteResult.error || !websiteResult.data) throw new Error("Website not found in the selected workspace.");
       const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
       if (!scanId) throw new Error("Could not start the website scan.");
-      const result = await performWebsiteScan(db, websiteResult.data, scanId);
+      const scanSignal = AbortSignal.timeout(75_000);
+      const result = await performWebsiteScan(db, websiteResult.data, scanId, 12, scanSignal);
       return respond(200, { ok: true, ...result });
     }
     if (input.action === "extract-knowledge") {
