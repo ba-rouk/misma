@@ -5,7 +5,7 @@ ALTER TABLE public.website_connections
   ADD COLUMN IF NOT EXISTS widget_deleted_at timestamptz;
 
 UPDATE public.website_connections
-SET widget_public_key = public_key
+SET widget_public_key = public_key::text
 WHERE widget_public_key IS NULL;
 
 ALTER TABLE public.website_connections

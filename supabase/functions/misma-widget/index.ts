@@ -171,10 +171,17 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   try { origin = new URL(originHeader); } catch { throw new Error("The website origin is invalid."); }
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
-  const result = await db.from("website_connections")
+  let result = await db.from("website_connections")
     .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
+  if (!result.error && !result.data?.length) {
+    // Keep older installs working when they still embed the original public_key.
+    result = await db.from("website_connections")
+      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at")
+      .eq("public_key", key)
+      .is("widget_deleted_at", null);
+  }
   if (result.error || !result.data?.length) throw new Error("This Misma website key is not valid or has been removed.");
   const site = result.data.find((candidate: AnyRecord) => String(candidate.domain || "").toLowerCase().replace(/^www\./, "") === originHost);
   if (!site) throw new Error("This shared widget key is not authorized for this website domain. Register this domain in Misma first.");
