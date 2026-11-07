@@ -3785,7 +3785,8 @@ function Dashboard() {
                       sendDisabled={selectedFiles.some((file) => composerUploadStatuses.get(file) !== "ready")}
                       voicePreset={selectedVoicePreset}
                       inputValue={draft}
-                      hasContent={Boolean(draft.trim() || selectedFiles.length || createMode)}
+                      hasContent={Boolean(draft.trim() || createMode)}
+                      hasAttachment={() => selectedFiles.length > 0}
                       isBusy={isSending || isGeneratingMedia}
                       disabled={isSending || isGeneratingMedia}
                       primaryActionLabel={createMode ? "Create " + createMode + " with Agnes" : "Send message"}
