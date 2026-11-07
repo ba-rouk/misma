@@ -36,6 +36,10 @@ import { VoiceInputBar } from "../components/voice-input-bar";
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
+const MAX_COMPOSER_FILES = 5;
+const MAX_DOCUMENT_UPLOAD_MB = 10;
+const MAX_IMAGE_UPLOAD_MB = 25;
+
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
 type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "settings";
@@ -154,6 +158,7 @@ type MessageAttachment = {
   videoId?: string;
   model?: string;
 };
+type ComposerUploadStatus = "uploading" | "ready" | "error";
 
 function cleanRecentChatTitle(value: unknown): string {
   const cleaned = String(value ?? "")
@@ -300,10 +305,15 @@ function normalizeComposerAttachment(file: File): File {
 async function compressImageForUpload(file: File): Promise<File> {
   const supportedOriginal = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
   if (!file.type.startsWith("image/")) return file;
-  if (supportedOriginal && file.size <= 4 * 1024 * 1024) return file;
+  if (supportedOriginal && file.size <= 4 * 1024 * 1024) {
+    const dimensions = await createImageBitmap(file);
+    const alreadySmall = Math.max(dimensions.width, dimensions.height) <= 1600;
+    dimensions.close();
+    if (alreadySmall) return file;
+  }
   const bitmap = await createImageBitmap(file);
   try {
-    const maxSide = 1800;
+    const maxSide = 1600;
     const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
@@ -312,7 +322,7 @@ async function compressImageForUpload(file: File): Promise<File> {
     if (!context) throw new Error("Your browser could not prepare this image.");
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not compress the image.")), "image/jpeg", 0.82);
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not compress the image.")), "image/jpeg", 0.85);
     });
     const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
     return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
@@ -321,6 +331,41 @@ async function compressImageForUpload(file: File): Promise<File> {
   }
 }
 
+async function uploadStorageObjectWithProgress(file: File, path: string, signal?: AbortSignal, onProgress?: (fraction: number) => void): Promise<void> {
+  const config = getSupabaseConfig();
+  const client = getSupabaseClient();
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken || !config) throw new Error("Your sign-in session expired. Please sign in again.");
+  if (signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const endpoint = config.url.replace(/\/$/, "") + "/storage/v1/object/misma-media/" + encodedPath;
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let settled = false;
+    const abort = () => xhr.abort();
+    const cleanup = () => signal?.removeEventListener("abort", abort);
+    const finish = (callback: () => void) => { if (settled) return; settled = true; cleanup(); callback(); };
+    xhr.open("POST", endpoint, true);
+    xhr.setRequestHeader("apikey", config.publishableKey);
+    xhr.setRequestHeader("Authorization", "Bearer " + accessToken);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.setRequestHeader("Cache-Control", "3600");
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable && event.total > 0) onProgress?.(event.loaded / event.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { onProgress?.(1); finish(resolve); return; }
+      let detail = "";
+      try { const payload = JSON.parse(xhr.responseText) as { message?: string; error?: string }; detail = payload.message || payload.error || ""; } catch { /* use a generic storage error */ }
+      finish(() => reject(new Error(detail || "Supabase Storage rejected the upload (HTTP " + xhr.status + ").")));
+    };
+    xhr.onerror = () => finish(() => reject(new Error("Network error while uploading " + file.name + ".")));
+    xhr.onabort = () => finish(() => reject(new DOMException("Upload cancelled.", "AbortError")));
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) { xhr.abort(); return; }
+    xhr.send(file);
+  });
+}
 async function extractVideoKeyframes(file: File): Promise<File[]> {
   const objectUrl = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -380,92 +425,38 @@ async function extractVideoKeyframes(file: File): Promise<File[]> {
 }
 
 function ComposerAttachmentPreview({
-  file,
-  index,
-  isUploading,
-  onRemove,
+  file, previewUrl, uploadStatus, uploadProgress, onRemove, onRetry,
 }: {
   file: File;
-  index: number;
-  isUploading: boolean;
-  onRemove: (index: number) => void;
+  previewUrl: string | null;
+  uploadStatus: "uploading" | "ready" | "error";
+  uploadProgress: number;
+  onRemove: () => void;
+  onRetry: () => void;
 }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewLoaded, setPreviewLoaded] = useState(false);
-  const [previewFailed, setPreviewFailed] = useState(false);
   const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i.test(file.name);
   const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
-  const isAudio = file.type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name);
-  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  const previewPending = (isImage || isVideo) && !previewLoaded;
-  const extension = file.name.split(".").pop()?.slice(0, 5).toUpperCase() || "FILE";
-  const sizeLabel = file.size < 1024 * 1024
-    ? Math.max(1, Math.round(file.size / 1024)) + " KB"
-    : (file.size / (1024 * 1024)).toFixed(1) + " MB";
-
-  useEffect(() => {
-    setPreviewLoaded(!isImage && !isVideo);
-    setPreviewFailed(false);
-    if (!isImage && !isVideo && !isAudio) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file, isImage, isVideo, isAudio]);
-
+  const extension = file.name.split(".").pop()?.slice(0, 6).toUpperCase() || "FILE";
+  const sizeLabel = file.size < 1024 * 1024 ? Math.max(1, Math.round(file.size / 1024)) + " KB" : (file.size / (1024 * 1024)).toFixed(1) + " MB";
+  const isUploading = uploadStatus === "uploading";
+  const isError = uploadStatus === "error";
+  const cardClass = "aichat-composer-attachment-card" + (isImage ? " is-image" : " is-file") + (isError ? " is-error" : "");
   return (
-    <div className={"aichat-composer-attachment-card" + (isAudio ? " is-audio" : "")} title={file.name}>
-      <div className={"aichat-composer-attachment-square" + (isAudio ? " is-audio" : "")}>
-        {isImage && previewUrl && !previewFailed ? (
-          <img
-            src={previewUrl}
-            alt={file.name}
-            decoding="async"
-            loading="eager"
-            fetchPriority="high"
-            onLoad={() => setPreviewLoaded(true)}
-            onError={() => { setPreviewLoaded(true); setPreviewFailed(true); }}
-          />
-        ) : isVideo && previewUrl && !previewFailed ? (
-          <video
-            src={previewUrl}
-            muted
-            playsInline
-            preload="metadata"
-            onLoadedMetadata={() => setPreviewLoaded(true)}
-            onError={() => { setPreviewLoaded(true); setPreviewFailed(true); }}
-          />
-        ) : isAudio && previewUrl ? (
-          <audio className="aichat-composer-audio-player" src={previewUrl} controls preload="metadata" aria-label={"Play " + file.name} />
-        ) : (
-          <div className={"aichat-composer-file-type" + (isPdf ? " is-pdf" : "")}>
-            <span>{isPdf ? "PDF" : isImage ? "IMAGE" : isVideo ? "VIDEO" : isAudio ? "AUDIO" : extension}</span>
-            <small>{isPdf ? "Document" : isImage ? (previewFailed ? "Preview unavailable" : "Image") : isVideo ? (previewFailed ? "Preview unavailable" : "Video") : isAudio ? "Voice note" : "File"}</small>
-          </div>
-        )}
-        <button
-          type="button"
-          className="aichat-composer-attachment-remove"
-          aria-label={"Remove " + file.name}
-          onClick={() => onRemove(index)}
-        >×</button>
-        {isUploading || previewPending ? (
-          <div className="aichat-composer-upload-state is-uploading" role="status">
-            <i />
-            <span>{isUploading ? "Uploading" : "Loading"}</span>
-          </div>
-        ) : (
-          <span className="aichat-composer-upload-state is-ready"><i>✓</i></span>
-        )}
+    <div className={cardClass} title={isImage ? undefined : file.name} aria-busy={isUploading}>
+      <div className={"aichat-composer-attachment-square" + (isImage ? "" : " is-file")}>
+        {isImage && previewUrl ? <img src={previewUrl} alt={file.name} decoding="async" loading="eager" fetchPriority="high" />
+          : isVideo && previewUrl ? <video src={previewUrl} muted playsInline preload="metadata" aria-label={file.name} />
+          : <div className="aichat-composer-file-card-copy"><span className="aichat-composer-file-icon" aria-hidden="true">{extension}</span><span className="aichat-composer-file-details"><strong>{file.name}</strong><small>{extension} · {sizeLabel}</small></span></div>}
+        {isUploading && <div className={"aichat-composer-upload-state is-uploading" + (uploadProgress > 0 ? " is-determinate" : "")} role="progressbar" aria-label={"Uploading " + file.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}>
+          <svg className="aichat-composer-upload-ring" viewBox="0 0 28 28" aria-hidden="true"><circle className="aichat-composer-upload-track" cx="14" cy="14" r="11" /><circle className="aichat-composer-upload-progress" cx="14" cy="14" r="11" style={{ strokeDashoffset: 69.12 * (1 - Math.max(0, Math.min(1, uploadProgress))) }} /></svg>
+        </div>}
+        {uploadStatus === "ready" && <span className="aichat-composer-upload-state is-ready" role="status" aria-label={file.name + " uploaded"}><i>✓</i></span>}
       </div>
-      <span className="aichat-composer-attachment-name">{file.name}</span>
-      <span className="aichat-composer-attachment-size">{sizeLabel}</span>
+      <button type="button" className="aichat-composer-attachment-remove" aria-label={"Remove " + file.name} onClick={onRemove}>×</button>
+      {isError && <button type="button" className="aichat-composer-attachment-retry" aria-label={"Retry upload of " + file.name} title="Retry upload" onClick={onRetry}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" /></svg></button>}
     </div>
   );
 }
-
 function LibraryFilePreview({
   asset,
   onClose,
@@ -575,27 +566,31 @@ function MessageAttachmentViews({
   onCrop,
   onShare,
   onCopy,
+  onOpenImage,
+  variant = "default",
 }: {
   attachments?: MessageAttachment[];
   onDownload?: (attachment: MessageAttachment) => void;
   onCrop?: (attachment: MessageAttachment) => void;
   onShare?: (attachment: MessageAttachment) => void;
   onCopy?: (attachment: MessageAttachment) => void;
+  onOpenImage: (attachment: MessageAttachment) => void;
+  variant?: "default" | "user";
 }) {
   if (!attachments?.length) return null;
   const visible = attachments.filter((item) => item.kind !== "video-frame" && item.kind !== "video-job" && item.url);
   if (!visible.length) return null;
   return (
-    <div className="aichat-message-attachments">
+    <div className={"aichat-message-attachments" + (variant === "user" ? " is-user-attachments" : "")}>
       {visible.map((item, index) => {
         const key = item.path || item.videoId || item.url || `${item.name}-${index}`;
         if (item.kind === "image" || item.kind === "generated-image" || item.mimeType?.startsWith("image/")) {
           const isGenerated = item.kind === "generated-image";
           return (
             <div key={key} className="aichat-generated-media-wrap is-image">
-              <a href={item.url} target="_blank" rel="noreferrer" className="aichat-attachment-image-link">
+              <button type="button" className="aichat-attachment-image-link" onClick={() => onOpenImage(item)} aria-label={"Open image " + item.name}>
                 <img className="aichat-attachment-image" src={item.url} alt={item.name} loading="eager" decoding="async" fetchPriority="high" />
-              </a>
+              </button>
               {isGenerated && (
                 <GeneratedImageActions
                   onDownload={onDownload ? () => onDownload(item) : undefined}
@@ -619,6 +614,33 @@ function MessageAttachmentViews({
   );
 }
 
+function AttachmentImageLightbox({ attachment, onClose }: { attachment: MessageAttachment; onClose: () => void }) {
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+  if (!attachment.url) return null;
+  return <div className="aichat-attachment-lightbox" role="dialog" aria-modal="true" aria-label={"Image viewer: " + attachment.name}
+    onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    onTouchStart={(event) => { const t = event.touches[0]; touchStart.current = { x: t.clientX, y: t.clientY }; }}
+    onTouchEnd={(event) => { const start = touchStart.current; const t = event.changedTouches[0]; touchStart.current = null; if (start && (Math.abs(t.clientX - start.x) > 90 || Math.abs(t.clientY - start.y) > 90)) onClose(); }}>
+    <button type="button" className="aichat-attachment-lightbox-close" onClick={onClose} aria-label="Close image viewer">×</button>
+    <img src={attachment.url} alt={attachment.name} />
+    <span className="aichat-attachment-lightbox-caption">{attachment.name}</span>
+  </div>;
+}
+type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
+
+function getVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
+  const female = voices.filter((voice) => /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa/i.test(voice.name + " " + voice.voiceURI));
+  const male = voices.filter((voice) => /(^|[^A-Za-z])(male|man|boy)(?=$|[^A-Za-z])|david|mark|guy|ryan|daniel|alex|george|james|fred|thomas/i.test(voice.name + " " + voice.voiceURI));
+  const other = voices.filter((voice) => !female.includes(voice) && !male.includes(voice));
+  const pool = preset === "girl" || preset === "woman" ? female : male;
+  const index = preset === "girl" || preset === "boy" ? 0 : 1;
+  return pool[index] || pool[0] || (preset === "girl" || preset === "boy" ? other[0] : other.find((voice) => voice.default)) || voices.find((voice) => voice.default) || voices[0];
+}
 function getLoginGreeting(): string {
   const hour = new Date().getHours();
   const choices = hour < 12
@@ -818,6 +840,8 @@ function Dashboard() {
   const [profileName, setProfileName] = useState("Your account");
   const [profileEmail, setProfileEmail] = useState("");
   const [profileImage, setProfileImage] = useState("");
+  const profileAvatarPathRef = useRef<string | null>(null);
+  const profileAvatarPreviewUrlRef = useRef<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
@@ -832,8 +856,11 @@ function Dashboard() {
     securityAlerts: true,
     chatActivity: true,
   });
+  const [notificationPermissionMessage, setNotificationPermissionMessage] = useState("");
+  const notificationCursorRef = useRef({ initialized: false, latestId: 0 });
+  const [privacyPreferences, setPrivacyPreferences] = useState({ useConversationHistory: true });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoiceUri, setSelectedVoiceUri] = useState("");
+  const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -865,14 +892,19 @@ function Dashboard() {
     try {
       const savedAccent = localStorage.getItem("misma_accent_color");
       const savedNotifications = localStorage.getItem("misma_notification_preferences");
-      const savedVoice = localStorage.getItem("misma_voice_uri");
+      const savedVoice = localStorage.getItem("misma_voice_preset") || localStorage.getItem("misma_voice_uri");
       const savedAutoSpeak = localStorage.getItem("misma_auto_speak_replies");
+      const savedPrivacy = localStorage.getItem("misma_privacy_preferences");
+      if (savedPrivacy) {
+        const parsed = JSON.parse(savedPrivacy) as Partial<typeof privacyPreferences>;
+        setPrivacyPreferences((current) => ({ ...current, ...parsed }));
+      }
       if (savedAccent && /^#[0-9a-f]{6}$/i.test(savedAccent)) setAccentColor(savedAccent);
       if (savedNotifications) {
         const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
         setNotificationPreferences((current) => ({ ...current, ...parsed }));
       }
-      if (savedVoice) setSelectedVoiceUri(savedVoice);
+      if (savedVoice && ["girl", "woman", "boy", "man"].includes(savedVoice)) setSelectedVoicePreset(savedVoice as MismaVoicePreset);
       if (savedAutoSpeak === "true") setAutoSpeakReplies(true);
     } catch {
       // Keep accessible defaults if browser preferences cannot be read.
@@ -889,12 +921,25 @@ function Dashboard() {
     try {
       localStorage.setItem("misma_accent_color", accentColor);
       localStorage.setItem("misma_notification_preferences", JSON.stringify(notificationPreferences));
-      localStorage.setItem("misma_voice_uri", selectedVoiceUri);
+      localStorage.setItem("misma_voice_preset", selectedVoicePreset);
       localStorage.setItem("misma_auto_speak_replies", String(autoSpeakReplies));
+      localStorage.setItem("misma_privacy_preferences", JSON.stringify(privacyPreferences));
     } catch {
       // Preferences remain active for this session when storage is unavailable.
     }
-  }, [accentColor, notificationPreferences, selectedVoiceUri, autoSpeakReplies, appearanceLoaded]);
+  }, [accentColor, notificationPreferences, selectedVoicePreset, autoSpeakReplies, privacyPreferences, appearanceLoaded]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("misma_privacy_preferences");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<typeof privacyPreferences>;
+        setPrivacyPreferences((current) => ({ ...current, ...parsed }));
+      }
+    } catch {
+      // Keep privacy-preserving defaults when saved preferences cannot be read.
+    }
+  }, []);
 
   useEffect(() => {
     if (!("speechSynthesis" in window)) return;
@@ -906,6 +951,30 @@ function Dashboard() {
 
   const updateAiSetting = <K extends keyof MismaAiSettings>(key: K, value: MismaAiSettings[K]) => {
     setAiSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const toggleChatActivityNotifications = async () => {
+    const currentlyEnabled = notificationPreferences.chatActivity;
+    const supported = typeof window !== "undefined" && "Notification" in window;
+    const needsPermissionPrompt = currentlyEnabled && supported && window.Notification.permission === "default";
+    const enabling = !currentlyEnabled || needsPermissionPrompt;
+    if (enabling) {
+      if (!supported) {
+        setNotificationPermissionMessage("This browser does not support desktop notifications. Your preference is saved, but alerts will not appear here.");
+      } else {
+        let permission = window.Notification.permission;
+        if (permission === "default") permission = await window.Notification.requestPermission();
+        if (permission !== "granted") {
+          setNotificationPermissionMessage("Allow Misma notifications in your browser's site settings to receive new chat alerts.");
+          setNotificationPreferences((current) => ({ ...current, chatActivity: false }));
+          return;
+        }
+        setNotificationPermissionMessage("Browser notifications are enabled for new visitor messages.");
+      }
+    } else {
+      setNotificationPermissionMessage("Browser notifications are paused.");
+    }
+    setNotificationPreferences((current) => ({ ...current, chatActivity: enabling }));
   };
 
   // Chat conversation state
@@ -972,9 +1041,14 @@ function Dashboard() {
   const [thinkHarder, setThinkHarder] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
+  const composerPreviewUrlsRef = useRef<Map<File, string>>(new Map());
+  const uploadAbortControllersRef = useRef<Map<File, AbortController>>(new Map());
   const uploadedComposerAttachmentsRef = useRef<Map<File, MessageAttachment[]>>(new Map());
   const attachmentUploadQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [composerUploadStatuses, setComposerUploadStatuses] = useState<Map<File, "uploading" | "ready" | "error">>(new Map());
+  const [composerUploadProgress, setComposerUploadProgress] = useState<Map<File, number>>(new Map());
+  const [lightboxAttachment, setLightboxAttachment] = useState<MessageAttachment | null>(null);
+  const [, setUploadingAttachments] = useState(false);
   const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
   const [mediaProgressPercent, setMediaProgressPercent] = useState(0);
@@ -1109,9 +1183,11 @@ function Dashboard() {
           }
           setProfileName(resolvedName);
           setProfileNameDraft(resolvedName);
-          const avatarPath = metadata.avatar_path;
-          if (typeof avatarPath === "string" && avatarPath.length > 0) {
-            void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 3600).then(({ data, error }) => {
+          const avatarPath = typeof metadata.avatar_path === "string" && metadata.avatar_path.length > 0 ? metadata.avatar_path : null;
+          profileAvatarPathRef.current = avatarPath;
+          if (avatarPath) {
+            void getSupabaseClient().storage.from("misma-media").createSignedUrl(avatarPath, 604800).then(({ data, error }) => {
+              if (!active) return;
               if (!error && data?.signedUrl) setProfileImage(data.signedUrl);
               else setProfileImage(image ?? "");
             });
@@ -1200,6 +1276,30 @@ function Dashboard() {
   };
 
   // Load workspace and dashboard data
+  useEffect(() => {
+    if (!dashboardDataLoaded) return;
+    const latestId = unreadVisitorMessages.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+    const cursor = notificationCursorRef.current;
+    if (!cursor.initialized) {
+      cursor.initialized = true;
+      cursor.latestId = latestId;
+      return;
+    }
+    const newMessages = unreadVisitorMessages.filter((item) => Number(item.id) > cursor.latestId);
+    cursor.latestId = Math.max(cursor.latestId, latestId);
+    if (!notificationPreferences.chatActivity || !newMessages.length || typeof window === "undefined" || !("Notification" in window) || window.Notification.permission !== "granted" || document.visibilityState === "visible") return;
+    const latest = newMessages.reduce((current, item) => Number(item.id) > Number(current.id) ? item : current);
+    const notification = new window.Notification("New Misma chat message", {
+      body: (latest.conversationTitle ? latest.conversationTitle + ": " : "") + latest.text.slice(0, 140),
+      tag: "misma-visitor-message-" + latest.id,
+    });
+    notification.onclick = () => {
+      window.focus();
+      setActiveTab("notifications");
+      notification.close();
+    };
+  }, [dashboardDataLoaded, unreadVisitorMessages, notificationPreferences.chatActivity]);
+
   const loadData = () => {
     if (!token) return;
     setDashboardDataLoaded(false);
@@ -1660,8 +1760,9 @@ function Dashboard() {
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(msg.text);
-    const selectedVoice = availableVoices.find((voice) => voice.voiceURI === selectedVoiceUri);
+    const selectedVoice = getVoiceForPreset(availableVoices, selectedVoicePreset);
     if (selectedVoice) utterance.voice = selectedVoice;
+    utterance.pitch = selectedVoicePreset === "girl" ? 1.28 : selectedVoicePreset === "boy" ? 1.18 : selectedVoicePreset === "woman" ? 1 : 0.9;
     utterance.onend = () => setSpeakingMessageId(null);
     utterance.onerror = () => setSpeakingMessageId(null);
     setSpeakingMessageId(msg.id);
@@ -1677,8 +1778,9 @@ function Dashboard() {
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance("Hello, this is your selected Misma voice.");
-    const voice = availableVoices.find((item) => item.voiceURI === selectedVoiceUri);
+    const voice = getVoiceForPreset(availableVoices, selectedVoicePreset);
     if (voice) utterance.voice = voice;
+    utterance.pitch = selectedVoicePreset === "girl" ? 1.28 : selectedVoicePreset === "boy" ? 1.18 : selectedVoicePreset === "woman" ? 1 : 0.9;
     window.speechSynthesis.speak(utterance);
   };
 
@@ -1705,7 +1807,8 @@ function Dashboard() {
         const extension = profileAvatarFile.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "jpg";
         avatarPath = workspace.id + "/" + userData.user.id + "/avatar-" + crypto.randomUUID() + "." + extension;
         const { error: uploadError } = await client.storage.from("misma-media").upload(avatarPath, profileAvatarFile, {
-          upsert: true,
+          upsert: false,
+          cacheControl: "604800",
           contentType: profileAvatarFile.type || "image/jpeg",
         });
         if (uploadError) throw new Error("Could not save the profile photo: " + uploadError.message);
@@ -1716,9 +1819,13 @@ function Dashboard() {
       if (updateError) throw new Error(updateError.message);
       setProfileName(name);
       if (avatarPath) {
-        const { data: signed, error: signedError } = await client.storage.from("misma-media").createSignedUrl(avatarPath, 3600);
-        if (!signedError && signed?.signedUrl) setProfileImage(signed.signedUrl);
+        profileAvatarPathRef.current = avatarPath;
+        const { data: signed, error: signedError } = await client.storage.from("misma-media").createSignedUrl(avatarPath, 604800);
+        if (signedError || !signed?.signedUrl) throw new Error("Your profile photo was uploaded but its preview could not be refreshed. Reopen Settings to retry.");
+        setProfileImage(signed.signedUrl);
       }
+      if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+      profileAvatarPreviewUrlRef.current = null;
       setProfileAvatarFile(null);
       setProfileSaved(true);
       window.setTimeout(() => setProfileSaved(false), 3000);
@@ -1727,6 +1834,16 @@ function Dashboard() {
     } finally {
       setProfileSaving(false);
     }
+  };
+
+  const refreshProfileAvatar = async () => {
+    const path = profileAvatarPathRef.current;
+    if (!path) { setProfileImage(""); return; }
+    try {
+      const { data, error } = await getSupabaseClient().storage.from("misma-media").createSignedUrl(path, 604800);
+      if (error || !data?.signedUrl) throw error || new Error("Could not refresh avatar.");
+      setProfileImage(data.signedUrl);
+    } catch { setProfileImage(""); }
   };
 
   const exportCurrentChat = () => {
@@ -1800,11 +1917,25 @@ function Dashboard() {
     selectedComposerFilesRef.current = selectedFiles;
   }, [selectedFiles]);
 
+  const releaseComposerPreviewUrl = (file: File) => {
+    const url = composerPreviewUrlsRef.current.get(file);
+    if (url) URL.revokeObjectURL(url);
+    composerPreviewUrlsRef.current.delete(file);
+  };
+
+  useEffect(() => () => {
+    uploadAbortControllersRef.current.forEach((controller) => controller.abort());
+    composerPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    composerPreviewUrlsRef.current.clear();
+    if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+  }, []);
+
   // Sending, retrying, or editing a user message.
   const uploadSelectedAttachments = async (
     filesToUpload: File[] = selectedFiles,
     videoFrameMode = false,
     signal?: AbortSignal,
+    onProgress?: (file: File, fraction: number) => void,
   ): Promise<MessageAttachment[]> => {
     if (!filesToUpload.length) return [];
     setUploadingAttachments(true);
@@ -1817,23 +1948,18 @@ function Dashboard() {
       const uploadOne = async (file: File, kind: "image" | "video" | "video-frame" | "audio" | "file"): Promise<MessageAttachment> => {
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is larger than 25 MB.`);
-        if ((file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) && file.size > 12 * 1024 * 1024) {
-          throw new Error("PDF files must be 12 MB or smaller for AI analysis.");
+        if (!(file.type.startsWith("image/") || file.type.startsWith("video/")) && file.size > 10 * 1024 * 1024) {
+          throw new Error(`${file.name} is larger than the 10 MB document limit.`);
         }
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120) || "upload";
         const path = `${workspace.id}/${userData.user.id}/${crypto.randomUUID()}-${safeName}`;
-        const { error } = await getSupabaseClient().storage.from("misma-media").upload(path, file, {
-          upsert: false,
-          cacheControl: "3600",
-          contentType: file.type || "application/octet-stream",
-        });
-        if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+        await uploadStorageObjectWithProgress(file, path, signal, (fraction) => onProgress?.(file, fraction));
         uploadedPaths.push(path);
         if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
         let url: string | undefined;
         if (kind !== "video-frame") {
           const { data: signed, error: signedError } = await getSupabaseClient()
-            .storage.from("misma-media").createSignedUrl(path, 3600);
+            .storage.from("misma-media").createSignedUrl(path, 604800);
           if (signedError || !signed?.signedUrl) {
             throw new Error(`Could not prepare ${file.name} for the chat preview.`);
           }
@@ -1909,19 +2035,37 @@ function Dashboard() {
     }
   };
 
-  // Upload selected files immediately, then reuse these objects when sending.
+  // Upload each selected file immediately; a per-file AbortController cancels an upload when its card is removed.
   const queueComposerAttachmentUpload = (files: File[]) => {
     const task = attachmentUploadQueueRef.current.then(async () => {
+      const failures: string[] = [];
       for (const file of files) {
-        if (uploadedComposerAttachmentsRef.current.has(file)) continue;
-        const uploaded = await uploadSelectedAttachments([file]);
-        if (!selectedComposerFilesRef.current.includes(file)) {
-          const paths = uploaded.map((item) => item.path).filter((path): path is string => Boolean(path));
-          if (paths.length) await getSupabaseClient().storage.from("misma-media").remove(paths).catch(() => undefined);
-          continue;
+        if (!selectedComposerFilesRef.current.includes(file) || uploadedComposerAttachmentsRef.current.has(file)) continue;
+        const controller = new AbortController();
+        uploadAbortControllersRef.current.set(file, controller);
+        setComposerUploadStatuses((current) => new Map(current).set(file, "uploading"));
+        setComposerUploadProgress((current) => new Map(current).set(file, 0));
+        try {
+          const uploaded = await uploadSelectedAttachments([file], false, controller.signal, (_source, fraction) => {
+            setComposerUploadProgress((current) => new Map(current).set(file, fraction));
+          });
+          if (!selectedComposerFilesRef.current.includes(file) || controller.signal.aborted) {
+            const paths = uploaded.map((item) => item.path).filter((path): path is string => Boolean(path));
+            if (paths.length) await getSupabaseClient().storage.from("misma-media").remove(paths).catch(() => undefined);
+            continue;
+          }
+          uploadedComposerAttachmentsRef.current.set(file, uploaded);
+          setComposerUploadStatuses((current) => new Map(current).set(file, "ready"));
+          setComposerUploadProgress((current) => new Map(current).set(file, 1));
+        } catch (cause) {
+          if (controller.signal.aborted || (cause instanceof Error && cause.name === "AbortError")) continue;
+          setComposerUploadStatuses((current) => new Map(current).set(file, "error"));
+          failures.push(cause instanceof Error ? cause.message : "Could not upload " + file.name + ".");
+        } finally {
+          uploadAbortControllersRef.current.delete(file);
         }
-        uploadedComposerAttachmentsRef.current.set(file, uploaded);
       }
+      if (failures.length) throw new Error(failures.join(" "));
     });
     attachmentUploadQueueRef.current = task.then(() => undefined, () => undefined);
     return task;
@@ -1947,7 +2091,10 @@ function Dashboard() {
         apikey: config.publishableKey,
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        ...(body.action === "chat" ? { aiSettings, privacySettings: privacyPreferences } : {}),
+      }),
       signal,
     });
     const result = await response.json() as Record<string, any>;
@@ -2150,8 +2297,9 @@ function Dashboard() {
   ): Promise<string | null> => {
     let textToSend = (customPrompt ?? draft).trim();
     if ((!textToSend && !selectedFiles.length) || isSending || !token || options.signal?.aborted) return null;
-    if (!textToSend) {
-      textToSend = "Please inspect the attached files and explain the important details.";
+    if (selectedFiles.some((file) => composerUploadStatuses.get(file) !== "ready")) {
+      setChatError("Wait for every attachment to finish uploading, or retry/remove the failed file.");
+      return null;
     }
 
     const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
@@ -2255,7 +2403,10 @@ function Dashboard() {
 
       setSelectedFiles([]);
       selectedComposerFilesRef.current = [];
+      for (const file of filesToSend) releaseComposerPreviewUrl(file);
       uploadedComposerAttachmentsRef.current.clear();
+      setComposerUploadStatuses((current) => { const nextStatus = new Map(current); filesToSend.forEach((file) => nextStatus.delete(file)); return nextStatus; });
+      setComposerUploadProgress((current) => { const nextProgress = new Map(current); filesToSend.forEach((file) => nextProgress.delete(file)); return nextProgress; });
       setThinkHarder(false);
       setFailedMessageId(null);
       setFailedAction(null);
@@ -2641,9 +2792,9 @@ function Dashboard() {
   const addSelectedFiles = (files: FileList | File[] | null) => {
     if (!files?.length) return;
     const additions = Array.from(files).map(normalizeComposerAttachment);
-    const next = [...selectedFiles, ...additions];
-    if (next.length > 4) {
-      setChatError("Attach up to four files per message.");
+    const next = [...selectedComposerFilesRef.current, ...additions];
+    if (next.length > MAX_COMPOSER_FILES) {
+      setChatError("Attach up to five files per message.");
       return;
     }
     const isVideoFile = (file: File) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name);
@@ -2651,20 +2802,42 @@ function Dashboard() {
       setChatError("Upload one video per message so Misma can sample its keyframes.");
       return;
     }
-    const oversized = additions.find((file) => file.size > 25 * 1024 * 1024);
-    if (oversized) {
-      setChatError(`${oversized.name} is larger than the 25 MB upload limit.`);
+    const oversizedImageOrVideo = additions.find((file) =>
+      (file.type.startsWith("image/") || isVideoFile(file)) && file.size > MAX_IMAGE_UPLOAD_MB * 1024 * 1024
+    );
+    if (oversizedImageOrVideo) {
+      setChatError(`${oversizedImageOrVideo.name} is larger than the 25 MB media limit.`);
       return;
     }
-    const oversizedPdf = additions.find((file) =>
-      (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) &&
-      file.size > 12 * 1024 * 1024
+    const oversizedDocument = additions.find((file) =>
+      !(file.type.startsWith("image/") || isVideoFile(file)) && file.size > MAX_DOCUMENT_UPLOAD_MB * 1024 * 1024
     );
-    if (oversizedPdf) {
-      setChatError("PDF files must be 12 MB or smaller for AI analysis.");
+    if (oversizedDocument) {
+      setChatError(`${oversizedDocument.name} is larger than the 10 MB document limit.`);
+      return;
+    }
+    const allowedDocument = /\.(pdf|docx|txt|csv|md|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i;
+    const unsupported = additions.find((file) => !file.type.startsWith("image/") && !isVideoFile(file) && !allowedDocument.test(file.name));
+    if (unsupported) {
+      setChatError(`${unsupported.name}: supported files are images, PDF, DOCX, TXT, CSV, and common text/code files.`);
       return;
     }
     setChatError("");
+    for (const file of additions) {
+      if (file.type.startsWith("image/") || isVideoFile(file)) {
+        composerPreviewUrlsRef.current.set(file, URL.createObjectURL(file));
+      }
+    }
+    setComposerUploadStatuses((current) => {
+      const nextStatus = new Map(current);
+      additions.forEach((file) => nextStatus.set(file, "uploading"));
+      return nextStatus;
+    });
+    setComposerUploadProgress((current) => {
+      const nextProgress = new Map(current);
+      additions.forEach((file) => nextProgress.set(file, 0));
+      return nextProgress;
+    });
     selectedComposerFilesRef.current = next;
     setSelectedFiles(next);
     void queueComposerAttachmentUpload(additions).catch((cause) => {
@@ -2675,9 +2848,14 @@ function Dashboard() {
   const removeSelectedComposerFile = (index: number) => {
     const removed = selectedComposerFilesRef.current[index];
     if (!removed) return;
+    uploadAbortControllersRef.current.get(removed)?.abort();
+    uploadAbortControllersRef.current.delete(removed);
     const next = selectedComposerFilesRef.current.filter((_, itemIndex) => itemIndex !== index);
     selectedComposerFilesRef.current = next;
     setSelectedFiles(next);
+    releaseComposerPreviewUrl(removed);
+    setComposerUploadStatuses((current) => { const nextStatus = new Map(current); nextStatus.delete(removed); return nextStatus; });
+    setComposerUploadProgress((current) => { const nextProgress = new Map(current); nextProgress.delete(removed); return nextProgress; });
     const uploaded = uploadedComposerAttachmentsRef.current.get(removed);
     uploadedComposerAttachmentsRef.current.delete(removed);
     const paths = (uploaded || []).map((item) => item.path).filter((path): path is string => Boolean(path));
@@ -3248,7 +3426,7 @@ function Dashboard() {
             title="Settings"
           >
             {profileImage ? (
-              <img className="aichat-user-avatar" src={profileImage} alt="" />
+              <img className="aichat-user-avatar" src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} />
             ) : (
               <span className="aichat-user-avatar">
                 {profileName[0]?.toUpperCase() ?? "M"}
@@ -3391,7 +3569,16 @@ function Dashboard() {
                         </div>
                       )}
                       <div className="aichat-message-content">
-                        <div
+                        {isUserMessage && <MessageAttachmentViews
+                          attachments={msg.attachments}
+                          variant="user"
+                          onDownload={(attachment) => void handleDownloadGeneratedMedia(attachment)}
+                          onCrop={(attachment) => handleOpenImageCrop(attachment)}
+                          onShare={(attachment) => void handleShareImage(attachment)}
+                          onCopy={(attachment) => void handleCopyImage(attachment)}
+                          onOpenImage={(attachment) => setLightboxAttachment(attachment)}
+                        />}
+                        {(!isUserMessage || Boolean(msg.text.trim()) || Boolean(msg.pendingMedia)) && <div
                           className="aichat-bubble"
                           onTouchStart={isUserMessage ? () => startMobileMessageLongPress(msg.id) : undefined}
                           onTouchMove={isUserMessage ? cancelMobileMessageLongPress : undefined}
@@ -3399,13 +3586,14 @@ function Dashboard() {
                           onTouchCancel={isUserMessage ? cancelMobileMessageLongPress : undefined}
                           onContextMenu={isUserMessage ? (event) => openMobileMessageActionsFromContextMenu(event, msg.id) : undefined}
                         >
-                          <MessageAttachmentViews
+                          {!isUserMessage && <MessageAttachmentViews
                             attachments={msg.attachments}
                             onDownload={(attachment) => void handleDownloadGeneratedMedia(attachment)}
                             onCrop={(attachment) => handleOpenImageCrop(attachment)}
                             onShare={(attachment) => void handleShareImage(attachment)}
                             onCopy={(attachment) => void handleCopyImage(attachment)}
-                          />
+                            onOpenImage={(attachment) => setLightboxAttachment(attachment)}
+                          />}
                           {msg.pendingMedia === "image" ? (
                             <div
                               className="aichat-image-generation-loading"
@@ -3432,7 +3620,7 @@ function Dashboard() {
                               </div>
                             </div>
                           ) : <MarkdownContent content={msg.text} /> }
-                        </div>
+                        </div>}
                         {!msg.pendingMedia && (
                         <div
                           className={`aichat-message-actions${isUserMessage && mobileActionMessageId === msg.id ? " is-mobile-open" : ""}`}
@@ -3583,22 +3771,76 @@ function Dashboard() {
                     {mediaProgress && <span className="aichat-composer-progress">{mediaProgress}</span>}
                   </div>
                   {selectedFiles.length > 0 && (
-                    <div className="aichat-composer-attachments" aria-label="Attachments ready to send">
+                    <div className="aichat-composer-attachments" aria-label="Attached files" aria-live="polite">
                       {selectedFiles.map((file, index) => (
                         <ComposerAttachmentPreview
                           key={`${file.name}-${file.lastModified}-${index}`}
                           file={file}
-                          index={index}
-                          isUploading={uploadingAttachments}
-                          onRemove={removeSelectedComposerFile}
+                          previewUrl={composerPreviewUrlsRef.current.get(file) || null}
+                          uploadStatus={composerUploadStatuses.get(file) || "uploading"}
+                          uploadProgress={composerUploadProgress.get(file) || 0}
+                          onRemove={() => removeSelectedComposerFile(index)}
+                          onRetry={() => {
+                            setChatError("");
+                            setComposerUploadStatuses((current) => new Map(current).set(file, "uploading"));
+                            setComposerUploadProgress((current) => new Map(current).set(file, 0));
+                            void queueComposerAttachmentUpload([file]).catch((cause) => setChatError(cause instanceof Error ? cause.message : "Could not upload " + file.name + "."));
+                          }}
                         />
                       ))}
                     </div>
                   )}
                   <div className="aichat-composer-input-row">
                     <VoiceInputBar
+                      toolbarStart={
+                        <>
+                          <div className="aichat-composer-plus-wrap">
+                            <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
+                              {plusMenuOpen ? (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                              ) : (
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                              )}
+                            </button>
+                            {plusMenuOpen && (
+                              <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
+                                <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setCreateMode(null); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/></svg></span>
+                                  <span><strong>Think harder</strong></span>
+                                  <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H6a3 3 0 0 1 0-6h1"/><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2l-8.2 8.2a5 5 0 0 1-7.1-7.1L12 2.7"/></svg></span>
+                                  <span><strong>Upload files</strong></span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                                  <span><strong>Photo</strong></span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { cameraInputRef.current?.click(); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m14 4 7 5h-7z"/><circle cx="10" cy="12" r="3"/></svg></span>
+                                  <span><strong>Camera</strong></span>
+                                </button>
+                                <div className="aichat-plus-menu-divider" />
+                                <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("image"); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                                  <span><strong>Create image</strong></span>
+                                </button>
+                                <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("video"); setPlusMenuOpen(false); }}>
+                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
+                                  <span><strong>Create video</strong></span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                        </>
+                      }
+                      sendDisabled={selectedFiles.some((file) => composerUploadStatuses.get(file) !== "ready")}
+                      voicePreset={selectedVoicePreset}
                       inputValue={draft}
-                      hasContent={Boolean(draft.trim() || selectedFiles.length || createMode)}
+                      hasContent={Boolean(draft.trim() || createMode)}
+                      hasAttachment={() => selectedFiles.length > 0}
                       isBusy={isSending || isGeneratingMedia}
                       disabled={isSending || isGeneratingMedia}
                       primaryActionLabel={createMode ? "Create " + createMode + " with Agnes" : "Send message"}
@@ -3630,7 +3872,7 @@ function Dashboard() {
                           ref={textareaRef}
                           rows={1}
                           className="aichat-composer-textarea"
-                          placeholder={composerFocused ? "" : selectedFiles.length ? "Add a message about the attached file…" : createMode ? "Describe the " + createMode + " you want Agnes to create…" : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
+                          placeholder={composerFocused ? "" : createMode ? "Describe the " + createMode + " you want Agnes to create…" : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
                           value={draft}
                           onChange={(e) => {
                             const nextValue = e.target.value;
@@ -3667,69 +3909,7 @@ function Dashboard() {
                       </>
                     </VoiceInputBar>
                   </div>
-                  <div className="aichat-composer-sendrow">
-                    <div className="aichat-composer-plus-wrap">
-                      <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
-                        {plusMenuOpen ? (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                        ) : (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                        )}
-                      </button>
-                      {plusMenuOpen && (
-                        <div className="aichat-composer-plus-menu" role="menu" aria-label="Message tools">
-                          <button type="button" role="menuitemcheckbox" aria-checked={thinkHarder} onClick={() => { setThinkHarder((value) => !value); setCreateMode(null); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/></svg></span>
-                            <span><strong>Think harder</strong></span>
-                            <span className="aichat-plus-menu-check">{thinkHarder ? "✓" : ""}</span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { fileInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H6a3 3 0 0 1 0-6h1"/><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2l-8.2 8.2a5 5 0 0 1-7.1-7.1L12 2.7"/></svg></span>
-                            <span><strong>Upload files</strong></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { photoInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
-                            <span><strong>Photo</strong></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { cameraInputRef.current?.click(); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m14 4 7 5h-7z"/><circle cx="10" cy="12" r="3"/></svg></span>
-                            <span><strong>Camera</strong></span>
-                          </button>
-                          <div className="aichat-plus-menu-divider" />
-                          <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("image"); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
-                            <span><strong>Create image</strong></span>
-                          </button>
-                          <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("video"); setPlusMenuOpen(false); }}>
-                            <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
-                            <span><strong>Create video</strong></span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="aichat-composer-sendrow-spacer" />
-                    <button
-                      type="button"
-                      disabled={!isSending && !isGeneratingMedia && !draft.trim() && !selectedFiles.length && !createMode}
-                      className={"aichat-composer-send-btn" + ((draft.trim() || selectedFiles.length || createMode) && !isSending && !isGeneratingMedia ? " can-send" : "") + (isSending || isGeneratingMedia ? " is-thinking" : "")}
-                      onClick={() => {
-                        if (isSending || isGeneratingMedia) stopMisma();
-                        else if (createMode) void handleCreateMedia();
-                        else void handleSend();
-                      }}
-                      title={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
-                      aria-label={isSending || isGeneratingMedia ? "Stop Misma" : createMode ? "Create " + createMode + " with Agnes" : "Send message"}
-                    >
-                      {isSending || isGeneratingMedia ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
-                      ) : createMode ? (
-                        <span aria-hidden="true">✦</span>
-                      ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
-                      )}
-                    </button>
-                  </div>
-                  <input ref={fileInputRef} type="file" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf,.docx,.txt,.csv,.md,.json" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={photoInputRef} type="file" accept="image/*" hidden multiple onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                   <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addSelectedFiles(event.target.files); event.target.value = ""; }} />
                 </form>
@@ -4267,7 +4447,7 @@ function Dashboard() {
               <section id="settings-profile" className="aichat-card aichat-settings-card aichat-profile-settings">
                 <div className="aichat-settings-profile-head">
                   <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
-                    {profileImage ? <img src={profileImage} alt="" /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
+                    {profileImage ? <img src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
                     <span className="aichat-settings-avatar-edit" aria-hidden="true">✎</span>
                   </button>
                   <div>
@@ -4281,8 +4461,11 @@ function Dashboard() {
                       if (file.size > 5 * 1024 * 1024) {
                         setProfileError("Profile photos must be 5 MB or smaller.");
                       } else {
+                        if (profileAvatarPreviewUrlRef.current) URL.revokeObjectURL(profileAvatarPreviewUrlRef.current);
+                        const previewUrl = URL.createObjectURL(file);
+                        profileAvatarPreviewUrlRef.current = previewUrl;
                         setProfileAvatarFile(file);
-                        setProfileImage(URL.createObjectURL(file));
+                        setProfileImage(previewUrl);
                         setProfileError("");
                       }
                     }
@@ -4377,8 +4560,9 @@ function Dashboard() {
                 </div>
                 <SettingsToggle title="Product updates" description="Show relevant information about new Misma features." checked={notificationPreferences.productUpdates} onToggle={() => setNotificationPreferences((current) => ({ ...current, productUpdates: !current.productUpdates }))} />
                 <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
-                <SettingsToggle title="Chat activity" description="Enable notifications for new chat activity when supported by the browser." checked={notificationPreferences.chatActivity} onToggle={() => setNotificationPreferences((current) => ({ ...current, chatActivity: !current.chatActivity }))} />
-                <p className="aichat-settings-hint">These preferences are saved in this browser. Push delivery requires a notification service to be configured by the app.</p>
+                <SettingsToggle title="Chat activity" description="Receive a browser notification when a new visitor message arrives while Misma is in the background." checked={notificationPreferences.chatActivity} onToggle={() => void toggleChatActivityNotifications()} />
+                {notificationPermissionMessage && <p className="aichat-settings-hint" role="status">{notificationPermissionMessage}</p>}
+                <p className="aichat-settings-hint">Product update and security alert preferences are saved here. Their notification feeds will appear when those services are connected.</p>
               </section>
 
               <section id="settings-voice" className="aichat-card aichat-settings-card">
@@ -4390,10 +4574,7 @@ function Dashboard() {
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-voice-choice">Reply voice</label>
-                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoiceUri} onChange={(event) => setSelectedVoiceUri(event.target.value)}>
-                      <option value="">Device default voice</option>
-                      {availableVoices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang}){voice.default ? " — default" : ""}</option>)}
-                    </select>
+                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option><option value="boy">Boy</option><option value="man">Man</option></select>
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
@@ -4409,6 +4590,19 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
                 <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
                 <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Settings microphone testing is analysed locally and is never recorded or uploaded.</span></div>
+                <SettingsToggle title="Use recent conversation context" description="When enabled, Misma can use earlier messages in this chat for follow-up questions. Turn it off to send only the current request and workspace context." checked={privacyPreferences.useConversationHistory} onToggle={() => setPrivacyPreferences((current) => ({ ...current, useConversationHistory: !current.useConversationHistory }))} />
+                <div className="aichat-settings-action-row">
+                  <div><strong>Reset preferences on this device</strong><small>Restore the default voice, appearance, notifications, privacy, and assistant choices.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => {
+                    ["misma_ai_settings", "misma_accent_color", "misma_notification_preferences", "misma_voice_preset", "misma_voice_uri", "misma_auto_speak_replies", "misma_privacy_preferences"].forEach((key) => localStorage.removeItem(key));
+                    setAiSettings(DEFAULT_MISMA_AI_SETTINGS);
+                    setAccentColor("#8ab4ff");
+                    setNotificationPreferences({ productUpdates: true, securityAlerts: true, chatActivity: true });
+                    setSelectedVoicePreset("woman");
+                    setAutoSpeakReplies(false);
+                    setPrivacyPreferences({ useConversationHistory: true });
+                  }}>Reset preferences</button>
+                </div>
               </section>
 
               <section id="settings-history" className="aichat-card aichat-settings-card">
@@ -4738,6 +4932,7 @@ function Dashboard() {
             </section>
           </div>
         )}
+        {lightboxAttachment && <AttachmentImageLightbox attachment={lightboxAttachment} onClose={() => setLightboxAttachment(null)} />}
         {mediaActionStatus && <div className="aichat-media-toast" role="status">{mediaActionStatus}</div>}
       </main>
     </div>

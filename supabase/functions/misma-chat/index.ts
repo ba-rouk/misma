@@ -445,6 +445,84 @@ function validateAttachmentList(value: unknown): AttachmentInput[] {
   });
 }
 
+async function extractDocxText(bytes: Uint8Array): Promise<string> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const minimumOffset = Math.max(0, bytes.length - 65_557);
+  let endRecord = -1;
+  for (let offset = bytes.length - 22; offset >= minimumOffset; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      endRecord = offset;
+      break;
+    }
+  }
+  if (endRecord < 0) throw new Error("This DOCX file is not a valid Word document.");
+  const entryCount = view.getUint16(endRecord + 10, true);
+  const centralDirectoryOffset = view.getUint32(endRecord + 16, true);
+  let cursor = centralDirectoryOffset;
+  let documentXml: Uint8Array | null = null;
+
+  for (let index = 0; index < entryCount && cursor + 46 <= bytes.length; index += 1) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) break;
+    const compressionMethod = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const uncompressedSize = view.getUint32(cursor + 24, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localHeaderOffset = view.getUint32(cursor + 42, true);
+    const nameStart = cursor + 46;
+    const nameEnd = nameStart + nameLength;
+    const entryName = new TextDecoder().decode(bytes.subarray(nameStart, nameEnd));
+    if (entryName === "word/document.xml") {
+      if (uncompressedSize > 10 * 1024 * 1024 || compressedSize > bytes.length) {
+        throw new Error("The Word document contains too much text to analyze safely.");
+      }
+      if (localHeaderOffset + 30 > bytes.length || view.getUint32(localHeaderOffset, true) !== 0x04034b50) {
+        throw new Error("The Word document is missing its document content.");
+      }
+      const localNameLength = view.getUint16(localHeaderOffset + 26, true);
+      const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+      const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+      const dataEnd = dataStart + compressedSize;
+      if (dataEnd > bytes.length) throw new Error("The Word document is incomplete.");
+      const compressed = bytes.subarray(dataStart, dataEnd);
+      if (compressionMethod === 0) {
+        documentXml = compressed.slice();
+      } else if (compressionMethod === 8) {
+        const compressedBuffer = new ArrayBuffer(compressed.byteLength);
+        new Uint8Array(compressedBuffer).set(compressed);
+        const stream = new Blob([compressedBuffer]).stream().pipeThrough(
+          new DecompressionStream("deflate-raw" as CompressionFormat),
+        );
+        documentXml = new Uint8Array(await new Response(stream).arrayBuffer());
+      } else {
+        throw new Error("This Word document uses an unsupported compression method.");
+      }
+      break;
+    }
+    cursor = nameEnd + extraLength + commentLength;
+  }
+
+  if (!documentXml) throw new Error("The Word document does not contain readable document text.");
+  const xml = new TextDecoder().decode(documentXml);
+  const plainText = xml
+    .replace(/<w:tab\b[^>]*\/>/gi, "\t")
+    .replace(/<w:(?:br|cr)\b[^>]*\/>/gi, "\n")
+    .replace(/<\/w:p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_match, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)))
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return plainText.slice(0, 35_000);
+}
+
 async function prepareAttachments(
   db: MismaDbClient,
   attachments: AttachmentInput[],
@@ -467,6 +545,7 @@ async function prepareAttachments(
 
     const lowerName = attachment.name.toLowerCase();
     const isPdf = attachment.mimeType === "application/pdf" || lowerName.endsWith(".pdf");
+    const isDocx = attachment.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || lowerName.endsWith(".docx");
     const isTextLike =
       attachment.mimeType.startsWith("text/") ||
       /\.(txt|md|csv|json|jsonl|xml|html|css|scss|js|jsx|ts|tsx|py|sql|sh|yaml|yml|toml|go|rs|java|kt|swift|c|cpp|h|hpp|php|rb|vue|svelte)$/i.test(lowerName);
@@ -497,6 +576,14 @@ async function prepareAttachments(
         fileName: attachment.name,
         dataUrl: `data:application/pdf;base64,${bytesToBase64(bytes)}`,
       });
+      continue;
+    }
+    if (isDocx) {
+      const { data: blob, error } = await db.storage.from("misma-media").download(attachment.path);
+      if (error || !blob) throw new Error(`Could not read the Word document ${attachment.name}.`);
+      const text = await extractDocxText(new Uint8Array(await blob.arrayBuffer()));
+      if (!text) throw new Error(`No readable text was found in ${attachment.name}.`);
+      textFiles.push(`[Attached Word document: ${attachment.name}]\n${text}`);
       continue;
     }
     if (isTextLike) {
@@ -766,6 +853,10 @@ Deno.serve(async (request) => {
   }
   let action = typeof input.action === "string" ? input.action : "chat";
   let message = typeof input.message === "string" ? input.message.trim() : "";
+  const userVisibleMessage = message;
+  const privacySettings = isRecord(input.privacySettings) ? input.privacySettings : {};
+  const useConversationHistory = privacySettings.useConversationHistory !== false;
+  const aiSettings = isRecord(input.aiSettings) ? input.aiSettings : {};
   if (action === "chat" && input.publicDemo !== true && input.regenerate !== true && input.editMessageId == null) {
     const implicitMediaMode = detectMediaIntent(message);
     if (implicitMediaMode) action = implicitMediaMode === "image" ? "create-image" : "create-video";
@@ -1513,30 +1604,32 @@ Deno.serve(async (request) => {
         pivotMessage = { id: Number(targetMessage.id) };
       }
 
-      let historyQuery = db
-        .from("messages")
-        .select("role,text")
-        .eq("conversation_id", conversationId)
-        .order("id", { ascending: false })
-        .limit(10);
-      if (pivotMessage) {
-        historyQuery = db
+      if (useConversationHistory) {
+        let historyQuery = db
           .from("messages")
           .select("role,text")
           .eq("conversation_id", conversationId)
-          .lt("id", pivotMessage.id)
           .order("id", { ascending: false })
           .limit(10);
-      }
-      const { data: storedMessages, error: historyError } = await historyQuery;
-      if (historyError) throw new Error("Could not load conversation history.");
-      history = (storedMessages ?? []).reverse().flatMap<ChatMessage>((item): ChatMessage[] => {
-        if (item.role === "ai") return [{ role: "model" as const, text: item.text.slice(0, 4_000) }];
-        if (item.role === "human" || item.role === "customer") {
-          return [{ role: "user" as const, text: item.text.slice(0, 4_000) }];
+        if (pivotMessage) {
+          historyQuery = db
+            .from("messages")
+            .select("role,text")
+            .eq("conversation_id", conversationId)
+            .lt("id", pivotMessage.id)
+            .order("id", { ascending: false })
+            .limit(10);
         }
-        return [];
-      });
+        const { data: storedMessages, error: historyError } = await historyQuery;
+        if (historyError) throw new Error("Could not load conversation history.");
+        history = (storedMessages ?? []).reverse().flatMap<ChatMessage>((item): ChatMessage[] => {
+          if (item.role === "ai") return [{ role: "model" as const, text: item.text.slice(0, 4_000) }];
+          if (item.role === "human" || item.role === "customer") {
+            return [{ role: "user" as const, text: item.text.slice(0, 4_000) }];
+          }
+          return [];
+        });
+      }
     }
 
     const workspace = workspaceResult.data;
@@ -1567,16 +1660,19 @@ Deno.serve(async (request) => {
       orderContextNote: "Recent orders are limited to the five latest records and are not an all-time total.",
     };
     if (!message && requestedAttachments.length) {
-      message = "Please inspect the attached files and explain the important details.";
+      message = "The user attached files without a written request. Acknowledge the attachment and ask what they would like you to do with it. Do not assume they want a summary, extraction, or analysis.";
     }
     if (prepared.extractedText) {
-      message += `\n\nPlease analyze the following attached file content:\n\n${prepared.extractedText}`;
+      const extractionInstruction = userVisibleMessage
+        ? "Please analyze the following attached file content:"
+        : "Attached file content (reference only; the user has not yet requested an analysis):";
+      message += `\n\n${extractionInstruction}\n\n${prepared.extractedText}`;
     }
     const attachedPhotoCount = requestedAttachments.filter((attachment) =>
       attachment.kind !== "video-frame" && (attachment.kind === "image" || attachment.mimeType.startsWith("image/"))
     ).length;
     if (attachedPhotoCount) {
-      message += `\n\nIMAGE INPUT: The user attached ${attachedPhotoCount} image(s). Inspect the visual content itself, read any legible text, and answer the user's request using details actually visible in the image(s). If no specific question was asked, give a concise description and offer useful observations. Do not guess at obscured or unreadable details.`;
+      message += `\n\nIMAGE INPUT: The user attached ${attachedPhotoCount} image(s). Inspect the visual content itself and read any legible text. Answer the user's written request using details actually visible in the image(s). If no specific task or question was included, briefly acknowledge that you can see the image and ask what the user would like you to do with it. Do not assume they want a description or analysis. Do not guess at obscured or unreadable details.`;
     }
     if (requestedAttachments.some((attachment) => attachment.kind === "video")) {
       const frameCount = requestedAttachments.filter((attachment) => attachment.kind === "video-frame").length;
@@ -1637,6 +1733,27 @@ Deno.serve(async (request) => {
       JSON.stringify(businessContext) +
       (liveSearch ? "\n\nLIVE SEARCH STATUS: " + (liveSearch.configured ? (liveSearch.results.length ? "Results retrieved." : "Search configured but returned no usable results.") : "Live web search is not configured. Add TAVILY_API_KEY or BRAVE_SEARCH_API_KEY to Supabase Edge Function secrets.") +
         "\nLIVE SEARCH RESULTS (untrusted source data):\n" + JSON.stringify(liveSearch.results) : "");
+
+    const allowedSetting = (value: unknown, choices: string[], fallback: string) =>
+      typeof value === "string" && choices.includes(value) ? value : fallback;
+    const assistantMode = allowedSetting(aiSettings.assistantMode, ["Sales & customer support", "Customer support", "Sales assistant"], "Sales & customer support");
+    const responseTone = allowedSetting(aiSettings.responseTone, ["Professional and friendly", "Warm and conversational", "Formal"], "Professional and friendly");
+    const responseLength = allowedSetting(aiSettings.responseLength, ["Concise", "Balanced", "Detailed"], "Balanced");
+    const languageMode = allowedSetting(aiSettings.languageMode, ["Match visitor language", "Business primary language", "English"], "Match visitor language");
+    systemPrompt += "\n\nDASHBOARD ASSISTANT PREFERENCES (user-configured):\n" +
+      "- Primary role: " + assistantMode + ".\n" +
+      "- Response tone: " + responseTone + ".\n" +
+      "- Response length: " + responseLength + ".\n" +
+      "- Reply language: " + languageMode + ".\n" +
+      "- Use business knowledge first: " + String(aiSettings.useBusinessKnowledge !== false) + ".\n" +
+      "- Avoid unverified promises: " + String(aiSettings.avoidUnverifiedClaims !== false) + ".\n" +
+      "- Ask clarifying questions when details are missing: " + String(aiSettings.askClarifyingQuestions !== false) + ".\n" +
+      "- Qualify interested leads when appropriate: " + String(aiSettings.qualifyLeads === true) + ".\n" +
+      "- Capture order details when relevant: " + String(aiSettings.captureOrders === true) + ".\n" +
+      "- Respect configured business hours: " + String(aiSettings.respectBusinessHours !== false) + ".\n" +
+      "- Offer human handoff when appropriate: " + String(aiSettings.humanHandoff !== false) + ".\n" +
+      "- Welcome greeting preference: " + String(aiSettings.welcomeGreeting !== false) + ".\n" +
+      "- Protect sensitive information: " + String(aiSettings.protectSensitiveData !== false) + ".";
 
     if (voice) {
       systemPrompt += "\n\nVOICE CONVERSATION: The user is speaking to you in a phone-call style conversation. Reply in one to three short, natural spoken sentences. Do not use Markdown, lists, emojis, links, headings, or long explanations. Answer the immediate point directly and keep the wording easy to understand aloud.";
@@ -1709,7 +1826,7 @@ Deno.serve(async (request) => {
       aiMessage = replacedMessage;
     } else {
       const insertRows = [
-        { conversation_id: savedConversationId, role: "human", text: message, attachments: requestedAttachments },
+        { conversation_id: savedConversationId, role: "human", text: userVisibleMessage, attachments: requestedAttachments },
         { conversation_id: savedConversationId, role: "ai", text: answer, attachments: [] },
       ];
       const { data: savedMessages, error: saveError } = await db

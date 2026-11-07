@@ -15,10 +15,14 @@ type VoiceSendOptions = { voice?: boolean };
 
 type VoiceInputBarProps = {
   children: ReactNode;
+  toolbarStart?: ReactNode;
+  voicePreset?: "girl" | "woman" | "boy" | "man";
   inputValue: string;
   hasContent: boolean;
+  hasAttachment?: () => boolean;
   isBusy?: boolean;
   disabled?: boolean;
+  sendDisabled?: boolean;
   primaryActionLabel?: string;
   onPrimaryAction: () => void;
   onTranscript: (text: string) => void;
@@ -61,10 +65,14 @@ function appendTranscript(base: string, transcript: string): string {
 
 export function VoiceInputBar({
   children,
+  toolbarStart,
+  voicePreset = "woman",
   inputValue,
   hasContent,
+  hasAttachment,
   isBusy = false,
   disabled = false,
+  sendDisabled = false,
   primaryActionLabel = "Send message",
   onPrimaryAction,
   onTranscript,
@@ -155,6 +163,7 @@ export function VoiceInputBar({
     });
 
     const voice = createVoiceMode({
+      voicePreset,
       send: async (text, signal) => {
         const reply = await callbacksRef.current.onSend(text, signal, { voice: true });
         if (typeof reply !== "string" || !reply.trim()) throw new Error("Voice reply was empty.");
@@ -184,6 +193,10 @@ export function VoiceInputBar({
       if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    voiceRef.current?.setVoicePreset(voicePreset);
+  }, [voicePreset]);
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);
@@ -304,26 +317,11 @@ export function VoiceInputBar({
 
   const isDictating = dictationState !== "idle";
   const primaryActionVisible = !isDictating && !voiceOverlayOpen;
-  const primaryIsVoice = !hasContent && !isBusy;
+  const primaryIsVoice = !hasContent && !hasAttachment?.() && !isBusy;
 
   return (
     <>
       <div className={"misma-voice-composer" + (isDictating ? " is-dictating" : "")}>
-        <button
-          type="button"
-          className={"misma-voice-mic" + (isDictating ? " is-active" : "")}
-          aria-label={isDictating ? "Finish voice dictation" : "Start voice dictation"}
-          aria-pressed={isDictating}
-          title={isDictating ? "Finish dictation" : "Dictate message"}
-          disabled={disabled || !online || voiceOverlayOpen}
-          onClick={() => void toggleDictation()}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="9" y="2.5" width="6" height="12" rx="3" />
-            <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" />
-          </svg>
-        </button>
-
         <div
           className={"misma-voice-field" + (isDictating ? " is-dictating" : "")}
           ref={fieldRef}
@@ -349,75 +347,97 @@ export function VoiceInputBar({
           )}
         </div>
 
-        {isDictating ? (
-          <div className="misma-voice-dictation-actions">
+        {!voiceOverlayOpen && (
+          <div className="misma-voice-toolbar">
+            <div className="misma-voice-toolbar-start">{toolbarStart}</div>
+            <span className="misma-voice-toolbar-spacer" />
             <button
               type="button"
-              className="misma-voice-dictation-btn is-cancel"
-              aria-label="Cancel dictation and discard transcript"
-              title="Cancel dictation"
-              onClick={cancelDictation}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-            </button>
-            <button
-              type="button"
-              className="misma-voice-dictation-btn is-finish"
-              aria-label="Finish dictation and insert transcript"
-              title="Finish dictation"
-              onClick={() => finishDictation(false)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-            </button>
-            <button
-              type="button"
-              className="misma-voice-dictation-btn is-send"
-              aria-label="Stop dictation and send transcript"
-              title="Stop and send"
-              onClick={() => finishDictation(true)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
-            </button>
-          </div>
-        ) : primaryActionVisible ? (
-          primaryIsVoice ? (
-            <button
-              type="button"
-              className="misma-voice-primary is-voice"
-              aria-label="Start voice mode"
-              title="Start voice mode"
+              className={"misma-voice-mic" + (isDictating ? " is-active" : "")}
+              aria-label={isDictating ? "Finish voice dictation" : "Start voice dictation"}
+              aria-pressed={isDictating}
+              title={isDictating ? "Finish dictation" : "Dictate message"}
               disabled={disabled || !online}
-              onClick={() => void openVoiceMode()}
+              onClick={() => void toggleDictation()}
             >
-              <span className="misma-voice-primary-glyph" key="wave" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <rect x="3" y="9" width="3" height="6" rx="1.5" />
-                  <rect x="8" y="5" width="3" height="14" rx="1.5" />
-                  <rect x="13" y="7" width="3" height="10" rx="1.5" />
-                  <rect x="18" y="3" width="3" height="18" rx="1.5" />
-                </svg>
-              </span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="2.5" width="6" height="12" rx="3" />
+                <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" />
+              </svg>
             </button>
-          ) : (
-            <button
-              type="button"
-              className={"misma-voice-primary is-send" + (isBusy ? " is-busy" : "")}
-              aria-label={isBusy ? "Stop Misma" : primaryActionLabel}
-              title={isBusy ? "Stop Misma" : primaryActionLabel}
-              onClick={() => callbacksRef.current.onPrimaryAction()}
-            >
-              <span className="misma-voice-primary-glyph" key={isBusy ? "stop" : "send"} aria-hidden="true">
-                {isBusy ? (
-                  <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-                ) : (
-                  <svg viewBox="0 0 24 24"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
-                )}
-              </span>
-            </button>
-          )
-        ) : null}
-      </div>
 
+            {isDictating ? (
+              <div className="misma-voice-dictation-actions">
+                <button
+                  type="button"
+                  className="misma-voice-dictation-btn is-cancel"
+                  aria-label="Cancel dictation and discard transcript"
+                  title="Cancel dictation"
+                  onClick={cancelDictation}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                </button>
+                <button
+                  type="button"
+                  className="misma-voice-dictation-btn is-finish"
+                  aria-label="Finish dictation and insert transcript"
+                  title="Finish dictation"
+                  onClick={() => finishDictation(false)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                </button>
+                <button
+                  type="button"
+                  className="misma-voice-dictation-btn is-send"
+                  aria-label="Stop dictation and send transcript"
+                  title="Stop and send"
+                  disabled={sendDisabled}
+                  onClick={() => finishDictation(true)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
+                </button>
+              </div>
+            ) : primaryActionVisible ? (
+              primaryIsVoice ? (
+                <button
+                  type="button"
+                  className="misma-voice-primary is-voice"
+                  aria-label="Start voice mode"
+                  title="Start voice mode"
+                  disabled={disabled || !online}
+                  onClick={() => void openVoiceMode()}
+                >
+                  <span className="misma-voice-primary-glyph" key="wave" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="3" y="9" width="3" height="6" rx="1.5" />
+                      <rect x="8" y="5" width="3" height="14" rx="1.5" />
+                      <rect x="13" y="7" width="3" height="10" rx="1.5" />
+                      <rect x="18" y="3" width="3" height="18" rx="1.5" />
+                    </svg>
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={"misma-voice-primary is-send" + (isBusy ? " is-busy" : "")}
+                  aria-label={isBusy ? "Stop Misma" : primaryActionLabel}
+                  title={isBusy ? "Stop Misma" : primaryActionLabel}
+                  disabled={!isBusy && (disabled || !online || sendDisabled)}
+                  onClick={() => callbacksRef.current.onPrimaryAction()}
+                >
+                  <span className="misma-voice-primary-glyph" key={isBusy ? "stop" : "send"} aria-hidden="true">
+                    {isBusy ? (
+                      <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24"><path d="M12 19V5m-7 7 7-7 7 7" /></svg>
+                    )}
+                  </span>
+                </button>
+              )
+            ) : null}
+          </div>
+        )}
+      </div>
       {voiceOverlayOpen && (
         <div className="misma-voice-overlay" role="dialog" aria-modal="true" aria-label="Misma voice conversation">
           <button
