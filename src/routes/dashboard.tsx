@@ -447,7 +447,7 @@ function ComposerAttachmentPreview({
         {isImage && previewUrl ? <img src={previewUrl} alt={file.name} decoding="async" loading="eager" fetchPriority="high" />
           : isVideo && previewUrl ? <video src={previewUrl} muted playsInline preload="metadata" aria-label={file.name} />
           : <div className="aichat-composer-file-card-copy"><span className="aichat-composer-file-icon" aria-hidden="true">{extension}</span><span className="aichat-composer-file-details"><strong>{file.name}</strong><small>{extension} · {sizeLabel}</small></span></div>}
-        {isUploading && <div className="aichat-composer-upload-state is-uploading" role="progressbar" aria-label={"Uploading " + file.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}>
+        {isUploading && <div className={"aichat-composer-upload-state is-uploading" + (uploadProgress > 0 ? " is-determinate" : "")} role="progressbar" aria-label={"Uploading " + file.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, Math.round(uploadProgress * 100)))}>
           <svg className="aichat-composer-upload-ring" viewBox="0 0 28 28" aria-hidden="true"><circle className="aichat-composer-upload-track" cx="14" cy="14" r="11" /><circle className="aichat-composer-upload-progress" cx="14" cy="14" r="11" style={{ strokeDashoffset: 69.12 * (1 - Math.max(0, Math.min(1, uploadProgress))) }} /></svg>
         </div>}
         {uploadStatus === "ready" && <span className="aichat-composer-upload-state is-ready" role="status" aria-label={file.name + " uploaded"}><i>✓</i></span>}
