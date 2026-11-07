@@ -45,7 +45,7 @@ root.innerHTML=[
 var $=function(selector){return root.querySelector(selector);};
 var panel=$(".panel"),messages=$(".messages"),input=$(".composer textarea"),status=$(".status"),handoff=$(".handoff"),composer=$(".composer");
 var micButton=$(".mic"),primaryButton=$(".primary"),whatsappLink=$(".whatsapp-link"),instagramLink=$(".instagram-link");
-var closeTask=Promise.resolve();
+var closeTask=Promise.resolve(),chatTask=Promise.resolve(),handoffTask=Promise.resolve();
 
 function applySocialLink(link, rawUrl, expectedHost) {
   if (!link || typeof rawUrl !== "string" || !rawUrl) return;
@@ -227,7 +227,7 @@ function sendMessage(rawText,speakReply){
   if(!speakReply){input.value="";resizeInput();updatePrimary();stopDictation();}
   else{setVoiceState("thinking");}
   bubble(text,"user");showTyping();setStatus("");updatePrimary();
-  return call({action:"chat",message:text,voice:speakReply===true},controller?controller.signal:undefined).then(function(data){
+  chatTask=call({action:"chat",message:text,voice:speakReply===true},controller?controller.signal:undefined).then(function(data){
     removeTyping();var answer=data.answer||"I could not prepare a reply.";bubble(answer,"ai");
     if(data.handoffPending)setStatus("Your message has been sent to the business team.");
     if(speakReply&&voiceSession){return speakAsWoman(answer);}
@@ -244,6 +244,7 @@ function sendMessage(rawText,speakReply){
       else setVoiceState("ready");
     }
   });
+  return chatTask;
 }
 function stopDictation(){
   dictating=false;dictationSendAfterStop=false;composer.classList.remove("recording");micButton.classList.remove("is-active");stopRecognition();updatePrimary();
@@ -320,12 +321,20 @@ $(".close").addEventListener("click",function(){
   stopVoiceSession();
   stopDictation();
   $(".launch").setAttribute("aria-expanded","false");
-  if(!closingConversation||!closingVisitor)return;
-  closeTask=call({action:"close"}).then(function(result){
-    if(result.deleted===true&&conversation===closingConversation&&visitor===closingVisitor){
-      conversation=null;
-      try{sessionStorage.removeItem(conversationStore);}catch(error){}
-    }
+  closeTask=Promise.all([
+    Promise.resolve(chatTask).catch(function(){return null;}),
+    Promise.resolve(handoffTask).catch(function(){return null;})
+  ]).then(function(){
+    var closingConversation=conversation;
+    var closingVisitor=visitor;
+    if(!closingConversation||!closingVisitor)return null;
+    return call({action:"close"}).then(function(result){
+      if(result.deleted===true&&conversation===closingConversation&&visitor===closingVisitor){
+        conversation=null;
+        try{sessionStorage.removeItem(conversationStore);}catch(error){}
+      }
+      return result;
+    });
   }).catch(function(error){
     console.warn("[Misma] Visitor chat cleanup could not be confirmed:",error&&error.message?error.message:"unknown error");
   });
@@ -366,7 +375,7 @@ voiceModeButtons.forEach(function(button){button.addEventListener("click",functi
 $(".handoff-submit").addEventListener("click",function(){
   if(busy)return;var data={};handoff.querySelectorAll("input,textarea").forEach(function(element){data[element.name]=element.value.trim();});
   if(!data.name){setStatus("Please enter your name.");return;}busy=true;setStatus("Sending your request…");
-  call(Object.assign({action:"human-request"},data)).then(function(result){
+  handoffTask=call(Object.assign({action:"human-request"},data)).then(function(result){
     handoff.classList.remove("open");
     handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});
     setStatus("Human request sent. A person will reply here.");
