@@ -908,3 +908,26 @@ test("connected website settings and social widget controls stay accessible on m
   assert.match(css, /@media \(max-width: 560px\)[\s\S]*?aichat-website-row-heading/);
   assert.doesNotThrow(() => new Function(runtime), "widget runtime must parse");
 });
+
+
+test("widget heartbeat returns website social links and the header reveals only validated destinations", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(edge, /input\\.action === "heartbeat"\\) return respond\\(200, \\{ ok: true, connected: true, \\.\\.\\.getWebsiteWidgetSocialLinks\\(site\\) \\}\\)/);
+  assert.match(edge, /"https:\\/\\/wa\\.me\\/" \\+ fullNumber \\+ "\\?text=" \\+ encodeURIComponent\\(message\\)/);
+  assert.match(widget, /function initWidget\\(initialConfig\\)/);
+  assert.match(widget, /applyWebsiteSocialLinks\\(initialConfig\\)/);
+  assert.match(widget, /link\\.removeAttribute\\("hidden"\\)/);
+  assert.match(widget, /link\\.classList\\.add\\("is-visible"\\)/);
+  assert.doesNotThrow(() => new Function(widget), "widget runtime must parse");
+});
+
+test("website visitor history reuses the existing conversation by site and visitor session", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const start = edge.indexOf("async function ensureWebsiteConversation");
+  const end = edge.indexOf("\\nasync function ", start + 1);
+  const resolver = edge.slice(start, end);
+  assert.match(resolver, /\\.eq\\("website_connection_id", site\\.id\\)[\\s\\S]*?\\.eq\\("visitor_session_id", sessionId\\)/);
+  assert.match(resolver, /byVisitorSession\\.data\\) return \\{ conversation: byVisitorSession\\.data, visitorId: sessionId \\}/);
+  assert.match(resolver, /Could not look up the visitor's existing conversation/);
+});
