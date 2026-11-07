@@ -704,7 +704,7 @@ test("website widget connections support shared keys and safe removal", async ()
   assert.match(dashboard, /minimizedWebsiteIds/);
   assert.match(dashboard, /aichat-website-expand/);
   assert.match(dashboard, /aichat-website-card-details/);
-  assert.match(widget, /function initWidget\(\)/);
+  assert.match(widget, /function initWidget\(initialConfig\)/);
   assert.match(widget, /action:"heartbeat"/);
   assert.match(widget, /\.then\(initWidget\)/);
 });
