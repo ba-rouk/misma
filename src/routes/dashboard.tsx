@@ -245,19 +245,12 @@ function WebsiteSocialSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
-  const [countrySearch, setCountrySearch] = useState("");
   const [draft, setDraft] = useState<WebsiteSocialDraft>({
     instagramUrl: site.instagram_url || "",
     whatsappCountryCode: site.whatsapp_country_code || "250",
     whatsappNumber: site.whatsapp_number || "",
     whatsappMessage: site.whatsapp_message || "",
   });
-
-  const filteredCountries = WEBSITE_PHONE_COUNTRY_CODES.filter((country) => {
-    const query = countrySearch.trim().toLowerCase().replace(/^\+/, "");
-    return !query || country.name.toLowerCase().includes(query) || country.code.includes(query);
-  });
-  const selectedCountry = WEBSITE_PHONE_COUNTRY_CODES.find((country) => country.code === draft.whatsappCountryCode);
 
   const currentDraft = (): WebsiteSocialDraft => ({
     instagramUrl: site.instagram_url || "",
@@ -387,15 +380,6 @@ function WebsiteSocialSettings({
               <strong>WhatsApp</strong>
               <span>{site.whatsapp_number ? "Connected" : "Optional"}</span>
             </div>
-            <label>
-              Search country or dial code
-              <input
-                type="search"
-                value={countrySearch}
-                placeholder="Search country or +250"
-                onChange={(event) => setCountrySearch(event.target.value)}
-              />
-            </label>
             <div className="aichat-whatsapp-number-row">
               <label>
                 Country code
@@ -403,10 +387,10 @@ function WebsiteSocialSettings({
                   value={draft.whatsappCountryCode}
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappCountryCode: event.target.value }))}
                 >
-                  {selectedCountry && !filteredCountries.some((country) => country.name === selectedCountry.name) && (
-                    <option value={selectedCountry.code}>{selectedCountry.flag} {selectedCountry.name} (+{selectedCountry.code})</option>
+                  {!WEBSITE_PHONE_COUNTRY_CODES.some((country) => country.code === draft.whatsappCountryCode) && draft.whatsappCountryCode && (
+                    <option value={draft.whatsappCountryCode}>+{draft.whatsappCountryCode}</option>
                   )}
-                  {filteredCountries.map((country) => (
+                  {WEBSITE_PHONE_COUNTRY_CODES.map((country) => (
                     <option key={country.name} value={country.code}>{country.flag} +{country.code}</option>
                   ))}
                 </select>
