@@ -2172,6 +2172,19 @@ function Dashboard() {
 
   // Auto-scroll message list to bottom when appropriate
   useEffect(() => {
+    if (!dashboardUserId || currentConversationId === null || activeConversationIdRef.current !== currentConversationId) return;
+    try {
+      sessionStorage.setItem("misma_active_chat_messages_v1_" + dashboardUserId, JSON.stringify({
+        conversationId: currentConversationId,
+        messages: messages.slice(-120),
+        savedAt: Date.now(),
+      }));
+    } catch {
+      // Keep chat history on the server if the tab's storage quota is full.
+    }
+  }, [dashboardUserId, currentConversationId, messages]);
+
+  useEffect(() => {
     if (scrollRef.current && shouldAutoScrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -2233,17 +2246,6 @@ function Dashboard() {
       });
       if (conversationLoadVersion !== chatViewVersionRef.current || activeConversationIdRef.current !== convId) return;
       setMessages(res.messages);
-      if (conversationCacheKey) {
-        try {
-          sessionStorage.setItem(conversationCacheKey, JSON.stringify({
-            conversationId: convId,
-            messages: res.messages.slice(-120),
-            savedAt: Date.now(),
-          }));
-        } catch {
-          // Message history remains available from Supabase if session storage is full.
-        }
-      }
       const unreadForConversation = unreadVisitorMessages.filter((item) => item.conversationId === convId).length;
       if (unreadForConversation > 0) {
         try {
