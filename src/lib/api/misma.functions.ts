@@ -46,7 +46,7 @@ export const getMismaData = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
-    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult, libraryFilesResult] =
+    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
         db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
