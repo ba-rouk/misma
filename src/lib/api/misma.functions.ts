@@ -160,8 +160,6 @@ export const getMismaData = createServerFn({ method: "POST" })
     };
   });
 
-});
-
 /**
  * Load media separately from the first dashboard payload. Signing hundreds of Storage
  * URLs must not delay chat history, notification counts, or the first useful dashboard render.
