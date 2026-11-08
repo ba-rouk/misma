@@ -1055,3 +1055,14 @@ test("website Add channels has a country selector, WhatsApp number, and default 
   assert.match(dashboard, /Default message/);
   assert.match(dashboard, /WEBSITE_PHONE_COUNTRY_CODES\.map\(\(country\) =>/);
 });
+
+
+test("dashboard restores the selected chat from a user-scoped session cache while refreshing it", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /misma_active_chat_messages_v1_/);
+  assert.match(dashboard, /sessionStorage\.getItem\(conversationCacheKey/);
+  assert.match(dashboard, /setMessages\(cached\.messages\)/);
+  assert.match(dashboard, /getConversationMessages\(\{/);
+  assert.match(dashboard, /conversationLoadVersion !== chatViewVersionRef\.current/);
+  assert.match(dashboard, /messages\.slice\(-120\)/);
+});
