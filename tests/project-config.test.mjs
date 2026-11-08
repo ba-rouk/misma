@@ -404,7 +404,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(dashboard, /if \(!options\.voice && !editId && !isRetry\)/);
   assert.match(dashboard, /misma_active_chat_messages_v2_/);
   assert.match(voice, /export function primeSpeechVoices/);
-  assert.match(component, /useLayoutEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
+  assert.match(component, /useEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
   assert.ok(component.includes('synth.speak(new SpeechSynthesisUtterance(""))'));
   assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
@@ -532,7 +532,7 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
   const widget = await read("../src/assets/misma-widget-runtime.js");
 
   assert.match(voice, /export function primeSpeechVoices/);
-  assert.match(component, /useLayoutEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
+  assert.match(component, /useEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
   assert.ok(component.includes('synth.speak(new SpeechSynthesisUtterance(""))'));
   const dictationStart = voice.slice(voice.indexOf("export function createDictation"), voice.indexOf("type VoiceModeOptions"));
   const voiceModeStart = voice.slice(voice.indexOf("export function createVoiceMode"));
