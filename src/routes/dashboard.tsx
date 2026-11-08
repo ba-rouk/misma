@@ -288,7 +288,7 @@ function WebsiteSocialSettings({
       whatsappNumber = subscriberNumber;
       whatsappMessage = nextDraft.whatsappMessage.trim();
       if (!whatsappMessage) {
-        setError("A welcome message is required when a WhatsApp number is provided.");
+        setError("A default message is required when a WhatsApp number is provided.");
         return;
       }
     }
