@@ -2,6 +2,18 @@
 "use strict";
 var tag=document.currentScript,key=tag&&tag.dataset.siteKey,api=tag&&tag.dataset.endpoint;
 if(!key||!api){console.warn("[Misma] Missing site key or API endpoint.");return;}
+
+// Ask the browser to populate its speech voice list while the widget is being initialized.
+// The first spoken reply should not be the first time the browser is asked for voices.
+function primeWidgetSpeechVoices(){
+  var synth=window.speechSynthesis;
+  if(!synth||typeof synth.getVoices!=="function")return;
+  function refresh(){try{synth.getVoices();}catch(error){}}
+  refresh();
+  if(typeof synth.addEventListener==="function")synth.addEventListener("voiceschanged",refresh);
+}
+primeWidgetSpeechVoices();
+
 function initWidget(initialConfig){
 var siteSessionKey=key+"_"+location.hostname.toLowerCase();
 var store="misma_visitor_"+siteSessionKey,conversationStore="misma_conversation_"+siteSessionKey;
@@ -133,8 +145,12 @@ function closeWidget(){
 function refreshHistory(){
   if(!conversation||busy)return Promise.resolve(null);
   return call({action:"history"}).then(function(data){
-    if(Array.isArray(data.messages)){messages.innerHTML="";if(!data.messages.length)bubble("Hello! I am Misma. How can I help you today?","ai");
-      else data.messages.forEach(function(item){var text=item.role==="human"?"Business team: "+item.text:item.text;bubble(text,item.role==="customer"?"user":"ai");});}
+    if(Array.isArray(data.messages)){
+      messages.innerHTML="";
+      var visibleMessages=data.messages.filter(function(item){return item.is_voice!==true;});
+      if(!visibleMessages.length)bubble("Hello! I am Misma. How can I help you today?","ai");
+      else visibleMessages.forEach(function(item){var text=item.role==="human"?"Business team: "+item.text:item.text;bubble(text,item.role==="customer"?"user":"ai");});
+    }
     if(data.conversationStatus==="Needs you")setStatus((data.messages||[]).some(function(item){return item.role==="human";})?"You are chatting with the business team.":"Your request is with the business team. A person will reply here.");
     return data;
   });
@@ -274,15 +290,20 @@ function sendMessage(rawText,speakReply){
   if(controller)voiceRequestController=controller;
   if(!speakReply){input.value="";resizeInput();updatePrimary();stopDictation();}
   else{setVoiceState("thinking");}
-  bubble(text,"user");showTyping();setStatus("");updatePrimary();
+  if(!speakReply){bubble(text,"user");showTyping();}
+  setStatus("");updatePrimary();
   return call({action:"chat",message:text,voice:speakReply===true},controller?controller.signal:undefined).then(function(data){
-    removeTyping();var answer=data.answer||"I could not prepare a reply.";bubble(answer,"ai");
-    if(data.handoffPending)setStatus("Your message has been sent to the business team.");
+    if(!speakReply)removeTyping();
+    var answer=data.answer||"I could not prepare a reply.";
+    if(!speakReply)bubble(answer,"ai");
+    if(data.handoffPending&&!speakReply)setStatus("Your message has been sent to the business team.");
     if(speakReply&&voiceSession){return speakAsWoman(answer);}
     return null;
   }).catch(function(error){
-    removeTyping();
-    if(!(error&&error.name==="AbortError"))bubble(error.message||"Misma could not complete this request.","err");
+    if(!speakReply)removeTyping();
+    if(error&&error.name==="AbortError")return null;
+    if(speakReply&&voiceSession)setVoiceState("ready","Misma could not reply. Please try again.");
+    else if(!speakReply)bubble(error.message||"Misma could not complete this request.","err");
   }).then(function(){
     if(voiceRequestController===controller)voiceRequestController=null;
     busy=false;updatePrimary();
@@ -414,7 +435,7 @@ function requestMicForAction(action){
   if(voiceSession){stopVoiceSession();}
   if(!window.isSecureContext){pendingMicAction=action;showMicFailure({name:"SecurityError"});return;}
   if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=="function"){pendingMicAction=action;showMicFailure({name:"NotSupportedError"});return;}
-  if(micNeverAllowed||micPermissionState==="prompt"||micPermissionState==="denied"||micPermissionState==="checking"){
+  if(micNeverAllowed||micPermissionState==="prompt"||micPermissionState==="denied"){
     showMicPermissionPrompt(action);
     return;
   }
