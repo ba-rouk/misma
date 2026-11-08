@@ -317,45 +317,29 @@ export const getVisitorNotifications = createServerFn({ method: "POST" })
     const conversationIds = visitorConversations.map((conversation: any) => Number(conversation.id));
     if (!conversationIds.length) return { unreadVisitorMessages: [], unreadVisitorCount: 0 };
 
-    const [countResult, messagesResult, promptResult] = await Promise.all([
-      db.from("messages").select("id", { count: "exact", head: true })
-        .in("conversation_id", conversationIds)
-        .eq("role", "customer")
-        .is("read_at", null),
-      db.from("messages").select("id,conversation_id,text,created_at")
-        .in("conversation_id", conversationIds)
-        .eq("role", "customer")
-        .is("read_at", null)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      db.from("messages").select("conversation_id,id,text")
-        .in("conversation_id", conversationIds)
-        .in("role", ["human", "customer"])
-        .order("id", { ascending: true })
-        .limit(10000),
-    ]);
-    if (countResult.error) throw new Error("Could not count unread visitor messages.");
-    if (messagesResult.error) throw new Error("Could not load unread visitor messages.");
-    if (promptResult.error) throw new Error("Could not load visitor conversation titles.");
-
     const cleanTitle = (value: unknown): string => {
       const cleaned = String(value ?? "")
-        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\s*(?::|#|-)\s*)+/i, "")
-        .replace(/\s+/g, " ")
+        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\\s*(?::|#|-)\\s*)+/i, "")
+        .replace(/\\s+/g, " ")
         .trim();
-      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\s*[:#-].*)?$/i.test(cleaned)) return "";
+      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\\s*[:#-].*)?$/i.test(cleaned)) return "";
       if (/^(?:customer|visitor|user|human)[-_ ]+[0-9a-f-]{6,}$/i.test(cleaned)) return "";
       return cleaned.slice(0, 72);
     };
-    const titleByConversation = new Map<number, string>();
-    for (const row of promptResult.data ?? []) {
-      const id = Number(row.conversation_id);
-      if (!titleByConversation.has(id)) titleByConversation.set(id, String(row.text || ""));
-    }
+
+    const { data: messages, count, error } = await db.from("messages")
+      .select("id,conversation_id,text,created_at", { count: "exact" })
+      .in("conversation_id", conversationIds)
+      .eq("role", "customer")
+      .is("read_at", null)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw new Error("Could not load unread visitor messages.");
+
     const conversationById = new Map<number, any>(
       visitorConversations.map((conversation: any) => [Number(conversation.id), conversation] as const),
     );
-    const unreadVisitorMessages = (messagesResult.data ?? []).map((message: any) => {
+    const unreadVisitorMessages = (messages ?? []).map((message: any) => {
       const conversationId = Number(message.conversation_id);
       const conversation = conversationById.get(conversationId);
       return {
@@ -364,10 +348,10 @@ export const getVisitorNotifications = createServerFn({ method: "POST" })
         text: String(message.text || ""),
         created_at: String(message.created_at || ""),
         channel: String(conversation?.channel || "Website"),
-        conversationTitle: cleanTitle(titleByConversation.get(conversationId)) || "Website visitor",
+        conversationTitle: cleanTitle(conversation?.latest_text) || "Website visitor",
       };
     });
-    return { unreadVisitorMessages, unreadVisitorCount: countResult.count ?? 0 };
+    return { unreadVisitorMessages, unreadVisitorCount: count ?? 0 };
   });
 
 export const markVisitorMessagesRead = createServerFn({ method: "POST" })
