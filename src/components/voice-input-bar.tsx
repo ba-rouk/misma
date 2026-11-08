@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMicPermission } from "../lib/use-mic-permission";
 import { MicPermissionDialog } from "./mic-permission-dialog";
 import {
@@ -126,7 +126,7 @@ export function VoiceInputBar({
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     // Start browser TTS voice enumeration before the composer becomes interactive.
     void primeSpeechVoices();
     const dictation = createDictation({
