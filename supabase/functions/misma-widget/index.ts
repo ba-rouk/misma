@@ -1294,10 +1294,19 @@ Deno.serve(async (request: Request) => {
       } else if (channel !== "website") {
         throw new Error("Human replies are supported for Website and WhatsApp conversations. Use the customer's contact details for this channel.");
       }
-      const inserted = await db.from("messages").insert({ conversation_id: conversationId, role: "human", text: message })
-        .select("id,role,text,created_at").single();
+      const voice = input.voice === true;
+      const inserted = await db.from("messages").insert({
+        conversation_id: conversationId,
+        role: "human",
+        text: message,
+        is_voice: voice,
+      }).select("id,role,text,created_at").single();
       if (inserted.error || !inserted.data) throw new Error("The reply could not be saved to the conversation.");
-      const updated = await db.from("conversations").update({ latest_text: message.slice(0, 200), status: "Needs you", updated_at: new Date().toISOString() })
+      const updated = await db.from("conversations").update({
+        latest_text: voice ? "Voice conversation" : message.slice(0, 200),
+        status: "Needs you",
+        updated_at: new Date().toISOString(),
+      })
         .eq("id", conversationId).eq("workspace_id", workspaceId);
       if (updated.error) throw new Error("The reply was delivered but the conversation could not be updated.");
       return respond(200, { ok: true, message: { id: String(inserted.data.id), role: "human", text: inserted.data.text, created_at: inserted.data.created_at } });
