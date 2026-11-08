@@ -867,7 +867,10 @@ test("widget microphone and speech talk show an explicit permission dialog and u
   assert.ok(widget.includes('requestMicForAction("speech")'));
   assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
   assert.ok(widget.includes("function getFemaleVoice()"));
-  assert.ok(widget.includes("return female[1]||female[0]"));
+  assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
+  assert.ok(widget.includes("return british[0]"));
+  assert.ok(widget.includes("utterance.pitch=1.16"));
+  assert.ok(widget.includes('utterance.lang=girlVoice.lang||"en-GB"'));
   assert.ok(widget.includes("synth.resume()"));
   assert.ok(widget.includes("Microphone is blocked. Tap the lock icon next to the address bar"));
   assert.ok(widget.includes('setVoiceState("idle",errorMessage)'));
@@ -1014,4 +1017,52 @@ test("dashboard and website widget share the Chrome-style microphone permission 
   assert.match(checklist, /Chrome Android/);
   assert.match(checklist, /Safari iOS/);
   assert.match(checklist, /schoolsize\.netlify\.app/);
+});
+
+
+test("website widget speech replies prioritize a girl-sounding British English voice", async () => {
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(widget, /function isBritishEnglish\(voice\)/);
+  assert.match(widget, /var british=female\.filter\(isBritishEnglish\)/);
+  assert.match(widget, /return british\[0\]/);
+  assert.match(widget, /utterance\.pitch=1\.16/);
+  assert.match(widget, /utterance\.rate=0\.98/);
+  assert.match(widget, /girlVoice\.lang\|\|"en-GB"/);
+  assert.doesNotThrow(() => new Function(widget));
+});
+
+test("dashboard bootstrap returns chat and notification data before media signing", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const start = api.indexOf("export const getMismaData");
+  const end = api.indexOf("export const getWorkspaceAssets");
+  assert.ok(start >= 0 && end > start);
+  const bootstrap = api.slice(start, end);
+  assert.match(bootstrap, /Promise\.all\(\[/);
+  assert.match(bootstrap, /unreadCountResult/);
+  assert.doesNotMatch(bootstrap, /createSignedUrl|workspace_library_files|attachments/);
+  assert.match(dashboard, /misma_dashboard_bootstrap_v1_/);
+  assert.match(dashboard, /sessionStorage\.setItem\(cacheKey/);
+  assert.match(dashboard, /getWorkspaceAssets\(\{ data: \{ token \} \}\)/);
+  assert.match(dashboard, /activeTab !== "images" && activeTab !== "library"/);
+});
+
+test("website Add channels has a country selector, WhatsApp number, and default message without country search", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.doesNotMatch(dashboard, /countrySearch|Search country or dial code|Search country or \+250/);
+  assert.match(dashboard, /Country code/);
+  assert.match(dashboard, /Phone number/);
+  assert.match(dashboard, /Default message/);
+  assert.match(dashboard, /WEBSITE_PHONE_COUNTRY_CODES\.map\(\(country\) =>/);
+});
+
+
+test("dashboard restores the selected chat from a user-scoped session cache while refreshing it", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /misma_active_chat_messages_v1_/);
+  assert.match(dashboard, /sessionStorage\.getItem\(conversationCacheKey/);
+  assert.match(dashboard, /setMessages\(cached\.messages\)/);
+  assert.match(dashboard, /getConversationMessages\(\{/);
+  assert.match(dashboard, /conversationLoadVersion !== chatViewVersionRef\.current/);
+  assert.match(dashboard, /messages\.slice\(-120\)/);
 });

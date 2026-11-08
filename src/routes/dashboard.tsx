@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   getMismaData,
+  getWorkspaceAssets,
   getVisitorNotifications,
   getWorkspaceLiveUpdates,
   getConversationMessages,
@@ -244,19 +245,12 @@ function WebsiteSocialSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
-  const [countrySearch, setCountrySearch] = useState("");
   const [draft, setDraft] = useState<WebsiteSocialDraft>({
     instagramUrl: site.instagram_url || "",
     whatsappCountryCode: site.whatsapp_country_code || "250",
     whatsappNumber: site.whatsapp_number || "",
     whatsappMessage: site.whatsapp_message || "",
   });
-
-  const filteredCountries = WEBSITE_PHONE_COUNTRY_CODES.filter((country) => {
-    const query = countrySearch.trim().toLowerCase().replace(/^\+/, "");
-    return !query || country.name.toLowerCase().includes(query) || country.code.includes(query);
-  });
-  const selectedCountry = WEBSITE_PHONE_COUNTRY_CODES.find((country) => country.code === draft.whatsappCountryCode);
 
   const currentDraft = (): WebsiteSocialDraft => ({
     instagramUrl: site.instagram_url || "",
@@ -292,7 +286,7 @@ function WebsiteSocialSettings({
       whatsappNumber = subscriberNumber;
       whatsappMessage = nextDraft.whatsappMessage.trim();
       if (!whatsappMessage) {
-        setError("A welcome message is required when a WhatsApp number is provided.");
+        setError("A default message is required when a WhatsApp number is provided.");
         return;
       }
     }
@@ -386,15 +380,6 @@ function WebsiteSocialSettings({
               <strong>WhatsApp</strong>
               <span>{site.whatsapp_number ? "Connected" : "Optional"}</span>
             </div>
-            <label>
-              Search country or dial code
-              <input
-                type="search"
-                value={countrySearch}
-                placeholder="Search country or +250"
-                onChange={(event) => setCountrySearch(event.target.value)}
-              />
-            </label>
             <div className="aichat-whatsapp-number-row">
               <label>
                 Country code
@@ -402,11 +387,11 @@ function WebsiteSocialSettings({
                   value={draft.whatsappCountryCode}
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappCountryCode: event.target.value }))}
                 >
-                  {selectedCountry && !filteredCountries.some((country) => country.name === selectedCountry.name) && (
-                    <option value={selectedCountry.code}>{selectedCountry.flag} {selectedCountry.name} (+{selectedCountry.code})</option>
+                  {!WEBSITE_PHONE_COUNTRY_CODES.some((country) => country.code === draft.whatsappCountryCode) && (
+                    <option value={draft.whatsappCountryCode}>+{draft.whatsappCountryCode}</option>
                   )}
-                  {filteredCountries.map((country) => (
-                    <option key={country.name} value={country.code}>{country.flag} +{country.code}</option>
+                  {WEBSITE_PHONE_COUNTRY_CODES.map((country) => (
+                    <option key={country.name} value={country.code}>{country.flag} {country.name} (+{country.code})</option>
                   ))}
                 </select>
               </label>
@@ -423,7 +408,7 @@ function WebsiteSocialSettings({
               </label>
             </div>
             <label>
-              Welcome message
+              Default message
               <textarea
                 rows={3}
                 value={draft.whatsappMessage}
@@ -1364,8 +1349,12 @@ function formatInline(text: string) {
 function Dashboard() {
   const navigate = useNavigate();
   const [token, setToken] = useState<string | null>(null);
+  const [dashboardUserId, setDashboardUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const signingOutRef = useRef(false);
+  const workspaceAssetsRequestStartedRef = useRef(false);
+  const workspaceAssetsGenerationRef = useRef(0);
+  const dashboardUserIdRef = useRef<string | null>(null);
 
   // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1403,6 +1392,9 @@ function Dashboard() {
   // Business and user data
   const [workspace, setWorkspace] = useState<any>(null);
   const [workspaceAssets, setWorkspaceAssets] = useState<any[]>([]);
+  const [workspaceAssetsLoaded, setWorkspaceAssetsLoaded] = useState(false);
+  const [workspaceAssetsLoading, setWorkspaceAssetsLoading] = useState(false);
+  const [workspaceAssetsLoadError, setWorkspaceAssetsLoadError] = useState("");
   const [librarySearch, setLibrarySearch] = useState("");
   const [conversations, setConversations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1767,6 +1759,17 @@ function Dashboard() {
             profileAvatarPreviewUrlRef.current = null;
             setProfileAvatarStoragePath(null);
             setProfileImage("");
+            setDashboardUserId(null);
+            dashboardUserIdRef.current = null;
+            activeConversationIdRef.current = null;
+            setCurrentConversationId(null);
+            setPendingRestoreConversationId(null);
+            setMessages([]);
+            setWorkspaceAssets([]);
+            setWorkspaceAssetsLoaded(false);
+            setWorkspaceAssetsLoading(false);
+            workspaceAssetsGenerationRef.current += 1;
+            workspaceAssetsRequestStartedRef.current = false;
             setToken(null);
             setAuthChecked(true);
             if (event === "INITIAL_SESSION" || event === "SIGNED_OUT") {
@@ -1776,8 +1779,24 @@ function Dashboard() {
           }
 
           const s = session;
+          if (dashboardUserIdRef.current !== s.user.id) {
+            if (dashboardUserIdRef.current) {
+              activeConversationIdRef.current = null;
+              setCurrentConversationId(null);
+              setPendingRestoreConversationId(null);
+              setMessages([]);
+            }
+            dashboardUserIdRef.current = s.user.id;
+            workspaceAssetsGenerationRef.current += 1;
+            workspaceAssetsRequestStartedRef.current = false;
+            setWorkspaceAssets([]);
+            setWorkspaceAssetsLoaded(false);
+            setWorkspaceAssetsLoading(false);
+            setWorkspaceAssetsLoadError("");
+          }
           sessionStorage.setItem("misma_id_token", s.access_token);
           if (s.user.email) sessionStorage.setItem("misma_email", s.user.email);
+          setDashboardUserId(s.user.id);
           setProfileEmail(s.user.email ?? "");
           const metadata = s.user.user_metadata || {};
           const displayName = [
@@ -1928,41 +1947,88 @@ function Dashboard() {
     };
   }, [dashboardDataLoaded, unreadVisitorMessages, notificationPreferences.chatActivity]);
 
+  const applyDashboardData = (data: any, refreshChannelStatus = true) => {
+    setWorkspace(data.workspace);
+    setConversations(data.conversations ?? []);
+    setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
+    setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
+    setOrders(data.orders ?? []);
+    setKnowledgeList(data.knowledge ?? []);
+    setCustomers(data.customers ?? []);
+    setConnectedWebsites(data.websites ?? []);
+    setHumanHandoffs(data.handoffs ?? []);
+    setAllNotifications(data.notifications ?? []);
+    setProductsServices(data.products ?? []);
+    setChannelConnections(data.channelConnections ?? []);
+
+    if (refreshChannelStatus && data.workspace?.id) {
+      void callWidgetFunction({ action: "connection-status", workspaceId: data.workspace.id })
+        .then((status) => setChannelEnvironment({
+          whatsappConfigured: Boolean(status.whatsappConfigured),
+          phoneConfigured: Boolean(status.phoneConfigured),
+        }))
+        .catch((cause) => console.warn("Could not read channel configuration status:", cause));
+    }
+
+    if (data.workspace) {
+      setProfileForm({
+        name: data.workspace.name || "",
+        location: data.workspace.location || "",
+        description: data.workspace.description || "",
+        openingHours: data.workspace.opening_hours || "",
+        primaryLanguage: data.workspace.primary_language || "English",
+      });
+    }
+  };
+
   const loadData = () => {
     if (!token) return;
-    setDashboardDataLoaded(false);
     setLoadError("");
+
+    // Rehydrate the previous authenticated session's non-media dashboard snapshot
+    // immediately, then refresh it from Supabase in the background.
+    const cacheKey = dashboardUserId ? "misma_dashboard_bootstrap_v1_" + dashboardUserId : "";
+    let hasCachedDashboard = false;
+    if (cacheKey) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+        if (cached?.version === 1 && cached?.data && Array.isArray(cached.data.conversations)) {
+          applyDashboardData(cached.data, false);
+          setDashboardDataLoaded(true);
+          hasCachedDashboard = true;
+        }
+      } catch {
+        try { sessionStorage.removeItem(cacheKey); } catch { /* Ignore unavailable session storage. */ }
+      }
+    }
+    if (!hasCachedDashboard) setDashboardDataLoaded(false);
+
     getMismaData({ data: { token } })
       .then((data) => {
-        setWorkspace(data.workspace);
-        setConversations(data.conversations ?? []);
-        setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
-        setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
-        setOrders(data.orders ?? []);
-        setKnowledgeList(data.knowledge ?? []);
-        setCustomers(data.customers ?? []);
-        setConnectedWebsites(data.websites ?? []);
-        setHumanHandoffs(data.handoffs ?? []);
-        setAllNotifications(data.notifications ?? []);
-        setProductsServices(data.products ?? []);
-        setChannelConnections(data.channelConnections ?? []);
-        if (data.workspace?.id) {
-          void callWidgetFunction({ action: "connection-status", workspaceId: data.workspace.id })
-            .then((status) => setChannelEnvironment({
-              whatsappConfigured: Boolean(status.whatsappConfigured),
-              phoneConfigured: Boolean(status.phoneConfigured),
-            }))
-            .catch((cause) => console.warn("Could not read channel configuration status:", cause));
-        }
-        setWorkspaceAssets(data.assets ?? []);
-        if (data.workspace) {
-          setProfileForm({
-            name: data.workspace.name || "",
-            location: data.workspace.location || "",
-            description: data.workspace.description || "",
-            openingHours: data.workspace.opening_hours || "",
-            primaryLanguage: data.workspace.primary_language || "English",
-          });
+        applyDashboardData(data, true);
+        if (cacheKey) {
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify({
+              version: 1,
+              savedAt: Date.now(),
+              data: {
+                workspace: data.workspace,
+                conversations: data.conversations ?? [],
+                orders: data.orders ?? [],
+                knowledge: data.knowledge ?? [],
+                customers: data.customers ?? [],
+                websites: data.websites ?? [],
+                handoffs: data.handoffs ?? [],
+                notifications: data.notifications ?? [],
+                products: data.products ?? [],
+                channelConnections: data.channelConnections ?? [],
+                unreadVisitorMessages: data.unreadVisitorMessages ?? [],
+                unreadVisitorCount: data.unreadVisitorCount ?? 0,
+              },
+            }));
+          } catch {
+            // Session storage has a browser quota; live API data remains available.
+          }
         }
         setDashboardDataLoaded(true);
       })
@@ -1975,7 +2041,7 @@ function Dashboard() {
   useEffect(() => {
     if (!authChecked || !token) return;
     loadData();
-  }, [authChecked, token]);
+  }, [authChecked, token, dashboardUserId]);
 
   const openHumanRequestNotification = async (notification: any) => {
     const notificationId = Number(notification.id);
@@ -2029,6 +2095,29 @@ function Dashboard() {
         console.warn("Could not refresh workspace visitor activity:", cause);
       });
   };
+
+  useEffect(() => {
+    if (!token || !dashboardDataLoaded || (activeTab !== "images" && activeTab !== "library")) return;
+    if (workspaceAssetsLoaded || workspaceAssetsRequestStartedRef.current) return;
+
+    workspaceAssetsRequestStartedRef.current = true;
+    const generation = workspaceAssetsGenerationRef.current;
+    setWorkspaceAssetsLoading(true);
+    setWorkspaceAssetsLoadError("");
+    void getWorkspaceAssets({ data: { token } })
+      .then((result) => {
+        if (generation !== workspaceAssetsGenerationRef.current) return;
+        setWorkspaceAssets(result.assets ?? []);
+        setWorkspaceAssetsLoaded(true);
+      })
+      .catch((cause) => {
+        if (generation !== workspaceAssetsGenerationRef.current) return;
+        setWorkspaceAssetsLoadError(cause instanceof Error ? cause.message : "Could not load your saved files.");
+      })
+      .finally(() => {
+        if (generation === workspaceAssetsGenerationRef.current) setWorkspaceAssetsLoading(false);
+      });
+  }, [token, dashboardDataLoaded, activeTab, workspaceAssetsLoaded]);
 
   useEffect(() => {
     if (!authChecked || !token) return;
@@ -2093,6 +2182,19 @@ function Dashboard() {
 
   // Auto-scroll message list to bottom when appropriate
   useEffect(() => {
+    if (!dashboardUserId || currentConversationId === null || activeConversationIdRef.current !== currentConversationId) return;
+    try {
+      sessionStorage.setItem("misma_active_chat_messages_v1_" + dashboardUserId, JSON.stringify({
+        conversationId: currentConversationId,
+        messages: messages.slice(-120),
+        savedAt: Date.now(),
+      }));
+    } catch {
+      // Keep chat history on the server if the tab's storage quota is full.
+    }
+  }, [dashboardUserId, currentConversationId, messages]);
+
+  useEffect(() => {
     if (scrollRef.current && shouldAutoScrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -2106,7 +2208,24 @@ function Dashboard() {
     if (!token) return;
     if (!options.isRestore) setPendingRestoreConversationId(null);
     chatViewVersionRef.current += 1;
+    const conversationLoadVersion = chatViewVersionRef.current;
     activeConversationIdRef.current = convId;
+    const conversationCacheKey = dashboardUserId
+      ? "misma_active_chat_messages_v1_" + dashboardUserId
+      : "";
+    let hasCachedConversationMessages = false;
+    if (conversationCacheKey) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(conversationCacheKey) || "null");
+        if (Number(cached?.conversationId) === convId && Array.isArray(cached?.messages)) {
+          setMessages(cached.messages);
+          hasCachedConversationMessages = true;
+        }
+      } catch {
+        try { sessionStorage.removeItem(conversationCacheKey); } catch { /* Ignore unavailable session storage. */ }
+      }
+    }
+    if (!hasCachedConversationMessages) setMessages([]);
     setChatActionMenuId(null);
     setCurrentConversationId(convId);
     if (options.activateWorkspace !== false) setActiveTab("workspace");
@@ -2135,6 +2254,7 @@ function Dashboard() {
       const res = await getConversationMessages({
         data: { token, conversationId: convId },
       });
+      if (conversationLoadVersion !== chatViewVersionRef.current || activeConversationIdRef.current !== convId) return;
       setMessages(res.messages);
       const unreadForConversation = unreadVisitorMessages.filter((item) => item.conversationId === convId).length;
       if (unreadForConversation > 0) {
@@ -4635,7 +4755,19 @@ function Dashboard() {
                   window.setTimeout(() => textareaRef.current?.focus(), 0);
                 }}>＋ Create image</button>
               </div>
-              {workspaceAssets.filter((asset) => asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/")).length === 0 ? (
+              {workspaceAssetsLoading ? (
+                <div className="aichat-card aichat-assets-empty">
+                  <div className="aichat-assets-empty-icon">◌</div>
+                  <h3>Loading your images…</h3>
+                  <p>Your saved images are loading from this workspace.</p>
+                </div>
+              ) : workspaceAssetsLoadError ? (
+                <div className="aichat-card aichat-assets-empty">
+                  <div className="aichat-assets-empty-icon">!</div>
+                  <h3>Could not load your images</h3>
+                  <p>{workspaceAssetsLoadError}</p>
+                </div>
+              ) : workspaceAssets.filter((asset) => asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/")).length === 0 ? (
                 <div className="aichat-card aichat-assets-empty">
                   <div className="aichat-assets-empty-icon">▧</div>
                   <h3>Your image library is ready</h3>
@@ -4690,10 +4822,22 @@ function Dashboard() {
               <input ref={libraryFileInputRef} type="file" hidden multiple onChange={(event) => void handleLibraryUpload(event)} />
               <div className="aichat-card">
                 <div className="aichat-library-toolbar">
-                  <span>{workspaceAssets.length} saved items</span>
+                  <span>{workspaceAssetsLoaded ? workspaceAssets.length + " saved items" : workspaceAssetsLoading ? "Loading saved items…" : "Saved items"}</span>
                   <input className="aichat-input" type="search" placeholder="Search your library…" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} aria-label="Search library" />
                 </div>
-                {workspaceAssets.filter((asset) => `${asset.name} ${asset.kind} ${asset.mimeType}`.toLowerCase().includes(librarySearch.trim().toLowerCase())).length === 0 ? (
+                {workspaceAssetsLoading ? (
+                  <div className="aichat-assets-empty">
+                    <div className="aichat-assets-empty-icon">◌</div>
+                    <h3>Loading your files…</h3>
+                    <p>Your saved files are loading from this workspace.</p>
+                  </div>
+                ) : workspaceAssetsLoadError ? (
+                  <div className="aichat-assets-empty">
+                    <div className="aichat-assets-empty-icon">!</div>
+                    <h3>Could not load your files</h3>
+                    <p>{workspaceAssetsLoadError}</p>
+                  </div>
+                ) : workspaceAssets.filter((asset) => `${asset.name} ${asset.kind} ${asset.mimeType}`.toLowerCase().includes(librarySearch.trim().toLowerCase())).length === 0 ? (
                   <div className="aichat-assets-empty">
                     <div className="aichat-assets-empty-icon">▤</div>
                     <h3>No library items found</h3>
