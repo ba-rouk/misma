@@ -234,7 +234,16 @@ function speakAsWoman(text){
   if(!synth||typeof window.SpeechSynthesisUtterance==="undefined"){setVoiceState("ready","Speech playback is not supported by this browser.");return Promise.resolve(false);}
   var femalePattern=/female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|google.*female/i;
   var malePattern=/(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee|microsoft.*male/i;
-  function getFemaleVoice(){var voices=synth.getVoices();var female=voices.filter(function(voice){var label=voice.name+" "+voice.voiceURI;return femalePattern.test(label)&&!malePattern.test(label);});return female[1]||female[0];}
+  var britishEnglishPattern=/^en[-_]gb(?:$|[-_])/i;
+  var englishLocalePattern=/^en(?:[-_]|$)/i;
+  function getFemaleVoice(){
+    var voices=synth.getVoices();
+    var female=voices.filter(function(voice){var label=voice.name+" "+voice.voiceURI;return femalePattern.test(label)&&!malePattern.test(label);});
+    var britishFemale=female.filter(function(voice){return britishEnglishPattern.test(voice.lang||"")||/\b(?:british|uk english|english uk)\b/i.test(voice.name+" "+voice.voiceURI);});
+    if(britishFemale.length)return britishFemale[0];
+    var englishFemale=female.filter(function(voice){return englishLocalePattern.test(voice.lang||"");});
+    return englishFemale[0]||female[0];
+  }
   function waitForVoice(){var current=getFemaleVoice();if(current)return Promise.resolve(current);return new Promise(function(resolve){
     var finished=false;function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice());}
     synth.addEventListener("voiceschanged",done,{once:true});window.setTimeout(done,3000);
@@ -251,7 +260,7 @@ function speakAsWoman(text){
       function next(){
         if(finished)return;
         if(index>=parts.length||!voiceSession){finish(true);return;}
-        var utterance=new SpeechSynthesisUtterance(parts[index++].trim());utterance.lang=womanVoice.lang||"en-US";utterance.voice=womanVoice;utterance.pitch=1.04;utterance.rate=1;
+        var utterance=new SpeechSynthesisUtterance(parts[index++].trim());utterance.lang=womanVoice.lang||"en-GB";utterance.voice=womanVoice;utterance.pitch=1.12;utterance.rate=0.98;
         utterance.onend=next;utterance.onerror=next;synth.speak(utterance);
       }
       voiceSpeechCancel=function(){if(finished)return;synth.cancel();finish(false);};
