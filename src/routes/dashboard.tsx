@@ -1354,6 +1354,7 @@ function Dashboard() {
   const signingOutRef = useRef(false);
   const workspaceAssetsRequestStartedRef = useRef(false);
   const workspaceAssetsGenerationRef = useRef(0);
+  const dashboardUserIdRef = useRef<string | null>(null);
 
   // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1759,6 +1760,7 @@ function Dashboard() {
             setProfileAvatarStoragePath(null);
             setProfileImage("");
             setDashboardUserId(null);
+            dashboardUserIdRef.current = null;
             setWorkspaceAssets([]);
             setWorkspaceAssetsLoaded(false);
             setWorkspaceAssetsLoading(false);
@@ -1773,6 +1775,15 @@ function Dashboard() {
           }
 
           const s = session;
+          if (dashboardUserIdRef.current !== s.user.id) {
+            dashboardUserIdRef.current = s.user.id;
+            workspaceAssetsGenerationRef.current += 1;
+            workspaceAssetsRequestStartedRef.current = false;
+            setWorkspaceAssets([]);
+            setWorkspaceAssetsLoaded(false);
+            setWorkspaceAssetsLoading(false);
+            setWorkspaceAssetsLoadError("");
+          }
           sessionStorage.setItem("misma_id_token", s.access_token);
           if (s.user.email) sessionStorage.setItem("misma_email", s.user.email);
           setDashboardUserId(s.user.id);
@@ -4703,7 +4714,19 @@ function Dashboard() {
                   window.setTimeout(() => textareaRef.current?.focus(), 0);
                 }}>＋ Create image</button>
               </div>
-              {workspaceAssets.filter((asset) => asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/")).length === 0 ? (
+              {workspaceAssetsLoading ? (
+                <div className="aichat-card aichat-assets-empty">
+                  <div className="aichat-assets-empty-icon">◌</div>
+                  <h3>Loading your images…</h3>
+                  <p>Your saved images are loading from this workspace.</p>
+                </div>
+              ) : workspaceAssetsLoadError ? (
+                <div className="aichat-card aichat-assets-empty">
+                  <div className="aichat-assets-empty-icon">!</div>
+                  <h3>Could not load your images</h3>
+                  <p>{workspaceAssetsLoadError}</p>
+                </div>
+              ) : workspaceAssets.filter((asset) => asset.kind === "image" || asset.kind === "generated-image" || String(asset.mimeType || "").startsWith("image/")).length === 0 ? (
                 <div className="aichat-card aichat-assets-empty">
                   <div className="aichat-assets-empty-icon">▧</div>
                   <h3>Your image library is ready</h3>
@@ -4758,10 +4781,22 @@ function Dashboard() {
               <input ref={libraryFileInputRef} type="file" hidden multiple onChange={(event) => void handleLibraryUpload(event)} />
               <div className="aichat-card">
                 <div className="aichat-library-toolbar">
-                  <span>{workspaceAssets.length} saved items</span>
+                  <span>{workspaceAssetsLoaded ? workspaceAssets.length + " saved items" : workspaceAssetsLoading ? "Loading saved items…" : "Saved items"}</span>
                   <input className="aichat-input" type="search" placeholder="Search your library…" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} aria-label="Search library" />
                 </div>
-                {workspaceAssets.filter((asset) => `${asset.name} ${asset.kind} ${asset.mimeType}`.toLowerCase().includes(librarySearch.trim().toLowerCase())).length === 0 ? (
+                {workspaceAssetsLoading ? (
+                  <div className="aichat-assets-empty">
+                    <div className="aichat-assets-empty-icon">◌</div>
+                    <h3>Loading your files…</h3>
+                    <p>Your saved files are loading from this workspace.</p>
+                  </div>
+                ) : workspaceAssetsLoadError ? (
+                  <div className="aichat-assets-empty">
+                    <div className="aichat-assets-empty-icon">!</div>
+                    <h3>Could not load your files</h3>
+                    <p>{workspaceAssetsLoadError}</p>
+                  </div>
+                ) : workspaceAssets.filter((asset) => `${asset.name} ${asset.kind} ${asset.mimeType}`.toLowerCase().includes(librarySearch.trim().toLowerCase())).length === 0 ? (
                   <div className="aichat-assets-empty">
                     <div className="aichat-assets-empty-icon">▤</div>
                     <h3>No library items found</h3>
