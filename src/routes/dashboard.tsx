@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   getMismaData,
+  getWorkspaceAssets,
   getVisitorNotifications,
   getWorkspaceLiveUpdates,
   getConversationMessages,
@@ -1718,6 +1719,7 @@ function Dashboard() {
   const chatLongPressTriggeredRef = useRef(false);
   const chatViewVersionRef = useRef(0);
   const activeConversationIdRef = useRef<number | null>(null);
+  const workspaceAssetsRequestRef = useRef(0);
   const chatAbortControllerRef = useRef<AbortController | null>(null);
   const mediaAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -1930,6 +1932,7 @@ function Dashboard() {
 
   const loadData = () => {
     if (!token) return;
+    const assetsRequestId = ++workspaceAssetsRequestRef.current;
     setDashboardDataLoaded(false);
     setLoadError("");
     getMismaData({ data: { token } })
@@ -1954,7 +1957,6 @@ function Dashboard() {
             }))
             .catch((cause) => console.warn("Could not read channel configuration status:", cause));
         }
-        setWorkspaceAssets(data.assets ?? []);
         if (data.workspace) {
           setProfileForm({
             name: data.workspace.name || "",
@@ -1964,7 +1966,18 @@ function Dashboard() {
             primaryLanguage: data.workspace.primary_language || "English",
           });
         }
+        // Publish core workspace data immediately. Media signing is a separate,
+        // lower-priority request so it cannot delay chats or notification counts.
         setDashboardDataLoaded(true);
+        void getWorkspaceAssets({ data: { token } })
+          .then((assetData) => {
+            if (workspaceAssetsRequestRef.current === assetsRequestId) {
+              setWorkspaceAssets(assetData.assets ?? []);
+            }
+          })
+          .catch((cause) => {
+            console.warn("Could not load workspace media in the background:", cause);
+          });
       })
       .catch((cause) => {
         setLoadError(cause instanceof Error ? cause.message : "Could not load your Misma workspace.");
