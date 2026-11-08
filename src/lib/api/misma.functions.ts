@@ -441,6 +441,7 @@ export const getConversationMessages = createServerFn({ method: "POST" })
       .from("messages")
       .select("id,conversation_id,role,text,created_at,attachments")
       .eq("conversation_id", data.conversationId)
+      .eq("is_voice", false)
       .order("id", { ascending: true });
     if (msgErr) throw new Error(msgErr.message);
 
