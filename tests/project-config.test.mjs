@@ -867,7 +867,11 @@ test("widget microphone and speech talk show an explicit permission dialog and u
   assert.ok(widget.includes('requestMicForAction("speech")'));
   assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
   assert.ok(widget.includes("function getFemaleVoice()"));
-  assert.ok(widget.includes("return female[1]||female[0]"));
+  assert.ok(widget.includes("britishFemale"));
+  assert.ok(widget.includes("/^en[-_]GB(?:$|[-_])/i"));
+  assert.ok(widget.includes('utterance.lang="en-GB"'));
+  assert.ok(widget.includes("utterance.pitch=1.12"));
+  assert.ok(widget.includes("utterance.rate=0.98"));
   assert.ok(widget.includes("synth.resume()"));
   assert.ok(widget.includes("Microphone is blocked. Tap the lock icon next to the address bar"));
   assert.ok(widget.includes('setVoiceState("idle",errorMessage)'));
@@ -884,6 +888,7 @@ test("embedded speech talk hides transcripts and uses dashboard-compatible femal
   assert.ok(widget.includes('instance.lang=isVoiceChat?"en-US"'));
   assert.ok(!widget.includes("^en(?:-|$)"));
   assert.ok(widget.includes("google.*female"));
+  assert.ok(widget.includes("sonia|hazel|kate|amy|emma"));
   assert.ok(edge.includes("Always understand and respond in English"));
 });
 
@@ -1014,4 +1019,30 @@ test("dashboard and website widget share the Chrome-style microphone permission 
   assert.match(checklist, /Chrome Android/);
   assert.match(checklist, /Safari iOS/);
   assert.match(checklist, /schoolsize\.netlify\.app/);
+});
+
+
+test("dashboard critical workspace data loads before media URL hydration", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const coreStart = api.indexOf("export const getMismaData");
+  const coreEnd = api.indexOf("export const getWorkspaceAssets");
+  assert.ok(coreStart >= 0 && coreEnd > coreStart);
+  const coreLoader = api.slice(coreStart, coreEnd);
+  assert.doesNotMatch(coreLoader, /workspace_library_files|createSignedUrl/);
+  assert.match(coreLoader, /assets:\s*\[\]/);
+  assert.match(api, /export const getWorkspaceAssets/);
+  assert.match(api, /createSignedUrl\(path, 3600\)/);
+  assert.match(dashboard, /getWorkspaceAssets/);
+  assert.match(dashboard, /setDashboardDataLoaded\(true\)[\s\S]*getWorkspaceAssets/);
+  assert.match(dashboard, /workspaceAssetsRequestRef/);
+});
+
+test("website Add channels uses only the country-code plus WhatsApp-number row and default message", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.doesNotMatch(dashboard, /countrySearch|Search country or dial code|Search country or \+250/);
+  assert.match(dashboard, /Country code/);
+  assert.match(dashboard, /Phone number/);
+  assert.match(dashboard, /Default message/);
+  assert.doesNotMatch(dashboard, /Welcome message/);
 });
