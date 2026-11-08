@@ -2185,7 +2185,24 @@ function Dashboard() {
     if (!token) return;
     if (!options.isRestore) setPendingRestoreConversationId(null);
     chatViewVersionRef.current += 1;
+    const conversationLoadVersion = chatViewVersionRef.current;
     activeConversationIdRef.current = convId;
+    const conversationCacheKey = dashboardUserId
+      ? "misma_active_chat_messages_v1_" + dashboardUserId
+      : "";
+    let hasCachedConversationMessages = false;
+    if (conversationCacheKey) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(conversationCacheKey) || "null");
+        if (Number(cached?.conversationId) === convId && Array.isArray(cached?.messages)) {
+          setMessages(cached.messages);
+          hasCachedConversationMessages = true;
+        }
+      } catch {
+        try { sessionStorage.removeItem(conversationCacheKey); } catch { /* Ignore unavailable session storage. */ }
+      }
+    }
+    if (!hasCachedConversationMessages) setMessages([]);
     setChatActionMenuId(null);
     setCurrentConversationId(convId);
     if (options.activateWorkspace !== false) setActiveTab("workspace");
@@ -2214,7 +2231,19 @@ function Dashboard() {
       const res = await getConversationMessages({
         data: { token, conversationId: convId },
       });
+      if (conversationLoadVersion !== chatViewVersionRef.current || activeConversationIdRef.current !== convId) return;
       setMessages(res.messages);
+      if (conversationCacheKey) {
+        try {
+          sessionStorage.setItem(conversationCacheKey, JSON.stringify({
+            conversationId: convId,
+            messages: res.messages.slice(-120),
+            savedAt: Date.now(),
+          }));
+        } catch {
+          // Message history remains available from Supabase if session storage is full.
+        }
+      }
       const unreadForConversation = unreadVisitorMessages.filter((item) => item.conversationId === convId).length;
       if (unreadForConversation > 0) {
         try {
