@@ -1761,6 +1761,25 @@ function Dashboard() {
             setProfileImage("");
             setDashboardUserId(null);
             dashboardUserIdRef.current = null;
+            try {
+              sessionStorage.removeItem("misma_id_token");
+              sessionStorage.removeItem("misma_email");
+            } catch {
+              // Ignore storage restrictions during sign-out.
+            }
+            setWorkspace(null);
+            setConversations([]);
+            setUnreadVisitorMessages([]);
+            setUnreadVisitorCount(0);
+            setOrders([]);
+            setKnowledgeList([]);
+            setCustomers([]);
+            setConnectedWebsites([]);
+            setHumanHandoffs([]);
+            setAllNotifications([]);
+            setProductsServices([]);
+            setChannelConnections([]);
+            setDashboardDataLoaded(false);
             activeConversationIdRef.current = null;
             setCurrentConversationId(null);
             setPendingRestoreConversationId(null);
@@ -1781,10 +1800,25 @@ function Dashboard() {
           const s = session;
           if (dashboardUserIdRef.current !== s.user.id) {
             if (dashboardUserIdRef.current) {
+              // Never show another account's locally cached dashboard while the new
+              // account's workspace is being fetched.
               activeConversationIdRef.current = null;
               setCurrentConversationId(null);
               setPendingRestoreConversationId(null);
               setMessages([]);
+              setWorkspace(null);
+              setConversations([]);
+              setUnreadVisitorMessages([]);
+              setUnreadVisitorCount(0);
+              setOrders([]);
+              setKnowledgeList([]);
+              setCustomers([]);
+              setConnectedWebsites([]);
+              setHumanHandoffs([]);
+              setAllNotifications([]);
+              setProductsServices([]);
+              setChannelConnections([]);
+              setDashboardDataLoaded(false);
             }
             dashboardUserIdRef.current = s.user.id;
             workspaceAssetsGenerationRef.current += 1;
@@ -1980,6 +2014,35 @@ function Dashboard() {
       });
     }
   };
+
+  // Paint the most recent authenticated dashboard snapshot before the async
+  // Supabase auth listener completes. A reload should not blank recents or badges
+  // while the server refresh runs in the background.
+  useIsomorphicLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storedToken = sessionStorage.getItem("misma_id_token") || "";
+      const encodedPayload = storedToken.split(".")[1];
+      if (!encodedPayload) return;
+      const normalizedPayload = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
+      const paddedPayload = normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, "=");
+      const claims = JSON.parse(window.atob(paddedPayload)) as { sub?: unknown; exp?: unknown };
+      const userId = typeof claims.sub === "string" ? claims.sub : "";
+      if (!userId || (typeof claims.exp === "number" && claims.exp * 1000 <= Date.now())) return;
+
+      const cacheKey = "misma_dashboard_bootstrap_v1_" + userId;
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+      if (cached?.version !== 1 || !cached?.data || !Array.isArray(cached.data.conversations)) return;
+      if (dashboardUserIdRef.current && dashboardUserIdRef.current !== userId) return;
+
+      dashboardUserIdRef.current = userId;
+      setDashboardUserId(userId);
+      applyDashboardData(cached.data, false);
+      setDashboardDataLoaded(true);
+    } catch {
+      // Expired or unavailable local snapshots must never block live authentication.
+    }
+  }, []);
 
   const loadData = () => {
     if (!token) return;

@@ -4,8 +4,16 @@ export type VoiceConversationMode = "hands-free" | "push-to-talk";
 
 export type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
 
-const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|google.*female/i;
-const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee|microsoft.*male/i;
+const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|sonia|hazel|kate|serena|amy|martha|fiona|moira|emma|olivia|ava|allison|michelle|zoe|salli|joanna|kendra|kimberly|ivy|google.*female/i;
+const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee/i;
+
+function speechVoiceLanguageRank(voice: SpeechSynthesisVoice): number {
+  const language = String(voice.lang || "").replace(/_/g, "-").toLowerCase();
+  const label = voice.name + " " + voice.voiceURI;
+  if (language === "en-gb" || /\b(?:british|uk english|united kingdom)\b/i.test(label)) return 0;
+  if (language.startsWith("en-") || language === "en" || /english/i.test(label)) return 1;
+  return 2;
+}
 
 export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
   const female = voices.filter((voice) => {
@@ -13,7 +21,9 @@ export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: 
     return FEMALE_VOICE_PATTERN.test(label) && !MALE_VOICE_PATTERN.test(label);
   });
   const male = voices.filter((voice) => MALE_VOICE_PATTERN.test(voice.name + " " + voice.voiceURI));
-  const pool = preset === "girl" || preset === "woman" ? female : male;
+  const pool = (preset === "girl" || preset === "woman" ? female : male)
+    .slice()
+    .sort((left, right) => speechVoiceLanguageRank(left) - speechVoiceLanguageRank(right));
   const preferredIndex = preset === "girl" || preset === "boy" ? 0 : 1;
   return pool[preferredIndex] || pool[0];
 }
@@ -368,8 +378,8 @@ type VoiceModeOptions = {
 /** Hands-free or push-to-talk listen -> send text -> speak reply loop. */
 export function createVoiceMode({
   send,
-  lang = typeof navigator === "undefined" ? "en-US" : navigator.language || "en-US",
-  voicePreset = "woman",
+  lang = "en-GB",
+  voicePreset = "girl",
   onState,
   onUser,
   onReply,

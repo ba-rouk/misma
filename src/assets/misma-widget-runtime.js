@@ -169,7 +169,7 @@ function listen(isVoiceChat){
   stopRecognition();
   if(isVoiceChat){finalTranscript="";interimTranscript="";setVoiceState("listening");}
   else{interimTranscript="";}
-  var instance=new Recognition();recognition=instance;instance.lang=isVoiceChat?"en-US":(navigator.language||"en-US");instance.interimResults=true;instance.continuous=false;instance.maxAlternatives=1;
+  var instance=new Recognition();recognition=instance;instance.lang=isVoiceChat?"en-GB":(navigator.language||"en-US");instance.interimResults=true;instance.continuous=false;instance.maxAlternatives=1;
   instance.onresult=function(event){
     var finalText="",interim="";
     for(var index=event.resultIndex;index<event.results.length;index+=1){
@@ -233,7 +233,7 @@ function speakAsWoman(text){
   var synth=window.speechSynthesis;
   if(!synth||typeof window.SpeechSynthesisUtterance==="undefined"){setVoiceState("ready","Speech playback is not supported by this browser.");return Promise.resolve(false);}
   var femalePattern=/female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|sonia|hazel|kate|serena|amy|martha|fiona|moira|google.*female/i;
-  var malePattern=/(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee|microsoft.*male/i;
+  var malePattern=/(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee/i;
   function isBritishEnglish(voice){return /^en[-_]?(GB|UK)(?:$|[-_])/i.test(voice.lang||"")||/\b(?:uk|british|united kingdom)\b/i.test(voice.name+" "+voice.voiceURI);}
   function isEnglish(voice){return /^en(?:[-_]|$)/i.test(voice.lang||"")||/english/i.test(voice.name+" "+voice.voiceURI);}
   function getFemaleVoice(){
@@ -242,7 +242,7 @@ function speakAsWoman(text){
     var british=female.filter(isBritishEnglish);
     if(british.length)return british[0];
     var english=female.filter(isEnglish);
-    return english[0]||female[0];
+    return english[0];
   }
   function waitForVoice(){var current=getFemaleVoice();if(current)return Promise.resolve(current);return new Promise(function(resolve){
     var finished=false;function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice());}

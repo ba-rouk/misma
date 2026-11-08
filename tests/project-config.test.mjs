@@ -446,6 +446,31 @@ test("dashboard restores the last visited section and selected conversation afte
   assert.match(dashboard, /selectConversation\(pendingRestoreConversationId,\s*\{\s*activateWorkspace:\s*false,\s*isRestore:\s*true/);
 });
 
+test("dashboard paints cached recents and notification counts before live auth refresh", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  assert.match(dashboard, /useIsomorphicLayoutEffect\(\(\) => \{[\s\S]*?sessionStorage\.getItem\("misma_id_token"\)/);
+  assert.match(dashboard, /dashboard_bootstrap_v1_\" \+ userId/);
+  assert.match(dashboard, /applyDashboardData\(cached\.data, false\)/);
+  assert.match(dashboard, /claims\.exp \* 1000 <= Date\.now\(\)/);
+  const bootstrapStart = api.indexOf("export const getMismaData");
+  const assetsStart = api.indexOf("export const getWorkspaceAssets", bootstrapStart);
+  const bootstrap = api.slice(bootstrapStart, assetsStart);
+  assert.doesNotMatch(bootstrap, /promptRowsResult|limit\(10000\)/);
+  assert.match(bootstrap, /select\("id,conversation_id,text,created_at", \{ count: "exact" \}\)/);
+});
+
+test("WhatsApp Add channels has only a country-code phone row and a default message field", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const settingsStart = dashboard.indexOf("function WebsiteSocialSettings");
+  const settingsEnd = dashboard.indexOf("\ntype Message =", settingsStart);
+  const settings = dashboard.slice(settingsStart, settingsEnd);
+  assert.doesNotMatch(settings, /countrySearch|Search country or dial code|type="search"/);
+  assert.match(settings, /Country code[\s\S]*?<select/);
+  assert.match(settings, /Phone number[\s\S]*?type="tel"/);
+  assert.match(settings, /Default message[\s\S]*?<textarea/);
+});
+
 test("dashboard chat scrolls in a full-width pane with the scrollbar at the far right edge", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const styles = await read("../src/styles.css");
@@ -684,6 +709,9 @@ test("male and female voice presets never use an unrelated browser default voice
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(voice, /export function getSpeechVoiceForPreset/);
   assert.match(voice, /return pool\[preferredIndex\] \|\| pool\[0\]/);
+  assert.match(voice, /language === "en-gb"/);
+  assert.match(voice, /lang = "en-GB"/);
+  assert.match(voice, /voicePreset = "girl"/);
   assert.match(voice, /onError\?\.\("voice-unavailable"\)/);
   assert.match(dashboard, /getSpeechVoiceForPreset/);
   assert.match(dashboard, /voicePreset=\{selectedVoicePreset\}/);
@@ -884,8 +912,12 @@ test("embedded speech talk hides transcripts and uses dashboard-compatible femal
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   assert.ok(!widget.includes("voiceTranscript"));
   assert.ok(!widget.includes("voice-transcript"));
-  assert.ok(widget.includes('instance.lang=isVoiceChat?"en-US"'));
-  assert.ok(!widget.includes("^en(?:-|$)"));
+  assert.ok(widget.includes('instance.lang=isVoiceChat?"en-GB"'));
+  assert.ok(widget.includes("function isBritishEnglish(voice)"));
+  assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
+  assert.ok(widget.includes("return english[0];"));
+  assert.ok(widget.includes("utterance.lang=girlVoice.lang||" + '"en-GB"'));
+  assert.ok(widget.includes("utterance.pitch=1.16"));
   assert.ok(widget.includes("google.*female"));
   assert.ok(edge.includes("Always understand and respond in English"));
 });
@@ -1039,7 +1071,8 @@ test("dashboard bootstrap returns chat and notification data before media signin
   assert.ok(start >= 0 && end > start);
   const bootstrap = api.slice(start, end);
   assert.match(bootstrap, /Promise\.all\(\[/);
-  assert.match(bootstrap, /unreadCountResult/);
+  assert.match(bootstrap, /unreadVisitorCount/);
+  assert.match(bootstrap, /count: "exact"/);
   assert.doesNotMatch(bootstrap, /createSignedUrl|workspace_library_files|attachments/);
   assert.match(dashboard, /misma_dashboard_bootstrap_v1_/);
   assert.match(dashboard, /sessionStorage\.setItem\(cacheKey/);
