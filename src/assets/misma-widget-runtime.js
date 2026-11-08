@@ -469,6 +469,14 @@ micPermissionNever.addEventListener("click",function(){
 micPermissionGotIt.addEventListener("click",function(){hideMicPermissionPrompt();});
 function startVoiceSession(){
   if(voiceSession){stopVoiceSession();return;}if(busy)return;
+  // Unlock TTS in the actual user click, before microphone permission may become async.
+  try{
+    if(window.speechSynthesis&&typeof window.SpeechSynthesisUtterance==="function"){
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+      window.speechSynthesis.cancel();
+      if(typeof window.speechSynthesis.resume==="function")window.speechSynthesis.resume();
+    }
+  }catch(error){}
   if(!recognitionConstructor()){
     voiceView.classList.add("open");primaryButton.classList.remove("is-active");
     setVoiceState("idle","Speech talk is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");
@@ -551,8 +559,17 @@ $(".handoff-submit").addEventListener("click",function(){
 });
 window.setInterval(function(){if(panel.classList.contains("open")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
 refreshMicPermission();
-call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
+  call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
+  return {
+    applyConfig:function(config){applyWebsiteSocialLinks(config||{});},
+    destroy:function(){
+      stopVoiceSession();
+      stopDictation();
+      if(host.parentNode)host.parentNode.removeChild(host);
+    }
+  };
 }
+var widgetInstance=initWidget({});
 fetch(api,{
   method:"POST",
   headers:{"Content-Type":"application/json"},
@@ -562,7 +579,10 @@ fetch(api,{
     if(!response.ok||data.error||data.connected!==true)throw Error(data.error||"This widget key is inactive for this website.");
     return data;
   });
-}).then(initWidget).catch(function(error){
+}).then(function(data){
+  widgetInstance.applyConfig(data);
+}).catch(function(error){
   console.warn("[Misma] Widget is disabled for this website.",error&&error.message?error.message:"");
+  widgetInstance.destroy();
 });
 })();
