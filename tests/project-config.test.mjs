@@ -1071,7 +1071,8 @@ test("dashboard bootstrap returns chat and notification data before media signin
   assert.ok(start >= 0 && end > start);
   const bootstrap = api.slice(start, end);
   assert.match(bootstrap, /Promise\.all\(\[/);
-  assert.match(bootstrap, /unreadCountResult/);
+  assert.match(bootstrap, /unreadVisitorCount/);
+  assert.match(bootstrap, /count: "exact"/);
   assert.doesNotMatch(bootstrap, /createSignedUrl|workspace_library_files|attachments/);
   assert.match(dashboard, /misma_dashboard_bootstrap_v1_/);
   assert.match(dashboard, /sessionStorage\.setItem\(cacheKey/);
