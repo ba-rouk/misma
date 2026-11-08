@@ -1743,6 +1743,17 @@ function Dashboard() {
     };
   }, [mobileMenuOpen]);
 
+  // Start the initial dashboard request with the last same-tab access token instead
+  // of waiting for the asynchronous Supabase INITIAL_SESSION callback.
+  useEffect(() => {
+    try {
+      const cachedToken = sessionStorage.getItem("misma_id_token");
+      if (cachedToken) setToken(cachedToken);
+    } catch {
+      // Auth state listener below remains the source of truth when storage is unavailable.
+    }
+  }, []);
+
   // Keep the dashboard session in sync with Supabase, including token refreshes.
   useEffect(() => {
     let active = true;
@@ -1751,6 +1762,12 @@ function Dashboard() {
         (event, session) => {
           if (!active) return;
           if (!session) {
+            try {
+              sessionStorage.removeItem("misma_id_token");
+              sessionStorage.removeItem("misma_email");
+            } catch {
+              // The Supabase auth state still clears the in-memory session.
+            }
             profileAvatarPathRef.current = null;
             profileAvatarPreviewUrlRef.current = null;
             setProfileAvatarStoragePath(null);
@@ -1976,9 +1993,9 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    if (!authChecked || !token) return;
+    if (!token) return;
     loadData();
-  }, [authChecked, token]);
+  }, [token]);
 
   const openHumanRequestNotification = async (notification: any) => {
     const notificationId = Number(notification.id);
