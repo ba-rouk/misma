@@ -227,7 +227,14 @@ export const getWorkspaceAssets = createServerFn({ method: "POST" })
     }
 
     const [conversationAssets, libraryAssets] = await Promise.all([
-      Promise.all(assetJobs),
+      (async () => {
+        const signedAssets: WorkspaceAsset[] = [];
+        for (let index = 0; index < assetJobs.length; index += 30) {
+          const batch = await Promise.all(assetJobs.slice(index, index + 30));
+          signedAssets.push(...batch.filter((asset): asset is WorkspaceAsset => asset !== null));
+        }
+        return signedAssets;
+      })(),
       Promise.all(libraryFiles.map(async (row: any): Promise<WorkspaceAsset | null> => {
         const { data: signed, error } = await db.storage.from("misma-media").createSignedUrl(row.storage_path, 3600);
         if (error || !signed?.signedUrl) return null;
