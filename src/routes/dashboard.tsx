@@ -3189,6 +3189,7 @@ function Dashboard() {
           workspaceId: workspace?.id,
           conversationId: currentConversationId,
           message: textToSend,
+          voice: options.voice === true,
         }, requestController.signal);
         if (!reply.message) throw new Error("The human reply was not saved.");
         if (!options.voice) {
