@@ -108,6 +108,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         .select("id,conversation_id,text,created_at", { count: "exact" })
         .in("conversation_id", visitorConversationIds)
         .eq("role", "customer")
+        .eq("is_voice", false)
         .is("read_at", null)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -331,6 +332,7 @@ export const getVisitorNotifications = createServerFn({ method: "POST" })
       .select("id,conversation_id,text,created_at", { count: "exact" })
       .in("conversation_id", conversationIds)
       .eq("role", "customer")
+      .eq("is_voice", false)
       .is("read_at", null)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -441,6 +443,7 @@ export const getConversationMessages = createServerFn({ method: "POST" })
       .from("messages")
       .select("id,conversation_id,role,text,created_at,attachments")
       .eq("conversation_id", data.conversationId)
+      .eq("is_voice", false)
       .order("id", { ascending: true });
     if (msgErr) throw new Error(msgErr.message);
 

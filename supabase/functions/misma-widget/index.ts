@@ -1176,7 +1176,7 @@ Deno.serve(async (request: Request) => {
       const { conversation } = await ensureWebsiteConversation(db, site, visitorId, input.conversationId);
       if (input.action === "history") {
         const [historyResult, conversationResult] = await Promise.all([
-          db.from("messages").select("id,role,text,created_at").eq("conversation_id", conversation.id).order("id", { ascending: true }).limit(100),
+          db.from("messages").select("id,role,text,created_at").eq("conversation_id", conversation.id).eq("is_voice", false).order("id", { ascending: true }).limit(100),
           db.from("conversations").select("status").eq("id", conversation.id).eq("workspace_id", site.workspace_id).single(),
         ]);
         if (historyResult.error || conversationResult.error) throw new Error("Could not load the website conversation history.");
@@ -1207,12 +1207,21 @@ Deno.serve(async (request: Request) => {
       }
       const message = safeString(input.message, 2000);
       if (!message) return respond(400, { error: "Enter a message." });
-      const userMessage = await db.from("messages").insert({ conversation_id: conversation.id, role: "customer", text: message }).select("id").single();
+      const voice = input.voice === true;
+      const userMessage = await db.from("messages").insert({
+        conversation_id: conversation.id,
+        role: "customer",
+        text: message,
+        is_voice: voice,
+      }).select("id").single();
       if (userMessage.error) throw new Error("Could not save the visitor message.");
       const conversationState = await db.from("conversations").select("status").eq("id", conversation.id).eq("workspace_id", site.workspace_id).single();
       if (conversationState.error) throw new Error("Could not check the conversation status.");
       if (conversationState.data.status === "Needs you") {
-        await db.from("conversations").update({ latest_text: message.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+        await db.from("conversations").update({
+          latest_text: voice ? "Voice conversation" : message.slice(0, 200),
+          updated_at: new Date().toISOString(),
+        }).eq("id", conversation.id);
         return respond(200, {
           ok: true, visitorId, conversationId: Number(conversation.id), userMessageId: Number(userMessage.data?.id),
           handoffPending: true, answer: "Your message has been sent to the business team. A person will reply in this conversation.",
@@ -1221,9 +1230,17 @@ Deno.serve(async (request: Request) => {
       let answer = "";
       try { answer = await answerCustomer(db, site.workspace_id, message, input.voice === true); }
       catch { answer = "I cannot access that business information right now. You can ask to speak with a member of the team."; }
-      const aiMessage = await db.from("messages").insert({ conversation_id: conversation.id, role: "ai", text: answer }).select("id").single();
+      const aiMessage = await db.from("messages").insert({
+        conversation_id: conversation.id,
+        role: "ai",
+        text: answer,
+        is_voice: voice,
+      }).select("id").single();
       if (aiMessage.error) throw new Error("Could not save the Misma reply.");
-      await db.from("conversations").update({ latest_text: answer.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+      await db.from("conversations").update({
+        latest_text: voice ? "Voice conversation" : answer.slice(0, 200),
+        updated_at: new Date().toISOString(),
+      }).eq("id", conversation.id);
       return respond(200, {
         ok: true, visitorId, conversationId: Number(conversation.id),
         userMessageId: Number(userMessage.data?.id), aiMessageId: Number(aiMessage.data?.id), answer,
@@ -1277,10 +1294,19 @@ Deno.serve(async (request: Request) => {
       } else if (channel !== "website") {
         throw new Error("Human replies are supported for Website and WhatsApp conversations. Use the customer's contact details for this channel.");
       }
-      const inserted = await db.from("messages").insert({ conversation_id: conversationId, role: "human", text: message })
-        .select("id,role,text,created_at").single();
+      const voice = input.voice === true;
+      const inserted = await db.from("messages").insert({
+        conversation_id: conversationId,
+        role: "human",
+        text: message,
+        is_voice: voice,
+      }).select("id,role,text,created_at").single();
       if (inserted.error || !inserted.data) throw new Error("The reply could not be saved to the conversation.");
-      const updated = await db.from("conversations").update({ latest_text: message.slice(0, 200), status: "Needs you", updated_at: new Date().toISOString() })
+      const updated = await db.from("conversations").update({
+        latest_text: voice ? "Voice conversation" : message.slice(0, 200),
+        status: "Needs you",
+        updated_at: new Date().toISOString(),
+      })
         .eq("id", conversationId).eq("workspace_id", workspaceId);
       if (updated.error) throw new Error("The reply was delivered but the conversation could not be updated.");
       return respond(200, { ok: true, message: { id: String(inserted.data.id), role: "human", text: inserted.data.text, created_at: inserted.data.created_at } });

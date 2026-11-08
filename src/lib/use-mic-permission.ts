@@ -161,14 +161,14 @@ export function useMicPermission() {
     }
 
     const current = permissionRef.current;
-    if (current === "prompt" || current === "denied" || current === "checking") {
+    if (current === "prompt" || current === "denied") {
       setDialogView("permission");
       setDialogOpen(true);
       return;
     }
 
-    // Granted permissions are preflighted without showing Misma's dialog. Browsers
-    // without a microphone Permissions API use this same direct getUserMedia fallback.
+    // A pending Permissions API query is not a reason to delay or show an extra dialog.
+    // Let getUserMedia resolve the browser permission on this user action.
     requestAndContinue();
   }, [neverAllowed, requestAndContinue]);
 

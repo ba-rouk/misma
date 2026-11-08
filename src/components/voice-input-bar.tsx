@@ -4,6 +4,7 @@ import { MicPermissionDialog } from "./mic-permission-dialog";
 import {
   createDictation,
   createVoiceMode,
+  primeSpeechVoices,
   type DictationState,
   type VoiceConversationMode,
   type VoiceModeState,
@@ -126,6 +127,8 @@ export function VoiceInputBar({
   };
 
   useEffect(() => {
+    // Start browser TTS voice enumeration before the composer becomes interactive.
+    void primeSpeechVoices();
     const dictation = createDictation({
       onText: (transcript) => {
         callbacksRef.current.onTranscript(appendTranscript(baseDraftRef.current, transcript));
@@ -306,6 +309,19 @@ export function VoiceInputBar({
     if (!online) {
       showToast("No internet connection");
       return;
+    }
+    // Prime and unlock TTS synchronously in the voice-button click, before
+    // microphone permission can resolve asynchronously.
+    try {
+      const synth = window.speechSynthesis;
+      if (synth && typeof SpeechSynthesisUtterance !== "undefined") {
+        void primeSpeechVoices();
+        synth.speak(new SpeechSynthesisUtterance(""));
+        synth.cancel();
+        synth.resume();
+      }
+    } catch {
+      // Voice output can still be used on browsers without an unlockable TTS engine.
     }
     micPermission.runWithPermission(() => beginVoiceModeAfterPermission());
   };

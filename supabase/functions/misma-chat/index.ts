@@ -1905,7 +1905,7 @@ Deno.serve(async (request) => {
         .insert({
           workspace_id: workspaceId,
           channel: "Dashboard",
-          latest_text: message.slice(0, 200),
+          latest_text: voice ? "Voice conversation" : message.slice(0, 200),
           status: "AI",
         })
         .select("id")
@@ -1941,8 +1941,8 @@ Deno.serve(async (request) => {
       aiMessage = replacedMessage;
     } else {
       const insertRows = [
-        { conversation_id: savedConversationId, role: "human", text: userVisibleMessage, attachments: requestedAttachments },
-        { conversation_id: savedConversationId, role: "ai", text: answer, attachments: [] },
+        { conversation_id: savedConversationId, role: "human", text: userVisibleMessage, attachments: requestedAttachments, is_voice: voice },
+        { conversation_id: savedConversationId, role: "ai", text: answer, attachments: [], is_voice: voice },
       ];
       const { data: savedMessages, error: saveError } = await db
         .from("messages")
@@ -1956,7 +1956,7 @@ Deno.serve(async (request) => {
       if (!userMessage || !aiMessage) throw new Error("Supabase returned incomplete chat messages.");
       const { error: updateError } = await db
         .from("conversations")
-        .update({ latest_text: answer.slice(0, 200), updated_at: new Date().toISOString() })
+        .update({ latest_text: voice ? "Voice conversation" : answer.slice(0, 200), updated_at: new Date().toISOString() })
         .eq("id", savedConversationId)
         .eq("workspace_id", workspaceId);
       if (updateError) throw new Error("Could not update conversation.");
@@ -1966,7 +1966,10 @@ Deno.serve(async (request) => {
       throw new Error("Supabase returned an incomplete Misma response.");
     }
 
-    // Core.01 auto-captures each successful dashboard exchange in its matching topic room.
+    // Speech turns are retained only as AI context; never convert private spoken content
+    // into visible Core.01 learning examples.
+    if (!voice) {
+    // Core.01 auto-captures each successful typed dashboard exchange in its matching topic room.
     try {
       const roomKey = classifyCore01Room(message);
       const { data: room, error: roomError } = await db.from("core_01_rooms")
@@ -2006,6 +2009,18 @@ Deno.serve(async (request) => {
     } catch (learningError) {
       console.warn("[misma-chat] Core.01 auto-learning skipped.", learningError instanceof Error ? learningError.name : "unknown");
     }
+    }
+
+    if (voice) {
+      return jsonResponse(200, {
+        conversationId: savedConversationId,
+        voiceReply: answer,
+        voice: true,
+        provider: selectedProvider,
+        usedFallback: selectedProvider !== providers[0]?.name,
+      });
+    }
+
     return jsonResponse(200, {
       conversationId: savedConversationId,
       ...(userMessage ? {

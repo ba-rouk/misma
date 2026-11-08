@@ -2247,7 +2247,7 @@ function Dashboard() {
   useEffect(() => {
     if (!dashboardUserId || currentConversationId === null || activeConversationIdRef.current !== currentConversationId) return;
     try {
-      sessionStorage.setItem("misma_active_chat_messages_v1_" + dashboardUserId, JSON.stringify({
+      sessionStorage.setItem("misma_active_chat_messages_v2_" + dashboardUserId, JSON.stringify({
         conversationId: currentConversationId,
         messages: messages.slice(-120),
         savedAt: Date.now(),
@@ -2274,7 +2274,7 @@ function Dashboard() {
     const conversationLoadVersion = chatViewVersionRef.current;
     activeConversationIdRef.current = convId;
     const conversationCacheKey = dashboardUserId
-      ? "misma_active_chat_messages_v1_" + dashboardUserId
+      ? "misma_active_chat_messages_v2_" + dashboardUserId
       : "";
     let hasCachedConversationMessages = false;
     if (conversationCacheKey) {
@@ -3157,7 +3157,7 @@ function Dashboard() {
     const filesToSend = editId ? [] : [...selectedFiles];
     let sendConversationId = currentConversationId;
 
-    if (!editId && !isRetry) {
+    if (!options.voice && !editId && !isRetry) {
       const tempUserMsg: Message = {
         id: tempUserId ?? `user-${Date.now()}`,
         role: "human",
@@ -3189,13 +3189,16 @@ function Dashboard() {
           workspaceId: workspace?.id,
           conversationId: currentConversationId,
           message: textToSend,
+          voice: options.voice === true,
         }, requestController.signal);
         if (!reply.message) throw new Error("The human reply was not saved.");
-        setMessages((prev) => prev.map((item) => item.id === tempUserId ? reply.message : item));
+        if (!options.voice) {
+          setMessages((prev) => prev.map((item) => item.id === tempUserId ? reply.message : item));
+        }
         setSelectedFiles([]);
         setThinkHarder(false);
         loadData();
-        return null;
+        return options.voice && typeof reply.message.text === "string" ? reply.message.text : null;
       }
       const attachments = editId ? [] : await ensureComposerAttachmentsUploaded(filesToSend);
       if (!editId && filesToSend.length && !sendConversationId) {
@@ -3230,6 +3233,26 @@ function Dashboard() {
         ...(options.voice ? { voice: true } : {}),
         ...(editId ? { editMessageId: Number(editId) } : {}),
       }, requestController.signal);
+      if (options.voice) {
+        const voiceReply = typeof res.voiceReply === "string" ? res.voiceReply.trim() : "";
+        if (!voiceReply) throw new Error("Misma could not prepare a spoken reply.");
+
+        if (res.conversationId) {
+          const returnedConversationId = Number(res.conversationId);
+          if (Number.isSafeInteger(returnedConversationId) && returnedConversationId > 0 && returnedConversationId !== sendConversationId) {
+            activeConversationIdRef.current = returnedConversationId;
+            setCurrentConversationId(returnedConversationId);
+          }
+        }
+
+        setSelectedFiles([]);
+        selectedComposerFilesRef.current = [];
+        setThinkHarder(false);
+        loadData();
+        // Spoken words and the spoken reply are intentionally never added to chat bubbles.
+        return voiceReply;
+      }
+
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!sendConversationId && res.conversationId) {
@@ -3273,8 +3296,11 @@ function Dashboard() {
       return typeof res.aiMessage.text === "string" ? res.aiMessage.text : "";
     } catch (cause) {
       if (requestController.signal.aborted) return null;
-      const errMsg = cause instanceof Error ? cause.message : "Failed to connect to Misma AI.";
+      const errMsg = options.voice
+        ? "Speech conversation could not be completed. Please try again."
+        : cause instanceof Error ? cause.message : "Failed to connect to Misma AI.";
       setChatError(errMsg);
+      if (options.voice) return null;
       setFailedPrompt(textToSend);
       setFailedAction(editId ? "edit" : "send");
       setFailedMessageId(tempUserId);
