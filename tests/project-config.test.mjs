@@ -1036,6 +1036,8 @@ test("dashboard critical workspace data loads before media URL hydration", async
   assert.match(dashboard, /getWorkspaceAssets/);
   assert.match(dashboard, /setDashboardDataLoaded\(true\)[\s\S]*getWorkspaceAssets/);
   assert.match(dashboard, /workspaceAssetsRequestRef/);
+  assert.match(dashboard, /sessionStorage\.getItem\("misma_id_token"\)/);
+  assert.match(dashboard, /if \(!token\) return;\s*loadData\(\)/);
 });
 
 test("website Add channels uses only the country-code plus WhatsApp-number row and default message", async () => {
