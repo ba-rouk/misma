@@ -709,6 +709,9 @@ test("male and female voice presets never use an unrelated browser default voice
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(voice, /export function getSpeechVoiceForPreset/);
   assert.match(voice, /return pool\[preferredIndex\] \|\| pool\[0\]/);
+  assert.match(voice, /language === "en-gb"/);
+  assert.match(voice, /lang = "en-GB"/);
+  assert.match(voice, /voicePreset = "girl"/);
   assert.match(voice, /onError\?\.\("voice-unavailable"\)/);
   assert.match(dashboard, /getSpeechVoiceForPreset/);
   assert.match(dashboard, /voicePreset=\{selectedVoicePreset\}/);
