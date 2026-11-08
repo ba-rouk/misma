@@ -46,7 +46,7 @@ export const getMismaData = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
-    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult, libraryFilesResult] =
+    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
         db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
@@ -58,7 +58,6 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("channel_connections").select("id,channel,provider,display_name,external_id,phone_number,status,created_at").eq("workspace_id", workspaceId),
-        db.from("workspace_library_files").select("id,storage_path,file_name,mime_type,file_size,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
       ]);
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const rawConversations = check(conversationsResult.data, conversationsResult.error);
@@ -68,26 +67,51 @@ export const getMismaData = createServerFn({ method: "POST" })
     const products = check(productsResult.data, productsResult.error);
     const channelConnections = check(channelConnectionsResult.data, channelConnectionsResult.error);
     const conversationIds = rawConversations.map((conversation: any) => conversation.id);
+    const visitorConversationIds = rawConversations
+      .filter((conversation: any) => String(conversation.channel || "").trim().toLowerCase() !== "dashboard")
+      .map((conversation: any) => Number(conversation.id));
+
+    // Resolve recent chat labels and visitor unread counts in the same round trip.
+    // Previously these database reads ran one after another, delaying the dashboard.
+    const [promptRowsResult, unreadCountResult, unreadRowsResult] = await Promise.all([
+      conversationIds.length
+        ? db.from("messages").select("conversation_id,id,text")
+          .in("conversation_id", conversationIds)
+          .in("role", ["human", "customer"])
+          .order("id", { ascending: true })
+          .limit(10000)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      visitorConversationIds.length
+        ? db.from("messages").select("id", { count: "exact", head: true })
+          .in("conversation_id", visitorConversationIds)
+          .eq("role", "customer")
+          .is("read_at", null)
+        : Promise.resolve({ count: 0, error: null }),
+      visitorConversationIds.length
+        ? db.from("messages").select("id,conversation_id,text,created_at")
+          .in("conversation_id", visitorConversationIds)
+          .eq("role", "customer")
+          .is("read_at", null)
+          .order("created_at", { ascending: false })
+          .limit(50)
+        : Promise.resolve({ data: [] as any[], error: null }),
+    ]);
+    if (promptRowsResult.error) throw new Error("Could not load recent chat titles.");
+    if (unreadCountResult.error) throw new Error("Could not count unread visitor messages.");
+    if (unreadRowsResult.error) throw new Error("Could not load unread visitor messages.");
+
     const promptTitles = new Map<number, string>();
-    if (conversationIds.length) {
-      const { data: promptRows, error: promptRowsError } = await db.from("messages")
-        .select("conversation_id,id,text")
-        .in("conversation_id", conversationIds)
-        .in("role", ["human", "customer"])
-        .order("id", { ascending: true })
-        .limit(10000);
-      if (promptRowsError) throw new Error("Could not load recent chat titles.");
-      for (const row of promptRows ?? []) {
-        const id = Number(row.conversation_id);
-        if (!promptTitles.has(id)) promptTitles.set(id, String(row.text || ""));
-      }
+    for (const row of promptRowsResult.data ?? []) {
+      const id = Number(row.conversation_id);
+      if (!promptTitles.has(id)) promptTitles.set(id, String(row.text || ""));
     }
+
     const cleanConversationTitle = (value: unknown): string => {
       const cleaned = String(value ?? "")
-        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\s*(?::|#|-)\s*)+/i, "")
-        .replace(/\s+/g, " ")
+        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\\s*(?::|#|-)\\s*)+/i, "")
+        .replace(/\\s+/g, " ")
         .trim();
-      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\s*[:#-].*)?$/i.test(cleaned)) return "";
+      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\\s*[:#-].*)?$/i.test(cleaned)) return "";
       if (/^(?:customer|visitor|user|human)[-_ ]+[0-9a-f-]{6,}$/i.test(cleaned)) return "";
       return cleaned.slice(0, 72);
     };
@@ -101,130 +125,21 @@ export const getMismaData = createServerFn({ method: "POST" })
       group_name: c.group_name || null,
     }));
 
-    // Unread customer messages from non-dashboard channels are website visitor notifications.
-    const visitorConversationIds = rawConversations
-      .filter((conversation: any) => String(conversation.channel || "").trim().toLowerCase() !== "dashboard")
-      .map((conversation: any) => Number(conversation.id));
-    let unreadVisitorCount = 0;
-    let unreadVisitorMessages: Array<{
-      id: number;
-      conversationId: number;
-      text: string;
-      created_at: string;
-      channel: string;
-      conversationTitle: string;
-    }> = [];
-    if (visitorConversationIds.length) {
-      const [unreadCountResult, unreadRowsResult] = await Promise.all([
-        db.from("messages").select("id", { count: "exact", head: true })
-          .in("conversation_id", visitorConversationIds)
-          .eq("role", "customer")
-          .is("read_at", null),
-        db.from("messages").select("id,conversation_id,text,created_at")
-          .in("conversation_id", visitorConversationIds)
-          .eq("role", "customer")
-          .is("read_at", null)
-          .order("created_at", { ascending: false })
-          .limit(50),
-      ]);
-      if (unreadCountResult.error) throw new Error("Could not count unread visitor messages.");
-      if (unreadRowsResult.error) throw new Error("Could not load unread visitor messages.");
-      unreadVisitorCount = unreadCountResult.count ?? 0;
-      const conversationById = new Map<number, any>(rawConversations.map((conversation: any) => [Number(conversation.id), conversation] as const));
-      unreadVisitorMessages = (unreadRowsResult.data ?? []).map((message: any) => {
-        const conversationId = Number(message.conversation_id);
-        const conversation = conversationById.get(conversationId) as any;
-        return {
-          id: Number(message.id),
-          conversationId,
-          text: String(message.text || ""),
-          created_at: String(message.created_at || ""),
-          channel: String(conversation?.channel || "Website"),
-          conversationTitle: cleanConversationTitle(promptTitles.get(conversationId)) || "Website visitor",
-        };
-      });
-    }
-
-    // Collect recent chat attachments for the Images and Library views.
-    const assets: WorkspaceAsset[] = [];
-    if (conversationIds.length) {
-      const { data: assetRows, error: assetRowsError } = await db.from("messages")
-        .select("id,conversation_id,role,text,created_at,attachments")
-        .in("conversation_id", conversationIds)
-        .order("id", { ascending: false })
-        .limit(250);
-      if (assetRowsError) throw new Error("Could not load your workspace media library.");
-
-      const assetJobs: Array<Promise<WorkspaceAsset | null>> = [];
-      for (const row of assetRows ?? []) {
-        const attachments: unknown[] = Array.isArray(row.attachments) ? row.attachments : [];
-        attachments.forEach((rawAttachment, index) => {
-          if (!rawAttachment || typeof rawAttachment !== "object" || Array.isArray(rawAttachment)) return;
-          const item = rawAttachment as Record<string, unknown>;
-          const kind = typeof item.kind === "string" ? item.kind : "file";
-          if (kind === "video-frame" || kind === "video-job") return;
-          const path = typeof item.path === "string" && item.path.startsWith(`${workspaceId}/`)
-            ? item.path
-            : "";
-          const originalUrl = typeof item.url === "string" && /^https:\/\//i.test(item.url)
-            ? item.url
-            : "";
-          if (!path && !originalUrl) return;
-
-          assetJobs.push((async () => {
-            let url = originalUrl;
-            if (path) {
-              const { data: signed } = await db.storage.from("misma-media").createSignedUrl(path, 3600);
-              if (signed?.signedUrl) url = signed.signedUrl;
-            }
-            if (!url) return null;
-            return {
-              id: String(row.id) + "-" + index,
-              messageId: Number(row.id),
-              conversationId: Number(row.conversation_id),
-              role: typeof row.role === "string" ? row.role : "",
-              text: typeof row.text === "string" ? row.text : "",
-              created_at: typeof row.created_at === "string" ? row.created_at : "",
-              kind,
-              name: typeof item.name === "string" ? item.name : "Workspace file",
-              mimeType: typeof item.mimeType === "string" ? item.mimeType : "",
-              size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
-              path,
-              url,
-            };
-          })());
-        });
-      }
-      const signedAssets: WorkspaceAsset[] = [];
-      for (let index = 0; index < assetJobs.length; index += 30) {
-        const batch = await Promise.all(assetJobs.slice(index, index + 30));
-        signedAssets.push(...batch.filter((asset): asset is WorkspaceAsset => asset !== null));
-      }
-      assets.push(...signedAssets);
-    }
-    const libraryFiles = check(libraryFilesResult.data, libraryFilesResult.error);
-    const libraryAssets = await Promise.all(libraryFiles.map(async (row: any): Promise<WorkspaceAsset | null> => {
-      const { data: signed, error } = await db.storage.from("misma-media").createSignedUrl(row.storage_path, 3600);
-      if (error || !signed?.signedUrl) return null;
-      const mimeType = String(row.mime_type || "application/octet-stream");
-      const kind = mimeType.startsWith("image/") ? "image" : mimeType.startsWith("video/") ? "video" : "file";
+    const unreadVisitorCount = unreadCountResult.count ?? 0;
+    const conversationById = new Map<number, any>(rawConversations.map((conversation: any) => [Number(conversation.id), conversation] as const));
+    const unreadVisitorMessages = (unreadRowsResult.data ?? []).map((message: any) => {
+      const conversationId = Number(message.conversation_id);
+      const conversation = conversationById.get(conversationId);
       return {
-        id: "library-" + String(row.id),
-        libraryFileId: String(row.id),
-        messageId: 0,
-        conversationId: 0,
-        role: "library",
-        text: "",
-        created_at: String(row.created_at || ""),
-        kind,
-        name: String(row.file_name || "Library file"),
-        mimeType,
-        size: Number(row.file_size || 0),
-        path: String(row.storage_path),
-        url: signed.signedUrl,
+        id: Number(message.id),
+        conversationId,
+        text: String(message.text || ""),
+        created_at: String(message.created_at || ""),
+        channel: String(conversation?.channel || "Website"),
+        conversationTitle: cleanConversationTitle(promptTitles.get(conversationId)) || "Website visitor",
       };
-    }));
-    assets.push(...libraryAssets.filter((asset): asset is WorkspaceAsset => asset !== null));
+    });
+
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
       id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
       customer: Array.isArray(o.contacts) ? o.contacts[0]?.name || "Customer" : o.contacts?.name || "Customer",
@@ -232,8 +147,115 @@ export const getMismaData = createServerFn({ method: "POST" })
     const knowledge = check(knowledgeResult.data, knowledgeResult.error);
     const customers = check(customersResult.data, customersResult.error);
     return {
-      workspace, conversations, orders, knowledge, customers, assets,
+      workspace, conversations, orders, knowledge, customers, assets: [],
       unreadVisitorMessages, unreadVisitorCount, websites, handoffs, notifications, products, channelConnections,
+    };
+  });
+
+/**
+ * Load signed media URLs only when the Images or Library view is opened.
+ * These queries and storage signing calls are intentionally kept off the
+ * dashboard's critical chat / notification bootstrap path.
+ */
+export const getWorkspaceAssets = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const [conversationsResult, libraryFilesResult] = await Promise.all([
+      db.from("conversations").select("id")
+        .eq("workspace_id", workspaceId)
+        .order("updated_at", { ascending: false })
+        .limit(200),
+      db.from("workspace_library_files")
+        .select("id,storage_path,file_name,mime_type,file_size,created_at")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
+    const conversations = check(conversationsResult.data, conversationsResult.error);
+    const libraryFiles = check(libraryFilesResult.data, libraryFilesResult.error);
+    const conversationIds = conversations.map((conversation: any) => conversation.id);
+
+    const assetRowsResult = conversationIds.length
+      ? await db.from("messages")
+        .select("id,conversation_id,role,text,created_at,attachments")
+        .in("conversation_id", conversationIds)
+        .order("id", { ascending: false })
+        .limit(250)
+      : { data: [] as any[], error: null };
+    if (assetRowsResult.error) throw new Error("Could not load your workspace media library.");
+
+    const assetJobs: Array<Promise<WorkspaceAsset | null>> = [];
+    for (const row of assetRowsResult.data ?? []) {
+      const attachments: unknown[] = Array.isArray(row.attachments) ? row.attachments : [];
+      attachments.forEach((rawAttachment, index) => {
+        if (!rawAttachment || typeof rawAttachment !== "object" || Array.isArray(rawAttachment)) return;
+        const item = rawAttachment as Record<string, unknown>;
+        const kind = typeof item.kind === "string" ? item.kind : "file";
+        if (kind === "video-frame" || kind === "video-job") return;
+        const path = typeof item.path === "string" && item.path.startsWith(`${workspaceId}/`)
+          ? item.path
+          : "";
+        const originalUrl = typeof item.url === "string" && /^https:\/\//i.test(item.url)
+          ? item.url
+          : "";
+        if (!path && !originalUrl) return;
+
+        assetJobs.push((async () => {
+          let url = originalUrl;
+          if (path) {
+            const { data: signed } = await db.storage.from("misma-media").createSignedUrl(path, 3600);
+            if (signed?.signedUrl) url = signed.signedUrl;
+          }
+          if (!url) return null;
+          return {
+            id: String(row.id) + "-" + index,
+            messageId: Number(row.id),
+            conversationId: Number(row.conversation_id),
+            role: typeof row.role === "string" ? row.role : "",
+            text: typeof row.text === "string" ? row.text : "",
+            created_at: typeof row.created_at === "string" ? row.created_at : "",
+            kind,
+            name: typeof item.name === "string" ? item.name : "Workspace file",
+            mimeType: typeof item.mimeType === "string" ? item.mimeType : "",
+            size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
+            path,
+            url,
+          };
+        })());
+      });
+    }
+
+    const [conversationAssets, libraryAssets] = await Promise.all([
+      Promise.all(assetJobs),
+      Promise.all(libraryFiles.map(async (row: any): Promise<WorkspaceAsset | null> => {
+        const { data: signed, error } = await db.storage.from("misma-media").createSignedUrl(row.storage_path, 3600);
+        if (error || !signed?.signedUrl) return null;
+        const mimeType = String(row.mime_type || "application/octet-stream");
+        const kind = mimeType.startsWith("image/") ? "image" : mimeType.startsWith("video/") ? "video" : "file";
+        return {
+          id: "library-" + String(row.id),
+          libraryFileId: String(row.id),
+          messageId: 0,
+          conversationId: 0,
+          role: "library",
+          text: "",
+          created_at: String(row.created_at || ""),
+          kind,
+          name: String(row.file_name || "Library file"),
+          mimeType,
+          size: Number(row.file_size || 0),
+          path: String(row.storage_path),
+          url: signed.signedUrl,
+        };
+      })),
+    ]);
+
+    return {
+      assets: [
+        ...conversationAssets.filter((asset): asset is WorkspaceAsset => asset !== null),
+        ...libraryAssets.filter((asset): asset is WorkspaceAsset => asset !== null),
+      ],
     };
   });
 
