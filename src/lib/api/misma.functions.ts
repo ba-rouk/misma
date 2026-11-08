@@ -66,79 +66,70 @@ export const getMismaData = createServerFn({ method: "POST" })
     const notifications = check(notificationsResult.data, notificationsResult.error);
     const products = check(productsResult.data, productsResult.error);
     const channelConnections = check(channelConnectionsResult.data, channelConnectionsResult.error);
-    const conversationIds = rawConversations.map((conversation: any) => conversation.id);
     const visitorConversationIds = rawConversations
       .filter((conversation: any) => String(conversation.channel || "").trim().toLowerCase() !== "dashboard")
       .map((conversation: any) => Number(conversation.id));
 
-    // Resolve recent chat labels and visitor unread counts in the same round trip.
-    // Previously these database reads ran one after another, delaying the dashboard.
-    const [promptRowsResult, unreadCountResult, unreadRowsResult] = await Promise.all([
-      conversationIds.length
-        ? db.from("messages").select("conversation_id,id,text")
-          .in("conversation_id", conversationIds)
-          .in("role", ["human", "customer"])
-          .order("id", { ascending: true })
-          .limit(10000)
-        : Promise.resolve({ data: [] as any[], error: null }),
-      visitorConversationIds.length
-        ? db.from("messages").select("id", { count: "exact", head: true })
-          .in("conversation_id", visitorConversationIds)
-          .eq("role", "customer")
-          .is("read_at", null)
-        : Promise.resolve({ count: 0, error: null }),
-      visitorConversationIds.length
-        ? db.from("messages").select("id,conversation_id,text,created_at")
-          .in("conversation_id", visitorConversationIds)
-          .eq("role", "customer")
-          .is("read_at", null)
-          .order("created_at", { ascending: false })
-          .limit(50)
-        : Promise.resolve({ data: [] as any[], error: null }),
-    ]);
-    if (promptRowsResult.error) throw new Error("Could not load recent chat titles.");
-    if (unreadCountResult.error) throw new Error("Could not count unread visitor messages.");
-    if (unreadRowsResult.error) throw new Error("Could not load unread visitor messages.");
-
-    const promptTitles = new Map<number, string>();
-    for (const row of promptRowsResult.data ?? []) {
-      const id = Number(row.conversation_id);
-      if (!promptTitles.has(id)) promptTitles.set(id, String(row.text || ""));
-    }
-
     const cleanConversationTitle = (value: unknown): string => {
       const cleaned = String(value ?? "")
-        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\s*(?::|#|-)\s*)+/i, "")
-        .replace(/\s+/g, " ")
+        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\\s*(?::|#|-)\\s*)+/i, "")
+        .replace(/\\s+/g, " ")
         .trim();
-      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\s*[:#-].*)?$/i.test(cleaned)) return "";
+      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\\s*[:#-].*)?$/i.test(cleaned)) return "";
       if (/^(?:customer|visitor|user|human)[-_ ]+[0-9a-f-]{6,}$/i.test(cleaned)) return "";
       return cleaned.slice(0, 72);
     };
-    const conversations = rawConversations.map((c: any) => ({
-      id: c.id,
-      channel: c.channel,
-      text: c.latest_text,
-      status: c.status,
-      updated_at: c.updated_at,
-      name: cleanConversationTitle(promptTitles.get(Number(c.id))) || cleanConversationTitle(c.latest_text) || "New chat",
-      group_name: c.group_name || null,
+
+    // Use the conversation's latest preview for labels instead of scanning up to
+    // 10,000 historical messages just to rebuild titles during every dashboard load.
+    const conversations = rawConversations.map((conversation: any) => ({
+      id: conversation.id,
+      channel: conversation.channel,
+      text: conversation.latest_text,
+      status: conversation.status,
+      updated_at: conversation.updated_at,
+      name: cleanConversationTitle(conversation.latest_text) || "New chat",
+      group_name: conversation.group_name || null,
     }));
 
-    const unreadVisitorCount = unreadCountResult.count ?? 0;
-    const conversationById = new Map<number, any>(rawConversations.map((conversation: any) => [Number(conversation.id), conversation] as const));
-    const unreadVisitorMessages = (unreadRowsResult.data ?? []).map((message: any) => {
-      const conversationId = Number(message.conversation_id);
-      const conversation = conversationById.get(conversationId);
-      return {
-        id: Number(message.id),
-        conversationId,
-        text: String(message.text || ""),
-        created_at: String(message.created_at || ""),
-        channel: String(conversation?.channel || "Website"),
-        conversationTitle: cleanConversationTitle(promptTitles.get(conversationId)) || "Website visitor",
-      };
-    });
+    let unreadVisitorCount = 0;
+    let unreadVisitorMessages: Array<{
+      id: number;
+      conversationId: number;
+      text: string;
+      created_at: string;
+      channel: string;
+      conversationTitle: string;
+    }> = [];
+
+    if (visitorConversationIds.length) {
+      // One count+rows query replaces separate count, message, and title scans.
+      const { data: unreadRows, count, error } = await db.from("messages")
+        .select("id,conversation_id,text,created_at", { count: "exact" })
+        .in("conversation_id", visitorConversationIds)
+        .eq("role", "customer")
+        .is("read_at", null)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw new Error("Could not load unread visitor messages.");
+
+      unreadVisitorCount = count ?? 0;
+      const conversationById = new Map<number, any>(
+        rawConversations.map((conversation: any) => [Number(conversation.id), conversation] as const),
+      );
+      unreadVisitorMessages = (unreadRows ?? []).map((message: any) => {
+        const conversationId = Number(message.conversation_id);
+        const conversation = conversationById.get(conversationId);
+        return {
+          id: Number(message.id),
+          conversationId,
+          text: String(message.text || ""),
+          created_at: String(message.created_at || ""),
+          channel: String(conversation?.channel || "Website"),
+          conversationTitle: cleanConversationTitle(conversation?.latest_text) || "Website visitor",
+        };
+      });
+    }
 
     const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
       id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
