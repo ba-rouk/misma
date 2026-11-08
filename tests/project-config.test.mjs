@@ -867,7 +867,12 @@ test("widget microphone and speech talk show an explicit permission dialog and u
   assert.ok(widget.includes('requestMicForAction("speech")'));
   assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
   assert.ok(widget.includes("function getFemaleVoice()"));
-  assert.ok(widget.includes("return female[1]||female[0]"));
+  assert.ok(widget.includes("britishEnglishPattern"));
+  assert.ok(widget.includes("var britishFemale=female.filter"));
+  assert.ok(widget.includes("var englishFemale=female.filter"));
+  assert.ok(widget.includes('utterance.lang=womanVoice.lang||"en-GB"'));
+  assert.ok(widget.includes("utterance.pitch=1.12"));
+  assert.ok(widget.includes("utterance.rate=0.98"));
   assert.ok(widget.includes("synth.resume()"));
   assert.ok(widget.includes("Microphone is blocked. Tap the lock icon next to the address bar"));
   assert.ok(widget.includes('setVoiceState("idle",errorMessage)'));
@@ -1014,4 +1019,40 @@ test("dashboard and website widget share the Chrome-style microphone permission 
   assert.match(checklist, /Chrome Android/);
   assert.match(checklist, /Safari iOS/);
   assert.match(checklist, /schoolsize\.netlify\.app/);
+});
+
+
+test("website widget speech prefers a female British English voice", async () => {
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  const speechStart = widget.indexOf("function speakAsWoman(text){");
+  const speechEnd = widget.indexOf("\nfunction sendMessage(", speechStart);
+  assert.ok(speechStart >= 0 && speechEnd > speechStart);
+  const speech = widget.slice(speechStart, speechEnd);
+  assert.match(speech, /britishEnglishPattern=\/\^en\[-_\]gb/);
+  assert.match(speech, /var britishFemale=female\.filter/);
+  assert.match(speech, /return englishFemale\[0\]\|\|female\[0\]/);
+  assert.match(speech, /utterance\.pitch=1\.12/);
+  assert.match(speech, /utterance\.lang=womanVoice\.lang\|\|"en-GB"/);
+});
+
+test("dashboard critical workspace data loads before signing chat and library media URLs", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const initialStart = api.indexOf("export const getMismaData");
+  const assetsStart = api.indexOf("export const getWorkspaceAssets");
+  const initialLoader = api.slice(initialStart, assetsStart);
+  assert.ok(initialStart >= 0 && assetsStart > initialStart);
+  assert.doesNotMatch(initialLoader, /createSignedUrl/);
+  assert.match(initialLoader, /assets,\s*unreadVisitorMessages/);
+  assert.match(dashboard, /setDashboardDataLoaded\(true\);\s*void getWorkspaceAssets/);
+  assert.match(dashboard, /workspaceAssetsRequestRef\.current === assetsRequestId/);
+});
+
+test("website WhatsApp setup has a direct country selector and number plus a default message, without country search", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.doesNotMatch(dashboard, /countrySearch|Search country or dial code|Search country or \+250/);
+  assert.match(dashboard, /WEBSITE_PHONE_COUNTRY_CODES\.map/);
+  assert.match(dashboard, /Country code/);
+  assert.match(dashboard, /Phone number/);
+  assert.match(dashboard, /Welcome message/);
 });
