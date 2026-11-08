@@ -169,7 +169,7 @@ function listen(isVoiceChat){
   stopRecognition();
   if(isVoiceChat){finalTranscript="";interimTranscript="";setVoiceState("listening");}
   else{interimTranscript="";}
-  var instance=new Recognition();recognition=instance;instance.lang=isVoiceChat?"en-US":(navigator.language||"en-US");instance.interimResults=true;instance.continuous=false;instance.maxAlternatives=1;
+  var instance=new Recognition();recognition=instance;instance.lang=isVoiceChat?"en-GB":(navigator.language||"en-US");instance.interimResults=true;instance.continuous=false;instance.maxAlternatives=1;
   instance.onresult=function(event){
     var finalText="",interim="";
     for(var index=event.resultIndex;index<event.results.length;index+=1){
@@ -242,7 +242,7 @@ function speakAsWoman(text){
     var british=female.filter(isBritishEnglish);
     if(british.length)return british[0];
     var english=female.filter(isEnglish);
-    return english[0]||female[0];
+    return english[0];
   }
   function waitForVoice(){var current=getFemaleVoice();if(current)return Promise.resolve(current);return new Promise(function(resolve){
     var finished=false;function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice());}
