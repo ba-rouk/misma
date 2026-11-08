@@ -108,6 +108,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         .select("id,conversation_id,text,created_at", { count: "exact" })
         .in("conversation_id", visitorConversationIds)
         .eq("role", "customer")
+        .eq("is_voice", false)
         .is("read_at", null)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -331,6 +332,7 @@ export const getVisitorNotifications = createServerFn({ method: "POST" })
       .select("id,conversation_id,text,created_at", { count: "exact" })
       .in("conversation_id", conversationIds)
       .eq("role", "customer")
+      .eq("is_voice", false)
       .is("read_at", null)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -368,6 +370,7 @@ export const markVisitorMessagesRead = createServerFn({ method: "POST" })
       .update({ read_at: new Date().toISOString() })
       .eq("conversation_id", data.conversationId)
       .eq("role", "customer")
+      .eq("is_voice", false)
       .is("read_at", null)
       .select("id");
     if (error) throw new Error("Could not mark visitor messages as read.");
