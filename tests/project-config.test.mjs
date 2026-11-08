@@ -400,7 +400,12 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(dashboard, /<VoiceInputBar/);
   assert.match(dashboard, /onSend=\{\(transcript, signal, options\) =>/);
   assert.match(dashboard, /voice: options\?\.voice === true/);
-  assert.match(dashboard, /return typeof res\.aiMessage\.text === "string" \? res\.aiMessage\.text : ""/);
+  assert.match(dashboard, /if \(options\.voice\) \{[\s\S]*?res\.voiceReply/);
+  assert.match(dashboard, /if \(!options\.voice && !editId && !isRetry\)/);
+  assert.match(dashboard, /misma_active_chat_messages_v2_/);
+  assert.match(voice, /export function primeSpeechVoices/);
+  assert.match(component, /useLayoutEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
+  assert.match(component, /synth\.speak\(new SpeechSynthesisUtterance\("?"?"?\)\)/);
   assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /current\.interimResults = true/);
@@ -517,6 +522,49 @@ test("dictation cancel button is placed to the left of the waveform", async () =
   assert.match(component, /className="misma-voice-recording-row"[\s\S]*?className="misma-voice-dictation-btn is-cancel"[\s\S]*?className="misma-voice-waveform"/);
   assert.match(styles, /\.misma-voice-recording-row\s*\{[\s\S]*?display: flex/);
   assert.match(styles, /\.misma-voice-recording-row \.misma-voice-waveform\s*\{[\s\S]*?flex: 1 1 auto/);
+});
+
+test("dashboard and widget Speech Talk starts without duplicate microphone preflight or transcript bubbles", async () => {
+  const voice = await read("../src/lib/misma-voice.ts");
+  const component = await read("../src/components/voice-input-bar.tsx");
+  const permission = await read("../src/lib/use-mic-permission.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+
+  assert.match(voice, /export function primeSpeechVoices/);
+  assert.match(component, /useLayoutEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
+  assert.match(component, /synth\.speak\(new SpeechSynthesisUtterance\("?"?"?\)\)/);
+  const dictationStart = voice.slice(voice.indexOf("export function createDictation"), voice.indexOf("type VoiceModeOptions"));
+  const voiceModeStart = voice.slice(voice.indexOf("export function createVoiceMode"));
+  assert.doesNotMatch(dictationStart, /await ensureMicPermission\(\)/);
+  assert.doesNotMatch(voiceModeStart, /await ensureMicPermission\(\)/);
+  assert.doesNotMatch(permission, /current === "checking"/);
+  assert.match(dashboard, /if \(options\.voice\) \{[\s\S]*?res\.voiceReply/);
+  assert.match(dashboard, /if \(!options\.voice && !editId && !isRetry\)/);
+  assert.match(dashboard, /misma_active_chat_messages_v2_/);
+  assert.match(widget, /var widgetInstance=initWidget\(\{\}\)/);
+  assert.match(widget, /function startVoiceSession\(\)[\s\S]*?speak\(new SpeechSynthesisUtterance\("?"?"?\)\)/);
+  assert.match(widget, /if\(!speakReply\)\{bubble\(text,"user"\);showTyping\(\);\}/);
+  assert.match(widget, /if\(!speakReply\)bubble\(answer,"ai"\)/);
+});
+
+test("speech turns are retained for AI context but excluded from visible chat history and Core.01 learning", async () => {
+  const migration = await read("../supabase/migrations/20261108113000_voice_messages_hidden_from_chat.sql");
+  const dashboardApi = await read("../src/lib/api/misma.functions.ts");
+  const chatEdge = await read("../supabase/functions/misma-chat/index.ts");
+  const widgetEdge = await read("../supabase/functions/misma-widget/index.ts");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS is_voice boolean NOT NULL DEFAULT false/);
+  assert.match(dashboardApi, /\.eq\("is_voice", false\)/);
+  assert.match(chatEdge, /is_voice: voice/);
+  assert.match(chatEdge, /if \(!voice\) \{[\s\S]*?core_01_experiences/);
+  assert.match(chatEdge, /voiceReply: answer/);
+  assert.match(chatEdge, /latest_text: voice \? "Voice conversation"/);
+  assert.match(widgetEdge, /\.eq\("is_voice", false\)/);
+  assert.match(widgetEdge, /is_voice: voice/);
+  assert.match(widgetEdge, /latest_text: voice \? "Voice conversation"/);
+  assert.match(widget, /visibleMessages=data\.messages\.filter\(function\(item\)\{return item\.is_voice!==true;\}\)/);
 });
 
 test("voice integration has no audio recording or transcription endpoint", async () => {
