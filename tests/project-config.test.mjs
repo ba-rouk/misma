@@ -581,8 +581,10 @@ test("voice integration has no audio recording or transcription endpoint", async
 test("voice-assisted human replies are hidden from customer chat transcript", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
-  assert.ok(dashboard.includes('action: "send-human-reply"'));\n  assert.ok(dashboard.includes("voice: options.voice === true"));
-  assert.ok(edge.includes("const voice = input.voice === true;"));\n  assert.ok(edge.includes("is_voice: voice"));
+  assert.ok(dashboard.includes('action: "send-human-reply"'));
+  assert.ok(dashboard.includes("voice: options.voice === true"));
+  assert.ok(edge.includes("const voice = input.voice === true;"));
+  assert.ok(edge.includes("is_voice: voice"));
   assert.ok(edge.includes('latest_text: voice ? "Voice conversation"'));
 });
 
