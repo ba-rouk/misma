@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   getMismaData,
+  getWorkspaceAssets,
   getVisitorNotifications,
   getWorkspaceLiveUpdates,
   getConversationMessages,
@@ -244,7 +245,6 @@ function WebsiteSocialSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
-  const [countrySearch, setCountrySearch] = useState("");
   const [draft, setDraft] = useState<WebsiteSocialDraft>({
     instagramUrl: site.instagram_url || "",
     whatsappCountryCode: site.whatsapp_country_code || "250",
@@ -252,10 +252,6 @@ function WebsiteSocialSettings({
     whatsappMessage: site.whatsapp_message || "",
   });
 
-  const filteredCountries = WEBSITE_PHONE_COUNTRY_CODES.filter((country) => {
-    const query = countrySearch.trim().toLowerCase().replace(/^\+/, "");
-    return !query || country.name.toLowerCase().includes(query) || country.code.includes(query);
-  });
   const selectedCountry = WEBSITE_PHONE_COUNTRY_CODES.find((country) => country.code === draft.whatsappCountryCode);
 
   const currentDraft = (): WebsiteSocialDraft => ({
@@ -386,15 +382,6 @@ function WebsiteSocialSettings({
               <strong>WhatsApp</strong>
               <span>{site.whatsapp_number ? "Connected" : "Optional"}</span>
             </div>
-            <label>
-              Search country or dial code
-              <input
-                type="search"
-                value={countrySearch}
-                placeholder="Search country or +250"
-                onChange={(event) => setCountrySearch(event.target.value)}
-              />
-            </label>
             <div className="aichat-whatsapp-number-row">
               <label>
                 Country code
@@ -402,10 +389,10 @@ function WebsiteSocialSettings({
                   value={draft.whatsappCountryCode}
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappCountryCode: event.target.value }))}
                 >
-                  {selectedCountry && !filteredCountries.some((country) => country.name === selectedCountry.name) && (
+                  {selectedCountry && !WEBSITE_PHONE_COUNTRY_CODES.some((country) => country.name === selectedCountry.name) && (
                     <option value={selectedCountry.code}>{selectedCountry.flag} {selectedCountry.name} (+{selectedCountry.code})</option>
                   )}
-                  {filteredCountries.map((country) => (
+                  {WEBSITE_PHONE_COUNTRY_CODES.map((country) => (
                     <option key={country.name} value={country.code}>{country.flag} +{country.code}</option>
                   ))}
                 </select>
@@ -423,7 +410,7 @@ function WebsiteSocialSettings({
               </label>
             </div>
             <label>
-              Welcome message
+              Default message
               <textarea
                 rows={3}
                 value={draft.whatsappMessage}
@@ -1719,6 +1706,7 @@ function Dashboard() {
   const chatViewVersionRef = useRef(0);
   const activeConversationIdRef = useRef<number | null>(null);
   const chatAbortControllerRef = useRef<AbortController | null>(null);
+  const workspaceAssetsRequestRef = useRef(0);
   const mediaAbortControllerRef = useRef<AbortController | null>(null);
 
 
@@ -1954,7 +1942,6 @@ function Dashboard() {
             }))
             .catch((cause) => console.warn("Could not read channel configuration status:", cause));
         }
-        setWorkspaceAssets(data.assets ?? []);
         if (data.workspace) {
           setProfileForm({
             name: data.workspace.name || "",
@@ -1965,6 +1952,22 @@ function Dashboard() {
           });
         }
         setDashboardDataLoaded(true);
+
+        // Media storage signing runs independently after the chat list, counts, and
+        // notifications are available, so it cannot hold the whole dashboard behind.
+        const assetRequestId = ++workspaceAssetsRequestRef.current;
+        setWorkspaceAssets([]);
+        void getWorkspaceAssets({ data: { token } })
+          .then((assetData) => {
+            if (assetRequestId === workspaceAssetsRequestRef.current) {
+              setWorkspaceAssets(assetData.assets ?? []);
+            }
+          })
+          .catch((assetError) => {
+            if (assetRequestId === workspaceAssetsRequestRef.current) {
+              console.warn("Could not finish loading workspace media:", assetError);
+            }
+          });
       })
       .catch((cause) => {
         setLoadError(cause instanceof Error ? cause.message : "Could not load your Misma workspace.");
