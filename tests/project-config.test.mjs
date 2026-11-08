@@ -463,12 +463,12 @@ test("dashboard paints cached recents and notification counts before live auth r
 test("WhatsApp Add channels has only a country-code phone row and a default message field", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const settingsStart = dashboard.indexOf("function WebsiteSocialSettings");
-  const settingsEnd = dashboard.indexOf("\\ntype Message =", settingsStart);
+  const settingsEnd = dashboard.indexOf("\ntype Message =", settingsStart);
   const settings = dashboard.slice(settingsStart, settingsEnd);
   assert.doesNotMatch(settings, /countrySearch|Search country or dial code|type="search"/);
-  assert.match(settings, /Country code[\\s\\S]*?type="select"|Country code[\\s\\S]*?<select/);
-  assert.match(settings, /Phone number[\\s\\S]*?type="tel"/);
-  assert.match(settings, /Default message[\\s\\S]*?<textarea/);
+  assert.match(settings, /Country code[\s\S]*?<select/);
+  assert.match(settings, /Phone number[\s\S]*?type="tel"/);
+  assert.match(settings, /Default message[\s\S]*?<textarea/);
 });
 
 test("dashboard chat scrolls in a full-width pane with the scrollbar at the far right edge", async () => {
