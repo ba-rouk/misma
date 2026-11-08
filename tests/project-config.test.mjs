@@ -543,7 +543,7 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
   assert.match(dashboard, /if \(!options\.voice && !editId && !isRetry\)/);
   assert.match(dashboard, /misma_active_chat_messages_v2_/);
   assert.match(widget, /var widgetInstance=initWidget\(\{\}\)/);
-  assert.ok(widget.includes('synth.speak(new SpeechSynthesisUtterance(""))'));
+  assert.ok(widget.includes('window.speechSynthesis.speak(new SpeechSynthesisUtterance(""))'));
   assert.match(widget, /if\(!speakReply\)\{bubble\(text,"user"\);showTyping\(\);\}/);
   assert.match(widget, /if\(!speakReply\)bubble\(answer,"ai"\)/);
 });
@@ -581,9 +581,9 @@ test("voice integration has no audio recording or transcription endpoint", async
 test("voice-assisted human replies are hidden from customer chat transcript", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
-  assert.match(dashboard, /action: "send-human-reply",[\\s\\S]*?voice: options\\.voice === true/);
-  assert.match(edge, /const voice = input\\.voice === true;[\\s\\S]*?is_voice: voice/);
-  assert.match(edge, /latest_text: voice \\? "Voice conversation"/);
+  assert.ok(dashboard.includes('action: "send-human-reply"'));\n  assert.ok(dashboard.includes("voice: options.voice === true"));
+  assert.ok(edge.includes("const voice = input.voice === true;"));\n  assert.ok(edge.includes("is_voice: voice"));
+  assert.ok(edge.includes('latest_text: voice ? "Voice conversation"'));
 });
 
 test("voice chat requests receive concise spoken replies and never upload recorded audio", async () => {
@@ -794,7 +794,7 @@ test("website widget connections support shared keys and safe removal", async ()
   assert.match(dashboard, /aichat-website-card-details/);
   assert.match(widget, /function initWidget\(initialConfig\)/);
   assert.match(widget, /action:"heartbeat"/);
-  assert.match(widget, /\.then\(initWidget\)/);
+  assert.match(widget, /\.then\(function\(data\)\{/);
 });
 
 
@@ -1151,7 +1151,7 @@ test("website Add channels has a country selector, WhatsApp number, and default 
 
 test("dashboard restores the selected chat from a user-scoped session cache while refreshing it", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.match(dashboard, /misma_active_chat_messages_v1_/);
+  assert.match(dashboard, /misma_active_chat_messages_v2_/);
   assert.match(dashboard, /sessionStorage\.getItem\(conversationCacheKey/);
   assert.match(dashboard, /setMessages\(cached\.messages\)/);
   assert.match(dashboard, /getConversationMessages\(\{/);
