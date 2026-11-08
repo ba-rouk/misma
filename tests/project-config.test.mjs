@@ -405,7 +405,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(dashboard, /misma_active_chat_messages_v2_/);
   assert.match(voice, /export function primeSpeechVoices/);
   assert.match(component, /useLayoutEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
-  assert.match(component, /synth\.speak\(new SpeechSynthesisUtterance\("?"?"?\)\)/);
+  assert.ok(component.includes('synth.speak(new SpeechSynthesisUtterance(""))'));
   assert.match(voice, /SpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /webkitSpeechRecognition\?: SpeechRecognitionConstructor/);
   assert.match(voice, /current\.interimResults = true/);
@@ -533,7 +533,7 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
 
   assert.match(voice, /export function primeSpeechVoices/);
   assert.match(component, /useLayoutEffect\(\(\) => \{[\s\S]*?primeSpeechVoices\(\)/);
-  assert.match(component, /synth\.speak\(new SpeechSynthesisUtterance\("?"?"?\)\)/);
+  assert.ok(component.includes('synth.speak(new SpeechSynthesisUtterance(""))'));
   const dictationStart = voice.slice(voice.indexOf("export function createDictation"), voice.indexOf("type VoiceModeOptions"));
   const voiceModeStart = voice.slice(voice.indexOf("export function createVoiceMode"));
   assert.doesNotMatch(dictationStart, /await ensureMicPermission\(\)/);
@@ -543,7 +543,7 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
   assert.match(dashboard, /if \(!options\.voice && !editId && !isRetry\)/);
   assert.match(dashboard, /misma_active_chat_messages_v2_/);
   assert.match(widget, /var widgetInstance=initWidget\(\{\}\)/);
-  assert.match(widget, /function startVoiceSession\(\)[\s\S]*?speak\(new SpeechSynthesisUtterance\("?"?"?\)\)/);
+  assert.ok(widget.includes('synth.speak(new SpeechSynthesisUtterance(""))'));
   assert.match(widget, /if\(!speakReply\)\{bubble\(text,"user"\);showTyping\(\);\}/);
   assert.match(widget, /if\(!speakReply\)bubble\(answer,"ai"\)/);
 });
@@ -578,12 +578,23 @@ test("voice integration has no audio recording or transcription endpoint", async
 });
 
 
+test("voice-assisted human replies are hidden from customer chat transcript", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(dashboard, /action: "send-human-reply",[\\s\\S]*?voice: options\\.voice === true/);
+  assert.match(edge, /const voice = input\\.voice === true;[\\s\\S]*?is_voice: voice/);
+  assert.match(edge, /latest_text: voice \\? "Voice conversation"/);
+});
+
 test("voice chat requests receive concise spoken replies and never upload recorded audio", async () => {
   const edgeFunction = await read("../supabase/functions/misma-chat/index.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
   const voice = await read("../src/lib/misma-voice.ts");
   assert.match(dashboard, /voice: options\?\.voice === true/);
   assert.match(edgeFunction, /const voice = input\.voice === true/);
+  assert.match(edgeFunction, /voiceReply: answer/);
+  assert.match(edgeFunction, /is_voice: voice/);
+  assert.match(edgeFunction, /if \(!voice\) \{/);
   assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
   assert.match(edgeFunction, /audio\/transcriptions/);
   assert.match(edgeFunction, /VOICE CONVERSATION/);
