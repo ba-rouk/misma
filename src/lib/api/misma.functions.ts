@@ -370,7 +370,6 @@ export const markVisitorMessagesRead = createServerFn({ method: "POST" })
       .update({ read_at: new Date().toISOString() })
       .eq("conversation_id", data.conversationId)
       .eq("role", "customer")
-      .eq("is_voice", false)
       .is("read_at", null)
       .select("id");
     if (error) throw new Error("Could not mark visitor messages as read.");
