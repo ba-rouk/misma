@@ -10,7 +10,7 @@ const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|
 function speechVoiceLanguageRank(voice: SpeechSynthesisVoice): number {
   const language = String(voice.lang || "").replace(/_/g, "-").toLowerCase();
   const label = voice.name + " " + voice.voiceURI;
-  if (language === "en-gb" || /\\b(?:british|uk english|united kingdom)\\b/i.test(label)) return 0;
+  if (language === "en-gb" || /\b(?:british|uk english|united kingdom)\b/i.test(label)) return 0;
   if (language.startsWith("en-") || language === "en" || /english/i.test(label)) return 1;
   return 2;
 }
