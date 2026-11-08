@@ -232,9 +232,18 @@ function listen(isVoiceChat){
 function speakAsWoman(text){
   var synth=window.speechSynthesis;
   if(!synth||typeof window.SpeechSynthesisUtterance==="undefined"){setVoiceState("ready","Speech playback is not supported by this browser.");return Promise.resolve(false);}
-  var femalePattern=/female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|google.*female/i;
+  var femalePattern=/female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|sonia|hazel|kate|serena|amy|martha|fiona|moira|google.*female/i;
   var malePattern=/(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee|microsoft.*male/i;
-  function getFemaleVoice(){var voices=synth.getVoices();var female=voices.filter(function(voice){var label=voice.name+" "+voice.voiceURI;return femalePattern.test(label)&&!malePattern.test(label);});return female[1]||female[0];}
+  function isBritishEnglish(voice){return /^en[-_]?(GB|UK)(?:$|[-_])/i.test(voice.lang||"")||/\b(?:uk|british|united kingdom)\b/i.test(voice.name+" "+voice.voiceURI);}
+  function isEnglish(voice){return /^en(?:[-_]|$)/i.test(voice.lang||"")||/english/i.test(voice.name+" "+voice.voiceURI);}
+  function getFemaleVoice(){
+    var voices=synth.getVoices();
+    var female=voices.filter(function(voice){var label=voice.name+" "+voice.voiceURI;return femalePattern.test(label)&&!malePattern.test(label);});
+    var british=female.filter(isBritishEnglish);
+    if(british.length)return british[0];
+    var english=female.filter(isEnglish);
+    return english[0]||female[0];
+  }
   function waitForVoice(){var current=getFemaleVoice();if(current)return Promise.resolve(current);return new Promise(function(resolve){
     var finished=false;function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice());}
     synth.addEventListener("voiceschanged",done,{once:true});window.setTimeout(done,3000);
@@ -243,15 +252,15 @@ function speakAsWoman(text){
   if(!clean)return Promise.resolve(true);
   var parts=clean.match(/[^.!?]+[.!?]*\s*/g)||[clean];
   setVoiceState("speaking");
-  return waitForVoice().then(function(womanVoice){
-    if(!womanVoice){setVoiceState("ready","No matching female speech voice is installed on this device. Enable a female voice in your device text-to-speech settings.");return false;}
+  return waitForVoice().then(function(girlVoice){
+    if(!girlVoice){setVoiceState("ready","No matching female English speech voice is installed on this device. Enable an English female voice in your device text-to-speech settings.");return false;}
     return new Promise(function(resolve){
       var index=0,finished=false;
       function finish(result){if(finished)return;finished=true;voiceSpeechCancel=null;resolve(result);}
       function next(){
         if(finished)return;
         if(index>=parts.length||!voiceSession){finish(true);return;}
-        var utterance=new SpeechSynthesisUtterance(parts[index++].trim());utterance.lang=womanVoice.lang||"en-US";utterance.voice=womanVoice;utterance.pitch=1.04;utterance.rate=1;
+        var utterance=new SpeechSynthesisUtterance(parts[index++].trim());utterance.lang=girlVoice.lang||"en-GB";utterance.voice=girlVoice;utterance.pitch=1.16;utterance.rate=0.98;
         utterance.onend=next;utterance.onerror=next;synth.speak(utterance);
       }
       voiceSpeechCancel=function(){if(finished)return;synth.cancel();finish(false);};
