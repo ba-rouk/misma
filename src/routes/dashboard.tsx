@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   getMismaData,
+  getWorkspaceAssets,
   getVisitorNotifications,
   getWorkspaceLiveUpdates,
   getConversationMessages,
@@ -1364,8 +1365,11 @@ function formatInline(text: string) {
 function Dashboard() {
   const navigate = useNavigate();
   const [token, setToken] = useState<string | null>(null);
+  const [dashboardUserId, setDashboardUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const signingOutRef = useRef(false);
+  const workspaceAssetsRequestStartedRef = useRef(false);
+  const workspaceAssetsGenerationRef = useRef(0);
 
   // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1403,6 +1407,9 @@ function Dashboard() {
   // Business and user data
   const [workspace, setWorkspace] = useState<any>(null);
   const [workspaceAssets, setWorkspaceAssets] = useState<any[]>([]);
+  const [workspaceAssetsLoaded, setWorkspaceAssetsLoaded] = useState(false);
+  const [workspaceAssetsLoading, setWorkspaceAssetsLoading] = useState(false);
+  const [workspaceAssetsLoadError, setWorkspaceAssetsLoadError] = useState("");
   const [librarySearch, setLibrarySearch] = useState("");
   const [conversations, setConversations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1767,6 +1774,12 @@ function Dashboard() {
             profileAvatarPreviewUrlRef.current = null;
             setProfileAvatarStoragePath(null);
             setProfileImage("");
+            setDashboardUserId(null);
+            setWorkspaceAssets([]);
+            setWorkspaceAssetsLoaded(false);
+            setWorkspaceAssetsLoading(false);
+            workspaceAssetsGenerationRef.current += 1;
+            workspaceAssetsRequestStartedRef.current = false;
             setToken(null);
             setAuthChecked(true);
             if (event === "INITIAL_SESSION" || event === "SIGNED_OUT") {
@@ -1778,6 +1791,7 @@ function Dashboard() {
           const s = session;
           sessionStorage.setItem("misma_id_token", s.access_token);
           if (s.user.email) sessionStorage.setItem("misma_email", s.user.email);
+          setDashboardUserId(s.user.id);
           setProfileEmail(s.user.email ?? "");
           const metadata = s.user.user_metadata || {};
           const displayName = [
@@ -1928,41 +1942,88 @@ function Dashboard() {
     };
   }, [dashboardDataLoaded, unreadVisitorMessages, notificationPreferences.chatActivity]);
 
+  const applyDashboardData = (data: any, refreshChannelStatus = true) => {
+    setWorkspace(data.workspace);
+    setConversations(data.conversations ?? []);
+    setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
+    setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
+    setOrders(data.orders ?? []);
+    setKnowledgeList(data.knowledge ?? []);
+    setCustomers(data.customers ?? []);
+    setConnectedWebsites(data.websites ?? []);
+    setHumanHandoffs(data.handoffs ?? []);
+    setAllNotifications(data.notifications ?? []);
+    setProductsServices(data.products ?? []);
+    setChannelConnections(data.channelConnections ?? []);
+
+    if (refreshChannelStatus && data.workspace?.id) {
+      void callWidgetFunction({ action: "connection-status", workspaceId: data.workspace.id })
+        .then((status) => setChannelEnvironment({
+          whatsappConfigured: Boolean(status.whatsappConfigured),
+          phoneConfigured: Boolean(status.phoneConfigured),
+        }))
+        .catch((cause) => console.warn("Could not read channel configuration status:", cause));
+    }
+
+    if (data.workspace) {
+      setProfileForm({
+        name: data.workspace.name || "",
+        location: data.workspace.location || "",
+        description: data.workspace.description || "",
+        openingHours: data.workspace.opening_hours || "",
+        primaryLanguage: data.workspace.primary_language || "English",
+      });
+    }
+  };
+
   const loadData = () => {
     if (!token) return;
-    setDashboardDataLoaded(false);
     setLoadError("");
+
+    // Rehydrate the previous authenticated session's non-media dashboard snapshot
+    // immediately, then refresh it from Supabase in the background.
+    const cacheKey = dashboardUserId ? "misma_dashboard_bootstrap_v1_" + dashboardUserId : "";
+    let hasCachedDashboard = false;
+    if (cacheKey) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+        if (cached?.version === 1 && cached?.data && Array.isArray(cached.data.conversations)) {
+          applyDashboardData(cached.data, false);
+          setDashboardDataLoaded(true);
+          hasCachedDashboard = true;
+        }
+      } catch {
+        try { sessionStorage.removeItem(cacheKey); } catch { /* Ignore unavailable session storage. */ }
+      }
+    }
+    if (!hasCachedDashboard) setDashboardDataLoaded(false);
+
     getMismaData({ data: { token } })
       .then((data) => {
-        setWorkspace(data.workspace);
-        setConversations(data.conversations ?? []);
-        setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
-        setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
-        setOrders(data.orders ?? []);
-        setKnowledgeList(data.knowledge ?? []);
-        setCustomers(data.customers ?? []);
-        setConnectedWebsites(data.websites ?? []);
-        setHumanHandoffs(data.handoffs ?? []);
-        setAllNotifications(data.notifications ?? []);
-        setProductsServices(data.products ?? []);
-        setChannelConnections(data.channelConnections ?? []);
-        if (data.workspace?.id) {
-          void callWidgetFunction({ action: "connection-status", workspaceId: data.workspace.id })
-            .then((status) => setChannelEnvironment({
-              whatsappConfigured: Boolean(status.whatsappConfigured),
-              phoneConfigured: Boolean(status.phoneConfigured),
-            }))
-            .catch((cause) => console.warn("Could not read channel configuration status:", cause));
-        }
-        setWorkspaceAssets(data.assets ?? []);
-        if (data.workspace) {
-          setProfileForm({
-            name: data.workspace.name || "",
-            location: data.workspace.location || "",
-            description: data.workspace.description || "",
-            openingHours: data.workspace.opening_hours || "",
-            primaryLanguage: data.workspace.primary_language || "English",
-          });
+        applyDashboardData(data, true);
+        if (cacheKey) {
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify({
+              version: 1,
+              savedAt: Date.now(),
+              data: {
+                workspace: data.workspace,
+                conversations: data.conversations ?? [],
+                orders: data.orders ?? [],
+                knowledge: data.knowledge ?? [],
+                customers: data.customers ?? [],
+                websites: data.websites ?? [],
+                handoffs: data.handoffs ?? [],
+                notifications: data.notifications ?? [],
+                products: data.products ?? [],
+                channelConnections: data.channelConnections ?? [],
+                unreadVisitorMessages: data.unreadVisitorMessages ?? [],
+                unreadVisitorCount: data.unreadVisitorCount ?? 0,
+              },
+            }));
+          } catch {
+            // Session storage has a browser quota; live API data remains available.
+          }
         }
         setDashboardDataLoaded(true);
       })
@@ -1975,7 +2036,7 @@ function Dashboard() {
   useEffect(() => {
     if (!authChecked || !token) return;
     loadData();
-  }, [authChecked, token]);
+  }, [authChecked, token, dashboardUserId]);
 
   const openHumanRequestNotification = async (notification: any) => {
     const notificationId = Number(notification.id);
@@ -2029,6 +2090,29 @@ function Dashboard() {
         console.warn("Could not refresh workspace visitor activity:", cause);
       });
   };
+
+  useEffect(() => {
+    if (!token || !dashboardDataLoaded || (activeTab !== "images" && activeTab !== "library")) return;
+    if (workspaceAssetsLoaded || workspaceAssetsRequestStartedRef.current) return;
+
+    workspaceAssetsRequestStartedRef.current = true;
+    const generation = workspaceAssetsGenerationRef.current;
+    setWorkspaceAssetsLoading(true);
+    setWorkspaceAssetsLoadError("");
+    void getWorkspaceAssets({ data: { token } })
+      .then((result) => {
+        if (generation !== workspaceAssetsGenerationRef.current) return;
+        setWorkspaceAssets(result.assets ?? []);
+        setWorkspaceAssetsLoaded(true);
+      })
+      .catch((cause) => {
+        if (generation !== workspaceAssetsGenerationRef.current) return;
+        setWorkspaceAssetsLoadError(cause instanceof Error ? cause.message : "Could not load your saved files.");
+      })
+      .finally(() => {
+        if (generation === workspaceAssetsGenerationRef.current) setWorkspaceAssetsLoading(false);
+      });
+  }, [token, dashboardDataLoaded, activeTab, workspaceAssetsLoaded]);
 
   useEffect(() => {
     if (!authChecked || !token) return;
