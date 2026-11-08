@@ -72,10 +72,10 @@ export const getMismaData = createServerFn({ method: "POST" })
 
     const cleanConversationTitle = (value: unknown): string => {
       const cleaned = String(value ?? "")
-        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\\s*(?::|#|-)\\s*)+/i, "")
-        .replace(/\\s+/g, " ")
+        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\s*(?::|#|-)\s*)+/i, "")
+        .replace(/\s+/g, " ")
         .trim();
-      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\\s*[:#-].*)?$/i.test(cleaned)) return "";
+      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\s*[:#-].*)?$/i.test(cleaned)) return "";
       if (/^(?:customer|visitor|user|human)[-_ ]+[0-9a-f-]{6,}$/i.test(cleaned)) return "";
       return cleaned.slice(0, 72);
     };
@@ -319,10 +319,10 @@ export const getVisitorNotifications = createServerFn({ method: "POST" })
 
     const cleanTitle = (value: unknown): string => {
       const cleaned = String(value ?? "")
-        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\\s*(?::|#|-)\\s*)+/i, "")
-        .replace(/\\s+/g, " ")
+        .replace(/^(?:(?:customer|visitor|user|human|contact|lead)\s*(?::|#|-)\s*)+/i, "")
+        .replace(/\s+/g, " ")
         .trim();
-      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\\s*[:#-].*)?$/i.test(cleaned)) return "";
+      if (!cleaned || /^(?:customer|visitor|user|human|contact|lead)(?:\s*[:#-].*)?$/i.test(cleaned)) return "";
       if (/^(?:customer|visitor|user|human)[-_ ]+[0-9a-f-]{6,}$/i.test(cleaned)) return "";
       return cleaned.slice(0, 72);
     };
