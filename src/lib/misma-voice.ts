@@ -7,6 +7,61 @@ export type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
 const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|sonia|hazel|kate|serena|amy|martha|fiona|moira|emma|olivia|ava|allison|michelle|zoe|salli|joanna|kendra|kimberly|ivy|google.*female/i;
 const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee/i;
 
+let speechVoicesCache: SpeechSynthesisVoice[] = [];
+let speechVoicesPending: Promise<SpeechSynthesisVoice[]> | null = null;
+let speechVoicesWatcherAttached = false;
+
+function refreshSpeechVoices(): SpeechSynthesisVoice[] {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) speechVoicesCache = voices;
+  } catch {
+    // Some browsers can temporarily reject voice enumeration during startup.
+  }
+  return speechVoicesCache;
+}
+
+/** Warm the browser voice list before a user starts Speech Talk. */
+export function primeSpeechVoices(timeoutMs = 1_200): Promise<SpeechSynthesisVoice[]> {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    return Promise.resolve([]);
+  }
+
+  const synth = window.speechSynthesis;
+  if (!speechVoicesWatcherAttached) {
+    synth.addEventListener("voiceschanged", refreshSpeechVoices);
+    speechVoicesWatcherAttached = true;
+  }
+
+  const immediate = refreshSpeechVoices();
+  if (immediate.length) return Promise.resolve(immediate);
+  if (speechVoicesPending) return speechVoicesPending;
+
+  speechVoicesPending = new Promise<SpeechSynthesisVoice[]>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      synth.removeEventListener("voiceschanged", onVoicesChanged);
+      window.clearTimeout(timeoutId);
+      resolve(refreshSpeechVoices());
+    };
+    const onVoicesChanged = () => {
+      if (refreshSpeechVoices().length) finish();
+    };
+    const timeoutId = window.setTimeout(finish, timeoutMs);
+    synth.addEventListener("voiceschanged", onVoicesChanged);
+    // Trigger enumeration while the browser is otherwise idle.
+    refreshSpeechVoices();
+    if (speechVoicesCache.length) finish();
+  }).finally(() => {
+    speechVoicesPending = null;
+  });
+
+  return speechVoicesPending;
+}
+
 function speechVoiceLanguageRank(voice: SpeechSynthesisVoice): number {
   const language = String(voice.lang || "").replace(/_/g, "-").toLowerCase();
   const label = voice.name + " " + voice.voiceURI;
@@ -320,18 +375,15 @@ export function createDictation({
       interimText = "";
       clearTimers();
       onState?.("requesting");
+      // VoiceInputBar has already completed the single microphone preflight.
+      // Do not open a second getUserMedia stream before starting recognition.
+      if (!active || startGeneration !== generation) return false;
+      onState?.("listening");
       try {
-        await ensureMicPermission();
-        if (!active || startGeneration !== generation) return false;
-        onState?.("listening");
         beginRecognition();
         return true;
-      } catch (cause) {
-        if (startGeneration !== generation) return false;
-        const code = cause && typeof cause === "object" && "code" in cause
-          ? String((cause as { code: unknown }).code)
-          : "permission";
-        fail(code);
+      } catch {
+        fail("recognition");
         return false;
       }
     },
@@ -501,29 +553,39 @@ export function createVoiceMode({
       finish();
     };
 
-    const speakNext = () => {
-      if (finished) return;
-      if (index >= chunks.length || !on) {
+    void primeSpeechVoices().then((voices) => {
+      if (finished || !on) {
         finish();
         return;
       }
-      const utterance = new SpeechSynthesisUtterance(chunks[index++]);
-      utterance.lang = lang;
-      utterance.pitch = currentVoicePreset === "girl" ? 1.2 : currentVoicePreset === "boy" ? 0.88 : currentVoicePreset === "woman" ? 1 : 0.82;
-      const preferredVoice = getSpeechVoiceForPreset(synth.getVoices(), currentVoicePreset);
+      const preferredVoice = getSpeechVoiceForPreset(voices, currentVoicePreset);
       if (!preferredVoice) {
         finish();
         onError?.("voice-unavailable");
         return;
       }
-      utterance.voice = preferredVoice;
-      utterance.onend = speakNext;
-      utterance.onerror = speakNext;
-      synth.speak(utterance);
-    };
 
-    setState("speaking");
-    speakNext();
+      const speakNext = () => {
+        if (finished) return;
+        if (index >= chunks.length || !on) {
+          finish();
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(chunks[index++]);
+        utterance.lang = preferredVoice.lang || lang;
+        utterance.pitch = currentVoicePreset === "girl" ? 1.2 : currentVoicePreset === "boy" ? 0.88 : currentVoicePreset === "woman" ? 1 : 0.82;
+        utterance.voice = preferredVoice;
+        utterance.onend = speakNext;
+        utterance.onerror = speakNext;
+        synth.speak(utterance);
+      };
+
+      setState("speaking");
+      speakNext();
+    }).catch(() => {
+      finish();
+      onError?.("voice-unavailable");
+    });
   });
 
   const respond = async (spokenText: string) => {
@@ -644,18 +706,8 @@ export function createVoiceMode({
       // Some browsers do not expose speech output.
     }
 
-    try {
-      await ensureMicPermission();
-    } catch (cause) {
-      if (attempt !== startAttempt) return false;
-      const code = cause && typeof cause === "object" && "code" in cause
-        ? String((cause as { code: unknown }).code)
-        : "permission";
-      onError?.(code);
-      setState("idle");
-      return false;
-    }
-
+    // VoiceInputBar performs the microphone permission preflight before calling start().
+    // Reusing that approval avoids opening a second microphone stream after the click.
     if (attempt !== startAttempt) return false;
     on = true;
     muted = false;
