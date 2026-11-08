@@ -58,7 +58,6 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("channel_connections").select("id,channel,provider,display_name,external_id,phone_number,status,created_at").eq("workspace_id", workspaceId),
-        db.from("workspace_library_files").select("id,storage_path,file_name,mime_type,file_size,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(200),
       ]);
     const workspace = check(workspaceResult.data, workspaceResult.error);
     const rawConversations = check(conversationsResult.data, conversationsResult.error);
@@ -67,12 +66,16 @@ export const getMismaData = createServerFn({ method: "POST" })
     const notifications = check(notificationsResult.data, notificationsResult.error);
     const products = check(productsResult.data, productsResult.error);
     const channelConnections = check(channelConnectionsResult.data, channelConnectionsResult.error);
-    const conversationIds = rawConversations.map((conversation: any) => conversation.id);
+    // Recent dashboard-chat titles are the only names needed in the initial chat list.
+    // Website visitor notifications use the stable "Website visitor" fallback below.
+    const dashboardConversationIds = rawConversations
+      .filter((conversation: any) => String(conversation.channel || "").trim().toLowerCase() === "dashboard")
+      .map((conversation: any) => conversation.id);
     const promptTitles = new Map<number, string>();
-    if (conversationIds.length) {
+    if (dashboardConversationIds.length) {
       const { data: promptRows, error: promptRowsError } = await db.from("messages")
         .select("conversation_id,id,text")
-        .in("conversation_id", conversationIds)
+        .in("conversation_id", dashboardConversationIds)
         .in("role", ["human", "customer"])
         .order("id", { ascending: true })
         .limit(10000);
@@ -145,65 +148,104 @@ export const getMismaData = createServerFn({ method: "POST" })
       });
     }
 
-    // Collect recent chat attachments for the Images and Library views.
-    const assets: WorkspaceAsset[] = [];
+    const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
+      id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
+      customer: Array.isArray(o.contacts) ? o.contacts[0]?.name || "Customer" : o.contacts?.name || "Customer",
+    }));
+    const knowledge = check(knowledgeResult.data, knowledgeResult.error);
+    const customers = check(customersResult.data, customersResult.error);
+    return {
+      workspace, conversations, orders, knowledge, customers, assets: [],
+      unreadVisitorMessages, unreadVisitorCount, websites, handoffs, notifications, products, channelConnections,
+    };
+  });
+
+});
+
+/**
+ * Load media separately from the first dashboard payload. Signing hundreds of Storage
+ * URLs must not delay chat history, notification counts, or the first useful dashboard render.
+ */
+export const getWorkspaceAssets = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const [conversationsResult, libraryFilesResult] = await Promise.all([
+      db.from("conversations").select("id")
+        .eq("workspace_id", workspaceId)
+        .order("updated_at", { ascending: false })
+        .limit(200),
+      db.from("workspace_library_files").select("id,storage_path,file_name,mime_type,file_size,created_at")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
+    const conversationIds = check(conversationsResult.data, conversationsResult.error)
+      .map((conversation: any) => Number(conversation.id));
+
+    let assetRows: any[] = [];
     if (conversationIds.length) {
-      const { data: assetRows, error: assetRowsError } = await db.from("messages")
+      const { data: rows, error } = await db.from("messages")
         .select("id,conversation_id,role,text,created_at,attachments")
         .in("conversation_id", conversationIds)
         .order("id", { ascending: false })
         .limit(250);
-      if (assetRowsError) throw new Error("Could not load your workspace media library.");
-
-      const assetJobs: Array<Promise<WorkspaceAsset | null>> = [];
-      for (const row of assetRows ?? []) {
-        const attachments: unknown[] = Array.isArray(row.attachments) ? row.attachments : [];
-        attachments.forEach((rawAttachment, index) => {
-          if (!rawAttachment || typeof rawAttachment !== "object" || Array.isArray(rawAttachment)) return;
-          const item = rawAttachment as Record<string, unknown>;
-          const kind = typeof item.kind === "string" ? item.kind : "file";
-          if (kind === "video-frame" || kind === "video-job") return;
-          const path = typeof item.path === "string" && item.path.startsWith(`${workspaceId}/`)
-            ? item.path
-            : "";
-          const originalUrl = typeof item.url === "string" && /^https:\/\//i.test(item.url)
-            ? item.url
-            : "";
-          if (!path && !originalUrl) return;
-
-          assetJobs.push((async () => {
-            let url = originalUrl;
-            if (path) {
-              const { data: signed } = await db.storage.from("misma-media").createSignedUrl(path, 3600);
-              if (signed?.signedUrl) url = signed.signedUrl;
-            }
-            if (!url) return null;
-            return {
-              id: String(row.id) + "-" + index,
-              messageId: Number(row.id),
-              conversationId: Number(row.conversation_id),
-              role: typeof row.role === "string" ? row.role : "",
-              text: typeof row.text === "string" ? row.text : "",
-              created_at: typeof row.created_at === "string" ? row.created_at : "",
-              kind,
-              name: typeof item.name === "string" ? item.name : "Workspace file",
-              mimeType: typeof item.mimeType === "string" ? item.mimeType : "",
-              size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
-              path,
-              url,
-            };
-          })());
-        });
-      }
-      const signedAssets: WorkspaceAsset[] = [];
-      for (let index = 0; index < assetJobs.length; index += 30) {
-        const batch = await Promise.all(assetJobs.slice(index, index + 30));
-        signedAssets.push(...batch.filter((asset): asset is WorkspaceAsset => asset !== null));
-      }
-      assets.push(...signedAssets);
+      if (error) throw new Error("Could not load your workspace media library.");
+      assetRows = rows ?? [];
     }
+
+    const assetJobs: Array<Promise<WorkspaceAsset | null>> = [];
+    for (const row of assetRows) {
+      const attachments: unknown[] = Array.isArray(row.attachments) ? row.attachments : [];
+      attachments.forEach((rawAttachment, index) => {
+        if (!rawAttachment || typeof rawAttachment !== "object" || Array.isArray(rawAttachment)) return;
+        const item = rawAttachment as Record<string, unknown>;
+        const kind = typeof item.kind === "string" ? item.kind : "file";
+        if (kind === "video-frame" || kind === "video-job") return;
+        const path = typeof item.path === "string" && item.path.startsWith(`${workspaceId}/`)
+          ? item.path
+          : "";
+        const originalUrl = typeof item.url === "string" && /^https:\/\//i.test(item.url)
+          ? item.url
+          : "";
+        if (!path && !originalUrl) return;
+
+        assetJobs.push((async () => {
+          let url = originalUrl;
+          if (path) {
+            const { data: signed } = await db.storage.from("misma-media").createSignedUrl(path, 3600);
+            if (signed?.signedUrl) url = signed.signedUrl;
+          }
+          if (!url) return null;
+          return {
+            id: String(row.id) + "-" + index,
+            messageId: Number(row.id),
+            conversationId: Number(row.conversation_id),
+            role: typeof row.role === "string" ? row.role : "",
+            text: typeof row.text === "string" ? row.text : "",
+            created_at: typeof row.created_at === "string" ? row.created_at : "",
+            kind,
+            name: typeof item.name === "string" ? item.name : "Workspace file",
+            mimeType: typeof item.mimeType === "string" ? item.mimeType : "",
+            size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
+            path,
+            url,
+          };
+        })());
+      });
+    }
+
+    const signInBatches = async (jobs: Array<Promise<WorkspaceAsset | null>>) => {
+      const signed: WorkspaceAsset[] = [];
+      for (let index = 0; index < jobs.length; index += 30) {
+        const batch = await Promise.all(jobs.slice(index, index + 30));
+        signed.push(...batch.filter((asset): asset is WorkspaceAsset => asset !== null));
+      }
+      return signed;
+    };
+
     const libraryFiles = check(libraryFilesResult.data, libraryFilesResult.error);
-    const libraryAssets = await Promise.all(libraryFiles.map(async (row: any): Promise<WorkspaceAsset | null> => {
+    const libraryJobs = libraryFiles.map(async (row: any): Promise<WorkspaceAsset | null> => {
       const { data: signed, error } = await db.storage.from("misma-media").createSignedUrl(row.storage_path, 3600);
       if (error || !signed?.signedUrl) return null;
       const mimeType = String(row.mime_type || "application/octet-stream");
@@ -223,18 +265,13 @@ export const getMismaData = createServerFn({ method: "POST" })
         path: String(row.storage_path),
         url: signed.signedUrl,
       };
-    }));
-    assets.push(...libraryAssets.filter((asset): asset is WorkspaceAsset => asset !== null));
-    const orders = check(ordersResult.data, ordersResult.error).map((o: any) => ({
-      id: String(o.id), item: o.item, total_rwf: o.total_rwf, status: o.status,
-      customer: Array.isArray(o.contacts) ? o.contacts[0]?.name || "Customer" : o.contacts?.name || "Customer",
-    }));
-    const knowledge = check(knowledgeResult.data, knowledgeResult.error);
-    const customers = check(customersResult.data, customersResult.error);
-    return {
-      workspace, conversations, orders, knowledge, customers, assets,
-      unreadVisitorMessages, unreadVisitorCount, websites, handoffs, notifications, products, channelConnections,
-    };
+    });
+
+    const [chatAssets, libraryAssets] = await Promise.all([
+      signInBatches(assetJobs),
+      signInBatches(libraryJobs),
+    ]);
+    return { assets: [...chatAssets, ...libraryAssets] };
   });
 
 export const getWorkspaceLiveUpdates = createServerFn({ method: "POST" })
