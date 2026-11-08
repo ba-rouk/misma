@@ -1761,6 +1761,10 @@ function Dashboard() {
             setProfileImage("");
             setDashboardUserId(null);
             dashboardUserIdRef.current = null;
+            activeConversationIdRef.current = null;
+            setCurrentConversationId(null);
+            setPendingRestoreConversationId(null);
+            setMessages([]);
             setWorkspaceAssets([]);
             setWorkspaceAssetsLoaded(false);
             setWorkspaceAssetsLoading(false);
@@ -1776,6 +1780,12 @@ function Dashboard() {
 
           const s = session;
           if (dashboardUserIdRef.current !== s.user.id) {
+            if (dashboardUserIdRef.current) {
+              activeConversationIdRef.current = null;
+              setCurrentConversationId(null);
+              setPendingRestoreConversationId(null);
+              setMessages([]);
+            }
             dashboardUserIdRef.current = s.user.id;
             workspaceAssetsGenerationRef.current += 1;
             workspaceAssetsRequestStartedRef.current = false;
