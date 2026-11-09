@@ -5801,7 +5801,7 @@ function Dashboard() {
                 <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
                 <SettingsToggle title="Chat activity" description="Receive a browser notification when a new visitor message arrives while Misma is in the background." checked={notificationPreferences.chatActivity} onToggle={() => void toggleChatActivityNotifications()} />
                 <div className="aichat-settings-action-row">
-                  <div><strong>Human assistance requests</strong><small>Send a push notification to this phone or desktop when a customer asks for a person, even while Misma is closed. Enable each device separately.</small></div>
+                  <div><strong>Human assistance requests</strong><small>Send a push notification to this phone or desktop when a customer asks for a person, even while Misma is closed. In Chrome, allow notifications when prompted and enable each signed-in device separately.</small></div>
                   <button type="button" className="aichat-action-btn secondary" onClick={() => void toggleHumanRequestPushNotifications()} disabled={humanRequestPushBusy || !workspace?.id}>{humanRequestPushBusy ? "Updating..." : humanRequestPushEnabled ? "Disable on this device" : "Enable on this device"}</button>
                 </div>
                 {humanRequestPushMessage && <p className="aichat-settings-hint" role="status">{humanRequestPushMessage}</p>}
