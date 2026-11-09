@@ -127,6 +127,86 @@ async function requireWorkspace(token: string, requestedWorkspaceId: string): Pr
   if (!selected || !workspaceIds.includes(selected)) throw new Error("Select a workspace you belong to before continuing.");
   return { db: getAdmin(), workspaceId: selected, userId: userResult.data.user.id };
 }
+
+function isSupportedPushEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    if (url.protocol !== "https:") return false;
+    const hostname = url.hostname.toLowerCase();
+    return hostname === "fcm.googleapis.com" ||
+      hostname === "web.push.apple.com" ||
+      hostname.endsWith(".push.services.mozilla.com") ||
+      hostname.endsWith(".notify.windows.com");
+  } catch {
+    return false;
+  }
+}
+
+async function getVapidKeyPair(db: Db): Promise<{ publicKey: string; privateKey: string }> {
+  const generated = webpush.generateVAPIDKeys();
+  const result = await db.rpc("get_or_create_push_vapid_key_pair", {
+    p_public_key: generated.publicKey,
+    p_private_key: generated.privateKey,
+  });
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  if (result.error || !row?.public_key || !row?.private_key) {
+    throw new Error("Could not load Misma Web Push server keys.");
+  }
+  return { publicKey: String(row.public_key), privateKey: String(row.private_key) };
+}
+
+async function sendHumanRequestPush(
+  db: Db,
+  workspaceId: string,
+  requestId: number,
+  conversationId: number,
+  notificationId: number,
+  websiteDomain: string,
+): Promise<void> {
+  const subscriptions = await db.from("push_subscriptions")
+    .select("endpoint,p256dh,auth")
+    .eq("workspace_id", workspaceId)
+    .limit(500);
+  if (subscriptions.error) {
+    console.warn("[misma-widget] Could not load workspace push subscriptions:", subscriptions.error.code || "unknown");
+    return;
+  }
+  if (!subscriptions.data?.length) return;
+
+  try {
+    const keys = await getVapidKeyPair(db);
+    webpush.setVapidDetails("https://misma.onrender.com/", keys.publicKey, keys.privateKey);
+    const domain = safeString(websiteDomain, 180);
+    const payload = JSON.stringify({
+      title: "A customer needs a human",
+      body: domain ? "A customer requested help from " + domain + "." : "A customer requested help from your business.",
+      tag: "misma-human-request-" + requestId,
+      url: "/dashboard?tab=notifications&notificationId=" + notificationId,
+      conversationId,
+    });
+
+    await Promise.allSettled(subscriptions.data.map(async (subscription: AnyRecord) => {
+      try {
+        await webpush.sendNotification({
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+        }, payload, { TTL: 43200, urgency: "high" });
+      } catch (error) {
+        const statusCode = Number((error as AnyRecord)?.statusCode || 0);
+        if (statusCode === 404 || statusCode === 410) {
+          await db.from("push_subscriptions").delete()
+            .eq("workspace_id", workspaceId)
+            .eq("endpoint", subscription.endpoint);
+          return;
+        }
+        console.warn("[misma-widget] Human request push delivery failed:", statusCode || "unknown");
+      }
+    }));
+  } catch (error) {
+    console.warn("[misma-widget] Human request push was unavailable:", error instanceof Error ? error.message : "unknown");
+  }
+}
+
 function providerList() {
   const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" | "cohere" }> = [];
   const add = (name: string, keyName: string, modelName: string, model: string, endpoint: string, kind: "gemini" | "openai" | "cohere" = "openai") => {
