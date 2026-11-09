@@ -2218,6 +2218,30 @@ function Dashboard() {
     }
   };
 
+
+  useEffect(() => {
+    if (!dashboardDataLoaded || pushNotificationLinkHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "notifications") {
+      setActiveTab("notifications");
+      const notificationId = Number(params.get("notificationId"));
+      if (Number.isSafeInteger(notificationId) && notificationId > 0) {
+        const notification = allNotifications.find((item) => Number(item.id) === notificationId);
+        if (notification) void openHumanRequestNotification(notification);
+        else setSelectedHumanRequestNotificationId(notificationId);
+      }
+      params.delete("tab");
+      params.delete("notificationId");
+      const remainingQuery = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + (remainingQuery ? "?" + remainingQuery : "") + window.location.hash,
+      );
+    }
+    pushNotificationLinkHandledRef.current = true;
+  }, [dashboardDataLoaded, allNotifications]);
+
   const refreshVisitorNotifications = () => {
     if (!token) return;
     Promise.all([
