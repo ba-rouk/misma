@@ -47,7 +47,7 @@ root.innerHTML=[
 "<button class='human' type='button' title='Request a human' aria-label='Request a human'><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round'><circle cx='12' cy='8' r='3.4'/><path d='M5 20a7 7 0 0 1 14 0M19 5v4m-2-2h4'/></svg></button>",
 "<button class='close' type='button' aria-label='Close' title='Close'>×</button></header>",
 "<div class='messages' aria-live='polite'><div class='bubble ai'>Hello! I am Misma. How can I help you today?</div></div>",
-"<div class='handoff'><b>Speak with a person</b><p>Leave your details and the business team will follow up in this conversation.</p><input name='name' maxlength='120' placeholder='Your name' autocomplete='name'><input name='email' maxlength='240' type='email' placeholder='Email (optional)'><input name='phone' maxlength='80' placeholder='Phone (optional)'><textarea name='reason' maxlength='500' placeholder='What would you like help with?'></textarea><button class='handoff-submit' type='button'>Request a human</button></div>",
+"<div class='handoff'><b>Speak with a person</b><p>Leave your details and an assistant will follow up in this conversation.</p><input name='name' maxlength='120' placeholder='Your name' autocomplete='name'><input name='email' maxlength='240' type='email' placeholder='Email (optional)'><input name='phone' maxlength='80' placeholder='Phone (optional)'><textarea name='reason' maxlength='500' placeholder='What would you like help with?'></textarea><button class='handoff-submit' type='button'>Request a human</button></div>",
 "<div class='composer-wrap'><form class='composer'><div class='recording-waveform' aria-label='Listening'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><textarea name='message' maxlength='2000' placeholder='Message Misma…' aria-label='Message Misma' rows='1'></textarea><div class='composer-actions'>",
 "<button class='icon-btn mic' type='button' aria-label='Start microphone dictation' title='Dictate message'><svg viewBox='0 0 24 24'><rect x='9' y='2.5' width='6' height='12' rx='3'/><path d='M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6'/></svg></button>",
 "<button class='send-btn primary is-voice' type='button' aria-label='Start voice chat' title='Start voice chat'><svg viewBox='0 0 24 24'><rect x='3' y='9' width='3' height='6' rx='1.5'/><rect x='8' y='5' width='3' height='14' rx='1.5'/><rect x='13' y='7' width='3' height='10' rx='1.5'/><rect x='18' y='3' width='3' height='18' rx='1.5'/></svg></button>",
@@ -625,7 +625,7 @@ $(".handoff-submit").addEventListener("click",function(){
     handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});
     setStatus("Human request sent. A person will reply here.");
     return refreshHistory().then(function(){
-      if(!result.confirmationSaved)bubble(result.confirmationText||"Your request to speak with a person has been sent. The business team will follow up here.","ai");
+      if(!result.confirmationSaved)bubble(result.confirmationText||"Your request to speak with a person has been sent. An assistant will follow up here.","ai");
     });
   }).catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
 });
