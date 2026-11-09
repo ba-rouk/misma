@@ -67,4 +67,5 @@
 - [x] Run `bun test`, `bun run typecheck`, and `bun run build`.
 - [x] Run `deno check supabase/functions/misma-widget/index.ts`.
 - [x] Apply the additive Supabase migration, deploy the updated Edge Function, and check Supabase security/performance advisors.
-- [x] Open PR, verify CI, perform a separate whole-branch review, merge, and verify the Render deployment is live.
+- [x] Open PR, verify CI, and perform a separate whole-branch review.
+- [ ] Merge the PR and verify the Render deployment is live.
