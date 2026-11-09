@@ -1334,7 +1334,44 @@ Deno.serve(async (request: Request) => {
 
     const authorization = request.headers.get("authorization") || "";
     const token = authorization.replace(/^Bearer\s+/i, "");
-    const { workspaceId } = await requireWorkspace(token, safeString(input.workspaceId, 80));
+    const { workspaceId, userId } = await requireWorkspace(token, safeString(input.workspaceId, 80));
+
+    if (input.action === "push-public-key") {
+      const keys = await getVapidKeyPair(db);
+      return respond(200, { ok: true, publicKey: keys.publicKey });
+    }
+    if (input.action === "save-push-subscription") {
+      const subscription = isRecord(input.subscription) ? input.subscription : {};
+      const endpoint = safeString(subscription.endpoint, 2048);
+      const subscriptionKeys = isRecord(subscription.keys) ? subscription.keys : {};
+      const p256dh = safeString(subscriptionKeys.p256dh, 200);
+      const auth = safeString(subscriptionKeys.auth, 100);
+      if (!isSupportedPushEndpoint(endpoint) ||
+        !/^[A-Za-z0-9_-]{20,200}$/.test(p256dh) ||
+        !/^[A-Za-z0-9_-]{10,100}$/.test(auth)) {
+        throw new Error("The browser returned an invalid push subscription.");
+      }
+      const saved = await db.from("push_subscriptions").upsert({
+        workspace_id: workspaceId,
+        user_id: userId,
+        endpoint,
+        p256dh,
+        auth,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "endpoint" });
+      if (saved.error) throw new Error("Could not save this device's notification subscription.");
+      return respond(200, { ok: true, enabled: true });
+    }
+    if (input.action === "delete-push-subscription") {
+      const endpoint = safeString(input.endpoint, 2048);
+      if (!isSupportedPushEndpoint(endpoint)) throw new Error("The push subscription endpoint is invalid.");
+      const removed = await db.from("push_subscriptions").delete()
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", userId)
+        .eq("endpoint", endpoint);
+      if (removed.error) throw new Error("Could not remove this device's notification subscription.");
+      return respond(200, { ok: true, enabled: false });
+    }
 
     if (input.action === "connection-status") {
       const [site, channelRows] = await Promise.all([
