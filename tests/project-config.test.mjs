@@ -1360,3 +1360,35 @@ test("website and dashboard Speech Talk use short replies with bounded fast prov
   assert.match(voice, /primeSpeechVoices\(800\)/);
   assert.match(widgetRuntime, /window\.setTimeout\(done,650\)/);
 });
+
+
+test("human handoff requests stay in Manage customers, can be deleted individually, and stay out of Recents", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /handoffConversationIds\.has\(Number\(item\.id\)\)/);
+  assert.match(dashboard, /activeTab === "customers"/);
+  assert.match(dashboard, /humanRequestMenuId/);
+  assert.match(dashboard, /Delete request/);
+  assert.match(dashboard, /deleteHumanRequest\(\{ data: \{ token, requestId \} \}\)/);
+  assert.match(api, /export const deleteHumanRequest = createServerFn/);
+  assert.match(api, /\.eq\("workspace_id", workspaceId\)/);
+  assert.match(styles, /\.aichat-handoff-more/);
+});
+
+test("connected website detail cards start collapsed and can be expanded", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /const \[expandedWebsiteIds, setExpandedWebsiteIds\] = useState<string\[]>\(\[\]\)/);
+  assert.match(dashboard, /hidden=\{!expandedWebsiteIds\.includes\(site\.id\)\}/);
+  assert.match(dashboard, /setExpandedWebsiteIds\(\(current\) => current\.includes\(site\.id\)/);
+  assert.doesNotMatch(dashboard, /minimizedWebsiteIds/);
+});
+
+test("Misma publishes its logo as a browser and search-engine favicon", async () => {
+  const root = await read("../src/routes/__root.tsx");
+  const icon = await read("../public/misma-logo.svg");
+  assert.match(root, /rel: "icon", href: "\/misma-logo\.svg", type: "image\/svg\+xml"/);
+  assert.match(root, /title: "Misma \| Business AI, connected"/);
+  assert.match(icon, /viewBox="0 0 100 100"/);
+});
