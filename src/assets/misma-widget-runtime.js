@@ -47,7 +47,7 @@ root.innerHTML=[
 "<button class='human' type='button' title='Request a human' aria-label='Request a human'><svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round'><circle cx='12' cy='8' r='3.4'/><path d='M5 20a7 7 0 0 1 14 0M19 5v4m-2-2h4'/></svg></button>",
 "<button class='close' type='button' aria-label='Close' title='Close'>×</button></header>",
 "<div class='messages' aria-live='polite'><div class='bubble ai'>Hello! I am Misma. How can I help you today?</div></div>",
-"<div class='handoff'><b>Speak with a person</b><p>Leave your details and the business team will follow up in this conversation.</p><input name='name' maxlength='120' placeholder='Your name' autocomplete='name'><input name='email' maxlength='240' type='email' placeholder='Email (optional)'><input name='phone' maxlength='80' placeholder='Phone (optional)'><textarea name='reason' maxlength='500' placeholder='What would you like help with?'></textarea><button class='handoff-submit' type='button'>Request a human</button></div>",
+"<div class='handoff'><b>Speak with a person</b><p>Leave your details and an assistant will follow up in this conversation.</p><input name='name' maxlength='120' placeholder='Your name' autocomplete='name'><input name='email' maxlength='240' type='email' placeholder='Email (optional)'><input name='phone' maxlength='80' placeholder='Phone (optional)'><textarea name='reason' maxlength='500' placeholder='What would you like help with?'></textarea><button class='handoff-submit' type='button'>Request a human</button></div>",
 "<div class='composer-wrap'><form class='composer'><div class='recording-waveform' aria-label='Listening'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><textarea name='message' maxlength='2000' placeholder='Message Misma…' aria-label='Message Misma' rows='1'></textarea><div class='composer-actions'>",
 "<button class='icon-btn mic' type='button' aria-label='Start microphone dictation' title='Dictate message'><svg viewBox='0 0 24 24'><rect x='9' y='2.5' width='6' height='12' rx='3'/><path d='M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6'/></svg></button>",
 "<button class='send-btn primary is-voice' type='button' aria-label='Start voice chat' title='Start voice chat'><svg viewBox='0 0 24 24'><rect x='3' y='9' width='3' height='6' rx='1.5'/><rect x='8' y='5' width='3' height='14' rx='1.5'/><rect x='13' y='7' width='3' height='10' rx='1.5'/><rect x='18' y='3' width='3' height='18' rx='1.5'/></svg></button>",
@@ -97,11 +97,30 @@ function applyWebsiteSocialLinks(config) {
 
 applyWebsiteSocialLinks(initialConfig);
 var voiceView=$(".voice-view"),voiceOrb=$(".voice-orb"),voiceStatus=$(".voice-status"),voiceMuteButton=$(".voice-mute"),voiceStopButton=$(".voice-stop"),voiceModeButtons=root.querySelectorAll(".voice-mode");
-var busy=false,recognition=null,dictating=false,dictationSendAfterStop=false,voiceSession=false,voiceMuted=false,voiceModeChoice="hands-free",voiceState="idle",voiceRequestController=null,voiceSpeechCancel=null,finalTranscript="",interimTranscript="",typingBubble=null;
+var busy=false,recognition=null,dictating=false,dictationSendAfterStop=false,voiceSession=false,voiceMuted=false,voiceModeChoice="hands-free",voiceState="idle",voiceRequestController=null,voiceSpeechCancel=null,finalTranscript="",interimTranscript="",typingBubble=null,conversationStatus="",visitorTyping=false,visitorTypingTimer=null,lastTypingSignalAt=0,historyPollTimer=null,widgetDestroyed=false;
 function setStatus(message){status.textContent=message||"";}
 function bubble(text,kind){var node=document.createElement("div");node.className="bubble "+kind;node.textContent=text;messages.appendChild(node);messages.scrollTop=messages.scrollHeight;return node;}
 function showTyping(){removeTyping();typingBubble=bubble("Misma is typing","ai typing");}
 function removeTyping(){if(typingBubble&&typingBubble.parentNode)typingBubble.parentNode.removeChild(typingBubble);typingBubble=null;}
+function setVisitorTyping(next){
+  if(visitorTypingTimer&&!next){window.clearTimeout(visitorTypingTimer);visitorTypingTimer=null;}
+  if(!conversation||conversationStatus!=="Needs you"||(!next&&!visitorTyping))return;
+  visitorTyping=next;
+  call({action:"typing",isTyping:next}).catch(function(){});
+}
+function reportVisitorTyping(){
+  if(conversationStatus!=="Needs you"||!conversation||!input.value.trim())return;
+  var now=Date.now();
+  if(!visitorTyping||now-lastTypingSignalAt>=1200){
+    lastTypingSignalAt=now;
+    setVisitorTyping(true);
+  }
+  if(visitorTypingTimer)window.clearTimeout(visitorTypingTimer);
+  visitorTypingTimer=window.setTimeout(function(){
+    visitorTypingTimer=null;
+    setVisitorTyping(false);
+  },2800);
+}
 function resizeInput(){input.style.height="auto";input.style.height=Math.min(108,Math.max(36,input.scrollHeight))+"px";}
 function updatePrimary(){
   var hasText=Boolean(input.value.trim());
@@ -146,13 +165,15 @@ function closeWidget(){
 function refreshHistory(){
   if(!conversation||busy)return Promise.resolve(null);
   return call({action:"history"}).then(function(data){
+    conversationStatus=String(data.conversationStatus||"");
     if(Array.isArray(data.messages)){
       messages.innerHTML="";
       var visibleMessages=data.messages.filter(function(item){return item.is_voice!==true;});
       if(!visibleMessages.length)bubble("Hello! I am Misma. How can I help you today?","ai");
-      else visibleMessages.forEach(function(item){var text=item.role==="human"?"Business team: "+item.text:item.text;bubble(text,item.role==="customer"?"user":"ai");});
+      else visibleMessages.forEach(function(item){var text=item.role==="human"?"Assistant: "+item.text:item.text;bubble(text,item.role==="customer"?"user":"ai");});
     }
-    if(data.conversationStatus==="Needs you")setStatus((data.messages||[]).some(function(item){return item.role==="human";})?"You are chatting with the business team.":"Your request is with the business team. A person will reply here.");
+    if(conversationStatus==="Needs you")setStatus((data.messages||[]).some(function(item){return item.role==="human";})?"You are chatting with an assistant.":"Your request has reached the assistant. A reply will appear here.");
+    scheduleHistoryPoll();
     return data;
   });
 }
@@ -281,7 +302,7 @@ function speakAsWoman(text){
       var finished=false;
       function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice()||null);}
       synth.addEventListener("voiceschanged",done,{once:true});
-      window.setTimeout(done,3000);
+      window.setTimeout(done,650);
     });
   }
   var clean=String(text||"").replace(/https?:\/\/\S+/g," ").replace(/[*_~>|#]+/g," ").replace(/\s+/g," ").trim().slice(0,1600);
@@ -332,7 +353,10 @@ function speakAsWoman(text){
   });
 }
 function sendMessage(rawText,speakReply){
-  var text=String(rawText||"").trim();if(!text||busy)return Promise.resolve();busy=true;
+  var text=String(rawText||"").trim();if(!text||busy)return Promise.resolve();
+  setVisitorTyping(false);
+  if(visitorTypingTimer){window.clearTimeout(visitorTypingTimer);visitorTypingTimer=null;}
+  busy=true;
   var controller=speakReply?new AbortController():null;
   if(controller)voiceRequestController=controller;
   if(!speakReply){input.value="";resizeInput();updatePrimary();stopDictation();}
@@ -343,7 +367,7 @@ function sendMessage(rawText,speakReply){
     if(!speakReply)removeTyping();
     var answer=data.answer||"I could not prepare a reply.";
     if(!speakReply)bubble(answer,"ai");
-    if(data.handoffPending&&!speakReply)setStatus("Your message has been sent to the business team.");
+    if(data.handoffPending){conversationStatus="Needs you";if(!speakReply)setStatus("Your message has reached the assistant. A reply will appear here.");}
     if(speakReply&&voiceSession){return speakAsWoman(answer);}
     return null;
   }).catch(function(error){
@@ -568,7 +592,8 @@ $(".launch").addEventListener("click",function(){
 $(".close").addEventListener("click",closeWidget);
 
 $(".human").addEventListener("click",function(){handoff.classList.toggle("open");if(handoff.classList.contains("open"))handoff.querySelector("[name='name']").focus();});
-input.addEventListener("input",function(){resizeInput();updatePrimary();});
+input.addEventListener("input",function(){resizeInput();updatePrimary();reportVisitorTyping();});
+input.addEventListener("blur",function(){setVisitorTyping(false);});
 input.addEventListener("keydown",function(event){if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);}});
 $(".composer").addEventListener("submit",function(event){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);});
 micButton.addEventListener("click",function(){if(dictating)return;if(busy)return;if(!recognitionConstructor()){setStatus("Microphone dictation is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");return;}requestMicForAction("dictation");});
@@ -600,16 +625,32 @@ $(".handoff-submit").addEventListener("click",function(){
     handoff.querySelectorAll("input,textarea").forEach(function(element){element.value="";});
     setStatus("Human request sent. A person will reply here.");
     return refreshHistory().then(function(){
-      if(!result.confirmationSaved)bubble(result.confirmationText||"Your request to speak with a person has been sent. The business team will follow up here.","ai");
+      if(!result.confirmationSaved)bubble(result.confirmationText||"Your request to speak with a person has been sent. An assistant will follow up here.","ai");
     });
   }).catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
 });
-window.setInterval(function(){if(panel.classList.contains("open")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
+function scheduleHistoryPoll(){
+  if(widgetDestroyed)return;
+  if(historyPollTimer)window.clearTimeout(historyPollTimer);
+  var delay=conversationStatus==="Needs you"?1400:5000;
+  historyPollTimer=window.setTimeout(function(){
+    historyPollTimer=null;
+    if(widgetDestroyed)return;
+    if(panel.classList.contains("open")&&conversation&&!busy){
+      refreshHistory().catch(function(){}).finally(scheduleHistoryPoll);
+    }else scheduleHistoryPoll();
+  },delay);
+}
+scheduleHistoryPoll();
 refreshMicPermission();
   call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
   return {
     applyConfig:function(config){applyWebsiteSocialLinks(config||{});},
     destroy:function(){
+      widgetDestroyed=true;
+      if(historyPollTimer)window.clearTimeout(historyPollTimer);
+      if(visitorTypingTimer)window.clearTimeout(visitorTypingTimer);
+      setVisitorTyping(false);
       stopVoiceSession();
       stopDictation();
       if(host.parentNode)host.parentNode.removeChild(host);

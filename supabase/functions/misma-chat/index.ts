@@ -167,7 +167,7 @@ function shouldSearchWeb(message: string): boolean {
   return explicitSearch || freshnessLanguage || updateLanguage || liveFactLanguage;
 }
 
-async function searchLiveWeb(query: string): Promise<{ configured: boolean; results: LiveSearchResult[] }> {
+async function searchLiveWeb(query: string, voiceFastMode = false): Promise<{ configured: boolean; results: LiveSearchResult[] }> {
   const isNews = /\b(news|breaking|headlines|election|press conference|current events|recent development)\b/i.test(query);
   const isImmediate = /\b(today|right now|breaking|this week|yesterday|current(?:ly)?|as of today|as of now)\b/i.test(query);
   const isRecent = /\b(latest|newest|most recent|recent|new|updates?|developments?|release notes|new version|current version)\b/i.test(query);
@@ -181,13 +181,13 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
       const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(7_500),
+        signal: AbortSignal.timeout(voiceFastMode ? 3_000 : 7_500),
         body: JSON.stringify({
           api_key: tavilyKey,
           query: query.slice(0, 380),
           search_depth: "fast",
           topic: isNews ? "news" : "general",
-          max_results: 6,
+          max_results: voiceFastMode ? 3 : 6,
           include_answer: false,
           include_raw_content: false,
           ...(isNews ? { days: isImmediate ? 7 : 30 } : { time_range: currentTimeRange }),
@@ -196,7 +196,7 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) console.warn("[misma-chat] Tavily Search returned HTTP " + response.status + ".");
       if (response.ok && isRecord(payload) && Array.isArray(payload.results)) {
-        for (const item of payload.results.slice(0, 6)) {
+        for (const item of payload.results.slice(0, voiceFastMode ? 3 : 6)) {
           if (!isRecord(item) || typeof item.title !== "string" || typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) continue;
           results.push({
             title: item.title.slice(0, 240),
@@ -211,18 +211,18 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
     }
   }
 
-  if (!results.length && braveKey) {
+  if (!results.length && braveKey && (!voiceFastMode || !tavilyKey)) {
     try {
       const endpoint = isNews
         ? "https://api.search.brave.com/res/v1/news/search"
         : "https://api.search.brave.com/res/v1/web/search";
       const searchUrl = new URL(endpoint);
       searchUrl.searchParams.set("q", query.slice(0, 380));
-      searchUrl.searchParams.set("count", "6");
+      searchUrl.searchParams.set("count", voiceFastMode ? "3" : "6");
       searchUrl.searchParams.set("freshness", isImmediate ? "pw" : "pm");
       const response = await fetch(searchUrl, {
         headers: { "Accept": "application/json", "X-Subscription-Token": braveKey },
-        signal: AbortSignal.timeout(7_500),
+        signal: AbortSignal.timeout(voiceFastMode ? 3_000 : 7_500),
       });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) console.warn("[misma-chat] Brave Search returned HTTP " + response.status + ".");
@@ -230,7 +230,7 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
         ? (isNews && isRecord(payload.news) ? payload.news : isRecord(payload.web) ? payload.web : null)
         : null;
       if (response.ok && resultBlock && Array.isArray(resultBlock.results)) {
-        for (const item of resultBlock.results.slice(0, 6)) {
+        for (const item of resultBlock.results.slice(0, voiceFastMode ? 3 : 6)) {
           if (!isRecord(item) || typeof item.title !== "string" || typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) continue;
           results.push({
             title: item.title.slice(0, 240),
@@ -295,6 +295,7 @@ async function requestProvider(
   pdfs: PreparedPdf[],
   thinkHarder: boolean,
   timeoutMs?: number,
+  voiceMode = false,
 ): Promise<string> {
   if (images.length && !provider.supportsImages) {
     throw new Error(`NON_RETRYABLE: ${provider.name} does not accept image input`);
@@ -345,7 +346,10 @@ async function requestProvider(
             ...history.map(({ role, text }) => ({ role, parts: [{ text }] })),
             { role: "user", parts },
           ],
-          generationConfig: { maxOutputTokens: thinkHarder ? 4096 : 2048, temperature: 0.65 },
+          generationConfig: {
+            maxOutputTokens: voiceMode ? 180 : thinkHarder ? 4096 : 2048,
+            temperature: voiceMode ? 0.35 : 0.65,
+          },
         };
         url = `${provider.url}/${encodeURIComponent(provider.model)}:generateContent`;
         headers = { "Content-Type": "application/json", "x-goog-api-key": provider.apiKey };
@@ -366,8 +370,8 @@ async function requestProvider(
         body = {
           model: provider.model,
           messages,
-          max_tokens: thinkHarder ? 4096 : 2048,
-          temperature: 0.65,
+          max_tokens: voiceMode ? 180 : thinkHarder ? 4096 : 2048,
+          temperature: voiceMode ? 0.35 : 0.65,
           ...(thinkHarder ? { thinking: { type: "enabled", token_budget: 2048 } } : {}),
         };
       } else {
@@ -397,7 +401,7 @@ async function requestProvider(
       const response = await fetch(url, {
         method: "POST",
         headers,
-        signal: AbortSignal.timeout(timeoutMs ?? (thinkHarder ? 35_000 : images.length ? 22_000 : 15_000)),
+        signal: AbortSignal.timeout(timeoutMs ?? (voiceMode ? 6_500 : thinkHarder ? 35_000 : images.length ? 22_000 : 15_000)),
         body: JSON.stringify(body),
       });
 
@@ -1585,7 +1589,7 @@ Deno.serve(async (request) => {
     if (action !== "chat") return jsonResponse(400, { error: "Unsupported action." });
 
     const liveSearchPromise = shouldSearchWeb(message)
-      ? searchLiveWeb(message)
+      ? searchLiveWeb(message, voice)
       : Promise.resolve(null);
     const [workspaceResult, knowledgeResult, orderResult, contactResult, core01LessonsResult, liveSearch] = await Promise.all([
       db.from("workspaces")
@@ -1597,14 +1601,14 @@ Deno.serve(async (request) => {
         .eq("workspace_id", workspaceId)
         .eq("approved", true)
         .order("id", { ascending: false })
-        .limit(20),
+        .limit(voice ? 8 : 20),
       db.from("orders")
         .select("item,total_rwf,status,created_at")
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
         .limit(5),
       db.from("contacts")
-        .select("id", { count: "exact", head: true })
+        .select("id", { count: voice ? "estimated" : "exact", head: true })
         .eq("workspace_id", workspaceId),
       db.from("core_01_lessons")
         .select("room_key,lesson,confidence")
@@ -1612,7 +1616,7 @@ Deno.serve(async (request) => {
         .eq("status", "approved")
         .order("confidence", { ascending: false })
         .order("updated_at", { ascending: false })
-        .limit(12),
+        .limit(voice ? 6 : 12),
       liveSearchPromise,
     ]);
     if (workspaceResult.error || !workspaceResult.data) {
@@ -1711,8 +1715,8 @@ Deno.serve(async (request) => {
       }
 
       if (useConversationHistory) {
-        const historyWindow = requestedAttachments.length ? 4 : 10;
-        const historyTextLimit = requestedAttachments.length ? 1_800 : 4_000;
+        const historyWindow = voice || requestedAttachments.length ? 4 : 10;
+        const historyTextLimit = voice ? 1_200 : requestedAttachments.length ? 1_800 : 4_000;
         let historyQuery = db
           .from("messages")
           .select("role,text")
@@ -1797,7 +1801,7 @@ Deno.serve(async (request) => {
     }
 
     const providerOptions = {
-      thinkHarder,
+      thinkHarder: thinkHarder && !voice,
       hasImages: prepared.images.length > 0 || requestedAttachments.some((attachment) => attachment.kind === "video"),
     };
     const providers = getProviders(providerOptions).filter((provider) =>
@@ -1874,15 +1878,26 @@ Deno.serve(async (request) => {
       "- Protect sensitive information: " + String(aiSettings.protectSensitiveData !== false) + ".";
 
     if (voice) {
-      systemPrompt += "\n\nVOICE CONVERSATION: The user is speaking to you in a phone-call style conversation. Reply in one to three short, natural spoken sentences. Do not use Markdown, lists, emojis, links, headings, or long explanations. Answer the immediate point directly and keep the wording easy to understand aloud.";
+      systemPrompt += "\n\nVOICE CONVERSATION: The user is speaking to you in a phone-call style conversation. Answer the immediate point directly in one or two natural spoken sentences, ideally under 25 words. Do not use Markdown, lists, emojis, links, headings, or long explanations.";
     }
 
     let answer = "";
     let selectedProvider = "";
     const providerFailures: string[] = [];
-    for (const provider of providers) {
+    for (const [providerIndex, provider] of providers.entries()) {
+      if (voice && providerIndex >= 2) break;
       try {
-        answer = await requestProvider(provider, systemPrompt, history, message, prepared.images, prepared.pdfs, thinkHarder);
+        answer = await requestProvider(
+          provider,
+          systemPrompt,
+          history,
+          message,
+          prepared.images,
+          prepared.pdfs,
+          thinkHarder && !voice,
+          voice ? (providerIndex === 0 ? 6_500 : 4_500) : undefined,
+          voice,
+        );
         selectedProvider = provider.name;
         break;
       } catch {

@@ -597,7 +597,7 @@ test("voice chat requests receive concise spoken replies and never upload record
   assert.match(edgeFunction, /voiceReply: answer/);
   assert.match(edgeFunction, /is_voice: voice/);
   assert.match(edgeFunction, /if \(!voice\) \{/);
-  assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
+  assert.match(edgeFunction, /one or two natural spoken sentences, ideally under 25 words/i);
   assert.match(edgeFunction, /audio\/transcriptions/);
   assert.match(edgeFunction, /VOICE CONVERSATION/);
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/, "live speech chat stays on the browser speech pipeline, while uploaded audio is transcribed separately");
@@ -664,8 +664,8 @@ test("attachment preparation is concurrent and skipped for attachment-only clari
 
   assert.match(edgeFunction, /Promise\.all\(attachments\.slice\(index,\s*index \+ 2\)\.map\(prepareOne\)\)/);
   assert.match(edgeFunction, /shouldAnalyzeAttachments = Boolean\(message\.trim\(\)\)/);
-  assert.match(edgeFunction, /historyWindow = requestedAttachments\.length \? 4 : 10/);
-  assert.match(edgeFunction, /historyTextLimit = requestedAttachments\.length \? 1_800 : 4_000/);
+  assert.match(edgeFunction, /historyWindow = voice \|\| requestedAttachments\.length \? 4 : 10/);
+  assert.match(edgeFunction, /historyTextLimit = voice \? 1_200 : requestedAttachments\.length \? 1_800 : 4_000/);
 });
 
 
@@ -1137,7 +1137,7 @@ test("dashboard and website speech talk retry playback through the device defaul
   const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.match(voice, /primeSpeechVoices\(3000\)/);
+  assert.match(voice, /primeSpeechVoices\(800\)/);
   assert.match(voice, /speakChunk\(chunk, true\)/);
   assert.match(voice, /synth\.resume\(\)/);
   assert.match(component, /Misma could not play the spoken reply/);
@@ -1232,7 +1232,12 @@ test("web push is workspace-scoped, opt-in, and connected to website human hando
   assert.match(edge, /save-push-subscription/);
   assert.match(edge, /delete-push-subscription/);
   assert.match(edge, /async function sendHumanRequestPush/);
-  assert.match(edge, /sendHumanRequestPush\(db, site\.workspace_id/);
+  assert.match(edge, /function scheduleHumanRequestPush/);
+  assert.match(edge, /scheduleHumanRequestPush\(db, site\.workspace_id/);
+  assert.match(edge, /scheduleHumanRequestPush\(db, workspaceId, Number\(request\.data\.id\), Number\(conversation\.id\).*"phone"/);
+  assert.match(edge, /scheduleHumanRequestPush\(db, workspaceId, Number\(request\.data\.id\), Number\(conversation\.data\.id\).*"WhatsApp"/);
+  assert.match(edge, /runtime\.waitUntil\(pushTask\)/);
+  assert.match(dashboard, /In Chrome, allow notifications when prompted/i);
   assert.match(edge, /statusCode === 404 \|\| statusCode === 410/);
 });
 
@@ -1273,4 +1278,63 @@ test("human-request conversations show only customer and staff messages with opp
   assert.match(dashboard, /dashboardTabHistory/);
   assert.match(styles, /\.aichat-message-row\.is-customer\s*\{\s*justify-content:\s*flex-start/);
   assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble/);
+});
+
+test("website human handoff sends customer typing and new replies to the open business conversation quickly", async () => {
+  const migration = await read("../supabase/migrations/20261109110000_website_visitor_typing_presence.sql");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+
+  assert.match(migration, /visitor_typing_until timestamptz/);
+  const workspaceContext = await read("../src/lib/api/workspace-context.server.ts");
+
+  assert.match(api, /export const getConversationActivity = createServerFn/);
+  assert.match(api, /workspaceId: z\.string\(\)\.uuid\(\)/);
+  assert.match(api, /ensureWorkspace\(data\.token, data\.workspaceId\)/);
+  assert.match(workspaceContext, /requestedWorkspaceId\?: string/);
+  assert.match(workspaceContext, /membershipQuery = membershipQuery\.eq\("workspace_id", requestedWorkspaceId\)/);
+  assert.match(dashboard, /workspaceId: workspace\.id, conversationId: currentConversationId/);
+  assert.match(api, /visitor_typing_until/);
+  assert.match(api, /afterMessageId/);
+  assert.match(api, /\.gt\("id", data\.afterMessageId\)/);
+  assert.match(dashboard, /getConversationActivity\(\{/);
+  assert.match(dashboard, /window\.setTimeout\(poll, 1200\)/);
+  assert.match(dashboard, /visitorIsTyping/);
+  assert.match(dashboard, /Customer is typing/);
+  assert.match(styles, /\.aichat-visitor-typing-bubble/);
+  assert.match(widget, /function reportVisitorTyping\(\)/);
+  assert.match(widget, /call\(\{action:"typing",isTyping:next\}\)/);
+  assert.match(widget, /conversationStatus==="Needs you"\?1400:5000/);
+  assert.match(widget, /item\.role==="human"\?"Assistant: "\+item\.text/);
+  assert.doesNotMatch(widget, /"Business team: "\+item\.text/);
+  assert.doesNotMatch(widget, /business team will follow up/i);
+  assert.match(edge, /An assistant will follow up here/);
+  assert.match(edge, /Your message has reached the assistant/);
+  assert.match(edge, /input\.action === "typing"/);
+  assert.match(edge, /visitor_typing_until: typingUntil/);
+  assert.match(edge, /visitor_typing_until: null/);
+});
+
+test("website and dashboard Speech Talk use short replies with bounded fast provider attempts", async () => {
+  const widgetVoice = await read("../supabase/functions/misma-widget/index.ts");
+  const dashboardVoice = await read("../supabase/functions/misma-chat/index.ts");
+  const voice = await read("../src/lib/misma-voice.ts");
+  const widgetRuntime = await read("../src/assets/misma-widget-runtime.js");
+
+  assert.match(widgetVoice, /voice \? \(voiceAttempt === 0 \? 6500 : 4500\) : 18000/);
+  assert.match(widgetVoice, /max_tokens: voice \? 180 : 6000/);
+  assert.match(widgetVoice, /providerAttempt >= 2/);
+  assert.match(widgetVoice, /ideally under 25 words/);
+  assert.match(dashboardVoice, /voice \? \(providerIndex === 0 \? 6_500 : 4_500\) : undefined/);
+  assert.match(dashboardVoice, /if \(voice && providerIndex >= 2\) break/);
+  assert.match(dashboardVoice, /voiceMode \? 180 : thinkHarder \? 4096 : 2048/);
+  assert.match(dashboardVoice, /thinkHarder: thinkHarder && !voice/);
+  assert.match(dashboardVoice, /searchLiveWeb\(message, voice\)/);
+  assert.match(dashboardVoice, /AbortSignal\.timeout\(voiceFastMode \? 3_000 : 7_500\)/);
+  assert.match(dashboardVoice, /historyWindow = voice \|\| requestedAttachments\.length \? 4 : 10/);
+  assert.match(voice, /primeSpeechVoices\(800\)/);
+  assert.match(widgetRuntime, /window\.setTimeout\(done,650\)/);
 });

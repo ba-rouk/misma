@@ -470,6 +470,51 @@ export const getConversationMessages = createServerFn({ method: "POST" })
     return { conversation: conv, messages: mappedMessages };
   });
 
+export const getConversationActivity = createServerFn({ method: "POST" })
+  .validator(z.object({
+    token: auth,
+    workspaceId: z.string().uuid(),
+    conversationId: z.number().int().positive(),
+    afterMessageId: z.number().int().nonnegative().default(0),
+  }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token, data.workspaceId);
+    const { data: conversation, error: conversationError } = await db.from("conversations")
+      .select("id,channel,status,visitor_typing_until")
+      .eq("id", data.conversationId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (conversationError || !conversation) throw new Error("Conversation not found.");
+    if (String(conversation.channel || "").toLowerCase() !== "website") {
+      throw new Error("Live customer activity is available for website conversations only.");
+    }
+
+    const { data: rows, error } = await db.from("messages")
+      .select("id,role,text,created_at,attachments")
+      .eq("conversation_id", data.conversationId)
+      .eq("is_voice", false)
+      .in("role", ["customer", "human"])
+      .gt("id", data.afterMessageId)
+      .order("id", { ascending: true })
+      .limit(30);
+    if (error) throw new Error("Could not refresh the customer conversation.");
+
+    return {
+      conversation: {
+        id: Number(conversation.id),
+        status: String(conversation.status || ""),
+        visitorTypingUntil: conversation.visitor_typing_until ?? null,
+      },
+      messages: (rows ?? []).map((message: any) => ({
+        id: String(message.id),
+        role: message.role as "customer" | "human",
+        text: String(message.text || ""),
+        created_at: String(message.created_at || ""),
+        attachments: Array.isArray(message.attachments) ? message.attachments : [],
+      })),
+    };
+  });
+
 export const createConversation = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth, title: z.string().optional() }))
   .handler(async ({ data }) => {

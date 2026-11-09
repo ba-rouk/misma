@@ -1,14 +1,16 @@
 import { getSupabaseClientForToken } from "../supabase";
 
-export async function ensureWorkspace(token: string) {
+export async function ensureWorkspace(token: string, requestedWorkspaceId?: string) {
   const db = getSupabaseClientForToken(token);
   const { data: userData, error: userError } = await db.auth.getUser(token);
   if (userError || !userData.user) throw new Error("Your session expired. Please sign in again.");
 
-  const { data: membership, error: membershipError } = await db
+  let membershipQuery = db
     .from("workspace_members")
     .select("workspace_id, role")
-    .eq("user_id", userData.user.id)
+    .eq("user_id", userData.user.id);
+  if (requestedWorkspaceId) membershipQuery = membershipQuery.eq("workspace_id", requestedWorkspaceId);
+  const { data: membership, error: membershipError } = await membershipQuery
     .limit(1)
     .maybeSingle();
   if (membershipError) throw new Error(`Could not load your workspace: ${membershipError.message}`);

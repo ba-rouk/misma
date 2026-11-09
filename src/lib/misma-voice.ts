@@ -690,7 +690,7 @@ export function createVoiceMode({
     };
 
     let preferredVoice: SpeechSynthesisVoice | undefined;
-    void primeSpeechVoices(3000).then((voices) => {
+    void primeSpeechVoices(800).then((voices) => {
       if (finished || !on) {
         finish();
         return;
