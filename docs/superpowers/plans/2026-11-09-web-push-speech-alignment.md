@@ -29,7 +29,7 @@
 ### Task 1: Define push storage and trigger regression tests
 
 **Files:**
-- Create: `supabase/migrations/20261109100000_web_push_subscriptions.sql`
+- Create: `supabase/migrations/20261109091625_web_push_subscriptions.sql`
 - Create: `public/misma-push-sw.js`
 - Modify: `supabase/functions/misma-widget/index.ts`
 - Modify: `src/routes/dashboard.tsx`
@@ -42,29 +42,29 @@
 - Edge actions: `push-public-key`, `save-push-subscription`, `delete-push-subscription`.
 - VAPID key RPC: `get_or_create_push_vapid_key_pair(p_public_key text, p_private_key text)`.
 
-- [ ] Write a failing test named `web push is workspace-scoped, opt-in, and connected to website human handoff`.
+- [x] Write a failing test named `web push is workspace-scoped, opt-in, and connected to website human handoff`.
 - [ ] Write a failing test named `dashboard Speech Talk shares the widget's woman English voice profile`.
-- [ ] Run the new tests and verify they fail because the new migration, service worker, push actions, and speech parity are missing.
+- [x] Run the new tests and verify they fail because the new migration, service worker, push actions, and speech parity are missing.
 
 ### Task 2: Implement migration, subscription UI, worker, and push delivery
 
-- [ ] Add `push_subscriptions` with unique endpoint, membership FK, RLS read/insert/update/delete policies, and workspace/user index.
-- [ ] Add a private, non-API-exposed VAPID singleton and service-role-only keypair RPC.
-- [ ] Add authenticated public-key/save/delete actions to `misma-widget`; derive user ID from the verified bearer token.
-- [ ] Add VAPID-backed push delivery after `saveHumanRequest`; keep it best-effort and prune 404/410 subscriptions.
-- [ ] Add service worker display/click handling with same-origin URL validation.
-- [ ] Add Settings > Notifications device opt-in/disable controls and subscription restoration for this device.
+- [x] Add `push_subscriptions` with unique endpoint, membership FK, RLS read/insert/update/delete policies, and workspace/user index.
+- [x] Add a private, non-API-exposed VAPID singleton and service-role-only keypair RPC.
+- [x] Add authenticated public-key/save/delete actions to `misma-widget`; derive user ID from the verified bearer token.
+- [x] Add VAPID-backed push delivery after `saveHumanRequest`; keep it best-effort and prune 404/410 subscriptions.
+- [x] Add service worker display/click handling with same-origin URL validation.
+- [x] Add Settings > Notifications device opt-in/disable controls and subscription restoration for this device.
 
 ### Task 3: Align dashboard Speech Talk
 
-- [ ] Keep the dashboard VoiceInputBar Speech Talk on the same woman/Siri-first preset the widget uses.
-- [ ] Match widget pitch 1.16, rate 0.98, selected-voice locale and `en-US` fallback; keep the system default retry.
-- [ ] Speak up to 1,600 cleaned characters in sentence chunks instead of truncating dashboard voice replies at 320 characters.
-- [ ] Keep the dashboard's read-aloud selector and its pitch logic unchanged.
+- [x] Keep the dashboard VoiceInputBar Speech Talk on the same woman/Siri-first preset the widget uses.
+- [x] Match widget pitch 1.16, rate 0.98, selected-voice locale and `en-US` fallback; keep the system default retry.
+- [x] Speak up to 1,600 cleaned characters in sentence chunks instead of truncating dashboard voice replies at 320 characters.
+- [x] Keep the dashboard's read-aloud selector and its pitch logic unchanged.
 
 ### Task 4: Verify and ship
 
-- [ ] Run `bun test`, `bun run typecheck`, and `bun run build`.
-- [ ] Run `deno check supabase/functions/misma-widget/index.ts`.
-- [ ] Apply the additive Supabase migration, deploy the updated Edge Function, and check Supabase security/performance advisors.
-- [ ] Open PR, verify CI, perform a separate whole-branch review, merge, and verify the Render deployment is live.
+- [x] Run `bun test`, `bun run typecheck`, and `bun run build`.
+- [x] Run `deno check supabase/functions/misma-widget/index.ts`.
+- [x] Apply the additive Supabase migration, deploy the updated Edge Function, and check Supabase security/performance advisors.
+- [x] Open PR, verify CI, perform a separate whole-branch review, merge, and verify the Render deployment is live.
