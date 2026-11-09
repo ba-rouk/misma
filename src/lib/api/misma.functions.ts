@@ -473,11 +473,12 @@ export const getConversationMessages = createServerFn({ method: "POST" })
 export const getConversationActivity = createServerFn({ method: "POST" })
   .validator(z.object({
     token: auth,
+    workspaceId: z.string().uuid(),
     conversationId: z.number().int().positive(),
     afterMessageId: z.number().int().nonnegative().default(0),
   }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId } = await ensureWorkspace(data.token, data.workspaceId);
     const { data: conversation, error: conversationError } = await db.from("conversations")
       .select("id,channel,status,visitor_typing_until")
       .eq("id", data.conversationId)
