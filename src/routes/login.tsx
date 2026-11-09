@@ -1,11 +1,39 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
+
+const POST_LOGIN_REDIRECT_KEY = "misma_post_login_redirect";
+
+function safeDashboardDestination(value: string | null): string {
+  if (!value || typeof window === "undefined") return "/dashboard";
+  try {
+    const target = new URL(value, window.location.origin);
+    if (target.origin !== window.location.origin || target.pathname !== "/dashboard") return "/dashboard";
+    return target.pathname + target.search + target.hash;
+  } catch {
+    return "/dashboard";
+  }
+}
+
+function getPostLoginDestination(): string {
+  const requested = new URLSearchParams(window.location.search).get("redirect");
+  if (requested) {
+    const safe = safeDashboardDestination(requested);
+    sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, safe);
+    return safe;
+  }
+  return safeDashboardDestination(sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY));
+}
+
+function consumePostLoginDestination(): string {
+  const destination = getPostLoginDestination();
+  sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+  return destination;
+}
 
 export const Route = createFileRoute("/login")({ component: Login });
 
 function Login() {
-  const navigate = useNavigate();
   const [signup, setSignup] = useState(false);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
@@ -21,11 +49,14 @@ function Login() {
     if (new URLSearchParams(window.location.search).get("mode") === "signup") {
       setSignup(true);
     }
+    // Capture this before any auth redirect so notification clicks survive re-login.
+    getPostLoginDestination();
   }, []);
 
   useEffect(() => {
     if (!getSupabaseConfig()) return;
 
+    const destination = getPostLoginDestination();
     let active = true;
     getSupabaseClient()
       .auth.getSession()
@@ -41,7 +72,8 @@ function Login() {
         if (data.session.user.email) {
           sessionStorage.setItem("misma_email", data.session.user.email);
         }
-        navigate({ to: "/dashboard", replace: true });
+        sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+        window.location.replace(destination);
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -55,7 +87,7 @@ function Login() {
     return () => {
       active = false;
     };
-  }, [navigate]);
+  }, []);
 
   const resetPassword = async () => {
     setBusy(true);
@@ -80,6 +112,7 @@ function Login() {
   };
 
   const signInWithGoogle = async () => {
+    getPostLoginDestination();
     setBusy(true);
     setError("");
     try {
@@ -161,7 +194,7 @@ function Login() {
         sessionStorage.setItem("misma_id_token", data.session.access_token);
         sessionStorage.setItem("misma_email", data.user?.email || email);
       }
-      await navigate({ to: "/dashboard", replace: true });
+      window.location.replace(consumePostLoginDestination());
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Authentication failed.",
