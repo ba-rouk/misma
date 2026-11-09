@@ -769,14 +769,14 @@ test("voice presets prefer matching English voices and fall back to system Engli
   const voice = await read("../src/lib/misma-voice.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(voice, /export function getSpeechVoiceForPreset/);
-  assert.match(voice, /const englishVoices = voices\\.filter/);
+  assert.match(voice, /const englishVoices = voices\.filter/);
   assert.match(voice, /const fallbackPool =/);
   assert.match(voice, /language === "en-gb"/);
   assert.match(voice, /lang = "en-GB"/);
   assert.match(voice, /voicePreset = "woman"/);
   assert.match(voice, /speech-playback/);
   assert.match(dashboard, /getSpeechVoiceForPreset/);
-  assert.match(dashboard, /voicePreset=\\{selectedVoicePreset\\}/);
+  assert.match(dashboard, /voicePreset=\{selectedVoicePreset\}/);
 });
 
 test("website widget connections support shared keys and safe removal", async () => {
@@ -1130,13 +1130,13 @@ test("dashboard and website speech talk retry playback through the device defaul
   const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.match(voice, /primeSpeechVoices\\(3000\\)/);
-  assert.match(voice, /speakChunk\\(chunk, true\\)/);
-  assert.match(voice, /synth\\.resume\\(\\)/);
+  assert.match(voice, /primeSpeechVoices\(3000\)/);
+  assert.match(voice, /speakChunk\(chunk, true\)/);
+  assert.match(voice, /synth\.resume\(\)/);
   assert.match(component, /Misma could not play the spoken reply/);
-  assert.match(widget, /var englishFallback=voices\\.filter/);
-  assert.match(widget, /speakChunk\\(textChunk,true\\)/);
-  assert.match(widget, /window\\.setTimeout\\(next,80\\)/);
+  assert.match(widget, /var englishFallback=voices\.filter/);
+  assert.match(widget, /speakChunk\(textChunk,true\)/);
+  assert.match(widget, /window\.setTimeout\(next,80\)/);
   assert.doesNotThrow(() => new Function(widget), "widget speech playback code must parse");
 });
 
