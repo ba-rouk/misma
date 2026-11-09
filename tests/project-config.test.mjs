@@ -1206,7 +1206,7 @@ test("dashboard restores the selected chat from a user-scoped session cache whil
 
 
 test("web push is workspace-scoped, opt-in, and connected to website human handoff", async () => {
-  const migration = await read("../supabase/migrations/20261109100000_web_push_subscriptions.sql");
+  const migration = await read("../supabase/migrations/20261109091625_web_push_subscriptions.sql");
   const worker = await read("../public/misma-push-sw.js");
   const dashboard = await read("../src/routes/dashboard.tsx");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
