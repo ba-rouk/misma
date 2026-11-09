@@ -597,7 +597,7 @@ test("voice chat requests receive concise spoken replies and never upload record
   assert.match(edgeFunction, /voiceReply: answer/);
   assert.match(edgeFunction, /is_voice: voice/);
   assert.match(edgeFunction, /if \(!voice\) \{/);
-  assert.match(edgeFunction, /one to three short, natural spoken sentences/i);
+  assert.match(edgeFunction, /one or two natural spoken sentences, ideally under 25 words/i);
   assert.match(edgeFunction, /audio\/transcriptions/);
   assert.match(edgeFunction, /VOICE CONVERSATION/);
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(/, "live speech chat stays on the browser speech pipeline, while uploaded audio is transcribed separately");
@@ -664,8 +664,8 @@ test("attachment preparation is concurrent and skipped for attachment-only clari
 
   assert.match(edgeFunction, /Promise\.all\(attachments\.slice\(index,\s*index \+ 2\)\.map\(prepareOne\)\)/);
   assert.match(edgeFunction, /shouldAnalyzeAttachments = Boolean\(message\.trim\(\)\)/);
-  assert.match(edgeFunction, /historyWindow = requestedAttachments\.length \? 4 : 10/);
-  assert.match(edgeFunction, /historyTextLimit = requestedAttachments\.length \? 1_800 : 4_000/);
+  assert.match(edgeFunction, /historyWindow = voice \|\| requestedAttachments\.length \? 4 : 10/);
+  assert.match(edgeFunction, /historyTextLimit = voice \? 1_200 : requestedAttachments\.length \? 1_800 : 4_000/);
 });
 
 
@@ -1137,7 +1137,7 @@ test("dashboard and website speech talk retry playback through the device defaul
   const voice = await read("../src/lib/misma-voice.ts");
   const component = await read("../src/components/voice-input-bar.tsx");
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.match(voice, /primeSpeechVoices\(3000\)/);
+  assert.match(voice, /primeSpeechVoices\(800\)/);
   assert.match(voice, /speakChunk\(chunk, true\)/);
   assert.match(voice, /synth\.resume\(\)/);
   assert.match(component, /Misma could not play the spoken reply/);
@@ -1237,7 +1237,7 @@ test("web push is workspace-scoped, opt-in, and connected to website human hando
   assert.match(edge, /scheduleHumanRequestPush\(db, workspaceId, Number\(request\.data\.id\), Number\(conversation\.id\).*"phone"/);
   assert.match(edge, /scheduleHumanRequestPush\(db, workspaceId, Number\(request\.data\.id\), Number\(conversation\.data\.id\).*"WhatsApp"/);
   assert.match(edge, /runtime\.waitUntil\(pushTask\)/);
-  assert.match(dashboard, /Allow notifications when prompted/);
+  assert.match(dashboard, /In Chrome, allow notifications when prompted/i);
   assert.match(edge, /statusCode === 404 \|\| statusCode === 410/);
 });
 
