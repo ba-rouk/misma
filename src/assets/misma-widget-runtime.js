@@ -506,12 +506,11 @@ function requestMicForAction(action){
   if(voiceSession){stopVoiceSession();}
   if(!window.isSecureContext){pendingMicAction=action;showMicFailure({name:"SecurityError"});return;}
   if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=="function"){pendingMicAction=action;showMicFailure({name:"NotSupportedError"});return;}
-  if(micNeverAllowed||micPermissionState==="prompt"||micPermissionState==="denied"){
-    showMicPermissionPrompt(action);
-    return;
-  }
+  // Ask the browser directly; do not show a second Misma permission prompt.
   pendingMicAction=action;
-  // Browsers without a microphone Permissions API use a direct getUserMedia fallback.
+  try{localStorage.removeItem(micPreferenceKey);}catch(error){}
+  micNeverAllowed=false;
+  updateMicPreferenceIcon();
   requestMicPermissionAndStart();
 }
 function refreshMicPermission(){
