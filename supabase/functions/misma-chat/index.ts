@@ -1601,14 +1601,14 @@ Deno.serve(async (request) => {
         .eq("workspace_id", workspaceId)
         .eq("approved", true)
         .order("id", { ascending: false })
-        .limit(20),
+        .limit(voice ? 8 : 20),
       db.from("orders")
         .select("item,total_rwf,status,created_at")
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
         .limit(5),
       db.from("contacts")
-        .select("id", { count: "exact", head: true })
+        .select("id", { count: voice ? "estimated" : "exact", head: true })
         .eq("workspace_id", workspaceId),
       db.from("core_01_lessons")
         .select("room_key,lesson,confidence")
@@ -1616,7 +1616,7 @@ Deno.serve(async (request) => {
         .eq("status", "approved")
         .order("confidence", { ascending: false })
         .order("updated_at", { ascending: false })
-        .limit(12),
+        .limit(voice ? 6 : 12),
       liveSearchPromise,
     ]);
     if (workspaceResult.error || !workspaceResult.data) {
