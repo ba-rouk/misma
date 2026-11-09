@@ -6459,7 +6459,11 @@ html, body, #app-root {
 }
 .aichat-website-actions, .aichat-product-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:12px; }
 .aichat-website-card > small { display:block; margin-top:8px; color:#8295aa; font-size:10px; line-height:1.5; }
-.aichat-handoff-card { padding:0 0 12px; border-top:1px solid rgba(255,255,255,.07); }
+.aichat-handoff-card { position:relative; padding:0 46px 12px 0; border-top:1px solid rgba(255,255,255,.07); }
+.aichat-handoff-menu { position:absolute; top:9px; right:0; z-index:101; }
+.aichat-handoff-more { display:grid; place-items:center; width:34px; height:34px; padding:0; border:0; border-radius:9px; background:transparent; color:#8c9caf; cursor:pointer; }
+.aichat-handoff-more:hover, .aichat-handoff-more[aria-expanded="true"] { background:#253244; color:#e5edf7; }
+.aichat-handoff-more svg { width:19px; height:19px; fill:currentColor; }
 .aichat-handoff-card .aichat-handoff-row { border-top:0; padding-bottom:10px; }
 .aichat-handoff-card > .aichat-action-btn { margin-left:48px; }
 .aichat-knowledge-import { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:18px; padding-top:16px; border-top:1px solid rgba(255,255,255,.08); }
