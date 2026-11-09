@@ -1274,3 +1274,49 @@ test("human-request conversations show only customer and staff messages with opp
   assert.match(styles, /\.aichat-message-row\.is-customer\s*\{\s*justify-content:\s*flex-start/);
   assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble/);
 });
+
+test("website human handoff sends customer typing and new replies to the open business conversation quickly", async () => {
+  const migration = await read("../supabase/migrations/20261109110000_website_visitor_typing_presence.sql");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+
+  assert.match(migration, /visitor_typing_until timestamptz/);
+  assert.match(api, /export const getConversationActivity = createServerFn/);
+  assert.match(api, /visitor_typing_until/);
+  assert.match(api, /afterMessageId/);
+  assert.match(api, /\.gt\("id", data\.afterMessageId\)/);
+  assert.match(dashboard, /getConversationActivity\(\{/);
+  assert.match(dashboard, /window\.setTimeout\(poll, 1200\)/);
+  assert.match(dashboard, /visitorIsTyping/);
+  assert.match(dashboard, /Customer is typing/);
+  assert.match(styles, /\.aichat-visitor-typing-bubble/);
+  assert.match(widget, /function reportVisitorTyping\(\)/);
+  assert.match(widget, /call\(\{action:"typing",isTyping:next\}\)/);
+  assert.match(widget, /conversationStatus==="Needs you"\?1400:5000/);
+  assert.match(widget, /item\.role==="human"\?"Assistant: "\+item\.text/);
+  assert.doesNotMatch(widget, /"Business team: "\+item\.text/);
+  assert.match(edge, /input\.action === "typing"/);
+  assert.match(edge, /visitor_typing_until: typingUntil/);
+  assert.match(edge, /visitor_typing_until: null/);
+});
+
+test("website and dashboard Speech Talk use short replies with bounded fast provider attempts", async () => {
+  const widgetVoice = await read("../supabase/functions/misma-widget/index.ts");
+  const dashboardVoice = await read("../supabase/functions/misma-chat/index.ts");
+  const voice = await read("../src/lib/misma-voice.ts");
+  const widgetRuntime = await read("../src/assets/misma-widget-runtime.js");
+
+  assert.match(widgetVoice, /voice \? \(voiceAttempt === 0 \? 6500 : 4500\) : 18000/);
+  assert.match(widgetVoice, /max_tokens: voice \? 180 : 6000/);
+  assert.match(widgetVoice, /providerAttempt >= 2/);
+  assert.match(widgetVoice, /ideally under 25 words/);
+  assert.match(dashboardVoice, /voice \? \(providerIndex === 0 \? 6_500 : 4_500\) : undefined/);
+  assert.match(dashboardVoice, /if \(voice && providerIndex >= 2\) break/);
+  assert.match(dashboardVoice, /voiceMode \? 180 : thinkHarder \? 4096 : 2048/);
+  assert.match(dashboardVoice, /thinkHarder: thinkHarder && !voice/);
+  assert.match(voice, /primeSpeechVoices\(800\)/);
+  assert.match(widgetRuntime, /window\.setTimeout\(done,650\)/);
+});
