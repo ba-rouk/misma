@@ -19,7 +19,10 @@ export const Route = createRootRoute({
           "Misma connects your business channels to an AI agent trained on your business.",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/misma-logo.svg", type: "image/svg+xml", sizes: "any" },
+    ],
   }),
   component: RootComponent,
 });
