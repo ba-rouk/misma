@@ -47,7 +47,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   timeout: "Microphone startup took too long. Check the permission prompt and try again.",
   recognition: "Voice recognition stopped unexpectedly. Please try again.",
   send: "Misma could not reply. You can try speaking again.",
-  "voice-unavailable": "The selected voice is not installed on this device. Add a matching voice in your device text-to-speech settings, then retry.",
+  "voice-unavailable": "No compatible speech voice is installed on this device.",
+  "speech-playback": "Misma could not play the spoken reply. Check your device volume and text-to-speech output, then try again.",
 };
 
 const STATE_LABELS: Record<VoiceModeState, string> = {
@@ -181,7 +182,7 @@ export function VoiceInputBar({
       },
       onError: (code) => {
         showToastRef.current(ERROR_MESSAGES[code] || ERROR_MESSAGES.recognition);
-        if (code !== "send") {
+        if (code !== "send" && code !== "speech-playback") {
           overlayOpenRef.current = false;
           setVoiceOverlayOpen(false);
         }
