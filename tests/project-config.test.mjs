@@ -539,6 +539,9 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
   assert.doesNotMatch(dictationStart, /await ensureMicPermission\(\)/);
   assert.doesNotMatch(voiceModeStart, /await ensureMicPermission\(\)/);
   assert.doesNotMatch(permission, /current === "checking"/);
+  assert.doesNotMatch(permission, /setDialogView\("permission"\)/);
+  assert.match(dashboard, /if \(options\.voice\) sendConversationId = null/);
+  assert.match(dashboard, /if \(!options\.voice && currentConversationId && selectedConversation\?\.status === "Needs you"/);
   assert.match(dashboard, /if \(options\.voice\) \{[\s\S]*?res\.voiceReply/);
   assert.match(dashboard, /if \(!options\.voice && !editId && !isRetry\)/);
   assert.match(dashboard, /misma_active_chat_messages_v2_/);
@@ -955,6 +958,9 @@ test("widget microphone and speech talk use female-first English voice selection
   assert.ok(widget.includes('micPermissionOnce.addEventListener("click",requestMicPermissionAndStart)'));
   assert.ok(widget.includes('micPermissionNever.addEventListener("click"'));
   assert.ok(widget.includes("navigator.mediaDevices.getUserMedia({audio:true})"));
+  const widgetPermissionFlow = widget.slice(widget.indexOf("function requestMicForAction(action)"), widget.indexOf("function refreshMicPermission()"));
+  assert.doesNotMatch(widgetPermissionFlow, /showMicPermissionPrompt\(action\)/);
+  assert.ok(widgetPermissionFlow.includes("requestMicPermissionAndStart();"));
   assert.ok(widget.includes('requestMicForAction("dictation")'));
   assert.ok(widget.includes('requestMicForAction("speech")'));
   assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
@@ -1221,7 +1227,10 @@ test("web push is workspace-scoped, opt-in, and connected to website human hando
   assert.match(worker, /addEventListener\(["']push["']/);
   assert.match(worker, /showNotification/);
   assert.match(worker, /notificationclick/);
-  assert.match(worker, /sameOrigin/);
+  assert.match(worker, /sameOriginDashboard/);
+  assert.ok(worker.includes('icon: "/misma-logo.svg"'));
+  assert.ok(worker.includes('badge: "/misma-logo.svg"'));
+  assert.ok(worker.includes('searchParams.set("redirect", notificationPath)'));
   assert.match(dashboard, /toggleHumanRequestPushNotifications/);
   assert.match(dashboard, /pushManager\.subscribe/);
   assert.match(dashboard, /requestPermission\(\)/);
@@ -1239,6 +1248,14 @@ test("web push is workspace-scoped, opt-in, and connected to website human hando
   assert.match(edge, /runtime\.waitUntil\(pushTask\)/);
   assert.match(dashboard, /In Chrome, allow notifications when prompted/i);
   assert.match(edge, /statusCode === 404 \|\| statusCode === 410/);
+  assert.ok(edge.includes('.select("visitor_name,reason")'));
+  assert.ok(edge.includes('"Website: " + sourceLabel'));
+  const login = await read("../src/routes/login.tsx");
+  const callback = await read("../src/routes/auth/callback.tsx");
+  assert.ok(login.includes("misma_post_login_redirect"));
+  assert.ok(login.includes("window.location.replace(consumePostLoginDestination())"));
+  assert.ok(callback.includes("misma_post_login_redirect"));
+  assert.ok(callback.includes("window.location.replace(destination)"));
 });
 
 test("dashboard Speech Talk shares the widget's woman English voice profile", async () => {
