@@ -4249,7 +4249,7 @@ function Dashboard() {
       );
       try {
         const activity = await getConversationActivity({
-          data: { token, conversationId: currentConversationId, afterMessageId },
+          data: { token, workspaceId: workspace.id, conversationId: currentConversationId, afterMessageId },
         });
         if (!active) return;
 
