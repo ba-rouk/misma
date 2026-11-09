@@ -104,7 +104,7 @@ function showTyping(){removeTyping();typingBubble=bubble("Misma is typing","ai t
 function removeTyping(){if(typingBubble&&typingBubble.parentNode)typingBubble.parentNode.removeChild(typingBubble);typingBubble=null;}
 function setVisitorTyping(next){
   if(visitorTypingTimer&&!next){window.clearTimeout(visitorTypingTimer);visitorTypingTimer=null;}
-  if(!conversation||conversationStatus!=="Needs you"||visitorTyping===next)return;
+  if(!conversation||conversationStatus!=="Needs you"||(!next&&!visitorTyping))return;
   visitorTyping=next;
   call({action:"typing",isTyping:next}).catch(function(){});
 }
