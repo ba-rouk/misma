@@ -1232,7 +1232,12 @@ test("web push is workspace-scoped, opt-in, and connected to website human hando
   assert.match(edge, /save-push-subscription/);
   assert.match(edge, /delete-push-subscription/);
   assert.match(edge, /async function sendHumanRequestPush/);
-  assert.match(edge, /sendHumanRequestPush\(db, site\.workspace_id/);
+  assert.match(edge, /function scheduleHumanRequestPush/);
+  assert.match(edge, /scheduleHumanRequestPush\(db, site\.workspace_id/);
+  assert.match(edge, /scheduleHumanRequestPush\(db, workspaceId, Number\(request\.data\.id\), Number\(conversation\.id\).*"phone"/);
+  assert.match(edge, /scheduleHumanRequestPush\(db, workspaceId, Number\(request\.data\.id\), Number\(conversation\.data\.id\).*"WhatsApp"/);
+  assert.match(edge, /runtime\.waitUntil\(pushTask\)/);
+  assert.match(dashboard, /Allow notifications when prompted/);
   assert.match(edge, /statusCode === 404 \|\| statusCode === 410/);
 });
 
@@ -1284,7 +1289,14 @@ test("website human handoff sends customer typing and new replies to the open bu
   const edge = await read("../supabase/functions/misma-widget/index.ts");
 
   assert.match(migration, /visitor_typing_until timestamptz/);
+  const workspaceContext = await read("../src/lib/api/workspace-context.server.ts");
+
   assert.match(api, /export const getConversationActivity = createServerFn/);
+  assert.match(api, /workspaceId: z\.string\(\)\.uuid\(\)/);
+  assert.match(api, /ensureWorkspace\(data\.token, data\.workspaceId\)/);
+  assert.match(workspaceContext, /requestedWorkspaceId\?: string/);
+  assert.match(workspaceContext, /membershipQuery = membershipQuery\.eq\("workspace_id", requestedWorkspaceId\)/);
+  assert.match(dashboard, /workspaceId: workspace\.id, conversationId: currentConversationId/);
   assert.match(api, /visitor_typing_until/);
   assert.match(api, /afterMessageId/);
   assert.match(api, /\.gt\("id", data\.afterMessageId\)/);
@@ -1298,6 +1310,9 @@ test("website human handoff sends customer typing and new replies to the open bu
   assert.match(widget, /conversationStatus==="Needs you"\?1400:5000/);
   assert.match(widget, /item\.role==="human"\?"Assistant: "\+item\.text/);
   assert.doesNotMatch(widget, /"Business team: "\+item\.text/);
+  assert.doesNotMatch(widget, /business team will follow up/i);
+  assert.match(edge, /An assistant will follow up here/);
+  assert.match(edge, /Your message has reached the assistant/);
   assert.match(edge, /input\.action === "typing"/);
   assert.match(edge, /visitor_typing_until: typingUntil/);
   assert.match(edge, /visitor_typing_until: null/);
