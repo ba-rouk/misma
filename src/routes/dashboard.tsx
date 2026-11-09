@@ -1459,7 +1459,11 @@ function Dashboard() {
     chatActivity: true,
   });
   const [notificationPermissionMessage, setNotificationPermissionMessage] = useState("");
+  const [humanRequestPushEnabled, setHumanRequestPushEnabled] = useState(false);
+  const [humanRequestPushBusy, setHumanRequestPushBusy] = useState(false);
+  const [humanRequestPushMessage, setHumanRequestPushMessage] = useState("");
   const notificationCursorRef = useRef({ initialized: false, latestId: 0 });
+  const pushNotificationLinkHandledRef = useRef(false);
   const [privacyPreferences, setPrivacyPreferences] = useState({ useConversationHistory: true });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
