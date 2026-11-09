@@ -4865,7 +4865,7 @@ function Dashboard() {
                         </>
                       }
                       sendDisabled={selectedFiles.some((file) => composerUploadStatuses.get(file) !== "ready")}
-                      voicePreset={selectedVoicePreset}
+                      voicePreset="woman"
                       inputValue={draft}
                       hasContent={Boolean(draft.trim() || createMode)}
                       hasAttachment={() => selectedFiles.length > 0}
@@ -5624,6 +5624,11 @@ function Dashboard() {
                 <SettingsToggle title="Product updates" description="Show relevant information about new Misma features." checked={notificationPreferences.productUpdates} onToggle={() => setNotificationPreferences((current) => ({ ...current, productUpdates: !current.productUpdates }))} />
                 <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
                 <SettingsToggle title="Chat activity" description="Receive a browser notification when a new visitor message arrives while Misma is in the background." checked={notificationPreferences.chatActivity} onToggle={() => void toggleChatActivityNotifications()} />
+                <div className="aichat-settings-action-row">
+                  <div><strong>Human assistance requests</strong><small>Send a push notification to this phone or desktop when a customer asks for a person, even while Misma is closed. Enable each device separately.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => void toggleHumanRequestPushNotifications()} disabled={humanRequestPushBusy || !workspace?.id}>{humanRequestPushBusy ? "Updating..." : humanRequestPushEnabled ? "Disable on this device" : "Enable on this device"}</button>
+                </div>
+                {humanRequestPushMessage && <p className="aichat-settings-hint" role="status">{humanRequestPushMessage}</p>}
                 {notificationPermissionMessage && <p className="aichat-settings-hint" role="status">{notificationPermissionMessage}</p>}
                 <p className="aichat-settings-hint">Product update and security alert preferences are saved here. Their notification feeds will appear when those services are connected.</p>
               </section>
@@ -5631,12 +5636,12 @@ function Dashboard() {
               <section id="settings-voice" className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">♫</span>
-                  <span><h3>Voice</h3><p>Choose the voice used for read-aloud and hands-free speech chat. Boy/Man require a male voice installed on this device; Misma will not substitute a woman's voice.</p></span>
+                  <span><h3>Voice</h3><p>Choose the read-aloud voice. Live Speech Talk uses the same Siri-first woman voice, English accent selection, and speaking style as the Misma website widget.</p></span>
                 </div>
                 <MicrophoneAccessPanel />
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
-                    <label htmlFor="misma-voice-choice">Reply voice</label>
+                    <label htmlFor="misma-voice-choice">Read-aloud voice</label>
                     <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option><option value="boy">Boy</option><option value="man">Man</option></select>
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
