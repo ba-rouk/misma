@@ -278,7 +278,7 @@ function speakAsWoman(text){
   }
   var clean=String(text||"").replace(/https?:\/\/\S+/g," ").replace(/[*_~>|#]+/g," ").replace(/\s+/g," ").trim().slice(0,1600);
   if(!clean)return Promise.resolve(true);
-  var parts=clean.match(/[^.!?]+[.!?]*\\s*/g)||[clean];
+  var parts=clean.match(/[^.!?]+[.!?]*\s*/g)||[clean];
   setVoiceState("speaking");
   return waitForVoice().then(function(girlVoice){
     return new Promise(function(resolve){
