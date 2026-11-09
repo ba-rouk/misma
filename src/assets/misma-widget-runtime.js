@@ -97,11 +97,30 @@ function applyWebsiteSocialLinks(config) {
 
 applyWebsiteSocialLinks(initialConfig);
 var voiceView=$(".voice-view"),voiceOrb=$(".voice-orb"),voiceStatus=$(".voice-status"),voiceMuteButton=$(".voice-mute"),voiceStopButton=$(".voice-stop"),voiceModeButtons=root.querySelectorAll(".voice-mode");
-var busy=false,recognition=null,dictating=false,dictationSendAfterStop=false,voiceSession=false,voiceMuted=false,voiceModeChoice="hands-free",voiceState="idle",voiceRequestController=null,voiceSpeechCancel=null,finalTranscript="",interimTranscript="",typingBubble=null;
+var busy=false,recognition=null,dictating=false,dictationSendAfterStop=false,voiceSession=false,voiceMuted=false,voiceModeChoice="hands-free",voiceState="idle",voiceRequestController=null,voiceSpeechCancel=null,finalTranscript="",interimTranscript="",typingBubble=null,conversationStatus="",visitorTyping=false,visitorTypingTimer=null,lastTypingSignalAt=0,historyPollTimer=null,widgetDestroyed=false;
 function setStatus(message){status.textContent=message||"";}
 function bubble(text,kind){var node=document.createElement("div");node.className="bubble "+kind;node.textContent=text;messages.appendChild(node);messages.scrollTop=messages.scrollHeight;return node;}
 function showTyping(){removeTyping();typingBubble=bubble("Misma is typing","ai typing");}
 function removeTyping(){if(typingBubble&&typingBubble.parentNode)typingBubble.parentNode.removeChild(typingBubble);typingBubble=null;}
+function setVisitorTyping(next){
+  if(visitorTypingTimer&&!next){window.clearTimeout(visitorTypingTimer);visitorTypingTimer=null;}
+  if(!conversation||conversationStatus!=="Needs you"||visitorTyping===next)return;
+  visitorTyping=next;
+  call({action:"typing",isTyping:next}).catch(function(){});
+}
+function reportVisitorTyping(){
+  if(conversationStatus!=="Needs you"||!conversation||!input.value.trim())return;
+  var now=Date.now();
+  if(!visitorTyping||now-lastTypingSignalAt>=1200){
+    lastTypingSignalAt=now;
+    setVisitorTyping(true);
+  }
+  if(visitorTypingTimer)window.clearTimeout(visitorTypingTimer);
+  visitorTypingTimer=window.setTimeout(function(){
+    visitorTypingTimer=null;
+    setVisitorTyping(false);
+  },2800);
+}
 function resizeInput(){input.style.height="auto";input.style.height=Math.min(108,Math.max(36,input.scrollHeight))+"px";}
 function updatePrimary(){
   var hasText=Boolean(input.value.trim());
@@ -146,13 +165,15 @@ function closeWidget(){
 function refreshHistory(){
   if(!conversation||busy)return Promise.resolve(null);
   return call({action:"history"}).then(function(data){
+    conversationStatus=String(data.conversationStatus||"");
     if(Array.isArray(data.messages)){
       messages.innerHTML="";
       var visibleMessages=data.messages.filter(function(item){return item.is_voice!==true;});
       if(!visibleMessages.length)bubble("Hello! I am Misma. How can I help you today?","ai");
-      else visibleMessages.forEach(function(item){var text=item.role==="human"?"Business team: "+item.text:item.text;bubble(text,item.role==="customer"?"user":"ai");});
+      else visibleMessages.forEach(function(item){var text=item.role==="human"?"Assistant: "+item.text:item.text;bubble(text,item.role==="customer"?"user":"ai");});
     }
-    if(data.conversationStatus==="Needs you")setStatus((data.messages||[]).some(function(item){return item.role==="human";})?"You are chatting with the business team.":"Your request is with the business team. A person will reply here.");
+    if(conversationStatus==="Needs you")setStatus((data.messages||[]).some(function(item){return item.role==="human";})?"You are chatting with an assistant.":"Your request has reached the assistant. A reply will appear here.");
+    scheduleHistoryPoll();
     return data;
   });
 }
@@ -332,7 +353,10 @@ function speakAsWoman(text){
   });
 }
 function sendMessage(rawText,speakReply){
-  var text=String(rawText||"").trim();if(!text||busy)return Promise.resolve();busy=true;
+  var text=String(rawText||"").trim();if(!text||busy)return Promise.resolve();
+  setVisitorTyping(false);
+  if(visitorTypingTimer){window.clearTimeout(visitorTypingTimer);visitorTypingTimer=null;}
+  busy=true;
   var controller=speakReply?new AbortController():null;
   if(controller)voiceRequestController=controller;
   if(!speakReply){input.value="";resizeInput();updatePrimary();stopDictation();}
@@ -343,7 +367,7 @@ function sendMessage(rawText,speakReply){
     if(!speakReply)removeTyping();
     var answer=data.answer||"I could not prepare a reply.";
     if(!speakReply)bubble(answer,"ai");
-    if(data.handoffPending&&!speakReply)setStatus("Your message has been sent to the business team.");
+    if(data.handoffPending){conversationStatus="Needs you";if(!speakReply)setStatus("Your message has reached the assistant. A reply will appear here.");}
     if(speakReply&&voiceSession){return speakAsWoman(answer);}
     return null;
   }).catch(function(error){
@@ -568,7 +592,8 @@ $(".launch").addEventListener("click",function(){
 $(".close").addEventListener("click",closeWidget);
 
 $(".human").addEventListener("click",function(){handoff.classList.toggle("open");if(handoff.classList.contains("open"))handoff.querySelector("[name='name']").focus();});
-input.addEventListener("input",function(){resizeInput();updatePrimary();});
+input.addEventListener("input",function(){resizeInput();updatePrimary();reportVisitorTyping();});
+input.addEventListener("blur",function(){setVisitorTyping(false);});
 input.addEventListener("keydown",function(event){if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);}});
 $(".composer").addEventListener("submit",function(event){event.preventDefault();if(input.value.trim())sendMessage(input.value,false);});
 micButton.addEventListener("click",function(){if(dictating)return;if(busy)return;if(!recognitionConstructor()){setStatus("Microphone dictation is not supported in this browser. Open this website in the latest Chrome browser over HTTPS.");return;}requestMicForAction("dictation");});
@@ -604,12 +629,28 @@ $(".handoff-submit").addEventListener("click",function(){
     });
   }).catch(function(error){setStatus(error.message);}).then(function(){busy=false;updatePrimary();});
 });
-window.setInterval(function(){if(panel.classList.contains("open")&&conversation&&!busy)refreshHistory().catch(function(){});},5000);
+function scheduleHistoryPoll(){
+  if(widgetDestroyed)return;
+  if(historyPollTimer)window.clearTimeout(historyPollTimer);
+  var delay=conversationStatus==="Needs you"?1400:5000;
+  historyPollTimer=window.setTimeout(function(){
+    historyPollTimer=null;
+    if(widgetDestroyed)return;
+    if(panel.classList.contains("open")&&conversation&&!busy){
+      refreshHistory().catch(function(){}).finally(scheduleHistoryPoll);
+    }else scheduleHistoryPoll();
+  },delay);
+}
+scheduleHistoryPoll();
 refreshMicPermission();
   call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
   return {
     applyConfig:function(config){applyWebsiteSocialLinks(config||{});},
     destroy:function(){
+      widgetDestroyed=true;
+      if(historyPollTimer)window.clearTimeout(historyPollTimer);
+      if(visitorTypingTimer)window.clearTimeout(visitorTypingTimer);
+      setVisitorTyping(false);
       stopVoiceSession();
       stopDictation();
       if(host.parentNode)host.parentNode.removeChild(host);
