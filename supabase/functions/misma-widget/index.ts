@@ -220,10 +220,14 @@ function providerList() {
   add("cohere", "COHERE_API_KEY", "COHERE_MODEL", "command-a-plus-05-2026", "https://api.cohere.com/v2/chat", "cohere");
   return providers;
 }
-async function generateText(systemPrompt: string, prompt: string, structuredOutput?: AnyRecord, scanSignal?: AbortSignal): Promise<string> {
+async function generateText(systemPrompt: string, prompt: string, structuredOutput?: AnyRecord, scanSignal?: AbortSignal, voice = false): Promise<string> {
   const providers = providerList();
   if (!providers.length) throw new Error("No text AI provider is configured.");
+  let providerAttempt = 0;
   for (const provider of providers) {
+    if (voice && providerAttempt >= 2) break;
+    const voiceAttempt = providerAttempt++;
+
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       let url = provider.endpoint;
@@ -235,15 +239,17 @@ async function generateText(systemPrompt: string, prompt: string, structuredOutp
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
-            maxOutputTokens: 6000,
-            temperature: 0.2,
+            maxOutputTokens: voice ? 180 : 6000,
+            temperature: voice ? 0.35 : 0.2,
             ...(structuredOutput ? { responseMimeType: "application/json", responseSchema: structuredOutput.geminiSchema } : {}),
           },
         };
       } else {
         headers.Authorization = "Bearer " + provider.key;
         payload = {
-          model: provider.model, temperature: 0.2, max_tokens: 6000,
+          model: provider.model,
+          temperature: voice ? 0.35 : 0.2,
+          max_tokens: voice ? 180 : 6000,
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
           ...(structuredOutput ? {
             response_format: provider.kind === "cohere"
@@ -252,7 +258,9 @@ async function generateText(systemPrompt: string, prompt: string, structuredOutp
           } : {}),
         };
       }
-      const timeoutSignal = AbortSignal.timeout(18000);
+      const timeoutSignal = AbortSignal.timeout(
+        voice ? (voiceAttempt === 0 ? 6500 : 4500) : 18000,
+      );
       const signal = scanSignal ? AbortSignal.any([scanSignal, timeoutSignal]) : timeoutSignal;
       const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload), signal });
       if (!response.ok) throw new Error("Provider returned " + response.status);
@@ -299,18 +307,18 @@ function parseJsonObject(answer: string): AnyRecord {
   if (!isRecord(parsed)) throw new Error("The extraction response was not an object.");
   return parsed;
 }
-async function loadBusinessContext(db: Db, workspaceId: string) {
+async function loadBusinessContext(db: Db, workspaceId: string, voice = false) {
   const [workspace, knowledge, products, lessons] = await Promise.all([
     db.from("workspaces").select("name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-    db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }).limit(30),
-    db.from("products_services").select("item_type,name,description,price_text").eq("workspace_id", workspaceId).eq("active", true).limit(50),
-    db.from("core_01_lessons").select("room_key,lesson").eq("workspace_id", workspaceId).eq("status", "approved").order("confidence", { ascending: false }).limit(12),
+    db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }).limit(voice ? 8 : 30),
+    db.from("products_services").select("item_type,name,description,price_text").eq("workspace_id", workspaceId).eq("active", true).limit(voice ? 15 : 50),
+    db.from("core_01_lessons").select("room_key,lesson").eq("workspace_id", workspaceId).eq("status", "approved").order("confidence", { ascending: false }).limit(voice ? 6 : 12),
   ]);
   if (workspace.error) throw new Error("Could not load the business profile.");
   return { workspace: workspace.data, knowledge: knowledge.data || [], products: products.data || [], core01: lessons.data || [] };
 }
 async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false): Promise<string> {
-  const context = await loadBusinessContext(db, workspaceId);
+  const context = await loadBusinessContext(db, workspaceId, voice);
   const system = [
     "You are Misma, the business's website and messaging assistant.",
     "PLATFORM IDENTITY: If asked who created, built, or developed Misma itself, answer: Misma was created by Misma Corporation. Do not attribute Misma's creation to the connected business; use supplied business facts only for questions about that business.",
@@ -321,12 +329,12 @@ async function answerCustomer(db: Db, workspaceId: string, message: string, voic
     ...(voice ? [
       "VOICE CONVERSATION: The visitor is talking to Misma in a phone-call style conversation.",
       "Always understand and respond in English, regardless of the visitor’s language.",
-      "Reply in one to three short, natural spoken sentences. Do not use Markdown, lists, emojis, links, headings, or long explanations.",
+      "Reply in one or two short, natural spoken sentences, ideally under 25 words. Do not use Markdown, lists, emojis, links, headings, or long explanations.",
       "Answer the immediate point directly and keep the wording easy to understand aloud.",
     ] : []),
     "Business context: " + JSON.stringify(context),
   ].join("\n");
-  return await generateText(system, message);
+  return await generateText(system, message, undefined, undefined, voice);
 }
 
 function getWebsiteWidgetSocialLinks(site: AnyRecord) {
@@ -500,6 +508,7 @@ async function saveHumanRequest(db: Db, site: AnyRecord, conversation: AnyRecord
     ...(contactId ? { contact_id: contactId } : {}),
     status: "Needs you",
     latest_text: ("Human request: " + reason).slice(0, 200),
+    visitor_typing_until: null,
     updated_at: new Date().toISOString(),
   })
     .eq("id", conversation.id)
@@ -1220,7 +1229,7 @@ Deno.serve(async (request: Request) => {
   if (!isRecord(input)) return respond(400, { error: "Invalid request." });
 
   try {
-    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "widget-config" || input.action === "close") {
+    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
         return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) });
@@ -1243,9 +1252,11 @@ Deno.serve(async (request: Request) => {
         }
         return respond(200, { ok: true, historyDeleted: deleted === true });
       }
-      await db.from("website_connections").update({
-        status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      }).eq("id", site.id);
+      if (input.action !== "typing") {
+        await db.from("website_connections").update({
+          status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }).eq("id", site.id);
+      }
       if (input.action === "page-view") {
         const refreshTask = autoRefreshWebsiteKnowledge(db, site);
         const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
@@ -1259,15 +1270,35 @@ Deno.serve(async (request: Request) => {
       if (input.action === "heartbeat") return respond(200, { ok: true, connected: true, ...getWebsiteWidgetSocialLinks(site) });
       const visitorId = safeString(input.visitorId, 120) || crypto.randomUUID();
       const { conversation } = await ensureWebsiteConversation(db, site, visitorId, input.conversationId);
+      if (input.action === "typing") {
+        const isTyping = input.isTyping === true;
+        const state = await db.from("conversations").select("status")
+          .eq("id", conversation.id)
+          .eq("workspace_id", site.workspace_id)
+          .eq("website_connection_id", site.id)
+          .eq("visitor_session_id", visitorId)
+          .maybeSingle();
+        if (state.error || !state.data) throw new Error("Could not update visitor typing state.");
+        if (state.data.status !== "Needs you") return respond(200, { ok: true, typing: false });
+        const typingUntil = isTyping ? new Date(Date.now() + 4_000).toISOString() : null;
+        const updated = await db.from("conversations").update({ visitor_typing_until: typingUntil })
+          .eq("id", conversation.id)
+          .eq("workspace_id", site.workspace_id)
+          .eq("website_connection_id", site.id)
+          .eq("visitor_session_id", visitorId);
+        if (updated.error) throw new Error("Could not update visitor typing state.");
+        return respond(200, { ok: true, typing: isTyping, visitorTypingUntil: typingUntil });
+      }
       if (input.action === "history") {
         const [historyResult, conversationResult] = await Promise.all([
           db.from("messages").select("id,role,text,created_at").eq("conversation_id", conversation.id).eq("is_voice", false).order("id", { ascending: true }).limit(100),
-          db.from("conversations").select("status").eq("id", conversation.id).eq("workspace_id", site.workspace_id).single(),
+          db.from("conversations").select("status,visitor_typing_until").eq("id", conversation.id).eq("workspace_id", site.workspace_id).single(),
         ]);
         if (historyResult.error || conversationResult.error) throw new Error("Could not load the website conversation history.");
         return respond(200, {
           ok: true, visitorId, conversationId: Number(conversation.id),
           conversationStatus: conversationResult.data.status,
+          visitorTypingUntil: conversationResult.data.visitor_typing_until ?? null,
           messages: (historyResult.data || []).map((item: AnyRecord) => ({
             id: Number(item.id), role: safeString(item.role, 20), text: safeString(item.text, 4000), created_at: item.created_at,
           })),
@@ -1311,6 +1342,7 @@ Deno.serve(async (request: Request) => {
       if (conversationState.data.status === "Needs you") {
         await db.from("conversations").update({
           latest_text: voice ? "Voice conversation" : message.slice(0, 200),
+          visitor_typing_until: null,
           updated_at: new Date().toISOString(),
         }).eq("id", conversation.id);
         return respond(200, {
@@ -1330,6 +1362,7 @@ Deno.serve(async (request: Request) => {
       if (aiMessage.error) throw new Error("Could not save the Misma reply.");
       await db.from("conversations").update({
         latest_text: voice ? "Voice conversation" : answer.slice(0, 200),
+        visitor_typing_until: null,
         updated_at: new Date().toISOString(),
       }).eq("id", conversation.id);
       return respond(200, {
