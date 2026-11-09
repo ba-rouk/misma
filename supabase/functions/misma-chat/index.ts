@@ -295,6 +295,7 @@ async function requestProvider(
   pdfs: PreparedPdf[],
   thinkHarder: boolean,
   timeoutMs?: number,
+  voiceMode = false,
 ): Promise<string> {
   if (images.length && !provider.supportsImages) {
     throw new Error(`NON_RETRYABLE: ${provider.name} does not accept image input`);
@@ -345,7 +346,10 @@ async function requestProvider(
             ...history.map(({ role, text }) => ({ role, parts: [{ text }] })),
             { role: "user", parts },
           ],
-          generationConfig: { maxOutputTokens: thinkHarder ? 4096 : 2048, temperature: 0.65 },
+          generationConfig: {
+            maxOutputTokens: voiceMode ? 180 : thinkHarder ? 4096 : 2048,
+            temperature: voiceMode ? 0.35 : 0.65,
+          },
         };
         url = `${provider.url}/${encodeURIComponent(provider.model)}:generateContent`;
         headers = { "Content-Type": "application/json", "x-goog-api-key": provider.apiKey };
@@ -366,8 +370,8 @@ async function requestProvider(
         body = {
           model: provider.model,
           messages,
-          max_tokens: thinkHarder ? 4096 : 2048,
-          temperature: 0.65,
+          max_tokens: voiceMode ? 180 : thinkHarder ? 4096 : 2048,
+          temperature: voiceMode ? 0.35 : 0.65,
           ...(thinkHarder ? { thinking: { type: "enabled", token_budget: 2048 } } : {}),
         };
       } else {
@@ -397,7 +401,7 @@ async function requestProvider(
       const response = await fetch(url, {
         method: "POST",
         headers,
-        signal: AbortSignal.timeout(timeoutMs ?? (thinkHarder ? 35_000 : images.length ? 22_000 : 15_000)),
+        signal: AbortSignal.timeout(timeoutMs ?? (voiceMode ? 6_500 : thinkHarder ? 35_000 : images.length ? 22_000 : 15_000)),
         body: JSON.stringify(body),
       });
 
@@ -1797,7 +1801,7 @@ Deno.serve(async (request) => {
     }
 
     const providerOptions = {
-      thinkHarder,
+      thinkHarder: thinkHarder && !voice,
       hasImages: prepared.images.length > 0 || requestedAttachments.some((attachment) => attachment.kind === "video"),
     };
     const providers = getProviders(providerOptions).filter((provider) =>
@@ -1874,15 +1878,26 @@ Deno.serve(async (request) => {
       "- Protect sensitive information: " + String(aiSettings.protectSensitiveData !== false) + ".";
 
     if (voice) {
-      systemPrompt += "\n\nVOICE CONVERSATION: The user is speaking to you in a phone-call style conversation. Reply in one to three short, natural spoken sentences. Do not use Markdown, lists, emojis, links, headings, or long explanations. Answer the immediate point directly and keep the wording easy to understand aloud.";
+      systemPrompt += "\n\nVOICE CONVERSATION: The user is speaking to you in a phone-call style conversation. Answer the immediate point directly in one or two natural spoken sentences, ideally under 25 words. Do not use Markdown, lists, emojis, links, headings, or long explanations.";
     }
 
     let answer = "";
     let selectedProvider = "";
     const providerFailures: string[] = [];
-    for (const provider of providers) {
+    for (const [providerIndex, provider] of providers.entries()) {
+      if (voice && providerIndex >= 2) break;
       try {
-        answer = await requestProvider(provider, systemPrompt, history, message, prepared.images, prepared.pdfs, thinkHarder);
+        answer = await requestProvider(
+          provider,
+          systemPrompt,
+          history,
+          message,
+          prepared.images,
+          prepared.pdfs,
+          thinkHarder && !voice,
+          voice ? (providerIndex === 0 ? 6_500 : 4_500) : undefined,
+          voice,
+        );
         selectedProvider = provider.name;
         break;
       } catch {
