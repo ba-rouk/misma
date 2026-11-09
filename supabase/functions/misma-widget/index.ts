@@ -512,6 +512,7 @@ async function saveHumanRequest(db: Db, site: AnyRecord, conversation: AnyRecord
     email ? "Email: " + email : "",
     phone ? "Phone: " + phone : "",
   ].filter(Boolean).join("\n");
+  let notificationId: number | null = null;
   const notificationValues = {
     workspace_id: site.workspace_id,
     notification_type: "human_request",
@@ -542,14 +543,16 @@ async function saveHumanRequest(db: Db, site: AnyRecord, conversation: AnyRecord
     if (updatedNotification.error || !updatedNotification.data) {
       throw new Error("The request was saved, but Misma could not update the owner notification.");
     }
+    notificationId = Number(updatedNotification.data.id);
   } else {
     const createdNotification = await db.from("workspace_notifications").insert(notificationValues).select("id").single();
     if (createdNotification.error || !createdNotification.data) {
       throw new Error("The request was saved, but Misma could not create the owner notification.");
     }
+    notificationId = Number(createdNotification.data.id);
   }
 
-  return { requestId, alreadyPending };
+  return { requestId, alreadyPending, notificationId };
 }
 function isSafeWebsiteUrl(value: string): URL | null {
   try {
