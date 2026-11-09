@@ -765,17 +765,18 @@ test("multiple sent attachments remain horizontal in the user message", async ()
   assert.match(styles, /overflow-x:\s*auto/);
 });
 
-test("male and female voice presets never use an unrelated browser default voice", async () => {
+test("voice presets prefer matching English voices and fall back to system English when gender labels are hidden", async () => {
   const voice = await read("../src/lib/misma-voice.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(voice, /export function getSpeechVoiceForPreset/);
-  assert.match(voice, /return pool\[preferredIndex\] \|\| pool\[0\]/);
+  assert.match(voice, /const englishVoices = voices\\.filter/);
+  assert.match(voice, /const fallbackPool =/);
   assert.match(voice, /language === "en-gb"/);
   assert.match(voice, /lang = "en-GB"/);
-  assert.match(voice, /voicePreset = "girl"/);
-  assert.match(voice, /onError\?\.\("voice-unavailable"\)/);
+  assert.match(voice, /voicePreset = "woman"/);
+  assert.match(voice, /speech-playback/);
   assert.match(dashboard, /getSpeechVoiceForPreset/);
-  assert.match(dashboard, /voicePreset=\{selectedVoicePreset\}/);
+  assert.match(dashboard, /voicePreset=\\{selectedVoicePreset\\}/);
 });
 
 test("website widget connections support shared keys and safe removal", async () => {
@@ -1122,6 +1123,21 @@ test("website widget speech replies prioritize a girl-sounding British English v
   assert.match(widget, /utterance\.rate=0\.98/);
   assert.match(widget, /girlVoice\.lang\|\|"en-GB"/);
   assert.doesNotThrow(() => new Function(widget));
+});
+
+
+test("dashboard and website speech talk retry playback through the device default voice", async () => {
+  const voice = await read("../src/lib/misma-voice.ts");
+  const component = await read("../src/components/voice-input-bar.tsx");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(voice, /primeSpeechVoices\\(3000\\)/);
+  assert.match(voice, /speakChunk\\(chunk, true\\)/);
+  assert.match(voice, /synth\\.resume\\(\\)/);
+  assert.match(component, /Misma could not play the spoken reply/);
+  assert.match(widget, /var englishFallback=voices\\.filter/);
+  assert.match(widget, /speakChunk\\(textChunk,true\\)/);
+  assert.match(widget, /window\\.setTimeout\\(next,80\\)/);
+  assert.doesNotThrow(() => new Function(widget), "widget speech playback code must parse");
 });
 
 test("dashboard bootstrap returns chat and notification data before media signing", async () => {
