@@ -1116,12 +1116,13 @@ test("dashboard and website widget share the Chrome-style microphone permission 
 });
 
 
-test("website widget speech replies prioritize a British English female voice and fall back safely", async () => {
+test("website widget speech replies prefer a Siri US English voice and then a US female system voice", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.ok(widget.includes("function isBritishEnglish(voice)"));
-  assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
-  assert.ok(widget.includes("var englishFallback=voices.filter"));
-  assert.ok(widget.includes("return englishFallback[0]||nonMale[0]"));
+  assert.ok(widget.includes("var siriPattern=/siri|susan\\\\s+bennett/i;"));
+  assert.ok(widget.includes("function isAmericanEnglish(voice)"));
+  assert.ok(widget.includes("var siri=voices.filter"));
+  assert.ok(widget.includes("var american=female.filter(isAmericanEnglish)"));
+  assert.ok(widget.includes("var americanFallback=englishPool.filter(isAmericanEnglish)"));
   assert.ok(widget.includes("utterance.pitch=1.16"));
   assert.ok(widget.includes("utterance.rate=0.98"));
   assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
@@ -1142,6 +1143,25 @@ test("dashboard and website speech talk retry playback through the device defaul
   assert.match(widget, /speakChunk\(textChunk,true\)/);
   assert.match(widget, /window\.setTimeout\(next,80\)/);
   assert.doesNotThrow(() => new Function(widget), "widget speech playback code must parse");
+});
+
+
+test("mobile dashboard microphone and Speech Talk controls are not disabled by navigator.onLine", async () => {
+  const component = await read("../src/components/voice-input-bar.tsx");
+  assert.doesNotMatch(component, /navigator\\.onLine|disabled=\\{disabled \\|\\| !online\\}/);
+  assert.match(component, /disabled=\\{disabled\\}/);
+  assert.match(component, /micPermission\\.runWithPermission/);
+});
+
+test("Misma says it was created by Misma Corporation and widget channel icons use platform colors", async () => {
+  const chat = await read("../supabase/functions/misma-chat/index.ts");
+  const widgetEdge = await read("../supabase/functions/misma-widget/index.ts");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(chat, /Misma was created by Misma Corporation/);
+  assert.match(widgetEdge, /Misma was created by Misma Corporation/);
+  assert.match(widget, /whatsapp-link\\{background:#25D366/);
+  assert.match(widget, /instagram-link\\{background:linear-gradient/);
+  assert.doesNotThrow(() => new Function(widget), "widget runtime must parse");
 });
 
 test("dashboard bootstrap returns chat and notification data before media signing", async () => {
