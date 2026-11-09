@@ -1332,6 +1332,9 @@ test("website and dashboard Speech Talk use short replies with bounded fast prov
   assert.match(dashboardVoice, /if \(voice && providerIndex >= 2\) break/);
   assert.match(dashboardVoice, /voiceMode \? 180 : thinkHarder \? 4096 : 2048/);
   assert.match(dashboardVoice, /thinkHarder: thinkHarder && !voice/);
+  assert.match(dashboardVoice, /searchLiveWeb\(message, voice\)/);
+  assert.match(dashboardVoice, /AbortSignal\.timeout\(voiceFastMode \? 3_000 : 7_500\)/);
+  assert.match(dashboardVoice, /historyWindow = voice \|\| requestedAttachments\.length \? 4 : 10/);
   assert.match(voice, /primeSpeechVoices\(800\)/);
   assert.match(widgetRuntime, /window\.setTimeout\(done,650\)/);
 });
