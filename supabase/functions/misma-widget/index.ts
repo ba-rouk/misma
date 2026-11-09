@@ -174,12 +174,27 @@ async function sendHumanRequestPush(
   if (!subscriptions.data?.length) return;
 
   try {
-    const keys = await getVapidKeyPair(db);
+    const [keys, requestDetails] = await Promise.all([
+      getVapidKeyPair(db),
+      db.from("human_requests")
+        .select("visitor_name,reason")
+        .eq("workspace_id", workspaceId)
+        .eq("id", requestId)
+        .maybeSingle(),
+    ]);
     webpush.setVapidDetails("https://misma.onrender.com/", keys.publicKey, keys.privateKey);
-    const domain = safeString(websiteDomain, 180);
+    const senderName = safeString(requestDetails.data?.visitor_name, 120) || "A customer";
+    const reason = safeString(requestDetails.data?.reason, 160);
+    const sourceLabel = safeString(websiteDomain, 180);
+    const isWebsite = Boolean(sourceLabel) && !["phone", "whatsapp"].includes(sourceLabel.toLowerCase());
+    const sourceText = isWebsite
+      ? "Website: " + sourceLabel
+      : sourceLabel
+      ? "Channel: " + sourceLabel
+      : "Your workspace";
     const payload = JSON.stringify({
-      title: "A customer needs a human",
-      body: domain ? "A customer requested help from " + domain + "." : "A customer requested help from your business.",
+      title: senderName + " needs a human",
+      body: [sourceText, reason ? "Message: " + reason : "They requested human assistance."].join(" · ").slice(0, 180),
       tag: "misma-human-request-" + requestId,
       url: "/dashboard?tab=notifications&notificationId=" + notificationId,
       conversationId,

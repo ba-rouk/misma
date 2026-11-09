@@ -1,13 +1,23 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "../../lib/supabase";
+
+function safeDashboardDestination(value: string | null): string {
+  if (!value || typeof window === "undefined") return "/dashboard";
+  try {
+    const target = new URL(value, window.location.origin);
+    if (target.origin !== window.location.origin || target.pathname !== "/dashboard") return "/dashboard";
+    return target.pathname + target.search + target.hash;
+  } catch {
+    return "/dashboard";
+  }
+}
 
 export const Route = createFileRoute("/auth/callback")({
   component: AuthCallback,
 });
 
 function AuthCallback() {
-  const navigate = useNavigate();
   const started = useRef(false);
   const [error, setError] = useState("");
 
@@ -40,7 +50,9 @@ function AuthCallback() {
         if (data.session.user.email) {
           sessionStorage.setItem("misma_email", data.session.user.email);
         }
-        await navigate({ to: "/dashboard", replace: true });
+        const destination = safeDashboardDestination(sessionStorage.getItem("misma_post_login_redirect"));
+        sessionStorage.removeItem("misma_post_login_redirect");
+        window.location.replace(destination);
       } catch (cause) {
         setError(
           cause instanceof Error
@@ -51,7 +63,7 @@ function AuthCallback() {
     };
 
     void completeSignIn();
-  }, [navigate]);
+  }, []);
 
   return (
     <main className="auth-page">

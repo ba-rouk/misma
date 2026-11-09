@@ -3306,6 +3306,9 @@ function Dashboard() {
     const tempUserId = isRetry ? failedMessageId : `user-${Date.now()}`;
     const filesToSend = editId ? [] : [...selectedFiles];
     let sendConversationId = currentConversationId;
+    // Speech Talk belongs to the signed-in workspace owner, not the selected website visitor.
+    const isOwnerSpeechTalk = options.voice === true;
+    if (isOwnerSpeechTalk) sendConversationId = null;
 
     if (!options.voice && !editId && !isRetry) {
       const tempUserMsg: Message = {
@@ -3332,7 +3335,7 @@ function Dashboard() {
     try {
       if (requestController.signal.aborted) return null;
       const selectedConversation = conversations.find((item: any) => Number(item.id) === Number(currentConversationId));
-      if (currentConversationId && selectedConversation?.status === "Needs you" && selectedConversation?.channel !== "Dashboard" && !editId && !isRetry) {
+      if (!isOwnerSpeechTalk && currentConversationId && selectedConversation?.status === "Needs you" && selectedConversation?.channel !== "Dashboard" && !editId && !isRetry) {
         if (selectedFiles.length) throw new Error("Send text-only replies during a customer handoff.");
         const reply = await callWidgetFunction({
           action: "send-human-reply",
