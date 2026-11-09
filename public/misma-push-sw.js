@@ -14,6 +14,8 @@ self.addEventListener("push", (event) => {
     : "A customer needs a human";
   const options = {
     body: typeof payload.body === "string" ? payload.body.slice(0, 180) : "A customer requested help from your business.",
+    icon: "/misma-logo.svg",
+    badge: "/misma-logo.svg",
     tag: typeof payload.tag === "string" ? payload.tag.slice(0, 120) : "misma-human-request",
     renotify: false,
     data: {
@@ -34,8 +36,15 @@ self.addEventListener("notificationclick", (event) => {
     target = new URL("/dashboard?tab=notifications", self.location.origin);
   }
 
-  const sameOrigin = target.origin === self.location.origin;
-  const safeUrl = sameOrigin ? target.href : new URL("/dashboard?tab=notifications", self.location.origin).href;
+  const sameOriginDashboard = target.origin === self.location.origin && target.pathname === "/dashboard";
+  const notificationPath = sameOriginDashboard
+    ? target.pathname + target.search + target.hash
+    : "/dashboard?tab=notifications";
+  // Keep the requested destination through login. The login page opens it immediately
+  // for a valid session, or restores it after the user signs in again.
+  const loginUrl = new URL("/login", self.location.origin);
+  loginUrl.searchParams.set("redirect", notificationPath);
+  const safeUrl = loginUrl.href;
 
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
