@@ -1276,9 +1276,7 @@ Deno.serve(async (request: Request) => {
       if (input.action === "human-request") {
         const handoff = await saveHumanRequest(db, site, conversation, visitorId, input);
         if (handoff.notificationId) {
-          const pushTask = sendHumanRequestPush(
-            db, site.workspace_id, handoff.requestId, Number(conversation.id), handoff.notificationId, safeString(site.domain, 180),
-          );
+          const pushTask = sendHumanRequestPush(db, site.workspace_id, handoff.requestId, Number(conversation.id), handoff.notificationId, safeString(site.domain, 180));
           const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
           if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(pushTask);
           else await pushTask;

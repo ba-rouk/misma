@@ -8,10 +8,7 @@ CREATE TABLE public.push_subscriptions (
   auth text NOT NULL CHECK (char_length(auth) BETWEEN 10 AND 100),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT push_subscriptions_workspace_member_fkey
-    FOREIGN KEY (workspace_id, user_id)
-    REFERENCES public.workspace_members (workspace_id, user_id)
-    ON DELETE CASCADE
+  CONSTRAINT push_subscriptions_workspace_member_fkey FOREIGN KEY (workspace_id, user_id) REFERENCES public.workspace_members (workspace_id, user_id) ON DELETE CASCADE
 );
 
 CREATE INDEX push_subscriptions_workspace_user_idx
