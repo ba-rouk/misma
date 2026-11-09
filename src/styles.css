@@ -3967,6 +3967,21 @@ body:has(.aichat-main) {
   border: 1px solid #303a49;
   border-top-left-radius: 4px;
 }
+.aichat-message-row.is-visitor-typing {
+  padding: 2px 0 4px 46px;
+}
+.aichat-visitor-typing-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid #303a49;
+  border-radius: 14px;
+  background: #19212c;
+  color: #aab5c4;
+  font-size: 12px;
+  line-height: 1.2;
+}
 
 /* Markdown formatting inside AI bubbles */
 .aichat-markdown {
