@@ -4,6 +4,10 @@ export type VoiceConversationMode = "hands-free" | "push-to-talk";
 
 export type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
 
+// Live Speech Talk matches the female English profile used by the website widget.
+const WIDGET_SPEECH_PITCH = 1.16;
+const WIDGET_SPEECH_RATE = 0.98;
+
 const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|sonia|hazel|kate|serena|amy|martha|fiona|moira|emma|olivia|ava|allison|michelle|zoe|salli|joanna|kendra|kimberly|ivy|google.*female/i;
 const SIRI_VOICE_PATTERN = /siri|susan\s+bennett/i;
 const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee/i;
@@ -562,7 +566,7 @@ export function createVoiceMode({
 
   const speak = (rawText: string) => new Promise<void>((resolve) => {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
-    const chunks = synth ? toSpeechChunks(shortenForSpeech(cleanForSpeech(rawText), 320)) : [];
+    const chunks = synth ? toSpeechChunks(cleanForSpeech(rawText).slice(0, 1600)) : [];
     if (!synth || !chunks.length) {
       resolve();
       return;
@@ -590,8 +594,9 @@ export function createVoiceMode({
       }
 
       const utterance = new SpeechSynthesisUtterance(chunk);
-      utterance.lang = preferredVoice?.lang || lang;
-      utterance.pitch = currentVoicePreset === "girl" ? 1.2 : currentVoicePreset === "boy" ? 0.88 : currentVoicePreset === "woman" ? 1.12 : 0.82;
+      utterance.lang = preferredVoice?.lang || "en-US";
+      utterance.pitch = WIDGET_SPEECH_PITCH;
+      utterance.rate = WIDGET_SPEECH_RATE;
       if (!useDeviceDefault && preferredVoice) utterance.voice = preferredVoice;
 
       let handled = false;
@@ -646,7 +651,7 @@ export function createVoiceMode({
         finish();
         return;
       }
-      preferredVoice = getSpeechVoiceForPreset(voices, currentVoicePreset);
+      preferredVoice = getSpeechVoiceForPreset(voices, "woman");
       setState("speaking");
       speakNext();
     }).catch(() => {

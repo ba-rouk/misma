@@ -295,7 +295,7 @@ function speakAsWoman(text){
       function speakChunk(textChunk,useDeviceDefault){
         if(finished||!voiceSession){finish(false);return;}
         var utterance=new SpeechSynthesisUtterance(textChunk);
-        utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB";
+        utterance.lang=(girlVoice&&girlVoice.lang)||"en-US";
         if(!useDeviceDefault&&girlVoice)utterance.voice=girlVoice;
         utterance.pitch=1.16;utterance.rate=0.98;
         var handled=false;
