@@ -1139,7 +1139,7 @@ test("dashboard and website speech talk retry playback through the device defaul
   assert.match(voice, /speakChunk\(chunk, true\)/);
   assert.match(voice, /synth\.resume\(\)/);
   assert.match(component, /Misma could not play the spoken reply/);
-  assert.match(widget, /var englishFallback=voices\.filter/);
+  assert.ok(widget.includes("var englishPool=voices.filter(isEnglish)"));
   assert.match(widget, /speakChunk\(textChunk,true\)/);
   assert.match(widget, /window\.setTimeout\(next,80\)/);
   assert.doesNotThrow(() => new Function(widget), "widget speech playback code must parse");
