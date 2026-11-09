@@ -4224,7 +4224,9 @@ function Dashboard() {
   // human-handoff conversation is open. This avoids the former 30-second inbox delay.
   useEffect(() => {
     if (!token || !dashboardDataLoaded || !currentConversationId ||
-        !isHumanHandoffConversation || activeTab !== "workspace") {
+        !isHumanHandoffConversation ||
+        String(activeConversation?.channel || "").toLowerCase() !== "website" ||
+        activeTab !== "workspace") {
       setVisitorIsTyping(false);
       return;
     }
@@ -4316,9 +4318,8 @@ function Dashboard() {
       active = false;
       window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
-      setVisitorIsTyping(false);
     };
-  }, [token, dashboardDataLoaded, currentConversationId, isHumanHandoffConversation, activeTab, messages]);
+  }, [token, dashboardDataLoaded, currentConversationId, isHumanHandoffConversation, activeConversation?.channel, activeTab, messages]);
 
   return (
     <div className="aichat">
