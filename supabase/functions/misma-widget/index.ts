@@ -1335,7 +1335,7 @@ Deno.serve(async (request: Request) => {
         if (handoff.notificationId) {
           scheduleHumanRequestPush(db, site.workspace_id, handoff.requestId, Number(conversation.id), handoff.notificationId, safeString(site.domain, 180));
         }
-        const confirmationText = "Your request to speak with a person has been sent. The business team will follow up here.";
+        const confirmationText = "Your request to speak with a person has been sent. An assistant will follow up here.";
         const confirmationMessage = await db.from("messages").insert({
           conversation_id: conversation.id,
           role: "ai",
@@ -1370,7 +1370,7 @@ Deno.serve(async (request: Request) => {
         }).eq("id", conversation.id);
         return respond(200, {
           ok: true, visitorId, conversationId: Number(conversation.id), userMessageId: Number(userMessage.data?.id),
-          handoffPending: true, answer: "Your message has been sent to the business team. A person will reply in this conversation.",
+          handoffPending: true, answer: "Your message has reached the assistant. A reply will appear here.",
         });
       }
       let answer = "";
