@@ -14,6 +14,7 @@ import {
   getVisitorNotifications,
   getWorkspaceLiveUpdates,
   getConversationMessages,
+  getConversationActivity,
   createConversation,
   deleteConversation,
   setConversationGroup,
@@ -1618,6 +1619,7 @@ function Dashboard() {
   const [pendingRestoreConversationId, setPendingRestoreConversationId] = useState<number | null>(null);
   const [dashboardDataLoaded, setDashboardDataLoaded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [visitorIsTyping, setVisitorIsTyping] = useState(false);
 
   // Restore the last dashboard section and selected chat after a full browser refresh.
   useEffect(() => {
@@ -2330,7 +2332,7 @@ function Dashboard() {
 
   useEffect(() => {
     if (!authChecked || !token) return;
-    const refreshId = window.setInterval(refreshVisitorNotifications, 30000);
+    const refreshId = window.setInterval(refreshVisitorNotifications, 8000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") refreshVisitorNotifications();
     };
@@ -4218,6 +4220,106 @@ function Dashboard() {
     ? messages.filter((message) => message.role === "customer" || message.role === "human")
     : messages;
 
+  // Refresh only new messages and the short-lived visitor typing status while a
+  // human-handoff conversation is open. This avoids the former 30-second inbox delay.
+  useEffect(() => {
+    if (!token || !dashboardDataLoaded || !currentConversationId ||
+        !isHumanHandoffConversation || activeTab !== "workspace") {
+      setVisitorIsTyping(false);
+      return;
+    }
+
+    let active = true;
+    let timeoutId = 0;
+    let requestInFlight = false;
+
+    const poll = async () => {
+      if (!active || requestInFlight) return;
+      if (document.visibilityState !== "visible") {
+        timeoutId = window.setTimeout(poll, 2500);
+        return;
+      }
+
+      requestInFlight = true;
+      const afterMessageId = messages.reduce(
+        (max, message) => Math.max(max, Number(message.id) || 0),
+        0,
+      );
+      try {
+        const activity = await getConversationActivity({
+          data: { token, conversationId: currentConversationId, afterMessageId },
+        });
+        if (!active) return;
+
+        const typingUntil = activity.conversation.visitorTypingUntil
+          ? Date.parse(activity.conversation.visitorTypingUntil)
+          : 0;
+        setVisitorIsTyping(
+          activity.conversation.status === "Needs you" &&
+          Number.isFinite(typingUntil) &&
+          typingUntil > Date.now(),
+        );
+
+        if (activity.messages.length) {
+          const additions = activity.messages.filter((message) =>
+            message.role === "customer" || message.role === "human"
+          );
+          if (additions.length) {
+            setMessages((current) => {
+              const existingIds = new Set(current.map((message) => String(message.id)));
+              const fresh = additions.filter((message) => !existingIds.has(String(message.id)));
+              return fresh.length ? [...current, ...fresh] : current;
+            });
+            const latest = additions[additions.length - 1];
+            setConversations((current) => current.map((conversation: any) =>
+              Number(conversation.id) === currentConversationId
+                ? {
+                    ...conversation,
+                    text: latest.text.slice(0, 200),
+                    updated_at: latest.created_at,
+                  }
+                : conversation
+            ));
+            const newCustomerMessages = additions.filter((message) => message.role === "customer");
+            if (newCustomerMessages.length) {
+              setUnreadVisitorMessages((current) =>
+                current.filter((item) => item.conversationId !== currentConversationId)
+              );
+              setUnreadVisitorCount((count) =>
+                Math.max(0, count - newCustomerMessages.length)
+              );
+              void markVisitorMessagesRead({
+                data: { token, conversationId: currentConversationId },
+              }).catch((cause) => {
+                console.warn("Could not mark live customer replies as read:", cause);
+              });
+            }
+          }
+        }
+      } catch (cause) {
+        // A transient poll failure should not interrupt the open conversation.
+      } finally {
+        requestInFlight = false;
+        if (active) timeoutId = window.setTimeout(poll, 1200);
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "visible" || !active) return;
+      window.clearTimeout(timeoutId);
+      void poll();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    void poll();
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      setVisitorIsTyping(false);
+    };
+  }, [token, dashboardDataLoaded, currentConversationId, isHumanHandoffConversation, activeTab, messages]);
+
   return (
     <div className="aichat">
       {/* Mobile Translucent Backdrop */}
@@ -4782,6 +4884,17 @@ function Dashboard() {
                     </div>
                   );
                 })
+              )}
+
+              {isHumanHandoffConversation && visitorIsTyping && (
+                <div className="aichat-message-row is-customer is-visitor-typing" role="status" aria-live="polite">
+                  <div className="aichat-visitor-typing-bubble">
+                    <span>Customer is typing</span>
+                    <div className="aichat-thinking-dots" aria-hidden="true">
+                      <span /><span /><span />
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* AI Thinking State */}
