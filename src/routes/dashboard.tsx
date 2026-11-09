@@ -2439,6 +2439,7 @@ function Dashboard() {
     if (!hasCachedConversationMessages) setMessages([]);
     setChatActionMenuId(null);
     setCurrentConversationId(convId);
+    setVisitorIsTyping(false);
     if (options.activateWorkspace !== false) setActiveTab("workspace");
     setMobileMenuOpen(false);
     setChatError("");
@@ -2524,6 +2525,7 @@ function Dashboard() {
     activeConversationIdRef.current = null;
     setChatActionMenuId(null);
     setCurrentConversationId(null);
+    setVisitorIsTyping(false);
     setMessages([]);
     setDraft("");
     setChatError("");
