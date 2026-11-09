@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4.4.3";
+import webpush from "npm:web-push@3.6.7";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -111,7 +112,7 @@ function getUserClient(token: string): Db {
     global: { headers: { Authorization: "Bearer " + token } },
   });
 }
-async function requireWorkspace(token: string, requestedWorkspaceId: string): Promise<{ db: Db; workspaceId: string }> {
+async function requireWorkspace(token: string, requestedWorkspaceId: string): Promise<{ db: Db; workspaceId: string; userId: string }> {
   if (!token) throw new Error("Sign in to manage this workspace.");
   const userDb = getUserClient(token);
   const userResult = await userDb.auth.getUser(token);
@@ -124,7 +125,7 @@ async function requireWorkspace(token: string, requestedWorkspaceId: string): Pr
   const workspaceIds = Array.from(new Set(memberResult.data.map((row: AnyRecord) => String(row.workspace_id))));
   const selected = requestedWorkspaceId || (workspaceIds.length === 1 ? workspaceIds[0] : "");
   if (!selected || !workspaceIds.includes(selected)) throw new Error("Select a workspace you belong to before continuing.");
-  return { db: getAdmin(), workspaceId: selected };
+  return { db: getAdmin(), workspaceId: selected, userId: userResult.data.user.id };
 }
 function providerList() {
   const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" | "cohere" }> = [];
