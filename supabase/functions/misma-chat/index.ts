@@ -167,7 +167,7 @@ function shouldSearchWeb(message: string): boolean {
   return explicitSearch || freshnessLanguage || updateLanguage || liveFactLanguage;
 }
 
-async function searchLiveWeb(query: string): Promise<{ configured: boolean; results: LiveSearchResult[] }> {
+async function searchLiveWeb(query: string, voiceFastMode = false): Promise<{ configured: boolean; results: LiveSearchResult[] }> {
   const isNews = /\b(news|breaking|headlines|election|press conference|current events|recent development)\b/i.test(query);
   const isImmediate = /\b(today|right now|breaking|this week|yesterday|current(?:ly)?|as of today|as of now)\b/i.test(query);
   const isRecent = /\b(latest|newest|most recent|recent|new|updates?|developments?|release notes|new version|current version)\b/i.test(query);
@@ -181,13 +181,13 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
       const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(7_500),
+        signal: AbortSignal.timeout(voiceFastMode ? 3_000 : 7_500),
         body: JSON.stringify({
           api_key: tavilyKey,
           query: query.slice(0, 380),
           search_depth: "fast",
           topic: isNews ? "news" : "general",
-          max_results: 6,
+          max_results: voiceFastMode ? 3 : 6,
           include_answer: false,
           include_raw_content: false,
           ...(isNews ? { days: isImmediate ? 7 : 30 } : { time_range: currentTimeRange }),
@@ -196,7 +196,7 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) console.warn("[misma-chat] Tavily Search returned HTTP " + response.status + ".");
       if (response.ok && isRecord(payload) && Array.isArray(payload.results)) {
-        for (const item of payload.results.slice(0, 6)) {
+        for (const item of payload.results.slice(0, voiceFastMode ? 3 : 6)) {
           if (!isRecord(item) || typeof item.title !== "string" || typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) continue;
           results.push({
             title: item.title.slice(0, 240),
@@ -211,18 +211,18 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
     }
   }
 
-  if (!results.length && braveKey) {
+  if (!results.length && braveKey && (!voiceFastMode || !tavilyKey)) {
     try {
       const endpoint = isNews
         ? "https://api.search.brave.com/res/v1/news/search"
         : "https://api.search.brave.com/res/v1/web/search";
       const searchUrl = new URL(endpoint);
       searchUrl.searchParams.set("q", query.slice(0, 380));
-      searchUrl.searchParams.set("count", "6");
+      searchUrl.searchParams.set("count", voiceFastMode ? "3" : "6");
       searchUrl.searchParams.set("freshness", isImmediate ? "pw" : "pm");
       const response = await fetch(searchUrl, {
         headers: { "Accept": "application/json", "X-Subscription-Token": braveKey },
-        signal: AbortSignal.timeout(7_500),
+        signal: AbortSignal.timeout(voiceFastMode ? 3_000 : 7_500),
       });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) console.warn("[misma-chat] Brave Search returned HTTP " + response.status + ".");
@@ -230,7 +230,7 @@ async function searchLiveWeb(query: string): Promise<{ configured: boolean; resu
         ? (isNews && isRecord(payload.news) ? payload.news : isRecord(payload.web) ? payload.web : null)
         : null;
       if (response.ok && resultBlock && Array.isArray(resultBlock.results)) {
-        for (const item of resultBlock.results.slice(0, 6)) {
+        for (const item of resultBlock.results.slice(0, voiceFastMode ? 3 : 6)) {
           if (!isRecord(item) || typeof item.title !== "string" || typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) continue;
           results.push({
             title: item.title.slice(0, 240),
@@ -1589,7 +1589,7 @@ Deno.serve(async (request) => {
     if (action !== "chat") return jsonResponse(400, { error: "Unsupported action." });
 
     const liveSearchPromise = shouldSearchWeb(message)
-      ? searchLiveWeb(message)
+      ? searchLiveWeb(message, voice)
       : Promise.resolve(null);
     const [workspaceResult, knowledgeResult, orderResult, contactResult, core01LessonsResult, liveSearch] = await Promise.all([
       db.from("workspaces")
@@ -1715,8 +1715,8 @@ Deno.serve(async (request) => {
       }
 
       if (useConversationHistory) {
-        const historyWindow = requestedAttachments.length ? 4 : 10;
-        const historyTextLimit = requestedAttachments.length ? 1_800 : 4_000;
+        const historyWindow = voice || requestedAttachments.length ? 4 : 10;
+        const historyTextLimit = voice ? 1_200 : requestedAttachments.length ? 1_800 : 4_000;
         let historyQuery = db
           .from("messages")
           .select("role,text")
