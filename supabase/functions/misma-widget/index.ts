@@ -1275,6 +1275,14 @@ Deno.serve(async (request: Request) => {
       }
       if (input.action === "human-request") {
         const handoff = await saveHumanRequest(db, site, conversation, visitorId, input);
+        if (handoff.notificationId) {
+          const pushTask = sendHumanRequestPush(
+            db, site.workspace_id, handoff.requestId, Number(conversation.id), handoff.notificationId, safeString(site.domain, 180),
+          );
+          const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
+          if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(pushTask);
+          else await pushTask;
+        }
         const confirmationText = "Your request to speak with a person has been sent. The business team will follow up here.";
         const confirmationMessage = await db.from("messages").insert({
           conversation_id: conversation.id,
