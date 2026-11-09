@@ -76,6 +76,50 @@ function speechVoiceLanguageRank(voice: SpeechSynthesisVoice): number {
   return 3;
 }
 
+const WIDGET_FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|sonia|hazel|kate|serena|amy|martha|fiona|moira|google.*female/i;
+
+function isWidgetEnglishVoice(voice: SpeechSynthesisVoice): boolean {
+  return /^en(?:[-_]|$)/i.test(voice.lang || "") || /english/i.test(voice.name + " " + voice.voiceURI);
+}
+
+function isWidgetAmericanEnglishVoice(voice: SpeechSynthesisVoice): boolean {
+  return /^en[-_]?(US|USA)(?:$|[-_])/i.test(voice.lang || "") ||
+    /\b(?:us english|american english|united states)\b/i.test(voice.name + " " + voice.voiceURI);
+}
+
+function isWidgetBritishEnglishVoice(voice: SpeechSynthesisVoice): boolean {
+  return /^en[-_]?(GB|UK)(?:$|[-_])/i.test(voice.lang || "") ||
+    /\b(?:uk|british|united kingdom)\b/i.test(voice.name + " " + voice.voiceURI);
+}
+
+/** Match the website widget's Siri-first, US-English-first female voice selection exactly. */
+export function getWidgetSpeechVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  const siri = voices.filter((voice) => {
+    const label = voice.name + " " + voice.voiceURI;
+    return SIRI_VOICE_PATTERN.test(label) && isWidgetEnglishVoice(voice) && !MALE_VOICE_PATTERN.test(label);
+  });
+  if (siri.length) return siri[0];
+
+  const female = voices.filter((voice) => {
+    const label = voice.name + " " + voice.voiceURI;
+    return WIDGET_FEMALE_VOICE_PATTERN.test(label) && !MALE_VOICE_PATTERN.test(label);
+  });
+  const american = female.filter(isWidgetAmericanEnglishVoice);
+  if (american.length) return american[0];
+  const british = female.filter(isWidgetBritishEnglishVoice);
+  if (british.length) return british[0];
+  const english = female.filter(isWidgetEnglishVoice);
+  if (english.length) return english[0];
+
+  // Keep the same US-first fallback for devices that do not expose voice gender metadata.
+  const englishPool = voices.filter(isWidgetEnglishVoice);
+  const americanFallback = englishPool.filter(isWidgetAmericanEnglishVoice);
+  const englishFallback = americanFallback.concat(englishPool.filter((voice) => !isWidgetAmericanEnglishVoice(voice)));
+  const englishNonMale = englishFallback.filter((voice) => !MALE_VOICE_PATTERN.test(voice.name + " " + voice.voiceURI));
+  const nonMale = voices.filter((voice) => !MALE_VOICE_PATTERN.test(voice.name + " " + voice.voiceURI));
+  return englishNonMale[0] || englishFallback[0] || nonMale[0] || voices[0];
+}
+
 export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
   const femalePreset = preset === "girl" || preset === "woman";
   if (femalePreset) {
@@ -651,7 +695,7 @@ export function createVoiceMode({
         finish();
         return;
       }
-      preferredVoice = getSpeechVoiceForPreset(voices, "woman");
+      preferredVoice = getWidgetSpeechVoice(voices);
       setState("speaking");
       speakNext();
     }).catch(() => {
