@@ -1385,10 +1385,10 @@ test("connected website detail cards start collapsed and can be expanded", async
   assert.doesNotMatch(dashboard, /minimizedWebsiteIds/);
 });
 
-test("Misma publishes its logo as a browser and search-engine favicon", async () => {
+test("Misma publishes a PNG favicon supported by browser and Google Search formats", async () => {
   const root = await read("../src/routes/__root.tsx");
-  const icon = await read("../public/misma-logo.svg");
-  assert.match(root, /rel: "icon", href: "\/misma-logo\.svg", type: "image\/svg\+xml"/);
+  const icon = await readFile(new URL("../public/misma-favicon.png", import.meta.url));
+  assert.match(root, /rel: "icon", href: "\/misma-favicon\.png", type: "image\/png", sizes: "48x48"/);
   assert.match(root, /title: "Misma \| Business AI, connected"/);
-  assert.match(icon, /viewBox="0 0 100 100"/);
+  assert.equal(icon.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
 });
