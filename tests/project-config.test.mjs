@@ -958,8 +958,8 @@ test("widget microphone and speech talk use female-first English voice selection
   assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
   assert.ok(widget.includes("function getFemaleVoice()"));
   assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
-  assert.ok(widget.includes("var englishFallback=voices.filter"));
-  assert.ok(widget.includes("return englishFallback[0]||nonMale[0]"));
+  assert.ok(widget.includes("var englishPool=voices.filter(isEnglish)"));
+  assert.ok(widget.includes("return englishNonMale[0]||englishFallback[0]||nonMale[0]||voices[0]"));
   assert.ok(widget.includes("utterance.pitch=1.16"));
   assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
   assert.ok(widget.includes("synth.resume()"));
@@ -978,8 +978,8 @@ test("embedded speech talk hides transcripts and uses female-first English speec
   assert.ok(widget.includes('instance.lang=isVoiceChat?"en-GB"'));
   assert.ok(widget.includes("function isBritishEnglish(voice)"));
   assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
-  assert.ok(widget.includes("var englishFallback=voices.filter"));
-  assert.ok(widget.includes("return englishFallback[0]||nonMale[0]"));
+  assert.ok(widget.includes("var englishPool=voices.filter(isEnglish)"));
+  assert.ok(widget.includes("return englishNonMale[0]||englishFallback[0]||nonMale[0]||voices[0]"));
   assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
   assert.ok(widget.includes("utterance.pitch=1.16"));
   assert.ok(widget.includes("google.*female"));
@@ -1118,7 +1118,7 @@ test("dashboard and website widget share the Chrome-style microphone permission 
 
 test("website widget speech replies prefer a Siri US English voice and then a US female system voice", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.ok(widget.includes("var siriPattern=/siri|susan\\\\s+bennett/i;"));
+  assert.ok(widget.includes("var siriPattern=/siri|susan\\s+bennett/i;"));
   assert.ok(widget.includes("function isAmericanEnglish(voice)"));
   assert.ok(widget.includes("var siri=voices.filter"));
   assert.ok(widget.includes("var american=female.filter(isAmericanEnglish)"));
@@ -1148,19 +1148,20 @@ test("dashboard and website speech talk retry playback through the device defaul
 
 test("mobile dashboard microphone and Speech Talk controls are not disabled by navigator.onLine", async () => {
   const component = await read("../src/components/voice-input-bar.tsx");
-  assert.doesNotMatch(component, /navigator\\.onLine|disabled=\\{disabled \\|\\| !online\\}/);
-  assert.match(component, /disabled=\\{disabled\\}/);
-  assert.match(component, /micPermission\\.runWithPermission/);
+  assert.ok(!component.includes("navigator.onLine"));
+  assert.ok(!component.includes("disabled={disabled || !online}"));
+  assert.ok(component.includes("disabled={disabled}"));
+  assert.ok(component.includes("micPermission.runWithPermission"));
 });
 
 test("Misma says it was created by Misma Corporation and widget channel icons use platform colors", async () => {
   const chat = await read("../supabase/functions/misma-chat/index.ts");
   const widgetEdge = await read("../supabase/functions/misma-widget/index.ts");
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.match(chat, /Misma was created by Misma Corporation/);
-  assert.match(widgetEdge, /Misma was created by Misma Corporation/);
-  assert.match(widget, /whatsapp-link\\{background:#25D366/);
-  assert.match(widget, /instagram-link\\{background:linear-gradient/);
+  assert.ok(chat.includes("Misma was created by Misma Corporation"));
+  assert.ok(widgetEdge.includes("Misma was created by Misma Corporation"));
+  assert.ok(widget.includes("whatsapp-link{background:#25D366"));
+  assert.ok(widget.includes("instagram-link{background:linear-gradient"));
   assert.doesNotThrow(() => new Function(widget), "widget runtime must parse");
 });
 
