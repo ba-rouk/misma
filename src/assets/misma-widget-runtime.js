@@ -302,7 +302,7 @@ function speakAsWoman(text){
       var finished=false;
       function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice()||null);}
       synth.addEventListener("voiceschanged",done,{once:true});
-      window.setTimeout(done,3000);
+      window.setTimeout(done,650);
     });
   }
   var clean=String(text||"").replace(/https?:\/\/\S+/g," ").replace(/[*_~>|#]+/g," ").replace(/\s+/g," ").trim().slice(0,1600);
