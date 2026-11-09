@@ -71,16 +71,36 @@ function speechVoiceLanguageRank(voice: SpeechSynthesisVoice): number {
 }
 
 export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
+  const femalePreset = preset === "girl" || preset === "woman";
   const female = voices.filter((voice) => {
     const label = voice.name + " " + voice.voiceURI;
     return FEMALE_VOICE_PATTERN.test(label) && !MALE_VOICE_PATTERN.test(label);
   });
   const male = voices.filter((voice) => MALE_VOICE_PATTERN.test(voice.name + " " + voice.voiceURI));
-  const pool = (preset === "girl" || preset === "woman" ? female : male)
+  const preferredPool = (femalePreset ? female : male)
     .slice()
     .sort((left, right) => speechVoiceLanguageRank(left) - speechVoiceLanguageRank(right));
   const preferredIndex = preset === "girl" || preset === "boy" ? 0 : 1;
-  return pool[preferredIndex] || pool[0];
+  if (preferredPool.length) return preferredPool[preferredIndex] || preferredPool[0];
+
+  // Android and some desktop voice engines expose neutral names such as
+  // "English (United Kingdom)" instead of declaring a voice's gender. Do not
+  // abandon spoken replies just because the OS hides that metadata.
+  const oppositeGenderPattern = femalePreset ? MALE_VOICE_PATTERN : FEMALE_VOICE_PATTERN;
+  const englishVoices = voices.filter((voice) => {
+    const label = voice.name + " " + voice.voiceURI;
+    const language = String(voice.lang || "").replace(/_/g, "-").toLowerCase();
+    return (language.startsWith("en") || /english/i.test(label)) && !oppositeGenderPattern.test(label);
+  });
+  const anyEnglishVoice = voices.filter((voice) => {
+    const label = voice.name + " " + voice.voiceURI;
+    const language = String(voice.lang || "").replace(/_/g, "-").toLowerCase();
+    return language.startsWith("en") || /english/i.test(label);
+  });
+  const fallbackPool = (englishVoices.length ? englishVoices : anyEnglishVoice.length ? anyEnglishVoice : voices)
+    .slice()
+    .sort((left, right) => speechVoiceLanguageRank(left) - speechVoiceLanguageRank(right));
+  return fallbackPool[0];
 }
 
 type RecognitionResult = { isFinal: boolean; 0: { transcript: string } };
@@ -431,7 +451,7 @@ type VoiceModeOptions = {
 export function createVoiceMode({
   send,
   lang = "en-GB",
-  voicePreset = "girl",
+  voicePreset = "woman",
   onState,
   onUser,
   onReply,
@@ -553,38 +573,80 @@ export function createVoiceMode({
       finish();
     };
 
-    void primeSpeechVoices().then((voices) => {
+    const speakChunk = (chunk: string, useDeviceDefault = false) => {
       if (finished || !on) {
         finish();
         return;
       }
-      const preferredVoice = getSpeechVoiceForPreset(voices, currentVoicePreset);
-      if (!preferredVoice) {
-        finish();
-        onError?.("voice-unavailable");
-        return;
-      }
 
-      const speakNext = () => {
-        if (finished) return;
-        if (index >= chunks.length || !on) {
-          finish();
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      utterance.lang = preferredVoice?.lang || lang;
+      utterance.pitch = currentVoicePreset === "girl" ? 1.2 : currentVoicePreset === "boy" ? 0.88 : currentVoicePreset === "woman" ? 1.12 : 0.82;
+      if (!useDeviceDefault && preferredVoice) utterance.voice = preferredVoice;
+
+      let handled = false;
+      utterance.onend = () => {
+        if (handled || finished) return;
+        handled = true;
+        speakNext();
+      };
+      utterance.onerror = () => {
+        if (handled || finished) return;
+        handled = true;
+        if (!useDeviceDefault && on) {
+          // Retry once through the OS default voice. Some mobile engines reject
+          // a named voice even though their default speech engine is available.
+          utterance.onend = null;
+          utterance.onerror = null;
+          try { synth.cancel(); } catch { /* The browser may already have cleared the queue. */ }
+          window.setTimeout(() => {
+            if (finished || !on) {
+              finish();
+              return;
+            }
+            try { synth.resume(); } catch { /* Resume is not implemented in every browser. */ }
+            speakChunk(chunk, true);
+          }, 100);
           return;
         }
-        const utterance = new SpeechSynthesisUtterance(chunks[index++]);
-        utterance.lang = preferredVoice.lang || lang;
-        utterance.pitch = currentVoicePreset === "girl" ? 1.2 : currentVoicePreset === "boy" ? 0.88 : currentVoicePreset === "woman" ? 1 : 0.82;
-        utterance.voice = preferredVoice;
-        utterance.onend = speakNext;
-        utterance.onerror = speakNext;
-        synth.speak(utterance);
+        finish();
+        onError?.("speech-playback");
       };
 
+      try {
+        if (typeof synth.resume === "function") synth.resume();
+        synth.speak(utterance);
+      } catch {
+        utterance.onerror?.(new Event("error") as SpeechSynthesisErrorEvent);
+      }
+    };
+
+    const speakNext = () => {
+      if (finished) return;
+      if (index >= chunks.length || !on) {
+        finish();
+        return;
+      }
+      speakChunk(chunks[index++]);
+    };
+
+    let preferredVoice: SpeechSynthesisVoice | undefined;
+    void primeSpeechVoices(3000).then((voices) => {
+      if (finished || !on) {
+        finish();
+        return;
+      }
+      preferredVoice = getSpeechVoiceForPreset(voices, currentVoicePreset);
       setState("speaking");
       speakNext();
     }).catch(() => {
-      finish();
-      onError?.("voice-unavailable");
+      if (finished || !on) {
+        finish();
+        return;
+      }
+      // Still attempt device-default speech if voice enumeration is unavailable.
+      setState("speaking");
+      speakNext();
     });
   });
 

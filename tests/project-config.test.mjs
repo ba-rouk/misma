@@ -549,7 +549,7 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
 });
 
 test("speech turns are retained for AI context but excluded from visible chat history and Core.01 learning", async () => {
-  const migration = await read("../supabase/migrations/20261108113000_voice_messages_hidden_from_chat.sql");
+  const migration = await read("../supabase/migrations/20261108095954_voice_messages_hidden_from_chat.sql");
   const dashboardApi = await read("../src/lib/api/misma.functions.ts");
   const chatEdge = await read("../supabase/functions/misma-chat/index.ts");
   const widgetEdge = await read("../supabase/functions/misma-widget/index.ts");
@@ -765,15 +765,16 @@ test("multiple sent attachments remain horizontal in the user message", async ()
   assert.match(styles, /overflow-x:\s*auto/);
 });
 
-test("male and female voice presets never use an unrelated browser default voice", async () => {
+test("voice presets prefer matching English voices and fall back to system English when gender labels are hidden", async () => {
   const voice = await read("../src/lib/misma-voice.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(voice, /export function getSpeechVoiceForPreset/);
-  assert.match(voice, /return pool\[preferredIndex\] \|\| pool\[0\]/);
+  assert.match(voice, /const englishVoices = voices\.filter/);
+  assert.match(voice, /const fallbackPool =/);
   assert.match(voice, /language === "en-gb"/);
   assert.match(voice, /lang = "en-GB"/);
-  assert.match(voice, /voicePreset = "girl"/);
-  assert.match(voice, /onError\?\.\("voice-unavailable"\)/);
+  assert.match(voice, /voicePreset = "woman"/);
+  assert.match(voice, /speech-playback/);
   assert.match(dashboard, /getSpeechVoiceForPreset/);
   assert.match(dashboard, /voicePreset=\{selectedVoicePreset\}/);
 });
@@ -944,7 +945,7 @@ test("dashboard notification feed shows named human requests and counts unread n
 });
 
 
-test("widget microphone and speech talk show an explicit permission dialog and use dashboard female voice selection", async () => {
+test("widget microphone and speech talk use female-first English voice selection with playback fallback", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.ok(widget.includes("class='mic-permission-backdrop'"));
   assert.ok(widget.includes("<strong>misma.onrender.com</strong> wants to use your microphone"));
@@ -957,9 +958,10 @@ test("widget microphone and speech talk show an explicit permission dialog and u
   assert.ok(widget.includes("function beginVoiceSessionAfterPermission()"));
   assert.ok(widget.includes("function getFemaleVoice()"));
   assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
-  assert.ok(widget.includes("return british[0]"));
+  assert.ok(widget.includes("var englishFallback=voices.filter"));
+  assert.ok(widget.includes("return englishFallback[0]||nonMale[0]"));
   assert.ok(widget.includes("utterance.pitch=1.16"));
-  assert.ok(widget.includes('utterance.lang=girlVoice.lang||"en-GB"'));
+  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
   assert.ok(widget.includes("synth.resume()"));
   assert.ok(widget.includes("Microphone is blocked. Tap the lock icon next to the address bar"));
   assert.ok(widget.includes('setVoiceState("idle",errorMessage)'));
@@ -968,7 +970,7 @@ test("widget microphone and speech talk show an explicit permission dialog and u
   assert.doesNotThrow(() => new Function(widget), "widget microphone code must parse");
 });
 
-test("embedded speech talk hides transcripts and uses dashboard-compatible female voice matching", async () => {
+test("embedded speech talk hides transcripts and uses female-first English speech fallback", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   assert.ok(!widget.includes("voiceTranscript"));
@@ -976,8 +978,9 @@ test("embedded speech talk hides transcripts and uses dashboard-compatible femal
   assert.ok(widget.includes('instance.lang=isVoiceChat?"en-GB"'));
   assert.ok(widget.includes("function isBritishEnglish(voice)"));
   assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
-  assert.ok(widget.includes("return english[0];"));
-  assert.ok(widget.includes("utterance.lang=girlVoice.lang||" + '"en-GB"'));
+  assert.ok(widget.includes("var englishFallback=voices.filter"));
+  assert.ok(widget.includes("return englishFallback[0]||nonMale[0]"));
+  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
   assert.ok(widget.includes("utterance.pitch=1.16"));
   assert.ok(widget.includes("google.*female"));
   assert.ok(edge.includes("Always understand and respond in English"));
@@ -1113,15 +1116,32 @@ test("dashboard and website widget share the Chrome-style microphone permission 
 });
 
 
-test("website widget speech replies prioritize a girl-sounding British English voice", async () => {
+test("website widget speech replies prioritize a British English female voice and fall back safely", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.match(widget, /function isBritishEnglish\(voice\)/);
-  assert.match(widget, /var british=female\.filter\(isBritishEnglish\)/);
-  assert.match(widget, /return british\[0\]/);
-  assert.match(widget, /utterance\.pitch=1\.16/);
-  assert.match(widget, /utterance\.rate=0\.98/);
-  assert.match(widget, /girlVoice\.lang\|\|"en-GB"/);
+  assert.ok(widget.includes("function isBritishEnglish(voice)"));
+  assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
+  assert.ok(widget.includes("var englishFallback=voices.filter"));
+  assert.ok(widget.includes("return englishFallback[0]||nonMale[0]"));
+  assert.ok(widget.includes("utterance.pitch=1.16"));
+  assert.ok(widget.includes("utterance.rate=0.98"));
+  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
+  assert.ok(widget.includes("speakChunk(textChunk,true)"));
   assert.doesNotThrow(() => new Function(widget));
+});
+
+
+test("dashboard and website speech talk retry playback through the device default voice", async () => {
+  const voice = await read("../src/lib/misma-voice.ts");
+  const component = await read("../src/components/voice-input-bar.tsx");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(voice, /primeSpeechVoices\(3000\)/);
+  assert.match(voice, /speakChunk\(chunk, true\)/);
+  assert.match(voice, /synth\.resume\(\)/);
+  assert.match(component, /Misma could not play the spoken reply/);
+  assert.match(widget, /var englishFallback=voices\.filter/);
+  assert.match(widget, /speakChunk\(textChunk,true\)/);
+  assert.match(widget, /window\.setTimeout\(next,80\)/);
+  assert.doesNotThrow(() => new Function(widget), "widget speech playback code must parse");
 });
 
 test("dashboard bootstrap returns chat and notification data before media signing", async () => {

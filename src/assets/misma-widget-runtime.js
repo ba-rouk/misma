@@ -253,34 +253,73 @@ function speakAsWoman(text){
   function isBritishEnglish(voice){return /^en[-_]?(GB|UK)(?:$|[-_])/i.test(voice.lang||"")||/\b(?:uk|british|united kingdom)\b/i.test(voice.name+" "+voice.voiceURI);}
   function isEnglish(voice){return /^en(?:[-_]|$)/i.test(voice.lang||"")||/english/i.test(voice.name+" "+voice.voiceURI);}
   function getFemaleVoice(){
-    var voices=synth.getVoices();
+    var voices=synth.getVoices()||[];
     var female=voices.filter(function(voice){var label=voice.name+" "+voice.voiceURI;return femalePattern.test(label)&&!malePattern.test(label);});
     var british=female.filter(isBritishEnglish);
     if(british.length)return british[0];
     var english=female.filter(isEnglish);
-    return english[0];
+    if(english.length)return english[0];
+    // Many Android speech engines do not expose gender in the voice name.
+    // Prefer a neutral English voice, then any non-male voice, instead of
+    // silently dropping the spoken reply.
+    var englishFallback=voices.filter(function(voice){return isEnglish(voice)&&!malePattern.test(voice.name+" "+voice.voiceURI);});
+    var nonMale=voices.filter(function(voice){return !malePattern.test(voice.name+" "+voice.voiceURI);});
+    return englishFallback[0]||nonMale[0]||voices.filter(isEnglish)[0]||voices[0];
   }
-  function waitForVoice(){var current=getFemaleVoice();if(current)return Promise.resolve(current);return new Promise(function(resolve){
-    var finished=false;function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice());}
-    synth.addEventListener("voiceschanged",done,{once:true});window.setTimeout(done,3000);
-  });}
+  function waitForVoice(){
+    var current=getFemaleVoice();
+    if(current)return Promise.resolve(current);
+    return new Promise(function(resolve){
+      var finished=false;
+      function done(){if(finished)return;finished=true;synth.removeEventListener("voiceschanged",done);resolve(getFemaleVoice()||null);}
+      synth.addEventListener("voiceschanged",done,{once:true});
+      window.setTimeout(done,3000);
+    });
+  }
   var clean=String(text||"").replace(/https?:\/\/\S+/g," ").replace(/[*_~>|#]+/g," ").replace(/\s+/g," ").trim().slice(0,1600);
   if(!clean)return Promise.resolve(true);
   var parts=clean.match(/[^.!?]+[.!?]*\s*/g)||[clean];
   setVoiceState("speaking");
   return waitForVoice().then(function(girlVoice){
-    if(!girlVoice){setVoiceState("ready","No matching female English speech voice is installed on this device. Enable an English female voice in your device text-to-speech settings.");return false;}
     return new Promise(function(resolve){
       var index=0,finished=false;
       function finish(result){if(finished)return;finished=true;voiceSpeechCancel=null;resolve(result);}
+      function speakChunk(textChunk,useDeviceDefault){
+        if(finished||!voiceSession){finish(false);return;}
+        var utterance=new SpeechSynthesisUtterance(textChunk);
+        utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB";
+        if(!useDeviceDefault&&girlVoice)utterance.voice=girlVoice;
+        utterance.pitch=1.16;utterance.rate=0.98;
+        var handled=false;
+        utterance.onend=function(){if(handled||finished)return;handled=true;next();};
+        utterance.onerror=function(){
+          if(handled||finished)return;handled=true;
+          if(!useDeviceDefault&&voiceSession){
+            utterance.onend=null;utterance.onerror=null;
+            try{synth.cancel();}catch(error){}
+            window.setTimeout(function(){
+              if(finished||!voiceSession){finish(false);return;}
+              try{if(typeof synth.resume==="function")synth.resume();}catch(error){}
+              speakChunk(textChunk,true);
+            },100);
+            return;
+          }
+          setVoiceState("ready","Misma could not play the spoken reply. Check your device volume and text-to-speech output, then try again.");
+          finish(false);
+        };
+        try{
+          if(typeof synth.resume==="function")synth.resume();
+          synth.speak(utterance);
+        }catch(error){utterance.onerror();}
+      }
       function next(){
         if(finished)return;
         if(index>=parts.length||!voiceSession){finish(true);return;}
-        var utterance=new SpeechSynthesisUtterance(parts[index++].trim());utterance.lang=girlVoice.lang||"en-GB";utterance.voice=girlVoice;utterance.pitch=1.16;utterance.rate=0.98;
-        utterance.onend=next;utterance.onerror=next;synth.speak(utterance);
+        speakChunk(parts[index++].trim(),false);
       }
-      voiceSpeechCancel=function(){if(finished)return;synth.cancel();finish(false);};
-      synth.cancel();if(typeof synth.resume==="function")synth.resume();next();
+      voiceSpeechCancel=function(){if(finished)return;try{synth.cancel();}catch(error){}finish(false);};
+      try{synth.cancel();if(typeof synth.resume==="function")synth.resume();}catch(error){}
+      window.setTimeout(next,80);
     });
   });
 }
