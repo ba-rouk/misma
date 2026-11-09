@@ -154,21 +154,16 @@ export function useMicPermission() {
       return;
     }
 
+    // Use the browser's native permission prompt as the only grant prompt.
+    // The former Misma pre-prompt caused two consecutive dialogs on Android Chrome.
     if (neverAllowed) {
-      setDialogView("permission");
-      setDialogOpen(true);
-      return;
+      try {
+        window.localStorage.removeItem(MISMA_MIC_PREFERENCE_KEY);
+      } catch {
+        // Browser storage may be unavailable; native permission remains authoritative.
+      }
+      setNeverAllowed(false);
     }
-
-    const current = permissionRef.current;
-    if (current === "prompt" || current === "denied") {
-      setDialogView("permission");
-      setDialogOpen(true);
-      return;
-    }
-
-    // A pending Permissions API query is not a reason to delay or show an extra dialog.
-    // Let getUserMedia resolve the browser permission on this user action.
     requestAndContinue();
   }, [neverAllowed, requestAndContinue]);
 
