@@ -826,6 +826,35 @@ export const updateHumanRequestStatus = createServerFn({ method: "POST" })
     return { request: saved };
   });
 
+export const deleteHumanRequest = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, requestId: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { data: request, error: requestError } = await db.from("human_requests")
+      .select("id,conversation_id")
+      .eq("id", data.requestId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (requestError) throw new Error("Could not find the human request.");
+    if (!request) throw new Error("Human request not found.");
+
+    // Remove its notification rows first. The conversation and messages are
+    // intentionally retained so deleting an inbox request does not erase history.
+    const { error: notificationError } = await db.from("workspace_notifications")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("human_request_id", data.requestId)
+      .eq("notification_type", "human_request");
+    if (notificationError) throw new Error("Could not remove the request notification.");
+
+    const { error: deleteError } = await db.from("human_requests")
+      .delete()
+      .eq("id", data.requestId)
+      .eq("workspace_id", workspaceId);
+    if (deleteError) throw new Error("Could not delete the human request.");
+    return { ok: true, requestId: data.requestId, conversationId: Number(request.conversation_id) };
+  });
+
 export const updateProductServiceStatus = createServerFn({ method: "POST" })
   .validator(z.object({
     token: auth,
