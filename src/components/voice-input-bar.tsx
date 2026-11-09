@@ -90,7 +90,6 @@ export function VoiceInputBar({
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [voiceModeChoice, setVoiceModeChoice] = useState<VoiceConversationMode>("hands-free");
   const [muted, setMuted] = useState(false);
-  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [toast, setToast] = useState("");
   const micPermission = useMicPermission();
 
@@ -206,32 +205,7 @@ export function VoiceInputBar({
     voiceRef.current?.setVoicePreset(voicePreset);
   }, [voicePreset]);
 
-  useEffect(() => {
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => {
-      setOnline(false);
-      const base = baseDraftRef.current;
-      dictationRef.current?.cancel();
-      callbacksRef.current.onTranscript(base);
-      window.requestAnimationFrame(() => {
-        writeNativeInputValue(base);
-        callbacksRef.current.onDictationDone?.();
-      });
-      voiceRef.current?.stop();
-      overlayOpenRef.current = false;
-      setVoiceOverlayOpen(false);
-      setDictationState("idle");
-      setWaveLevel(0);
-      showToastRef.current("No internet connection");
-    };
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
 
   const finishDictation = (sendNow = false) => {
     sendAfterDictationRef.current = sendNow;
@@ -257,10 +231,6 @@ export function VoiceInputBar({
 
   const toggleDictation = () => {
     if (disabled) return;
-    if (!online) {
-      showToast("No internet connection");
-      return;
-    }
 
     const dictation = dictationRef.current;
     if (!dictation) return;
@@ -307,10 +277,6 @@ export function VoiceInputBar({
 
   const openVoiceMode = () => {
     if (disabled || overlayOpenRef.current) return;
-    if (!online) {
-      showToast("No internet connection");
-      return;
-    }
     // Prime and unlock TTS synchronously in the voice-button click, before
     // microphone permission can resolve asynchronously.
     try {
@@ -396,7 +362,7 @@ export function VoiceInputBar({
               aria-label={isDictating ? "Finish voice dictation" : "Start voice dictation"}
               aria-pressed={isDictating}
               title={isDictating ? "Finish dictation" : "Dictate message"}
-              disabled={disabled || !online}
+              disabled={disabled}
               onClick={() => void toggleDictation()}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -434,7 +400,7 @@ export function VoiceInputBar({
                   className={"misma-voice-primary is-voice" + (micPermission.neverAllowed ? " is-never-allowed" : "")}
                   aria-label="Start voice mode"
                   title="Start voice mode"
-                  disabled={disabled || !online}
+                  disabled={disabled}
                   onClick={() => void openVoiceMode()}
                 >
                   <span className="misma-voice-primary-glyph" key="wave" aria-hidden="true">
@@ -452,7 +418,7 @@ export function VoiceInputBar({
                   className={"misma-voice-primary is-send" + (isBusy ? " is-busy" : "")}
                   aria-label={isBusy ? "Stop Misma" : primaryActionLabel}
                   title={isBusy ? "Stop Misma" : primaryActionLabel}
-                  disabled={!isBusy && (disabled || !online || sendDisabled)}
+                  disabled={!isBusy && (disabled || sendDisabled)}
                   onClick={() => callbacksRef.current.onPrimaryAction()}
                 >
                   <span className="misma-voice-primary-glyph" key={isBusy ? "stop" : "send"} aria-hidden="true">
