@@ -1459,7 +1459,11 @@ function Dashboard() {
     chatActivity: true,
   });
   const [notificationPermissionMessage, setNotificationPermissionMessage] = useState("");
+  const [humanRequestPushEnabled, setHumanRequestPushEnabled] = useState(false);
+  const [humanRequestPushBusy, setHumanRequestPushBusy] = useState(false);
+  const [humanRequestPushMessage, setHumanRequestPushMessage] = useState("");
   const notificationCursorRef = useRef({ initialized: false, latestId: 0 });
+  const pushNotificationLinkHandledRef = useRef(false);
   const [privacyPreferences, setPrivacyPreferences] = useState({ useConversationHistory: true });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
@@ -1956,6 +1960,97 @@ function Dashboard() {
     return result;
   };
 
+
+  const toggleHumanRequestPushNotifications = async () => {
+    if (humanRequestPushBusy) return;
+    const supported = typeof window !== "undefined" &&
+      "Notification" in window &&
+      "serviceWorker" in navigator &&
+      "PushManager" in window;
+    if (!supported) {
+      setHumanRequestPushMessage("This browser does not support background push notifications. Human requests will still appear in Misma's notification centre.");
+      return;
+    }
+
+    setHumanRequestPushBusy(true);
+    setHumanRequestPushMessage("");
+    try {
+      if (humanRequestPushEnabled) {
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const subscription = await registration?.pushManager.getSubscription();
+        if (subscription) {
+          await callWidgetFunction({ action: "delete-push-subscription", endpoint: subscription.endpoint });
+          await subscription.unsubscribe();
+        }
+        setHumanRequestPushEnabled(false);
+        setHumanRequestPushMessage("Human request alerts are disabled on this device.");
+        return;
+      }
+
+      // Permission is requested only in response to this explicit user action.
+      const permission = window.Notification.permission === "default"
+        ? await window.Notification.requestPermission()
+        : window.Notification.permission;
+      if (permission !== "granted") {
+        setHumanRequestPushMessage("Allow Misma notifications in your browser's site settings, then enable alerts again.");
+        return;
+      }
+
+      const vapid = await callWidgetFunction({ action: "push-public-key" });
+      if (typeof vapid.publicKey !== "string" || !vapid.publicKey) {
+        throw new Error("Misma could not prepare the push notification service. Try again.");
+      }
+      const normalizedKey = vapid.publicKey.replace(/-/g, "+").replace(/_/g, "/");
+      const decodedKey = window.atob(normalizedKey + "=".repeat((4 - normalizedKey.length % 4) % 4));
+      const applicationServerKey = new Uint8Array(decodedKey.length);
+      for (let index = 0; index < decodedKey.length; index += 1) {
+        applicationServerKey[index] = decodedKey.charCodeAt(index);
+      }
+
+      const registration = await navigator.serviceWorker.register("/misma-push-sw.js", { scope: "/" });
+      await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription = existingSubscription || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey as BufferSource,
+      });
+      try {
+        await callWidgetFunction({
+          action: "save-push-subscription",
+          subscription: subscription.toJSON(),
+        });
+      } catch (cause) {
+        if (!existingSubscription) await subscription.unsubscribe().catch(() => false);
+        throw cause;
+      }
+      setHumanRequestPushEnabled(true);
+      setHumanRequestPushMessage("Human request alerts are enabled on this device, including when Misma is closed.");
+    } catch (cause) {
+      setHumanRequestPushMessage(cause instanceof Error ? cause.message : "Could not update push notifications on this device.");
+    } finally {
+      setHumanRequestPushBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!dashboardDataLoaded || !token || !workspace?.id || !("serviceWorker" in navigator)) {
+      if (!dashboardDataLoaded || !token) setHumanRequestPushEnabled(false);
+      return;
+    }
+    let cancelled = false;
+    void navigator.serviceWorker.getRegistration("/").then(async (registration) => {
+      const scriptUrl = registration?.active?.scriptURL || registration?.waiting?.scriptURL || "";
+      if (!registration || !scriptUrl.endsWith("/misma-push-sw.js") || window.Notification?.permission !== "granted") return;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) return;
+      await callWidgetFunction({ action: "save-push-subscription", subscription: subscription.toJSON() });
+      if (!cancelled) setHumanRequestPushEnabled(true);
+    }).catch((cause) => {
+      console.warn("[misma] Could not restore this device's push subscription:", cause);
+    });
+    return () => { cancelled = true; };
+  }, [dashboardDataLoaded, token, workspace?.id]);
+
   // Load workspace and dashboard data
   useEffect(() => {
     if (!dashboardDataLoaded) return;
@@ -2122,6 +2217,30 @@ function Dashboard() {
       console.warn("Could not mark the human request notification as read:", cause);
     }
   };
+
+
+  useEffect(() => {
+    if (!dashboardDataLoaded || pushNotificationLinkHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "notifications") {
+      setActiveTab("notifications");
+      const notificationId = Number(params.get("notificationId"));
+      if (Number.isSafeInteger(notificationId) && notificationId > 0) {
+        const notification = allNotifications.find((item) => Number(item.id) === notificationId);
+        if (notification) void openHumanRequestNotification(notification);
+        else setSelectedHumanRequestNotificationId(notificationId);
+      }
+      params.delete("tab");
+      params.delete("notificationId");
+      const remainingQuery = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + (remainingQuery ? "?" + remainingQuery : "") + window.location.hash,
+      );
+    }
+    pushNotificationLinkHandledRef.current = true;
+  }, [dashboardDataLoaded, allNotifications]);
 
   const refreshVisitorNotifications = () => {
     if (!token) return;
@@ -4746,7 +4865,7 @@ function Dashboard() {
                         </>
                       }
                       sendDisabled={selectedFiles.some((file) => composerUploadStatuses.get(file) !== "ready")}
-                      voicePreset={selectedVoicePreset}
+                      voicePreset="woman"
                       inputValue={draft}
                       hasContent={Boolean(draft.trim() || createMode)}
                       hasAttachment={() => selectedFiles.length > 0}
@@ -5505,6 +5624,11 @@ function Dashboard() {
                 <SettingsToggle title="Product updates" description="Show relevant information about new Misma features." checked={notificationPreferences.productUpdates} onToggle={() => setNotificationPreferences((current) => ({ ...current, productUpdates: !current.productUpdates }))} />
                 <SettingsToggle title="Security alerts" description="Keep security and sign-in notices enabled." checked={notificationPreferences.securityAlerts} onToggle={() => setNotificationPreferences((current) => ({ ...current, securityAlerts: !current.securityAlerts }))} />
                 <SettingsToggle title="Chat activity" description="Receive a browser notification when a new visitor message arrives while Misma is in the background." checked={notificationPreferences.chatActivity} onToggle={() => void toggleChatActivityNotifications()} />
+                <div className="aichat-settings-action-row">
+                  <div><strong>Human assistance requests</strong><small>Send a push notification to this phone or desktop when a customer asks for a person, even while Misma is closed. Enable each device separately.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => void toggleHumanRequestPushNotifications()} disabled={humanRequestPushBusy || !workspace?.id}>{humanRequestPushBusy ? "Updating..." : humanRequestPushEnabled ? "Disable on this device" : "Enable on this device"}</button>
+                </div>
+                {humanRequestPushMessage && <p className="aichat-settings-hint" role="status">{humanRequestPushMessage}</p>}
                 {notificationPermissionMessage && <p className="aichat-settings-hint" role="status">{notificationPermissionMessage}</p>}
                 <p className="aichat-settings-hint">Product update and security alert preferences are saved here. Their notification feeds will appear when those services are connected.</p>
               </section>
@@ -5512,12 +5636,12 @@ function Dashboard() {
               <section id="settings-voice" className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">♫</span>
-                  <span><h3>Voice</h3><p>Choose the voice used for read-aloud and hands-free speech chat. Boy/Man require a male voice installed on this device; Misma will not substitute a woman's voice.</p></span>
+                  <span><h3>Voice</h3><p>Choose the read-aloud voice. Live Speech Talk uses the same Siri-first woman voice, English accent selection, and speaking style as the Misma website widget.</p></span>
                 </div>
                 <MicrophoneAccessPanel />
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
-                    <label htmlFor="misma-voice-choice">Reply voice</label>
+                    <label htmlFor="misma-voice-choice">Read-aloud voice</label>
                     <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option><option value="boy">Boy</option><option value="man">Man</option></select>
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>

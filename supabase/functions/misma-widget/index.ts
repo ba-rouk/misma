@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4.4.3";
+import webpush from "web-push";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -111,7 +112,7 @@ function getUserClient(token: string): Db {
     global: { headers: { Authorization: "Bearer " + token } },
   });
 }
-async function requireWorkspace(token: string, requestedWorkspaceId: string): Promise<{ db: Db; workspaceId: string }> {
+async function requireWorkspace(token: string, requestedWorkspaceId: string): Promise<{ db: Db; workspaceId: string; userId: string }> {
   if (!token) throw new Error("Sign in to manage this workspace.");
   const userDb = getUserClient(token);
   const userResult = await userDb.auth.getUser(token);
@@ -124,8 +125,88 @@ async function requireWorkspace(token: string, requestedWorkspaceId: string): Pr
   const workspaceIds = Array.from(new Set(memberResult.data.map((row: AnyRecord) => String(row.workspace_id))));
   const selected = requestedWorkspaceId || (workspaceIds.length === 1 ? workspaceIds[0] : "");
   if (!selected || !workspaceIds.includes(selected)) throw new Error("Select a workspace you belong to before continuing.");
-  return { db: getAdmin(), workspaceId: selected };
+  return { db: getAdmin(), workspaceId: selected, userId: userResult.data.user.id };
 }
+
+function isSupportedPushEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    if (url.protocol !== "https:") return false;
+    const hostname = url.hostname.toLowerCase();
+    return hostname === "fcm.googleapis.com" ||
+      hostname === "web.push.apple.com" ||
+      hostname.endsWith(".push.services.mozilla.com") ||
+      hostname.endsWith(".notify.windows.com");
+  } catch {
+    return false;
+  }
+}
+
+async function getVapidKeyPair(db: Db): Promise<{ publicKey: string; privateKey: string }> {
+  const generated = webpush.generateVAPIDKeys();
+  const result = await db.rpc("get_or_create_push_vapid_key_pair", {
+    p_public_key: generated.publicKey,
+    p_private_key: generated.privateKey,
+  });
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  if (result.error || !row?.public_key || !row?.private_key) {
+    throw new Error("Could not load Misma Web Push server keys.");
+  }
+  return { publicKey: String(row.public_key), privateKey: String(row.private_key) };
+}
+
+async function sendHumanRequestPush(
+  db: Db,
+  workspaceId: string,
+  requestId: number,
+  conversationId: number,
+  notificationId: number,
+  websiteDomain: string,
+): Promise<void> {
+  const subscriptions = await db.from("push_subscriptions")
+    .select("endpoint,p256dh,auth")
+    .eq("workspace_id", workspaceId)
+    .limit(500);
+  if (subscriptions.error) {
+    console.warn("[misma-widget] Could not load workspace push subscriptions:", subscriptions.error.code || "unknown");
+    return;
+  }
+  if (!subscriptions.data?.length) return;
+
+  try {
+    const keys = await getVapidKeyPair(db);
+    webpush.setVapidDetails("https://misma.onrender.com/", keys.publicKey, keys.privateKey);
+    const domain = safeString(websiteDomain, 180);
+    const payload = JSON.stringify({
+      title: "A customer needs a human",
+      body: domain ? "A customer requested help from " + domain + "." : "A customer requested help from your business.",
+      tag: "misma-human-request-" + requestId,
+      url: "/dashboard?tab=notifications&notificationId=" + notificationId,
+      conversationId,
+    });
+
+    await Promise.allSettled(subscriptions.data.map(async (subscription: AnyRecord) => {
+      try {
+        await webpush.sendNotification({
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+        }, payload, { TTL: 43200, urgency: "high" });
+      } catch (error) {
+        const statusCode = Number((error as AnyRecord)?.statusCode || 0);
+        if (statusCode === 404 || statusCode === 410) {
+          await db.from("push_subscriptions").delete()
+            .eq("workspace_id", workspaceId)
+            .eq("endpoint", subscription.endpoint);
+          return;
+        }
+        console.warn("[misma-widget] Human request push delivery failed:", statusCode || "unknown");
+      }
+    }));
+  } catch (error) {
+    console.warn("[misma-widget] Human request push was unavailable:", error instanceof Error ? error.message : "unknown");
+  }
+}
+
 function providerList() {
   const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" | "cohere" }> = [];
   const add = (name: string, keyName: string, modelName: string, model: string, endpoint: string, kind: "gemini" | "openai" | "cohere" = "openai") => {
@@ -431,6 +512,7 @@ async function saveHumanRequest(db: Db, site: AnyRecord, conversation: AnyRecord
     email ? "Email: " + email : "",
     phone ? "Phone: " + phone : "",
   ].filter(Boolean).join("\n");
+  let notificationId: number | null = null;
   const notificationValues = {
     workspace_id: site.workspace_id,
     notification_type: "human_request",
@@ -461,14 +543,16 @@ async function saveHumanRequest(db: Db, site: AnyRecord, conversation: AnyRecord
     if (updatedNotification.error || !updatedNotification.data) {
       throw new Error("The request was saved, but Misma could not update the owner notification.");
     }
+    notificationId = Number(updatedNotification.data.id);
   } else {
     const createdNotification = await db.from("workspace_notifications").insert(notificationValues).select("id").single();
     if (createdNotification.error || !createdNotification.data) {
       throw new Error("The request was saved, but Misma could not create the owner notification.");
     }
+    notificationId = Number(createdNotification.data.id);
   }
 
-  return { requestId, alreadyPending };
+  return { requestId, alreadyPending, notificationId };
 }
 function isSafeWebsiteUrl(value: string): URL | null {
   try {
@@ -1191,6 +1275,12 @@ Deno.serve(async (request: Request) => {
       }
       if (input.action === "human-request") {
         const handoff = await saveHumanRequest(db, site, conversation, visitorId, input);
+        if (handoff.notificationId) {
+          const pushTask = sendHumanRequestPush(db, site.workspace_id, handoff.requestId, Number(conversation.id), handoff.notificationId, safeString(site.domain, 180));
+          const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
+          if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(pushTask);
+          else await pushTask;
+        }
         const confirmationText = "Your request to speak with a person has been sent. The business team will follow up here.";
         const confirmationMessage = await db.from("messages").insert({
           conversation_id: conversation.id,
@@ -1250,7 +1340,44 @@ Deno.serve(async (request: Request) => {
 
     const authorization = request.headers.get("authorization") || "";
     const token = authorization.replace(/^Bearer\s+/i, "");
-    const { workspaceId } = await requireWorkspace(token, safeString(input.workspaceId, 80));
+    const { workspaceId, userId } = await requireWorkspace(token, safeString(input.workspaceId, 80));
+
+    if (input.action === "push-public-key") {
+      const keys = await getVapidKeyPair(db);
+      return respond(200, { ok: true, publicKey: keys.publicKey });
+    }
+    if (input.action === "save-push-subscription") {
+      const subscription = isRecord(input.subscription) ? input.subscription : {};
+      const endpoint = safeString(subscription.endpoint, 2048);
+      const subscriptionKeys = isRecord(subscription.keys) ? subscription.keys : {};
+      const p256dh = safeString(subscriptionKeys.p256dh, 200);
+      const auth = safeString(subscriptionKeys.auth, 100);
+      if (!isSupportedPushEndpoint(endpoint) ||
+        !/^[A-Za-z0-9_-]{20,200}$/.test(p256dh) ||
+        !/^[A-Za-z0-9_-]{10,100}$/.test(auth)) {
+        throw new Error("The browser returned an invalid push subscription.");
+      }
+      const saved = await db.from("push_subscriptions").upsert({
+        workspace_id: workspaceId,
+        user_id: userId,
+        endpoint,
+        p256dh,
+        auth,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "endpoint" });
+      if (saved.error) throw new Error("Could not save this device's notification subscription.");
+      return respond(200, { ok: true, enabled: true });
+    }
+    if (input.action === "delete-push-subscription") {
+      const endpoint = safeString(input.endpoint, 2048);
+      if (!isSupportedPushEndpoint(endpoint)) throw new Error("The push subscription endpoint is invalid.");
+      const removed = await db.from("push_subscriptions").delete()
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", userId)
+        .eq("endpoint", endpoint);
+      if (removed.error) throw new Error("Could not remove this device's notification subscription.");
+      return respond(200, { ok: true, enabled: false });
+    }
 
     if (input.action === "connection-status") {
       const [site, channelRows] = await Promise.all([
