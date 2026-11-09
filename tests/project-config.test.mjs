@@ -1116,14 +1116,16 @@ test("dashboard and website widget share the Chrome-style microphone permission 
 });
 
 
-test("website widget speech replies prioritize a girl-sounding British English voice", async () => {
+test("website widget speech replies prioritize a British English female voice and fall back safely", async () => {
   const widget = await read("../src/assets/misma-widget-runtime.js");
-  assert.match(widget, /function isBritishEnglish\(voice\)/);
-  assert.match(widget, /var british=female\.filter\(isBritishEnglish\)/);
-  assert.match(widget, /return british\[0\]/);
-  assert.match(widget, /utterance\.pitch=1\.16/);
-  assert.match(widget, /utterance\.rate=0\.98/);
-  assert.match(widget, /girlVoice\.lang\|\|"en-GB"/);
+  assert.match(widget, /function isBritishEnglish\\(voice\\)/);
+  assert.match(widget, /var british=female\\.filter\\(isBritishEnglish\\)/);
+  assert.match(widget, /var englishFallback=voices\\.filter/);
+  assert.match(widget, /return englishFallback\\[0\\]\\|\\|nonMale\\[0\\]/);
+  assert.match(widget, /utterance\\.pitch=1\\.16/);
+  assert.match(widget, /utterance\\.rate=0\\.98/);
+  assert.match(widget, /utterance\\.lang=\\(girlVoice&&girlVoice\\.lang\\)\\|\\|"en-GB"/);
+  assert.match(widget, /speakChunk\\(textChunk,true\\)/);
   assert.doesNotThrow(() => new Function(widget));
 });
 
