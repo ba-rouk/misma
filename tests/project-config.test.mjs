@@ -417,7 +417,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(voice, /createVoiceMode/);
   assert.match(component, /onSend\(text, signal, \{ voice: true \}\)/);
   assert.match(voice, /new SpeechSynthesisUtterance/);
-  assert.match(voice, /shortenForSpeech\(cleanForSpeech\(rawText\), 320\)/);
+  assert.match(voice, /cleanForSpeech\(rawText\)\.slice\(0, 1600\)/);
   assert.match(voice, /navigator\.wakeLock\?\.request\("screen"\)/);
   assert.doesNotMatch(voice, /MediaRecorder|FormData|fetch\(|createAnalyser|AudioContext|MediaStreamSource/);
   assert.doesNotMatch(component, /misma-voice-overlay-transcript/);
@@ -644,7 +644,8 @@ test("privacy and voice preferences are persisted and used by dashboard voice/ch
   assert.match(edgeFunction, /useConversationHistory = privacySettings\.useConversationHistory !== false/);
   assert.match(edgeFunction, /if \(useConversationHistory\)/);
   assert.match(edgeFunction, /DASHBOARD ASSISTANT PREFERENCES/);
-  assert.match(voice, /currentVoicePreset === "girl"/);
+  assert.match(voice, /WIDGET_SPEECH_PITCH = 1\.16/);
+  assert.match(voice, /WIDGET_SPEECH_RATE = 0\.98/);
 });
 
 
@@ -776,7 +777,8 @@ test("voice presets prefer matching English voices and fall back to system Engli
   assert.match(voice, /voicePreset = "woman"/);
   assert.match(voice, /speech-playback/);
   assert.match(dashboard, /getSpeechVoiceForPreset/);
-  assert.match(dashboard, /voicePreset=\{selectedVoicePreset\}/);
+  assert.match(dashboard, /voicePreset="woman"/);
+  assert.match(dashboard, /getVoiceForPreset\(availableVoices, selectedVoicePreset\)/);
 });
 
 test("website widget connections support shared keys and safe removal", async () => {
@@ -961,7 +963,7 @@ test("widget microphone and speech talk use female-first English voice selection
   assert.ok(widget.includes("var englishPool=voices.filter(isEnglish)"));
   assert.ok(widget.includes("return englishNonMale[0]||englishFallback[0]||nonMale[0]||voices[0]"));
   assert.ok(widget.includes("utterance.pitch=1.16"));
-  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
+  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-US"'));
   assert.ok(widget.includes("synth.resume()"));
   assert.ok(widget.includes("Microphone is blocked. Tap the lock icon next to the address bar"));
   assert.ok(widget.includes('setVoiceState("idle",errorMessage)'));
@@ -980,7 +982,7 @@ test("embedded speech talk hides transcripts and uses female-first English speec
   assert.ok(widget.includes("var british=female.filter(isBritishEnglish)"));
   assert.ok(widget.includes("var englishPool=voices.filter(isEnglish)"));
   assert.ok(widget.includes("return englishNonMale[0]||englishFallback[0]||nonMale[0]||voices[0]"));
-  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
+  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-US"'));
   assert.ok(widget.includes("utterance.pitch=1.16"));
   assert.ok(widget.includes("google.*female"));
   assert.ok(edge.includes("Always understand and respond in English"));
@@ -1125,7 +1127,7 @@ test("website widget speech replies prefer a Siri US English voice and then a US
   assert.ok(widget.includes("var americanFallback=englishPool.filter(isAmericanEnglish)"));
   assert.ok(widget.includes("utterance.pitch=1.16"));
   assert.ok(widget.includes("utterance.rate=0.98"));
-  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-GB"'));
+  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-US"'));
   assert.ok(widget.includes("speakChunk(textChunk,true)"));
   assert.doesNotThrow(() => new Function(widget));
 });
@@ -1249,5 +1251,5 @@ test("dashboard Speech Talk shares the widget's woman English voice profile", as
   assert.match(dashboard, /<VoiceInputBar[\s\S]*?voicePreset="woman"/);
   assert.match(widget, /utterance\.pitch=1\.16;utterance\.rate=0\.98/);
   assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-US"'));
-  assert.match(dashboard, /getSpeechVoiceForPreset\(availableVoices, selectedVoicePreset\)/);
+  assert.match(dashboard, /getVoiceForPreset\(availableVoices, selectedVoicePreset\)/);
 });
