@@ -1960,6 +1960,97 @@ function Dashboard() {
     return result;
   };
 
+
+  const toggleHumanRequestPushNotifications = async () => {
+    if (humanRequestPushBusy) return;
+    const supported = typeof window !== "undefined" &&
+      "Notification" in window &&
+      "serviceWorker" in navigator &&
+      "PushManager" in window;
+    if (!supported) {
+      setHumanRequestPushMessage("This browser does not support background push notifications. Human requests will still appear in Misma's notification centre.");
+      return;
+    }
+
+    setHumanRequestPushBusy(true);
+    setHumanRequestPushMessage("");
+    try {
+      if (humanRequestPushEnabled) {
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const subscription = await registration?.pushManager.getSubscription();
+        if (subscription) {
+          await callWidgetFunction({ action: "delete-push-subscription", endpoint: subscription.endpoint });
+          await subscription.unsubscribe();
+        }
+        setHumanRequestPushEnabled(false);
+        setHumanRequestPushMessage("Human request alerts are disabled on this device.");
+        return;
+      }
+
+      // Permission is requested only in response to this explicit user action.
+      const permission = window.Notification.permission === "default"
+        ? await window.Notification.requestPermission()
+        : window.Notification.permission;
+      if (permission !== "granted") {
+        setHumanRequestPushMessage("Allow Misma notifications in your browser's site settings, then enable alerts again.");
+        return;
+      }
+
+      const vapid = await callWidgetFunction({ action: "push-public-key" });
+      if (typeof vapid.publicKey !== "string" || !vapid.publicKey) {
+        throw new Error("Misma could not prepare the push notification service. Try again.");
+      }
+      const normalizedKey = vapid.publicKey.replace(/-/g, "+").replace(/_/g, "/");
+      const decodedKey = window.atob(normalizedKey + "=".repeat((4 - normalizedKey.length % 4) % 4));
+      const applicationServerKey = new Uint8Array(decodedKey.length);
+      for (let index = 0; index < decodedKey.length; index += 1) {
+        applicationServerKey[index] = decodedKey.charCodeAt(index);
+      }
+
+      const registration = await navigator.serviceWorker.register("/misma-push-sw.js", { scope: "/" });
+      await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription = existingSubscription || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey as BufferSource,
+      });
+      try {
+        await callWidgetFunction({
+          action: "save-push-subscription",
+          subscription: subscription.toJSON(),
+        });
+      } catch (cause) {
+        if (!existingSubscription) await subscription.unsubscribe().catch(() => false);
+        throw cause;
+      }
+      setHumanRequestPushEnabled(true);
+      setHumanRequestPushMessage("Human request alerts are enabled on this device, including when Misma is closed.");
+    } catch (cause) {
+      setHumanRequestPushMessage(cause instanceof Error ? cause.message : "Could not update push notifications on this device.");
+    } finally {
+      setHumanRequestPushBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!dashboardDataLoaded || !token || !workspace?.id || !("serviceWorker" in navigator)) {
+      if (!dashboardDataLoaded || !token) setHumanRequestPushEnabled(false);
+      return;
+    }
+    let cancelled = false;
+    void navigator.serviceWorker.getRegistration("/").then(async (registration) => {
+      const scriptUrl = registration?.active?.scriptURL || registration?.waiting?.scriptURL || "";
+      if (!registration || !scriptUrl.endsWith("/misma-push-sw.js") || window.Notification?.permission !== "granted") return;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) return;
+      await callWidgetFunction({ action: "save-push-subscription", subscription: subscription.toJSON() });
+      if (!cancelled) setHumanRequestPushEnabled(true);
+    }).catch((cause) => {
+      console.warn("[misma] Could not restore this device's push subscription:", cause);
+    });
+    return () => { cancelled = true; };
+  }, [dashboardDataLoaded, token, workspace?.id]);
+
   // Load workspace and dashboard data
   useEffect(() => {
     if (!dashboardDataLoaded) return;
