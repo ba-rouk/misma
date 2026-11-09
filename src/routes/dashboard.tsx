@@ -30,6 +30,7 @@ import {
   deleteWebsiteConnection,
   createProductService,
   updateHumanRequestStatus,
+  deleteHumanRequest,
   updateProductServiceStatus,
   createWorkspaceLibraryFile,
   deleteWorkspaceLibraryFile,
@@ -1432,6 +1433,7 @@ function Dashboard() {
   const [humanHandoffs, setHumanHandoffs] = useState<any[]>([]);
   const [allNotifications, setAllNotifications] = useState<any[]>([]);
   const [selectedHumanRequestNotificationId, setSelectedHumanRequestNotificationId] = useState<number | null>(null);
+  const [humanRequestMenuId, setHumanRequestMenuId] = useState<number | null>(null);
   const [productsServices, setProductsServices] = useState<any[]>([]);
   const [channelConnections, setChannelConnections] = useState<any[]>([]);
   const [channelEnvironment, setChannelEnvironment] = useState({ whatsappConfigured: false, phoneConfigured: false });
@@ -1441,7 +1443,7 @@ function Dashboard() {
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
   const [websiteScanFeedback, setWebsiteScanFeedback] = useState<Record<string, { kind: "success" | "error" | "info"; message: string }>>({});
-  const [minimizedWebsiteIds, setMinimizedWebsiteIds] = useState<string[]>([]);
+  const [expandedWebsiteIds, setExpandedWebsiteIds] = useState<string[]>([]);
   const sharedWidgetPublicKey = connectedWebsites.length
     ? connectedWebsites[0].widget_public_key || connectedWebsites[0].public_key
     : "";
@@ -1717,8 +1719,9 @@ function Dashboard() {
     const url = getSupabaseConfig()?.url || "";
     return url.endsWith("/") ? url.slice(0, -1) : url;
   })();
+  const handoffConversationIds = new Set(humanHandoffs.map((request) => Number(request.conversation_id)).filter((id) => Number.isSafeInteger(id) && id > 0));
   const recentChats = conversations
-    .filter((item) => String(item.channel || "").trim().toLowerCase() === "dashboard")
+    .filter((item) => String(item.channel || "").trim().toLowerCase() === "dashboard" && !handoffConversationIds.has(Number(item.id)))
     .map((item) => ({ ...item, name: cleanRecentChatTitle(item.name) || "New chat" }));
   const conversationGroups = Array.from(new Set(recentChats.map((item) => item.group_name).filter((value): value is string => Boolean(value))));
   const filteredRecentChats = chatGroupFilter === "all"
@@ -5979,7 +5982,7 @@ function Dashboard() {
               )}
             </div>
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
-              {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className={`aichat-website-card${minimizedWebsiteIds.includes(site.id) ? " is-minimized" : ""}`} key={site.id}>
+              {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className={`aichat-website-card${!expandedWebsiteIds.includes(site.id) ? " is-minimized" : ""}`} key={site.id}>
                 <div className="aichat-website-row-heading">
                   <div className="aichat-website-heading-copy">
                     <div className="aichat-website-heading-main">
@@ -5991,15 +5994,15 @@ function Dashboard() {
                   <button
                     type="button"
                     className="aichat-website-expand"
-                    aria-expanded={!minimizedWebsiteIds.includes(site.id)}
-                    aria-label={minimizedWebsiteIds.includes(site.id) ? "Expand website details" : "Collapse website details"}
-                    title={minimizedWebsiteIds.includes(site.id) ? "Expand website details" : "Collapse website details"}
-                    onClick={() => setMinimizedWebsiteIds((current) => current.includes(site.id) ? current.filter((id) => id !== site.id) : [...current, site.id])}
+                    aria-expanded={!!expandedWebsiteIds.includes(site.id)}
+                    aria-label={!expandedWebsiteIds.includes(site.id) ? "Expand website details" : "Collapse website details"}
+                    title={!expandedWebsiteIds.includes(site.id) ? "Expand website details" : "Collapse website details"}
+                    onClick={() => setExpandedWebsiteIds((current) => current.includes(site.id) ? current.filter((id) => id !== site.id) : [...current, site.id])}
                   >
-                    <svg className={minimizedWebsiteIds.includes(site.id) ? "" : "is-expanded"} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                    <svg className={!expandedWebsiteIds.includes(site.id) ? "" : "is-expanded"} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                   </button>
                 </div>
-                <div className="aichat-website-card-details" hidden={minimizedWebsiteIds.includes(site.id)}>
+                <div className="aichat-website-card-details" hidden={!expandedWebsiteIds.includes(site.id)}>
                 <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
                 <WebsiteSocialSettings
                   site={site}
@@ -6075,17 +6078,64 @@ function Dashboard() {
           <div className="aichat-tab-view"><div className="aichat-tab-content">
             <div className="aichat-tab-header"><h2>Customers requesting a human</h2><p>Visitors who asked to speak with a person. Open a request to review the complete conversation.</p></div>
             <div className="aichat-card">
-              {humanHandoffs.length === 0 ? <div className="aichat-notifications-empty"><h3>No human requests yet</h3><p>Requests from your website chat will appear here with their conversation history.</p></div> :
-                humanHandoffs.map((request) => <article className="aichat-handoff-card" key={request.id}>
-                  <button type="button" className="aichat-handoff-row" onClick={() => void selectConversation(Number(request.conversation_id))}>
-                    <span className="aichat-handoff-avatar">♙</span><span className="aichat-handoff-copy"><strong>{request.visitor_name || request.contacts?.name || "Website visitor"}</strong><small>{request.visitor_email || request.contacts?.email || "Contact details not provided"} · {request.visitor_phone || request.contacts?.phone || "No phone"} · {request.created_at ? new Date(request.created_at).toLocaleString() : "New request"}</small><span>{request.reason || "Visitor requested a human agent"}</span><small>Latest conversation: {request.conversations?.latest_text || "Open the conversation to review the full history"}</small></span><span className={`aichat-status-pill is-${request.status}`}>{request.status}</span>
-                  </button>
-                  {request.status !== "handled" && <button type="button" className="aichat-action-btn" onClick={async () => {
-                    if (!token) return;
-                    try { await updateHumanRequestStatus({ data: { token, requestId: Number(request.id), status: "handled" } }); loadData(); }
-                    catch (cause) { alert(cause instanceof Error ? cause.message : "Could not mark this request handled."); }
-                  }}>Mark handled</button>}
-                </article>)}
+              {humanHandoffs.length === 0 ? <div className="aichat-notifications-empty"><h3>No human requests yet</h3><p>Requests from your connected channels appear here with their conversation history.</p></div> :
+                humanHandoffs.map((request) => {
+                  const requestId = Number(request.id);
+                  const visitorName = request.visitor_name || request.contacts?.name || "Website visitor";
+                  return <article className="aichat-handoff-card" key={request.id}>
+                    <button type="button" className="aichat-handoff-row" onClick={() => void selectConversation(Number(request.conversation_id))}>
+                      <span className="aichat-handoff-avatar">♙</span>
+                      <span className="aichat-handoff-copy">
+                        <strong>{visitorName}</strong>
+                        <small>{request.visitor_email || request.contacts?.email || "Contact details not provided"} · {request.visitor_phone || request.contacts?.phone || "No phone"} · {request.created_at ? new Date(request.created_at).toLocaleString() : "New request"}</small>
+                        <span>{request.reason || "Visitor requested a human agent"}</span>
+                        <small>Latest conversation: {request.conversations?.latest_text || "Open the conversation to review the full history"}</small>
+                      </span>
+                      <span className={`aichat-status-pill is-${request.status}`}>{request.status}</span>
+                    </button>
+                    <div className="aichat-handoff-menu">
+                      <button
+                        type="button"
+                        className="aichat-handoff-more"
+                        aria-label={`More options for ${visitorName}`}
+                        title="More options"
+                        aria-expanded={humanRequestMenuId === requestId}
+                        onClick={() => setHumanRequestMenuId((current) => current === requestId ? null : requestId)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
+                      </button>
+                      {humanRequestMenuId === requestId && (
+                        <div className="aichat-chat-context-menu" role="menu" aria-label={`Options for ${visitorName}`}>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="is-danger"
+                            onClick={async () => {
+                              if (!token) return;
+                              const confirmed = window.confirm(`Delete the human assistance request from ${visitorName}? Its request card and notification will be removed. The conversation record will be retained.`);
+                              if (!confirmed) return;
+                              try {
+                                await deleteHumanRequest({ data: { token, requestId } });
+                                setHumanHandoffs((items) => items.filter((item) => Number(item.id) !== requestId));
+                                setAllNotifications((items) => items.filter((item) => Number(item.human_request_id) !== requestId));
+                                setSelectedHumanRequestNotificationId(null);
+                                setHumanRequestMenuId(null);
+                                loadData();
+                              } catch (cause) {
+                                alert(cause instanceof Error ? cause.message : "Could not delete this human request.");
+                              }
+                            }}
+                          >Delete request</button>
+                        </div>
+                      )}
+                    </div>
+                    {request.status !== "handled" && <button type="button" className="aichat-action-btn" onClick={async () => {
+                      if (!token) return;
+                      try { await updateHumanRequestStatus({ data: { token, requestId, status: "handled" } }); loadData(); }
+                      catch (cause) { alert(cause instanceof Error ? cause.message : "Could not mark this request handled."); }
+                    }}>Mark handled</button>}
+                  </article>;
+                })}
             </div>
           </div></div>
         )}
