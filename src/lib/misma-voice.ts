@@ -5,6 +5,7 @@ export type VoiceConversationMode = "hands-free" | "push-to-talk";
 export type MismaVoicePreset = "girl" | "woman" | "boy" | "man";
 
 const FEMALE_VOICE_PATTERN = /female|woman|girl|zira|samantha|susan|karen|victoria|aria|jenny|libby|natasha|sara|tessa|sonia|hazel|kate|serena|amy|martha|fiona|moira|emma|olivia|ava|allison|michelle|zoe|salli|joanna|kendra|kimberly|ivy|google.*female/i;
+const SIRI_VOICE_PATTERN = /siri|susan\s+bennett/i;
 const MALE_VOICE_PATTERN = /(^|[^a-z])(male|man|boy)(?=$|[^a-z])|david|mark|guy|ryan|daniel|george|james|fred|thomas|aaron|liam|oliver|benjamin|arthur|lee/i;
 
 let speechVoicesCache: SpeechSynthesisVoice[] = [];
@@ -65,13 +66,24 @@ export function primeSpeechVoices(timeoutMs = 1_200): Promise<SpeechSynthesisVoi
 function speechVoiceLanguageRank(voice: SpeechSynthesisVoice): number {
   const language = String(voice.lang || "").replace(/_/g, "-").toLowerCase();
   const label = voice.name + " " + voice.voiceURI;
-  if (language === "en-gb" || /\b(?:british|uk english|united kingdom)\b/i.test(label)) return 0;
-  if (language.startsWith("en-") || language === "en" || /english/i.test(label)) return 1;
-  return 2;
+  if (language === "en-us" || /\b(?:us english|american english|united states)\b/i.test(label)) return 0;
+  if (language === "en-gb" || /\b(?:british|uk english|united kingdom)\b/i.test(label)) return 1;
+  if (language.startsWith("en-") || language === "en" || /english/i.test(label)) return 2;
+  return 3;
 }
 
 export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: MismaVoicePreset): SpeechSynthesisVoice | undefined {
   const femalePreset = preset === "girl" || preset === "woman";
+  if (femalePreset) {
+    const siriVoice = voices.find((voice) => {
+      const label = voice.name + " " + voice.voiceURI;
+      const language = String(voice.lang || "").replace(/_/g, "-").toLowerCase();
+      return SIRI_VOICE_PATTERN.test(label) && !MALE_VOICE_PATTERN.test(label) &&
+        (language.startsWith("en") || /english/i.test(label));
+    });
+    if (siriVoice) return siriVoice;
+  }
+
   const female = voices.filter((voice) => {
     const label = voice.name + " " + voice.voiceURI;
     return FEMALE_VOICE_PATTERN.test(label) && !MALE_VOICE_PATTERN.test(label);
@@ -83,9 +95,7 @@ export function getSpeechVoiceForPreset(voices: SpeechSynthesisVoice[], preset: 
   const preferredIndex = preset === "girl" || preset === "boy" ? 0 : 1;
   if (preferredPool.length) return preferredPool[preferredIndex] || preferredPool[0];
 
-  // Android and some desktop voice engines expose neutral names such as
-  // "English (United Kingdom)" instead of declaring a voice's gender. Do not
-  // abandon spoken replies just because the OS hides that metadata.
+  // Some engines do not expose gender metadata. Prefer neutral US English when available.
   const oppositeGenderPattern = femalePreset ? MALE_VOICE_PATTERN : FEMALE_VOICE_PATTERN;
   const englishVoices = voices.filter((voice) => {
     const label = voice.name + " " + voice.voiceURI;
