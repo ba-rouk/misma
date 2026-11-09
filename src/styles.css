@@ -3713,6 +3713,7 @@ body:has(.aichat-main) {
   align-items: center;
   gap: 12px;
 }
+.aichat-header-back,
 .aichat-header-toggle {
   width: 36px;
   height: 36px;
@@ -3726,9 +3727,24 @@ body:has(.aichat-main) {
     background 0.15s,
     color 0.15s;
 }
+.aichat-header-back {
+  border: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #8b949e;
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.aichat-header-back:hover,
 .aichat-header-toggle:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
+}
+.aichat-handoff-empty-hint {
+  margin: 9px 0 0;
+  color: #97a6b8;
+  font-size: 13px;
 }
 .aichat-header-title {
   font-size: var(--text-base);
@@ -3900,7 +3916,8 @@ body:has(.aichat-main) {
 .aichat-message-row.is-user {
   justify-content: flex-end;
 }
-.aichat-message-row.is-ai {
+.aichat-message-row.is-ai,
+.aichat-message-row.is-customer {
   justify-content: flex-start;
 }
 .aichat-msg-avatar {
@@ -3941,6 +3958,14 @@ body:has(.aichat-main) {
   padding: 4px 0;
   max-width: 100%;
   flex: 1;
+}
+.aichat-message-row.is-customer .aichat-bubble {
+  max-width: 85%;
+  flex: 0 1 auto;
+  background: #19212c;
+  color: #e6edf6;
+  border: 1px solid #303a49;
+  border-top-left-radius: 4px;
 }
 
 /* Markdown formatting inside AI bubbles */

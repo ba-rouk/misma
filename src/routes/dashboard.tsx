@@ -1368,6 +1368,33 @@ function Dashboard() {
 
   // Active navigation tab (5 primary items)
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const [dashboardTabHistory, setDashboardTabHistory] = useState<TabId[]>([]);
+  const previousDashboardTabRef = useRef<TabId>("workspace");
+  const skipDashboardTabHistoryRef = useRef(false);
+
+  useEffect(() => {
+    const previousTab = previousDashboardTabRef.current;
+    if (previousTab === activeTab) return;
+    if (skipDashboardTabHistoryRef.current) {
+      skipDashboardTabHistoryRef.current = false;
+    } else {
+      setDashboardTabHistory((history) => [...history, previousTab].slice(-40));
+    }
+    previousDashboardTabRef.current = activeTab;
+  }, [activeTab]);
+
+  const canGoBack = activeTab !== "workspace" || dashboardTabHistory.length > 0;
+  const handleDashboardBack = () => {
+    const previousTab = dashboardTabHistory[dashboardTabHistory.length - 1];
+    if (previousTab) {
+      skipDashboardTabHistoryRef.current = true;
+      setDashboardTabHistory((history) => history.slice(0, -1));
+      setActiveTab(previousTab);
+    } else if (activeTab !== "workspace") {
+      setActiveTab("workspace");
+    }
+    setMobileMenuOpen(false);
+  };
   const [expandedNavGroups, setExpandedNavGroups] = useState<Record<string, boolean>>({ workspace: true, manage: false, build: false, connect: false });
   const [greeting, setGreeting] = useState("Welcome back");
   const hasChosenGreetingRef = useRef(false);
@@ -4175,6 +4202,21 @@ function Dashboard() {
   const filteredSettingsNavItems = settingsNavItems.filter((item) =>
     !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
   );
+  const activeConversation = conversations.find(
+    (item: any) => Number(item.id) === Number(currentConversationId),
+  );
+  const isHumanHandoffConversation = Boolean(
+    currentConversationId &&
+    (
+      humanHandoffs.some((request: any) =>
+        Number(request.conversation_id) === Number(currentConversationId)
+      ) ||
+      (activeConversation?.status === "Needs you" && activeConversation?.channel !== "Dashboard")
+    )
+  );
+  const displayedMessages = isHumanHandoffConversation
+    ? messages.filter((message) => message.role === "customer" || message.role === "human")
+    : messages;
 
   return (
     <div className="aichat">
@@ -4484,6 +4526,19 @@ function Dashboard() {
       >
         {/* Keep the menu control available when the sidebar is closed. */}
         <header className="aichat-topbar">
+          {canGoBack && (
+            <button
+              type="button"
+              className="aichat-header-back"
+              aria-label="Go back to previous page"
+              title="Go back"
+              onClick={handleDashboardBack}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             className="aichat-header-toggle"
@@ -4550,7 +4605,7 @@ function Dashboard() {
                 }
               }}
             >
-              {messages.length === 0 ? (
+              {displayedMessages.length === 0 ? (
                 /* Empty State */
                 <div className="aichat-greeting-wrap">
                   <div className="aichat-glow" aria-hidden="true" />
@@ -4574,19 +4629,26 @@ function Dashboard() {
                     </svg>
                   </div>
                   <div className="aichat-greeting">
-                    <h1>{greeting}, {profileName}</h1>
+                    <h1>{isHumanHandoffConversation ? "Waiting for the customer" : `${greeting}, ${profileName}`}</h1>
+                    {isHumanHandoffConversation && (
+                      <p className="aichat-handoff-empty-hint">Customer messages appear on the left. Your replies appear on the right.</p>
+                    )}
                   </div>
                 </div>
               ) : (
                 /* Message Stream */
-                messages.map((msg) => {
-                  const isUserMessage = msg.role === "human" || msg.role === "customer";
-                  const isAiMessage = msg.role === "ai";
+                displayedMessages.map((msg) => {
+                  const isCustomerMessage = isHumanHandoffConversation && msg.role === "customer";
+                  const isUserMessage = isHumanHandoffConversation
+                    ? msg.role === "human"
+                    : msg.role === "human" || msg.role === "customer";
+                  const isAiMessage = !isHumanHandoffConversation && msg.role === "ai";
+                  const messageSide = isCustomerMessage ? "is-customer" : isUserMessage ? "is-user" : "is-ai";
                   const isLatestAiMessage = isAiMessage && msg.id === latestAiMessageId;
                   return (
                     <div
                       key={msg.id}
-                      className={"aichat-message-row " + (isUserMessage ? "is-user" : "is-ai")}
+                      className={"aichat-message-row " + messageSide}
                     >
                       {isAiMessage && msg.pendingMedia !== "image" && (
                         <div className="aichat-msg-avatar ai" title="Misma AI">
@@ -4649,11 +4711,11 @@ function Dashboard() {
                             </div>
                           ) : <MarkdownContent content={msg.text} /> }
                         </div>}
-                        {!msg.pendingMedia && (
+                        {!msg.pendingMedia && !isCustomerMessage && (
                         <div
                           className={`aichat-message-actions${isUserMessage && mobileActionMessageId === msg.id ? " is-mobile-open" : ""}`}
                           role="group"
-                          aria-label={isUserMessage ? "Your message actions" : "Misma response actions"}
+                          aria-label={isUserMessage ? "Your message actions" : isCustomerMessage ? "Customer message actions" : "Misma response actions"}
                         >
                           {isUserMessage ? (
                             <>
@@ -4723,7 +4785,7 @@ function Dashboard() {
               )}
 
               {/* AI Thinking State */}
-              {isSending && (
+              {isSending && !isHumanHandoffConversation && (
                 <div className="aichat-thinking-row" aria-live="polite">
                   <div className="aichat-thinking-icon">
                     <svg viewBox="0 0 100 100" width="14" height="14">

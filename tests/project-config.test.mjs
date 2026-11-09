@@ -1243,13 +1243,34 @@ test("dashboard Speech Talk shares the widget's woman English voice profile", as
 
   assert.match(voice, /const WIDGET_SPEECH_PITCH = 1\.16/);
   assert.match(voice, /const WIDGET_SPEECH_RATE = 0\.98/);
-  assert.match(voice, /getSpeechVoiceForPreset\(voices, "woman"\)/);
+  assert.match(voice, /getWidgetSpeechVoice\(voices\)/);
   assert.match(voice, /utterance\.pitch = WIDGET_SPEECH_PITCH/);
   assert.match(voice, /utterance\.rate = WIDGET_SPEECH_RATE/);
+  assert.match(voice, /const siri = voices\.filter/);
+  assert.match(voice, /const american = female\.filter\(isWidgetAmericanEnglishVoice\)/);
+  assert.match(voice, /const british = female\.filter\(isWidgetBritishEnglishVoice\)/);
+  assert.match(voice, /const englishPool = voices\.filter\(isWidgetEnglishVoice\)/);
+  assert.match(voice, /return englishNonMale\[0\] \|\| englishFallback\[0\] \|\| nonMale\[0\] \|\| voices\[0\]/);
   assert.match(voice, /preferredVoice\?\.lang \|\| "en-US"/);
   assert.match(voice, /cleanForSpeech\(rawText\)\.slice\(0, 1600\)/);
   assert.match(dashboard, /<VoiceInputBar[\s\S]*?voicePreset="woman"/);
   assert.match(widget, /utterance\.pitch=1\.16;utterance\.rate=0\.98/);
   assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-US"'));
   assert.match(dashboard, /getVoiceForPreset\(availableVoices, selectedVoicePreset\)/);
+});
+
+test("human-request conversations show only customer and staff messages with opposite alignment and internal back navigation", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /humanHandoffs\.some\(\(request: any\) =>[\s\S]*?Number\(request\.conversation_id\) === Number\(currentConversationId\)/);
+  assert.match(dashboard, /messages\.filter\(\(message\) => message\.role === "customer" \|\| message\.role === "human"\)/);
+  assert.match(dashboard, /const isCustomerMessage = isHumanHandoffConversation && msg\.role === "customer"/);
+  assert.match(dashboard, /const isUserMessage = isHumanHandoffConversation[\s\S]*?msg\.role === "human"/);
+  assert.match(dashboard, /messageSide = isCustomerMessage \? "is-customer" : isUserMessage \? "is-user" : "is-ai"/);
+  assert.match(dashboard, /className="aichat-header-back"/);
+  assert.match(dashboard, /Go back to previous page/);
+  assert.match(dashboard, /dashboardTabHistory/);
+  assert.match(styles, /\.aichat-message-row\.is-customer\s*\{\s*justify-content:\s*flex-start/);
+  assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble/);
 });
