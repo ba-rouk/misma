@@ -543,8 +543,9 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
   assert.doesNotMatch(voiceModeStart, /await ensureMicPermission\(\)/);
   assert.doesNotMatch(permission, /current === "checking"/);
   assert.doesNotMatch(permission, /setDialogView\("permission"\)/);
-  assert.match(dashboard, /if \(options\.voice\) sendConversationId = null/);
-  assert.match(dashboard, /if \(!options\.voice && currentConversationId && selectedConversation\?\.status === "Needs you"/);
+  assert.match(dashboard, /const isOwnerSpeechTalk = options\.voice === true/);
+  assert.match(dashboard, /isOwnerSpeechTalk \? null : currentConversationId/);
+  assert.match(dashboard, /if \(!isOwnerSpeechTalk && currentConversationId && selectedConversation\?\.status === "Needs you"/);
   assert.match(dashboard, /if \(options\.voice\) \{[\s\S]*?res\.voiceReply/);
   assert.match(dashboard, /if \(!options\.voice && !editId && !isRetry\)/);
   assert.match(dashboard, /misma_active_chat_messages_v2_/);
