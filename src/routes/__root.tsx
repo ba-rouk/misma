@@ -21,7 +21,7 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/misma-logo.svg", type: "image/svg+xml", sizes: "any" },
+      { rel: "icon", href: "/misma-favicon.png", type: "image/png", sizes: "48x48" },
     ],
   }),
   component: RootComponent,
