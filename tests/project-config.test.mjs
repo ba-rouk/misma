@@ -1201,3 +1201,53 @@ test("dashboard restores the selected chat from a user-scoped session cache whil
   assert.match(dashboard, /conversationLoadVersion !== chatViewVersionRef\.current/);
   assert.match(dashboard, /messages\.slice\(-120\)/);
 });
+
+
+test("web push is workspace-scoped, opt-in, and connected to website human handoff", async () => {
+  const migration = await read("../supabase/migrations/20261109100000_web_push_subscriptions.sql");
+  const worker = await read("../public/misma-push-sw.js");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+
+  assert.match(migration, /CREATE TABLE public\.push_subscriptions/);
+  assert.match(migration, /FOREIGN KEY \(workspace_id, user_id\) REFERENCES public\.workspace_members/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /auth\.uid\(\)/);
+  assert.match(migration, /CREATE SCHEMA IF NOT EXISTS private/);
+  assert.match(migration, /get_or_create_push_vapid_key_pair/);
+  assert.match(migration, /TO service_role/);
+  assert.match(worker, /addEventListener\(["']push["']/);
+  assert.match(worker, /showNotification/);
+  assert.match(worker, /notificationclick/);
+  assert.match(worker, /sameOrigin/);
+  assert.match(dashboard, /toggleHumanRequestPushNotifications/);
+  assert.match(dashboard, /pushManager\.subscribe/);
+  assert.match(dashboard, /requestPermission\(\)/);
+  assert.match(dashboard, /save-push-subscription/);
+  assert.match(dashboard, /delete-push-subscription/);
+  assert.match(dashboard, /Human assistance requests/);
+  assert.match(edge, /push-public-key/);
+  assert.match(edge, /save-push-subscription/);
+  assert.match(edge, /delete-push-subscription/);
+  assert.match(edge, /async function sendHumanRequestPush/);
+  assert.match(edge, /sendHumanRequestPush\(db, site\.workspace_id/);
+  assert.match(edge, /statusCode === 404 \|\| statusCode === 410/);
+});
+
+test("dashboard Speech Talk shares the widget's woman English voice profile", async () => {
+  const voice = await read("../src/lib/misma-voice.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+
+  assert.match(voice, /const WIDGET_SPEECH_PITCH = 1\.16/);
+  assert.match(voice, /const WIDGET_SPEECH_RATE = 0\.98/);
+  assert.match(voice, /getSpeechVoiceForPreset\(voices, "woman"\)/);
+  assert.match(voice, /utterance\.pitch = WIDGET_SPEECH_PITCH/);
+  assert.match(voice, /utterance\.rate = WIDGET_SPEECH_RATE/);
+  assert.match(voice, /preferredVoice\?\.lang \|\| "en-US"/);
+  assert.match(voice, /cleanForSpeech\(rawText\)\.slice\(0, 1600\)/);
+  assert.match(dashboard, /<VoiceInputBar[\s\S]*?voicePreset="woman"/);
+  assert.match(widget, /utterance\.pitch=1\.16;utterance\.rate=0\.98/);
+  assert.ok(widget.includes('utterance.lang=(girlVoice&&girlVoice.lang)||"en-US"'));
+  assert.match(dashboard, /getSpeechVoiceForPreset\(availableVoices, selectedVoicePreset\)/);
+});
