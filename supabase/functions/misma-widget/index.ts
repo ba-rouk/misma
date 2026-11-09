@@ -207,6 +207,22 @@ async function sendHumanRequestPush(
   }
 }
 
+function scheduleHumanRequestPush(
+  db: Db,
+  workspaceId: string,
+  requestId: number,
+  conversationId: number,
+  notificationId: number,
+  sourceLabel: string,
+): void {
+  const pushTask = sendHumanRequestPush(
+    db, workspaceId, requestId, conversationId, notificationId, sourceLabel,
+  );
+  const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
+  if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(pushTask);
+  else void pushTask;
+}
+
 function providerList() {
   const providers: Array<{ name: string; key: string; model: string; endpoint: string; kind: "gemini" | "openai" | "cohere" }> = [];
   const add = (name: string, keyName: string, modelName: string, model: string, endpoint: string, kind: "gemini" | "openai" | "cohere" = "openai") => {
@@ -1089,11 +1105,16 @@ async function handlePhoneWebhook(request: Request, db: Db) {
         visitor_name: "Phone caller", visitor_phone: from, reason: speech, status: "pending",
       }).select("id").single();
       await db.from("conversations").update({ status: "Needs you" }).eq("id", conversation.id);
-      if (request.data) await db.from("workspace_notifications").insert({
-        workspace_id: workspaceId, notification_type: "human_request", title: "Phone caller requested a human",
-        body: "A caller asked to speak with your team at " + from, conversation_id: conversation.id,
-        contact_id: conversation.contact_id, human_request_id: request.data.id, is_read: false,
-      });
+      if (request.data) {
+        const notification = await db.from("workspace_notifications").insert({
+          workspace_id: workspaceId, notification_type: "human_request", title: "Phone caller requested a human",
+          body: "A caller asked to speak with your team at " + from, conversation_id: conversation.id,
+          contact_id: conversation.contact_id, human_request_id: request.data.id, is_read: false,
+        }).select("id").single();
+        if (notification.data) {
+          scheduleHumanRequestPush(db, workspaceId, Number(request.data.id), Number(conversation.id), Number(notification.data.id), "phone");
+        }
+      }
     }
   }
   const callback = new URL(request.url);
@@ -1169,11 +1190,16 @@ async function handleWhatsAppWebhook(request: Request, db: Db) {
             visitor_name: name, visitor_phone: "+" + sender, reason: body, status: "pending",
           }).select("id").single();
           await db.from("conversations").update({ status: "Needs you" }).eq("id", conversation.data.id);
-          if (request.data) await db.from("workspace_notifications").insert({
-            workspace_id: workspaceId, notification_type: "human_request", title: "WhatsApp customer requested a human",
-            body: name + " asked to speak with your team.", conversation_id: conversation.data.id,
-            contact_id: contact, human_request_id: request.data.id, is_read: false,
-          });
+          if (request.data) {
+            const notification = await db.from("workspace_notifications").insert({
+              workspace_id: workspaceId, notification_type: "human_request", title: "WhatsApp customer requested a human",
+              body: name + " asked to speak with your team.", conversation_id: conversation.data.id,
+              contact_id: contact, human_request_id: request.data.id, is_read: false,
+            }).select("id").single();
+            if (notification.data) {
+              scheduleHumanRequestPush(db, workspaceId, Number(request.data.id), Number(conversation.data.id), Number(notification.data.id), "WhatsApp");
+            }
+          }
         }
         if (accessToken) {
           await fetch("https://graph.facebook.com/" + apiVersion + "/" + phoneNumberId + "/messages", {
@@ -1307,10 +1333,7 @@ Deno.serve(async (request: Request) => {
       if (input.action === "human-request") {
         const handoff = await saveHumanRequest(db, site, conversation, visitorId, input);
         if (handoff.notificationId) {
-          const pushTask = sendHumanRequestPush(db, site.workspace_id, handoff.requestId, Number(conversation.id), handoff.notificationId, safeString(site.domain, 180));
-          const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
-          if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(pushTask);
-          else await pushTask;
+          scheduleHumanRequestPush(db, site.workspace_id, handoff.requestId, Number(conversation.id), handoff.notificationId, safeString(site.domain, 180));
         }
         const confirmationText = "Your request to speak with a person has been sent. The business team will follow up here.";
         const confirmationMessage = await db.from("messages").insert({
