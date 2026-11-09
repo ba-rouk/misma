@@ -802,7 +802,7 @@ test("website widget connections support shared keys and safe removal", async ()
   assert.match(edge, /\.is\("widget_deleted_at", null\)/);
   assert.match(dashboard, /Use one widget for all connected websites/);
   assert.match(dashboard, /Delete connection/);
-  assert.match(dashboard, /minimizedWebsiteIds/);
+  assert.match(dashboard, /const \[expandedWebsiteIds, setExpandedWebsiteIds\] = useState<string\[]>\(\[\]\)/);
   assert.match(dashboard, /aichat-website-expand/);
   assert.match(dashboard, /aichat-website-card-details/);
   assert.match(widget, /function initWidget\(initialConfig\)/);
@@ -938,7 +938,7 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
 test("dashboard notification feed shows named human requests and counts unread notifications", async () => {
   const api = await read("../src/lib/api/misma.functions.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 3);
+  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 4);
   assert.ok(api.includes("export const markHumanRequestNotificationRead"));
   assert.ok(dashboard.includes('const unreadHumanRequestNotificationCount = allNotifications.filter((notification) => notification.is_read !== true).length;'));
   assert.ok(dashboard.includes("markHumanRequestNotificationRead({ data: { token, notificationId } })"));
@@ -1021,7 +1021,7 @@ test("connected website settings and social widget controls stay accessible on m
   const runtime = await read("../src/assets/misma-widget-runtime.js");
   const css = await read("../src/styles.css");
   assert.match(dashboard, /className="aichat-website-expand"/);
-  assert.match(dashboard, /aria-expanded=\{!minimizedWebsiteIds\.includes\(site\.id\)\}/);
+  assert.match(dashboard, /aria-expanded=\{!!expandedWebsiteIds\.includes\(site\.id\)\}/);
   assert.match(dashboard, /Add channels/);
   assert.match(dashboard, /Last activity:/);
   assert.match(runtime, /class='social-link whatsapp-link'/);
