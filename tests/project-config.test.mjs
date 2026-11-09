@@ -428,7 +428,7 @@ test("browser-native dictation and hands-free voice mode send text only", async 
   assert.match(component, /AUTO_SEND_ON_DICTATION = false/);
   assert.match(component, /misma-voice-dictation-btn is-cancel/);
   assert.match(component, /misma-voice-dictation-btn is-finish/);
-  assert.match(component, /No internet connection/);
+  assert.match(component, /The speech service could not connect/);
   assert.match(component, /Interrupt Misma and listen/);
   assert.match(component, /Push to talk/);
   assert.match(component, /Hands-free/);
