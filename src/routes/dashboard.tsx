@@ -4225,7 +4225,7 @@ function Dashboard() {
   // Refresh only new messages and the short-lived visitor typing status while a
   // human-handoff conversation is open. This avoids the former 30-second inbox delay.
   useEffect(() => {
-    if (!token || !dashboardDataLoaded || !currentConversationId ||
+    if (!token || !dashboardDataLoaded || !workspace?.id || !currentConversationId ||
         !isHumanHandoffConversation ||
         String(activeConversation?.channel || "").toLowerCase() !== "website" ||
         activeTab !== "workspace") {
@@ -4321,7 +4321,7 @@ function Dashboard() {
       window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [token, dashboardDataLoaded, currentConversationId, isHumanHandoffConversation, activeConversation?.channel, activeTab, messages]);
+  }, [token, dashboardDataLoaded, workspace?.id, currentConversationId, isHumanHandoffConversation, activeConversation?.channel, activeTab, messages]);
 
   return (
     <div className="aichat">
