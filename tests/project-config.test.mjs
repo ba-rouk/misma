@@ -35,11 +35,14 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   assert.match(login, /signInWithOAuth/);
   assert.match(login, /redirectTo: `\$\{window\.location\.origin\}\/auth\/callback`/);
   assert.match(login, /emailRedirectTo: `\$\{window\.location\.origin\}\/dashboard`/);
-  assert.match(login, /await navigate\(\{ to: "\/dashboard", replace: true \}\)/);
+  assert.match(login, /window\.location\.replace\(destination\)/);
+  assert.match(login, /window\.location\.replace\(consumePostLoginDestination\(\)\)/);
+  assert.match(login, /target\.pathname !== "\/dashboard"/);
   assert.match(dashboard, /getMismaData/);
   assert.match(callback, /createFileRoute\("\/auth\/callback"\)/);
   assert.match(callback, /exchangeCodeForSession\(code\)/);
-  assert.match(callback, /navigate\(\{ to: "\/dashboard", replace: true \}\)/);
+  assert.match(callback, /window\.location\.replace\(destination\)/);
+  assert.match(callback, /target\.pathname !== "\/dashboard"/);
   assert.match(dashboard, /functions\/v1\/misma-chat/);
   assert.match(dashboard, /Authorization:\s*`Bearer \$\{token\}`/);
   assert.match(dashboard, /auth\.onAuthStateChange/);
