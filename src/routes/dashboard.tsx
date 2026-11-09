@@ -3305,9 +3305,10 @@ function Dashboard() {
     const editId = editingMessageId;
     const tempUserId = isRetry ? failedMessageId : `user-${Date.now()}`;
     const filesToSend = editId ? [] : [...selectedFiles];
+    let sendConversationId = currentConversationId;
     // Speech Talk belongs to the signed-in workspace owner, not the selected website visitor.
     const isOwnerSpeechTalk = options.voice === true;
-    let sendConversationId = isOwnerSpeechTalk ? null : currentConversationId;
+    if (isOwnerSpeechTalk) sendConversationId = null;
 
     if (!options.voice && !editId && !isRetry) {
       const tempUserMsg: Message = {
