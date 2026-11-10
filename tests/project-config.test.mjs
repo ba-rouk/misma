@@ -1548,7 +1548,10 @@ test("website connection controls use dark-grey buttons and saved channels canno
   assert.match(dashboard, /site\.instagram_url \? "Added" : "Optional"/);
   assert.match(dashboard, /site\.gmail_address \? "Added" : "Optional"/);
   assert.match(dashboard, /site\.whatsapp_number \? "Added" : "Optional"/);
-  assert.match(dashboard, /className="aichat-action-btn secondary"[^>]*>Copy script/);
+  const copyLabel = dashboard.indexOf("Copy script");
+  const copyButtonStart = dashboard.lastIndexOf("<button", copyLabel);
+  assert.ok(copyLabel > 0 && copyButtonStart >= 0);
+  assert.match(dashboard.slice(copyButtonStart, copyLabel), /className="aichat-action-btn secondary"/);
   assert.doesNotMatch(dashboard, /className="aichat-action-btn secondary is-danger"/);
   assert.match(styles, /\.aichat-websites-tab \.aichat-action-btn[\s\S]*?background: #21262d !important/);
   assert.match(styles, /\.aichat-websites-tab \.aichat-social-dropdown[\s\S]*?background: #21262d !important/);
