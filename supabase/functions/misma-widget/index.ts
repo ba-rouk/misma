@@ -815,8 +815,10 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   // Restrict discovery and redirects to the same registrable domain (eTLD+1).
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
+  first.hash = "";
   const queue = Array.from(new Set([first.href, ...seedUrls])).slice(0, 100);
   const depthByUrl = new Map<string, number>(queue.map((url) => [url, url === first.href ? 0 : 1]));
+  const redirectHops = new Map<string, number>();
   const seen = new Set<string>();
   if (onDiscover) for (const seed of queue) await onDiscover(seed);
   const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }> = [];
@@ -851,9 +853,15 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
               if (value) rules.disallow.push(value);
             }
           }
+        } else if (robots.status >= 500) {
+          // RFC 9309 treats robots server errors as unavailable; fail closed for this host.
+          rules.disallow.push("/");
         }
       }
-    } catch { /* robots.txt unavailable: continue with conservative limits. */ }
+    } catch {
+      // A network failure is also fail-closed so temporary robots outages do not bypass policy.
+      rules.disallow.push("/");
+    }
     robotsByOrigin.set(url.origin, rules);
     return rules;
   };
@@ -961,7 +969,15 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         const location = response.headers.get("location");
         if (location) {
           const redirectUrl = new URL(location, parsed.href);
-          if (sameRegistrableDomain(redirectUrl) && isSafeWebsiteUrl(redirectUrl.href) && await allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
+          const hops = (redirectHops.get(parsed.href) || 0) + 1;
+          if (hops > 5) {
+            if (onSkip) await onSkip(parsed.href, "Redirect limit exceeded (5 hops)");
+          } else if (sameRegistrableDomain(redirectUrl) && isSafeWebsiteUrl(redirectUrl.href)
+            && await allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) {
+            redirectUrl.hash = "";
+            redirectHops.set(redirectUrl.href, hops);
+            if (!seen.has(redirectUrl.href) && !queue.includes(redirectUrl.href)) queue.unshift(redirectUrl.href);
+          }
         }
         continue;
       }
