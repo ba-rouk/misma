@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 const read = (file) => readFile(new URL(file, import.meta.url), "utf8");
 
 test("website widget customizer matches production defaults and updates a real DOM preview", async () => {
-  const page = await read("../src/routes/dashboard.websites.$siteId.customize.tsx");
+  const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
   const css = await read("../src/components/website-widget-customizer.css");
   const runtime = await read("../src/assets/misma-widget-runtime.js");
   const api = await read("../src/lib/api/misma.functions.ts");
