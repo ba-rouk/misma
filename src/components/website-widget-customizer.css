@@ -170,3 +170,57 @@
     max-width: 27vw;
   }
 }
+
+
+/* Match the connected-websites dashboard canvas and keep customization sections borderless. */
+.misma-theme-page {
+  background: linear-gradient(135deg, #f4f8fd, #eef4fb);
+  color: #172033;
+}
+.misma-theme-toolbar {
+  background: rgba(246, 248, 251, .94);
+  border: 0;
+}
+.misma-theme-preview-sticky,
+.misma-theme-section {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.misma-theme-color-control,
+.misma-theme-match-toggle {
+  background: rgba(255, 255, 255, .58);
+  border: 0;
+}
+.misma-theme-loading,
+.misma-theme-error {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.misma-theme-title h1,
+.misma-theme-section-heading h2,
+.misma-theme-preview-heading strong {
+  color: #172033;
+}
+.misma-theme-title p,
+.misma-theme-section-heading p,
+.misma-theme-hint,
+.misma-theme-match-toggle small,
+.misma-theme-unsaved,
+.misma-theme-picker {
+  color: #66758a;
+}
+.misma-theme-close {
+  border: 0;
+  background: transparent;
+  color: #334155;
+}
+@media (max-width: 640px) {
+  .misma-theme-toolbar {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .misma-theme-title p {
+    max-width: none;
+  }
+}

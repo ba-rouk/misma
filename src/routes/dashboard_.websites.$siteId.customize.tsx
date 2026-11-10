@@ -183,10 +183,10 @@ function WebsiteWidgetCustomizer() {
     <header className="misma-theme-toolbar">
       <button type="button" className="misma-theme-back" onClick={back}>← <span>Websites</span></button>
       <div className="misma-theme-title"><span className="misma-theme-eyebrow">WIDGET CUSTOMIZATION</span><h1>Customize widget</h1><p>{websiteName}{domain?" · "+domain:""}</p></div>
+      <button type="button" className="misma-theme-save" onClick={()=>void save()} disabled={!dirty||saving||!token}>{saving?"Saving…":"Save changes"}</button>
       <button type="button" className="misma-theme-close" onClick={back} aria-label="Close customization" title="Close customization">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>
       </button>
-      <button type="button" className="misma-theme-save" onClick={()=>void save()} disabled={!dirty||saving||!token}>{saving?"Saving…":"Save changes"}</button>
     </header>
     {message&&<div className={"misma-theme-notice is-"+message.kind} role="status">{message.text}</div>}
     <section className="misma-theme-preview-sticky" aria-label="Live widget preview">
@@ -206,14 +206,20 @@ function WebsiteWidgetCustomizer() {
       {[
         {id:"01",title:"Header",copy:"Control the widget title, subtitle and header surface.",group:"Header"},
         {id:"02",title:"Chat background",copy:"Set the canvas behind the conversation.",group:"Chat"},
-        {id:"04",title:"Message bubbles",copy:"Set separate surfaces and text colours for Misma and visitors.",group:"Bubbles"},
-        {id:"05",title:"Buttons",copy:"Set the send / voice action and header icon surfaces.",group:"Buttons"},
       ].map(section=><section key={section.id} className="misma-theme-section">
         <div className="misma-theme-section-heading"><span>{section.id}</span><div><h2>{section.title}</h2><p>{section.copy}</p></div></div>
         <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group===section.group).map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
       </section>)}
       <section className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>03</span><div><h2>Typography</h2><p>Choose a safe font family and general text colour.</p></div></div>
+        <div className="misma-theme-section-heading"><span>03</span><div><h2>Message bubbles</h2><p>Set separate surfaces and text colours for Misma and visitors.</p></div></div>
+        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Bubbles").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
+      </section>
+      <section className="misma-theme-section">
+        <div className="misma-theme-section-heading"><span>04</span><div><h2>Buttons</h2><p>Set the send / voice action and header icon surfaces.</p></div></div>
+        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Buttons").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
+      </section>
+      <section className="misma-theme-section">
+        <div className="misma-theme-section-heading"><span>05</span><div><h2>Typography</h2><p>Choose a safe font family and general text colour.</p></div></div>
         <label className="misma-theme-font-field"><span>Font family</span><select value={theme.fontFamily} onChange={e=>setTheme(current=>({...current,fontFamily:e.target.value as FontName}))}>{FONT_OPTIONS.map(font=><option key={font} value={font} style={{fontFamily:FONT_STACKS[font]}}>{font}</option>)}</select><small style={{fontFamily:FONT_STACKS[theme.fontFamily]}}>The quick brown fox jumps over the lazy dog.</small></label>
         <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Text").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
       </section>

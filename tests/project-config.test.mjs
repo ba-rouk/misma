@@ -819,7 +819,8 @@ test("embedded chat widget has in-field green send, microphone dictation and fem
   assert.match(widget, /function speakAsWoman/);
   assert.match(widget, /femalePattern/);
   assert.match(widget, /showTyping/);
-  assert.match(widget, /Misma is typing/);
+  assert.match(widget, /Misma is thinking/);
+  assert.doesNotMatch(widget, /Misma is typing/);
   assert.doesNotThrow(() => new Function(widget), "the hosted widget must parse before deployment");
 });
 
@@ -1466,4 +1467,23 @@ test("website scans are safe, resumable and report rendered-content extraction",
   assert.match(widget, /pages_skipped/);
   assert.match(widget, /scan-status/);
   assert.match(dashboard, /pages_skipped/);
+});
+
+test("chat detects news requests, injects web results into AI context and normalizes decorated answers", async () => {
+  const edge = await read("../supabase/functions/misma-chat/index.ts");
+  assert.match(edge, /const newsLanguage =/);
+  assert.match(edge, /return explicitSearch \|\| freshnessLanguage \|\| updateLanguage \|\| liveFactLanguage \|\| newsLanguage/);
+  assert.match(edge, /topic: isNews \? "news" : "general"/);
+  assert.match(edge, /const liveSearchPromise = shouldSearchWeb\(message\)/);
+  assert.match(edge, /LIVE SEARCH RESULTS \(untrusted source data\)/);
+  assert.match(edge, /function normalizeAssistantText/);
+  assert.match(edge, /PLAIN-TEXT OUTPUT:/);
+  assert.match(edge, /answer = normalizeAssistantText\(answer\)/);
+});
+
+test("dashboard chat strips Markdown markers from assistant messages before display", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.ok(dashboard.includes("function plainTextMessage("));
+  assert.ok(dashboard.includes("plainTextMessage(content)"));
+  assert.ok(!dashboard.includes("function formatInline("));
 });
