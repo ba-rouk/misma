@@ -1535,3 +1535,27 @@ test("dashboard chat messages are bright white and recent chat titles match prim
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble,[\s\S]*?\.aichat-message-row\.is-ai \.aichat-bubble[\s\S]*?color: #ffffff !important/);
   assert.match(styles, /\.aichat-chats-widget-item,[\s\S]*?font-size: var\(--text-base\);[\s\S]*?font-weight: var\(--weight-medium\)/);
 });
+
+
+test("website connection controls use dark-grey buttons and saved channels cannot be overwritten", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  assert.match(dashboard, /aichat-tab-view aichat-websites-tab/);
+  assert.match(dashboard, /readOnly=\{Boolean\(site\.instagram_url\)\}/);
+  assert.match(dashboard, /readOnly=\{Boolean\(site\.gmail_address\)\}/);
+  assert.match(dashboard, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.match(dashboard, /readOnly=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.match(dashboard, /site\.instagram_url \? "Added" : "Optional"/);
+  assert.match(dashboard, /site\.gmail_address \? "Added" : "Optional"/);
+  assert.match(dashboard, /site\.whatsapp_number \? "Added" : "Optional"/);
+  assert.match(dashboard, /className="aichat-action-btn secondary"[^>]*>Copy script/);
+  assert.doesNotMatch(dashboard, /className="aichat-action-btn secondary is-danger"/);
+  assert.match(styles, /\.aichat-websites-tab \.aichat-action-btn[\s\S]*?background: #21262d !important/);
+  assert.match(styles, /\.aichat-websites-tab \.aichat-social-dropdown[\s\S]*?background: #21262d !important/);
+});
+
+test("customer, user and assistant message bubbles use white foreground text", async () => {
+  const styles = await read("../src/styles.css");
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble,[\s\S]*?\.aichat-message-row\.is-customer \.aichat-bubble[\s\S]*?color: #ffffff !important/);
+  assert.match(styles, /\.aichat-chats-widget-item,[\s\S]*?font-size: var\(--text-base\);[\s\S]*?font-weight: var\(--weight-medium\)/);
+});
