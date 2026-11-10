@@ -230,3 +230,114 @@
 .misma-theme-contrast-ok {
   border: 0;
 }
+
+
+/* Match the website registration page's dark canvas and card surface. */
+.misma-theme-page {
+  background: #090a0c;
+  color: #ececf1;
+}
+.misma-theme-toolbar {
+  grid-template-columns: auto minmax(0, 1fr);
+  background: rgba(9, 10, 12, .96);
+  border: 0;
+}
+.misma-theme-title {
+  justify-self: start;
+  text-align: left;
+}
+.misma-theme-title h1,
+.misma-theme-section-heading h2,
+.misma-theme-preview-heading strong {
+  color: #f0f3f8;
+}
+.misma-theme-title p,
+.misma-theme-section-heading p,
+.misma-theme-hint,
+.misma-theme-match-toggle small,
+.misma-theme-unsaved,
+.misma-theme-picker,
+.misma-theme-preview-heading > div > span {
+  color: #9aa8b8;
+}
+.misma-theme-preview-sticky,
+.misma-theme-section {
+  background: #11141a;
+  border: 0;
+  box-shadow: none;
+}
+.misma-theme-color-control,
+.misma-theme-match-toggle {
+  background: #171c24;
+  border: 0;
+}
+.misma-theme-loading,
+.misma-theme-error {
+  background: #11141a;
+  color: #ececf1;
+  border: 0;
+  box-shadow: none;
+}
+.misma-theme-color-label,
+.misma-theme-font-field > span,
+.misma-theme-match-toggle strong {
+  color: #d8e1eb;
+}
+.misma-theme-picker,
+.misma-theme-hex {
+  color: #f0f3f8;
+}
+.misma-theme-hex,
+.misma-theme-font-field select,
+.misma-theme-picker input {
+  background: #0b0f15;
+  color: #f0f3f8;
+  border-color: #303743;
+}
+.misma-theme-secondary,
+.misma-theme-reset {
+  background: #14171d;
+  color: #d8e1eb;
+  border-color: #303743;
+}
+.misma-theme-notice.is-success {
+  background: rgba(34, 197, 94, .12);
+  color: #86efac;
+}
+.misma-theme-notice.is-error {
+  background: rgba(248, 113, 113, .12);
+  color: #fca5a5;
+}
+.misma-theme-notice.is-info {
+  background: rgba(96, 165, 250, .12);
+  color: #bfdbfe;
+}
+.misma-theme-contrast-warning {
+  background: rgba(251, 146, 60, .12);
+  color: #fdba74;
+  border: 0;
+}
+.misma-theme-contrast-ok {
+  background: rgba(34, 197, 94, .12);
+  color: #86efac;
+  border: 0;
+}
+.misma-theme-contrast-warning strong {
+  color: #fed7aa;
+}
+.misma-theme-back {
+  background: #14171d;
+  color: #d8e1eb;
+  border-color: #303743;
+}
+@media (max-width: 640px) {
+  .misma-theme-toolbar {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .misma-theme-title {
+    text-align: left;
+  }
+  .misma-theme-title h1 {
+    font-size: 15px;
+  }
+}
