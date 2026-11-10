@@ -1094,7 +1094,7 @@ test("website scanning requests structured JSON, validates extraction and retrie
   assert.match(edge, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
   assert.match(edge, /rawPreview: answer\.slice\(0, 1600\)/);
   assert.match(edge, /AbortSignal\.timeout\(100_000\)/);
-  assert.match(dashboard, /window\.setTimeout\(\(\) => controller\.abort\(\), 112_000\)/);
+  assert.match(dashboard, /window\.setTimeout\(\(\) => controller\.abort\(\), 390_000\)/);
   assert.match(dashboard, /websiteScanFeedback\[site\.id\]/);
 });
 
@@ -1419,7 +1419,7 @@ test("website widget themes are owner-saved, safely validated, and applied insid
   assert.match(migration, /core_room_id/);
   assert.match(api, /widgetThemeSchema/);
   assert.match(api, /Only the account owner can customize this website widget/);
-  assert.match(route, /LIVE PREVIEW/);
+  assert.match(route, /Live preview/);
   assert.match(route, /WCAG AA/);
   assert.match(runtime, /--misma-header-bg/);
   assert.match(runtime, /theme\.matchChatBackground===true/);
