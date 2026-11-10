@@ -8672,11 +8672,15 @@ html, body, #app-root {
   left: 0;
   right: auto;
 }
-.aichat-handoff-menu .aichat-chat-context-menu,
-.aichat-human-request-list-menu .aichat-chat-context-menu {
+.aichat-handoff-menu .aichat-chat-context-menu {
   top: calc(100% - 4px);
   left: 0;
   right: auto;
+}
+.aichat-human-request-list-menu .aichat-chat-context-menu {
+  top: calc(100% - 4px);
+  left: auto;
+  right: 0;
 }
 .aichat-handoff-more {
   width: 34px;
@@ -8688,21 +8692,25 @@ html, body, #app-root {
   height: 18px;
 }
 
-/* Notifications use the same left-side action slot as the Customers list. */
+/* Keep notification request actions aligned at the far right of each row. */
 .aichat-human-request-list-row {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  width: 100%;
 }
 .aichat-human-request-list-menu {
+  order: 2;
   position: relative;
   z-index: 101;
   width: 34px;
   height: 34px;
+  margin-left: auto;
   flex: none;
 }
 .aichat-human-request-list-row .aichat-notification-item {
+  order: 1;
   flex: 1 1 auto;
   min-width: 0;
   padding-left: 12px;
@@ -8726,4 +8734,15 @@ html, body, #app-root {
   width: 18px;
   height: 18px;
   stroke-width: 2.2;
+}
+
+
+/* Keep expandable sidebar navigation labels as bright as their icons. */
+.aichat-nav-btn[aria-expanded] {
+  color: #ffffff;
+}
+.aichat-nav-btn[aria-expanded] .aichat-nav-label,
+.aichat-nav-btn[aria-expanded] .aichat-nav-icon,
+.aichat-nav-btn[aria-expanded] .aichat-nav-caret {
+  color: #ffffff !important;
 }
