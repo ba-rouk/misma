@@ -901,6 +901,7 @@ const widgetThemeSchema = z.object({
   schemaVersion: z.literal(1),
   headerBackground: z.string().regex(/^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/),
   headerText: z.string().regex(/^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/),
+  headerSubtitleText: z.string().regex(/^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/),
   chatBackground: z.string().regex(/^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/),
   textColor: z.string().regex(/^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/),
   fontFamily: z.enum(["system-ui","Inter","Roboto","Poppins","Open Sans","Lato","Montserrat","Nunito","serif","monospace"]),
