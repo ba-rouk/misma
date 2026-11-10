@@ -78,9 +78,13 @@ test("dashboard typography is tokenized, self-hosted, and isolated from the live
   assert.match(customizer, /background: linear-gradient\(135deg, #f4f8fd, #eef4fb\)/);
   assert.ok(customizer.includes("font-family:var(--font-serif)"));
   assert.ok(page.includes("misma-widget-preview-close"));
-  assert.match(page, /aria-label="Close customization"/);
-  assert.match(page, /className="misma-theme-close" onClick={back}/);
-  assert.ok(page.includes("Header icon buttons (including close)"));
+  const toolbarStart = page.indexOf('<header className="misma-theme-toolbar">');
+  const toolbarEnd = page.indexOf("</header>", toolbarStart);
+  const toolbar = page.slice(toolbarStart, toolbarEnd);
+  assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart);
+  assert.doesNotMatch(toolbar, /WIDGET CUSTOMIZATION|misma-theme-save|misma-theme-close|Close customization/);
+  assert.ok(page.includes('className="misma-theme-save" onClick={()=>void save()}'));
+  assert.doesNotMatch(page, /Misma reads public rendered HTTP output/);
   assert.ok(page.includes('label:"Chat background"'));
   assert.match(runtime, /--misma-chat-bg/);
   assert.doesNotMatch(runtime, /--font-serif|--text-title-color/);
@@ -101,8 +105,9 @@ test("widget customizer matches website dashboard canvas and numbers sections in
   const positions = expected.map((label) => page.indexOf(label));
   assert.ok(positions.every((position) => position >= 0));
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
-  assert.ok(page.indexOf('className="misma-theme-save"') < page.indexOf('className="misma-theme-close"'));
-  assert.match(css, /background: linear-gradient\(135deg, #f4f8fd, #eef4fb\)/);
+  assert.match(css, /background: #090a0c/);
+  assert.match(css, /background: #11141a/);
+  assert.match(css, /\.misma-theme-section \{[\s\S]*?background: #11141a;[\s\S]*?border: 0;/);
   assert.match(css, /\.misma-theme-section \{[\s\S]*?border: 0;[\s\S]*?box-shadow: none;/);
   assert.match(css, /\.misma-theme-preview-sticky,[\s\S]*?border: 0;/);
   assert.match(css, /\.misma-theme-contrast-warning,[\s\S]*?border: 0;/);
