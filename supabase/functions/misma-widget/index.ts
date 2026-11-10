@@ -5,7 +5,7 @@ import webpush from "web-push";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, if-none-match, x-client-info, x-twilio-signature, x-hub-signature-256",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, if-none-match, x-client-info, x-twilio-signature, x-hub-signature-256, x-misma-scan-worker",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Cache-Control": "no-store",
 };
@@ -954,7 +954,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
           lastModified: previous.last_modified || null, contentType: previous.content_type || "text/html",
         });
         if (onPage) await onPage(pages[pages.length - 1]);
-        if (onProgress) await onProgress(pages.length, Math.min(maxPages, pages.length + queue.length));
+        if (onProgress) await onProgress(pages.length, Math.min(skipUrls.size + maxPages, skipUrls.size + pages.length + queue.length));
         continue;
       }
       if (response.status >= 300 && response.status < 400) {
@@ -1009,7 +1009,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         });
         if (onPage) await onPage(pages[pages.length - 1]);
       }
-      if (onProgress) await onProgress(pages.length, Math.min(maxPages, pages.length + queue.length));
+      if (onProgress) await onProgress(pages.length, Math.min(skipUrls.size + maxPages, skipUrls.size + pages.length + queue.length));
       const links = raw.match(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi) || [];
       for (const link of links) {
         const match = link.match(/href\s*=\s*["']([^"']+)["']/i);
@@ -1359,6 +1359,90 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
   }
 }
 
+async function processQueuedWebsiteScan(db: Db): Promise<AnyRecord> {
+  const now = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - 180_000).toISOString();
+  await db.from("scan_jobs").update({
+    status: "queued",
+    errors: [{ message: "Recovered an interrupted scan. Continuing from saved page checkpoints." }],
+    updated_at: now,
+  }).eq("status", "running").lt("updated_at", staleBefore);
+
+  const candidate = await db.from("scan_jobs")
+    .select("id,workspace_id,website_id,max_pages,crawl_depth,pages_scanned,pages_skipped,errors")
+    .eq("status", "queued").order("created_at", { ascending: true }).limit(1).maybeSingle();
+  if (candidate.error) throw new Error("Could not load the queued website scan.");
+  if (!candidate.data) return { processed: false, status: "idle" };
+
+  const claim = await db.from("scan_jobs").update({
+    status: "running", started_at: now, updated_at: now,
+  }).eq("id", candidate.data.id).eq("status", "queued")
+    .select("id,workspace_id,website_id,max_pages,crawl_depth,pages_scanned,pages_skipped")
+    .maybeSingle();
+  if (claim.error) throw new Error("Could not claim the queued website scan.");
+  if (!claim.data) return { processed: false, status: "already-claimed" };
+
+  const job = claim.data;
+  const jobId = String(job.id);
+  try {
+    const websiteResult = await db.from("website_connections")
+      .select("id,workspace_id,website_url,domain,last_scanned_at,status,core_room_id,name,detected_platform,theme_suggestions")
+      .eq("id", job.website_id).eq("workspace_id", job.workspace_id).is("widget_deleted_at", null).maybeSingle();
+    if (websiteResult.error || !websiteResult.data) throw new Error("The connected website for this scan no longer exists.");
+
+    await db.from("website_scan_runs").update({
+      status: "failed", error: "Worker restarted; scan continued from saved page checkpoints.",
+      completed_at: now,
+    }).eq("website_id", job.website_id).in("status", ["queued", "scanning"]).lt("started_at", staleBefore);
+
+    const configuredPageLimit = Math.max(1, Math.min(100, Number(getEnv("MISMA_SCAN_MAX_PAGES")) || 50));
+    const maxPages = Math.max(1, Math.min(configuredPageLimit, Number(job.max_pages) || configuredPageLimit));
+    const crawlDepth = Math.max(0, Math.min(8, Number(job.crawl_depth) || 3));
+    const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
+    if (!scanId) throw new Error("Could not start the queued website scan.");
+
+    const result = await performWebsiteScan(
+      db, websiteResult.data, scanId, maxPages, undefined,
+      async (scanned, discovered) => {
+        await db.from("scan_jobs").update({
+          pages_scanned: scanned,
+          pages_total: Math.max(scanned, discovered),
+          cursor: scanned,
+          updated_at: new Date().toISOString(),
+        }).eq("id", jobId);
+      },
+      jobId,
+      crawlDepth,
+    );
+
+    const completed = await db.from("scan_jobs").update({
+      status: "completed",
+      pages_scanned: result.pagesScanned,
+      pages_total: result.pagesScanned,
+      pages_skipped: Number(job.pages_skipped || 0) + Number(result.pagesSkipped || 0),
+      detected_platform: result.detectedPlatform || null,
+      errors: result.scanErrors || [],
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    if (completed.error) throw new Error("The scan finished but its job status could not be saved.");
+    return { processed: true, status: "completed", jobId, pagesScanned: result.pagesScanned, detectedPlatform: result.detectedPlatform };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Website scan failed.";
+    const resumable = /timed out|timeout|aborted|worker terminated/i.test(message);
+    await db.from("scan_jobs").update({
+      status: resumable ? "queued" : "failed",
+      errors: [{ message: resumable
+        ? "This scan pass reached its time budget. Saved pages are checkpointed and the queue will resume automatically."
+        : message.slice(0, 500) }],
+      completed_at: resumable ? null : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    console.error("[misma-widget] Scan worker pass ended.", { jobId, resumable, reason: message.slice(0, 300) });
+    return { processed: true, status: resumable ? "queued" : "failed", jobId, error: message.slice(0, 300) };
+  }
+}
+
 async function autoRefreshWebsiteKnowledge(db: Db, website: AnyRecord) {
   try {
     if (website.status === "paused") return;
@@ -1635,6 +1719,14 @@ Deno.serve(async (request: Request) => {
   if (!isRecord(input)) return respond(400, { error: "Invalid request." });
 
   try {
+    if (input.action === "scan-worker") {
+      const suppliedToken = request.headers.get("x-misma-scan-worker") || "";
+      if (!suppliedToken) return respond(401, { error: "Unauthorized scan worker." });
+      const tokenCheck = await db.rpc("misma_validate_scan_worker_token", { p_token: suppliedToken });
+      if (tokenCheck.error || tokenCheck.data !== true) return respond(401, { error: "Unauthorized scan worker." });
+      const result = await processQueuedWebsiteScan(db);
+      return respond(200, { ok: true, ...result });
+    }
     if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
@@ -1965,7 +2057,7 @@ Deno.serve(async (request: Request) => {
         .single();
       if (websiteResult.error || !websiteResult.data) throw new Error("Website not found in the selected workspace.");
       const configuredPageLimit = Math.max(1, Math.min(100, Number(getEnv("MISMA_SCAN_MAX_PAGES")) || 50));
-      const maxPages = Math.max(1, Math.min(configuredPageLimit, Number(input.maxPages) || 25));
+      const maxPages = Math.max(1, Math.min(configuredPageLimit, Number(input.maxPages) || configuredPageLimit));
       const crawlDepth = Math.max(0, Math.min(8, Number(input.crawlDepth) || 3));
       const staleBefore = new Date(Date.now() - 180_000).toISOString();
       await db.from("scan_jobs").update({
@@ -1979,14 +2071,14 @@ Deno.serve(async (request: Request) => {
       if (failedJob.data?.id) {
         jobId = String(failedJob.data.id);
         const resumed = await db.from("scan_jobs").update({
-          status: "queued", max_pages: maxPages, crawl_depth: crawlDepth, pages_total: 0, pages_scanned: 0, pages_skipped: 0,
-          cursor: 0, errors: [], started_at: null, completed_at: null, updated_at: new Date().toISOString(),
+          status: "queued", max_pages: maxPages, crawl_depth: crawlDepth,
+          errors: [], started_at: null, completed_at: null, updated_at: new Date().toISOString(),
         }).eq("id", jobId).eq("workspace_id", workspaceId);
         if (resumed.error) throw new Error("Could not resume the previous scan job.");
       } else {
         const createdJob = await db.from("scan_jobs").insert({
           workspace_id: workspaceId, website_id: websiteId, status: "queued", max_pages: maxPages, crawl_depth: crawlDepth,
-          pages_total: 0, pages_scanned: 0, pages_skipped: 0, errors: [], discovered_urls: [],
+          pages_total: 0, pages_scanned: 0, pages_skipped: 0, cursor: 0, errors: [], discovered_urls: [],
         }).select("id").single();
         if (createdJob.error || !createdJob.data) {
           if (createdJob.error?.code === "23505") throw new Error("A scan is already running for this website. Wait for it to finish.");
@@ -1994,31 +2086,7 @@ Deno.serve(async (request: Request) => {
         }
         jobId = String(createdJob.data.id);
       }
-      const scanTask = (async () => {
-        try {
-          await db.from("scan_jobs").update({ status: "running", started_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", jobId);
-          const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
-          if (!scanId) throw new Error("Could not start the website scan.");
-          const result = await performWebsiteScan(db, websiteResult.data, scanId, maxPages, undefined, async (scanned, discovered) => {
-            await db.from("scan_jobs").update({
-              pages_scanned: scanned, pages_total: discovered, cursor: scanned, updated_at: new Date().toISOString(),
-            }).eq("id", jobId);
-          }, jobId, crawlDepth);
-          await db.from("scan_jobs").update({
-            status: "completed", pages_scanned: result.pagesScanned, pages_total: result.pagesScanned,
-            pages_skipped: result.pagesSkipped || 0, detected_platform: result.detectedPlatform || null,
-            errors: result.scanErrors || [],
-            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-          }).eq("id", jobId);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Website scan failed.";
-          await db.from("scan_jobs").update({
-            status: "failed", errors: [{ message: message.slice(0, 500) }],
-            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-          }).eq("id", jobId);
-          console.error("[misma-widget] Background scan job failed.", { jobId, reason: message.slice(0, 300) });
-        }
-      })();
+      const scanTask = processQueuedWebsiteScan(db);
       const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
       if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(scanTask);
       else await scanTask;
