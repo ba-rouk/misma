@@ -43,7 +43,7 @@ test("theme validation migration remains compatible with old themes and adds sub
 
 test("scanner rechecks public DNS before page requests, honors robots allow rules and spaces page fetches", async () => {
   const edge = await read("../supabase/functions/misma-widget/index.ts");
-  assert.match(edge, /robotsAllow\.push/);
+  assert.match(edge, /rules\.allow\.push/);
   assert.match(edge, /isPublicHostname\(parsed\.hostname\)/);
   assert.match(edge, /650\)/);
   assert.match(edge, /retry-after/i);
