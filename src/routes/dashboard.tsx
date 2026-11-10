@@ -6040,7 +6040,7 @@ function Dashboard() {
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
                     if (!workspace?.id) return;
                     const controller = new AbortController();
-                    const timeoutId = window.setTimeout(() => controller.abort(), 112_000);
+                    const timeoutId = window.setTimeout(() => controller.abort(), 390_000);
                     setWebsiteActionId(site.id);
                     setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "info", message: "Scanning public pages and extracting business knowledge…" } }));
                     try {
@@ -6051,7 +6051,7 @@ function Dashboard() {
                       const jobId = String(queued.jobId || "");
                       if (!jobId) throw new Error("Misma did not return a scan job ID.");
                       let finalJob: any = null;
-                      for (let attempt = 0; attempt < 90; attempt += 1) {
+                      for (let attempt = 0; attempt < 300; attempt += 1) {
                         await new Promise((resolve) => window.setTimeout(resolve, 1200));
                         const statusResult = await callWidgetFunction(
                           { action: "scan-status", workspaceId: workspace.id, jobId },
@@ -6065,7 +6065,9 @@ function Dashboard() {
                             kind: "info",
                             message: job.status === "running"
                               ? `Scanning website: ${job.pages_scanned || 0}/${job.pages_total || "discovering"} pages discovered…`
-                              : "Preparing website scan…",
+                              : job.status === "queued"
+                                ? `Scan queued / resuming: ${job.pages_scanned || 0}/${job.pages_total || "discovering"} pages saved…`
+                                : "Preparing website scan…",
                           },
                         }));
                         if (job.status === "completed" || job.status === "failed") {
@@ -6073,7 +6075,13 @@ function Dashboard() {
                           break;
                         }
                       }
-                      if (!finalJob) throw new Error("The scan is still running in the background. Refresh the website card to check its latest status.");
+                      if (!finalJob) {
+                        setWebsiteScanFeedback((current) => ({
+                          ...current,
+                          [site.id]: { kind: "info", message: "The scan is still queued or running. Saved progress will resume automatically; refresh this card to see the latest report." },
+                        }));
+                        return;
+                      }
                       if (finalJob.status === "failed") {
                         const reason = Array.isArray(finalJob.errors) ? finalJob.errors[0]?.message : "";
                         throw new Error(reason || "Website scan failed. Please retry.");
@@ -6093,7 +6101,7 @@ function Dashboard() {
                         [site.id]: {
                           kind: "error",
                           message: timedOut
-                            ? "The scan timed out. Misma marked this attempt as failed; please try again."
+                            ? "This scan pass reached its time budget. Saved progress is queued and Misma will resume it automatically."
                             : cause instanceof Error
                               ? cause.message
                               : "The scan failed. Please try again.",
