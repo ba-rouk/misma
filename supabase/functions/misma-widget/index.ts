@@ -338,21 +338,25 @@ function parseJsonObject(answer: string): AnyRecord {
   if (!isRecord(parsed)) throw new Error("The extraction response was not an object.");
   return parsed;
 }
-async function loadBusinessContext(db: Db, workspaceId: string, voice = false) {
+async function loadBusinessContext(db: Db, workspaceId: string, voice = false, websiteConnectionId?: string, roomId?: number) {
+  let knowledgeQuery = db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true);
+  if (websiteConnectionId) knowledgeQuery = knowledgeQuery.or("website_connection_id.is.null,website_connection_id.eq." + websiteConnectionId);
+  let lessonsQuery = db.from("core_01_lessons").select("room_key,lesson").eq("workspace_id", workspaceId).eq("status", "approved");
+  if (roomId && Number.isSafeInteger(roomId)) lessonsQuery = lessonsQuery.eq("room_id", roomId);
   const [workspace, knowledge, products, lessons] = await Promise.all([
     db.from("workspaces").select("name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-    db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }).limit(voice ? 8 : 30),
+    knowledgeQuery.order("id", { ascending: false }).limit(voice ? 8 : 30),
     db.from("products_services").select("item_type,name,description,price_text").eq("workspace_id", workspaceId).eq("active", true).limit(voice ? 15 : 50),
-    db.from("core_01_lessons").select("room_key,lesson").eq("workspace_id", workspaceId).eq("status", "approved").order("confidence", { ascending: false }).limit(voice ? 6 : 12),
+    lessonsQuery.order("confidence", { ascending: false }).limit(voice ? 6 : 12),
   ]);
   if (workspace.error) throw new Error("Could not load the business profile.");
   return { workspace: workspace.data, knowledge: knowledge.data || [], products: products.data || [], core01: lessons.data || [] };
 }
-async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false): Promise<string> {
-  const context = await loadBusinessContext(db, workspaceId, voice);
+async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId?: string, roomId?: number): Promise<string> {
+  const context = await loadBusinessContext(db, workspaceId, voice, websiteConnectionId, roomId);
   const system = [
     "You are Misma, the business's website and messaging assistant.",
-    "PLATFORM IDENTITY: If asked who created, built, or developed Misma itself, answer: Misma was created by Misma Corporation. Do not attribute Misma's creation to the connected business; use supplied business facts only for questions about that business.",
+    "PLATFORM IDENTITY: If asked which model or knowledge model powers Misma, say that Misma uses Core.01. If asked who created, built, or developed Misma itself, answer: Misma was created by Misma Corporation. Do not attribute Misma's creation to the connected business; use supplied business facts only for questions about that business.",
     "Answer clearly and naturally. Use only the business facts supplied below for business-specific claims.",
     "Never invent prices, stock, availability, delivery promises, policies, contacts, or order details.",
     "When a business fact is missing, say so and offer a human handoff.",
@@ -366,6 +370,22 @@ async function answerCustomer(db: Db, workspaceId: string, message: string, voic
     "Business context: " + JSON.stringify(context),
   ].join("\n");
   return await generateText(system, message, undefined, undefined, voice);
+}
+
+function sanitizeWidgetTheme(value: unknown): AnyRecord | null {
+  if (!isRecord(value)) return null;
+  const colors = ["headerBackground","headerText","chatBackground","textColor","botBubbleBackground","botBubbleText","userBubbleBackground","userBubbleText","sendButtonBackground","headerButtonBackground","footerBackground"];
+  const fonts = ["system-ui","Inter","Roboto","Poppins","Open Sans","Lato","Montserrat","Nunito","serif","monospace"];
+  const result: AnyRecord = { schemaVersion: 1 };
+  for (const key of colors) {
+    const color = value[key];
+    if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(color)) return null;
+    result[key] = color.toLowerCase();
+  }
+  if (typeof value.fontFamily !== "string" || !fonts.includes(value.fontFamily) || typeof value.matchChatBackground !== "boolean") return null;
+  result.fontFamily = value.fontFamily;
+  result.matchChatBackground = value.matchChatBackground;
+  return result;
 }
 
 function getWebsiteWidgetSocialLinks(site: AnyRecord) {
@@ -398,7 +418,7 @@ function getWebsiteWidgetSocialLinks(site: AnyRecord) {
   } catch {
     instagramUrl = null;
   }
-  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl };
+  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl, theme: sanitizeWidgetTheme(site.theme) };
 }
 
 async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRecord> {
@@ -410,7 +430,7 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
   let result = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message")
+    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,theme,theme_updated_at,core_room_id")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
   if (!result.error && !result.data?.length) {
@@ -601,6 +621,7 @@ function isSafeWebsiteUrl(value: string): URL | null {
     const host = url.hostname.toLowerCase();
     if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return null;
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) return null;
+    if (url.port && url.port !== "80" && url.port !== "443") return null;
     if (url.username || url.password) return null;
     return url;
   } catch { return null; }
@@ -639,6 +660,57 @@ async function isPublicHostname(hostname: string): Promise<boolean> {
   }
 }
 
+function decodeWebsiteBytes(bytes: Uint8Array, contentType: string): string {
+  const match = contentType.match(/charset\s*=\s*["']?([^;"'\s]+)/i);
+  const requested = (match?.[1] || "utf-8").toLowerCase();
+  const supported = new Set(["utf-8","iso-8859-1","windows-1252","shift_jis","gbk","gb18030","big5","euc-kr"]);
+  const label = supported.has(requested) ? requested : "utf-8";
+  try { return new TextDecoder(label).decode(bytes); }
+  catch { return new TextDecoder("utf-8").decode(bytes); }
+}
+function extractEmbeddedData(html: string): string {
+  const parts: string[] = [];
+  const patterns = [
+    /<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i,
+    /<script[^>]+id=["']__NUXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i,
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
+  ];
+  for (const pattern of patterns) {
+    const matches = html.matchAll(new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g"));
+    for (const match of matches) parts.push(String(match[1] || "").slice(0, 12000));
+  }
+  for (const match of html.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:title|og:description|description|twitter:title|twitter:description)["'][^>]+content=["']([^"']+)["'][^>]*>/gi)) {
+    parts.push(String(match[1] || ""));
+  }
+  return parts.join("\n").slice(0, 24000);
+}
+function detectWebsitePlatform(html: string, url: string): string {
+  const lower = html.toLowerCase();
+  if (lower.includes("wp-content") || lower.includes("wp-includes")) return "WordPress / PHP";
+  if (lower.includes("cdn.shopify.com") || lower.includes("shopify-section")) return "Shopify";
+  if (lower.includes("__next_data__") || lower.includes("/_next/")) return "Next.js";
+  if (lower.includes("__nuxt") || lower.includes("/_nuxt/")) return "Nuxt";
+  if (lower.includes("wixstatic.com") || lower.includes("wix.com")) return "Wix";
+  if (lower.includes("drupalsettings")) return "Drupal / PHP";
+  if (lower.includes("laravel_session")) return "Laravel / PHP";
+  if (lower.includes("ng-version") || lower.includes("ng-app")) return "Angular";
+  if (lower.includes("data-v-app") || lower.includes("vue")) return "Vue.js";
+  if (lower.includes("reactroot") || lower.includes("react")) return "React";
+  if (url.toLowerCase().endsWith(".php")) return "PHP";
+  return "HTML / HTTP-rendered site";
+}
+function extractThemeSuggestions(html: string): AnyRecord {
+  const colors = Array.from(html.matchAll(/(?:content|--[\w-]+)\s*[:=]\s*["']?(#[0-9a-fA-F]{6})/g)).map((match) => match[1].toLowerCase());
+  const unique = Array.from(new Set(colors)).slice(0, 8);
+  const meta = html.match(/<meta[^>]+name=["']theme-color["'][^>]+content=["'](#[0-9a-fA-F]{6})["']/i);
+  const brand = meta?.[1]?.toLowerCase() || unique[0];
+  if (!brand) return {};
+  return {
+    headerBackground: brand,
+    sendButtonBackground: unique[1] || brand,
+    userBubbleBackground: unique[1] || brand,
+  };
+}
 function cleanHtml(html: string): string {
   return html
     .replace(/<(script|style|noscript|svg|nav|footer|header|form|iframe)[\s\S]*?<\/\1>/gi, " ")
@@ -654,19 +726,40 @@ function websiteScanSignal(parent: AbortSignal | undefined, timeoutMs: number): 
   const timeout = AbortSignal.timeout(timeoutMs);
   return parent ? AbortSignal.any([parent, timeout]) : timeout;
 }
-async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal): Promise<Array<{ url: string; title: string; text: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
   const queue = [first.href];
   const seen = new Set<string>();
-  const pages: Array<{ url: string; title: string; text: string }> = [];
+  const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord }> = [];
+  const robotsDisallow: string[] = [];
+  try {
+    const robots = await fetch(new URL("/robots.txt", first.origin).href, {
+      redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
+      signal: websiteScanSignal(scanSignal, 5000),
+    });
+    if (robots.ok) {
+      const body = (await robots.text()).slice(0, 100000);
+      let active = false;
+      for (const line of body.split(/\r?\n/)) {
+        const clean = line.split("#")[0].trim();
+        if (/^user-agent\s*:\s*\*/i.test(clean) || /^user-agent\s*:\s*MismaBot/i.test(clean)) active = true;
+        else if (/^user-agent\s*:/i.test(clean)) active = false;
+        else if (active && /^disallow\s*:/i.test(clean)) {
+          const value = clean.split(":").slice(1).join(":").trim();
+          if (value) robotsDisallow.push(value);
+        }
+      }
+    }
+  } catch { /* robots.txt unavailable: continue with conservative limits. */ }
+  const allowedByRobots = (url: URL) => !robotsDisallow.some((path) => url.pathname.startsWith(path));
   // Seed the bounded crawl from a same-origin XML sitemap when the site publishes one.
   try {
     const sitemapUrl = new URL("/sitemap.xml", first.origin);
     const sitemapResponse = await fetch(sitemapUrl.href, {
       redirect: "manual",
-      headers: { "User-Agent": "MismaWebsiteScanner/1.0 (+https://misma.onrender.com)" },
+      headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
       signal: websiteScanSignal(scanSignal, 7000),
     });
     if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
@@ -687,35 +780,60 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   while (queue.length && pages.length < maxPages) {
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
-    if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href)) continue;
+    if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href) || !allowedByRobots(parsed)) continue;
+    if (!(await isPublicHostname(parsed.hostname))) continue;
     seen.add(parsed.href);
     try {
       const response = await fetch(parsed.href, {
         redirect: "manual",
-        headers: { "User-Agent": "MismaWebsiteScanner/1.0 (+https://misma.onrender.com)" },
+        headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
         signal: websiteScanSignal(scanSignal, 9000),
       });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         if (location) {
           const redirectUrl = new URL(location, parsed.href);
-          if (redirectUrl.origin === first.origin && isSafeWebsiteUrl(redirectUrl.href)) queue.unshift(redirectUrl.href);
+          if (redirectUrl.origin === first.origin && isSafeWebsiteUrl(redirectUrl.href) && allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
         }
         continue;
       }
-      if (!response.ok || !(response.headers.get("content-type") || "").toLowerCase().includes("text/html")) continue;
-      const raw = (await response.text()).slice(0, 500000);
+      if (!response.ok) continue;
+      const contentType = (response.headers.get("content-type") || "").toLowerCase();
+      if (!/(text\/html|application\/xhtml\+xml|text\/plain|application\/json|application\/xml|text\/xml)/.test(contentType)) continue;
+      const declaredLength = Number(response.headers.get("content-length") || 0);
+      if (declaredLength > 1500000) continue;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength > 1500000) continue;
+      const raw = decodeWebsiteBytes(bytes, contentType);
       const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
       const title = titleMatch ? cleanHtml(titleMatch[1]).slice(0, 240) : parsed.pathname;
-      const text = cleanHtml(raw);
-      if (text.length > 120) pages.push({ url: parsed.href, title, text });
+      let text = /text\/html|application\/xhtml\+xml/.test(contentType)
+        ? (cleanHtml(raw) + "\n" + extractEmbeddedData(raw)).slice(0, 18000)
+        : raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000);
+      const platform = detectWebsitePlatform(raw, parsed.href);
+      const themeSuggestions = extractThemeSuggestions(raw);
+      if (text.length < 120 && /text\/html|application\/xhtml\+xml/.test(contentType) && getEnv("BROWSERLESS_API_KEY")) {
+        try {
+          const rendered = await fetch("https://production-sfo.browserless.io/content?token=" + encodeURIComponent(getEnv("BROWSERLESS_API_KEY")), {
+            method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "MismaBot/1.0" },
+            body: JSON.stringify({ url: parsed.href }), signal: websiteScanSignal(scanSignal, 12000),
+          });
+          if (rendered.ok) {
+            const renderedHtml = (await rendered.text()).slice(0, 500000);
+            const renderedText = (cleanHtml(renderedHtml) + "\n" + extractEmbeddedData(renderedHtml)).slice(0, 18000);
+            if (renderedText.length > text.length) text = renderedText;
+          }
+        } catch { /* Browser rendering is optional; static extraction remains available. */ }
+      }
+      if (text.length > 120) pages.push({ url: parsed.href, title, text, platform, themeSuggestions });
+      if (onProgress) await onProgress(pages.length, Math.min(maxPages, pages.length + queue.length));
       const links = raw.match(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi) || [];
       for (const link of links) {
         const match = link.match(/href\s*=\s*["']([^"']+)["']/i);
         if (!match) continue;
         try {
           const linked = new URL(match[1], parsed.href);
-          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && !seen.has(linked.href) && queue.length < 100) queue.push(linked.href);
+          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && !seen.has(linked.href) && queue.length < 100) queue.push(linked.href);
         } catch { /* Ignore malformed links. */ }
       }
     } catch (error) {
@@ -759,7 +877,7 @@ async function extractBusinessData(inputText: string, sourceName: string, scanSi
   }
   throw new Error("Website extraction failed.");
 }
-async function persistExtracted(db: Db, workspaceId: string, sourceType: string, sourceRef: string, extracted: AnyRecord) {
+async function persistExtracted(db: Db, workspaceId: string, sourceType: string, sourceRef: string, extracted: AnyRecord, websiteConnectionId: string | null = null, roomId: number | null = null) {
   const faqs = Array.isArray(extracted.faqs) ? extracted.faqs.slice(0, 25) : [];
   const items = Array.isArray(extracted.items) ? extracted.items.slice(0, 20) : [];
   const normalizedSourceRef = sourceRef.slice(0, 1500);
@@ -817,6 +935,8 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
       approved: true,
       source_type: sourceType,
       source_ref: normalizedSourceRef,
+      website_connection_id: websiteConnectionId,
+      room_id: roomId,
     });
     knowledgeByQuestion.set(question.toLocaleLowerCase(), {
       id: null, question, answer, source_type: sourceType, source_ref: normalizedSourceRef,
@@ -949,23 +1069,27 @@ async function createWebsiteScanRun(db: Db, website: AnyRecord, automatic: boole
   return String(created.data.id);
 }
 
-async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 25, parentSignal?: AbortSignal) {
+async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 25, parentSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>) {
   const scanSignal = parentSignal || AbortSignal.timeout(100_000);
   try {
-    const pages = await crawlWebsite(website.website_url, maxPages, scanSignal);
+    const pages = await crawlWebsite(website.website_url, maxPages, scanSignal, onProgress);
     if (!pages.length) throw new Error("No readable public HTML pages were found.");
     const sourceText = pages
       .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
       .join("\n\n")
       .slice(0, 45000);
     const extracted = await extractBusinessData(sourceText, website.website_url, scanSignal);
-    const saved = await persistExtracted(db, website.workspace_id, "website", website.website_url, extracted);
+    const saved = await persistExtracted(db, website.workspace_id, "website", website.website_url, extracted, String(website.id), Number(website.core_room_id) || null);
+    const detectedPlatform = pages.find((page) => page.platform)?.platform || "HTTP-rendered website";
+    const themeSuggestions = pages.map((page) => page.themeSuggestions).find((item) => Object.keys(item || {}).length > 0) || {};
     const summary = safeString(extracted.summary, 3000) || "Scanned " + pages.length + " public pages.";
 
     const [runUpdate, websiteUpdate] = await Promise.all([
       db.from("website_scan_runs").update({
         status: "completed",
         pages_scanned: pages.length,
+        pages_total: pages.length,
+        detected_platform: detectedPlatform,
         summary,
         error: null,
         completed_at: new Date().toISOString(),
@@ -973,12 +1097,14 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
       db.from("website_connections").update({
         last_scanned_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
+        detected_platform: detectedPlatform,
+        theme_suggestions: themeSuggestions,
       }).eq("id", website.id).eq("workspace_id", website.workspace_id),
     ]);
     if (runUpdate.error || websiteUpdate.error) {
       throw new Error("Website knowledge was extracted, but the scan status could not be finalized.");
     }
-    return { pagesScanned: pages.length, summary, ...saved };
+    return { pagesScanned: pages.length, detectedPlatform, themeSuggestions, summary, ...saved };
   } catch (error) {
     const message = scanSignal.aborted ? "Website scan timed out before it could finish." :
       error instanceof Error ? error.message : "Website scanning failed.";
@@ -1273,7 +1399,10 @@ Deno.serve(async (request: Request) => {
     if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
-        return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) });
+        return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) }, {
+          "Cache-Control": "public, max-age=60, stale-while-revalidate=30",
+          "ETag": '"misma-theme-' + safeString(site.theme_updated_at, 80) + '"',
+        });
       }
       if (input.action === "close") {
         const visitorId = safeString(input.visitorId, 120);
@@ -1389,7 +1518,7 @@ Deno.serve(async (request: Request) => {
         });
       }
       let answer = "";
-      try { answer = await answerCustomer(db, site.workspace_id, message, input.voice === true); }
+      try { answer = await answerCustomer(db, site.workspace_id, message, input.voice === true, String(site.id), Number(site.core_room_id) || undefined); }
       catch { answer = "I cannot access that business information right now. You can ask to speak with a member of the team."; }
       const aiMessage = await db.from("messages").insert({
         conversation_id: conversation.id,
@@ -1549,18 +1678,61 @@ Deno.serve(async (request: Request) => {
       const result = await recommendOfferingsFromDemand(db, workspaceId);
       return respond(200, { ok: true, ...result });
     }
+    if (input.action === "scan-status") {
+      const jobId = safeString(input.jobId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error("A valid scan job is required.");
+      const result = await db.from("scan_jobs")
+        .select("id,status,pages_total,pages_scanned,pages_skipped,detected_platform,errors,created_at,updated_at,completed_at")
+        .eq("id", jobId).eq("workspace_id", workspaceId).maybeSingle();
+      if (result.error || !result.data) throw new Error("Scan job not found.");
+      return respond(200, { ok: true, job: result.data });
+    }
     if (input.action === "scan-website") {
       const websiteId = safeString(input.websiteId, 80);
       const websiteResult = await db.from("website_connections")
-        .select("id,workspace_id,website_url,domain,last_scanned_at,status")
+        .select("id,workspace_id,website_url,domain,last_scanned_at,status,core_room_id,name")
         .eq("id", websiteId)
         .eq("workspace_id", workspaceId)
         .single();
       if (websiteResult.error || !websiteResult.data) throw new Error("Website not found in the selected workspace.");
-      const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
-      if (!scanId) throw new Error("Could not start the website scan.");
-      const result = await performWebsiteScan(db, websiteResult.data, scanId);
-      return respond(200, { ok: true, ...result });
+      const maxPages = Math.max(1, Math.min(50, Number(input.maxPages) || 25));
+      const createdJob = await db.from("scan_jobs").insert({
+        workspace_id: workspaceId, website_id: websiteId, status: "queued", max_pages: maxPages,
+        pages_total: 0, pages_scanned: 0, pages_skipped: 0, errors: [],
+      }).select("id").single();
+      if (createdJob.error || !createdJob.data) {
+        if (createdJob.error?.code === "23505") throw new Error("A scan is already running for this website. Wait for it to finish.");
+        throw new Error("Could not queue the website scan.");
+      }
+      const jobId = String(createdJob.data.id);
+      const scanTask = (async () => {
+        try {
+          await db.from("scan_jobs").update({ status: "running", started_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", jobId);
+          const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
+          if (!scanId) throw new Error("Could not start the website scan.");
+          const result = await performWebsiteScan(db, websiteResult.data, scanId, maxPages, undefined, async (scanned, discovered) => {
+            await db.from("scan_jobs").update({
+              pages_scanned: scanned, pages_total: discovered, updated_at: new Date().toISOString(),
+            }).eq("id", jobId);
+          });
+          await db.from("scan_jobs").update({
+            status: "completed", pages_scanned: result.pagesScanned, pages_total: result.pagesScanned,
+            detected_platform: result.detectedPlatform || null, errors: [],
+            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          }).eq("id", jobId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Website scan failed.";
+          await db.from("scan_jobs").update({
+            status: "failed", errors: [{ message: message.slice(0, 500) }],
+            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          }).eq("id", jobId);
+          console.error("[misma-widget] Background scan job failed.", { jobId, reason: message.slice(0, 300) });
+        }
+      })();
+      const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
+      if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(scanTask);
+      else await scanTask;
+      return respond(202, { ok: true, jobId, status: "queued", maxPages });
     }
     if (input.action === "extract-knowledge") {
       const fileName = safeString(input.fileName, 180) || "Uploaded business document";

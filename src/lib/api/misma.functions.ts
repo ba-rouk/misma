@@ -51,9 +51,9 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
         db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
-        db.from("knowledge_entries").select("id,question,answer,source_type,source_ref").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
+        db.from("knowledge_entries").select("id,question,answer,source_type,source_ref,website_connection_id,room_id").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
         db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
-        db.from("website_connections").select("id,name,website_url,domain,public_key,widget_public_key,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,widget_deleted_at,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: false }),
+        db.from("website_connections").select("id,name,website_url,domain,public_key,widget_public_key,core_room_id,theme,theme_schema_version,theme_updated_at,theme_suggestions,detected_platform,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,widget_deleted_at,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: false }),
         db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -377,13 +377,35 @@ export const markVisitorMessagesRead = createServerFn({ method: "POST" })
   });
 
 export const addKnowledge = createServerFn({ method: "POST" })
-  .validator(z.object({ token: auth, question: z.string().trim().min(2).max(500), answer: z.string().trim().min(2).max(4000) }))
+  .validator(z.object({
+    token: auth,
+    question: z.string().trim().min(2).max(500),
+    answer: z.string().trim().min(2).max(4000),
+    websiteConnectionId: z.string().uuid().nullable().optional(),
+  }))
   .handler(async ({ data }) => {
     const { db, workspaceId } = await ensureWorkspace(data.token);
-    const result = await db.from("knowledge_entries").insert({ workspace_id: workspaceId, question: data.question, answer: data.answer, approved: true }).select("id,question,answer").single();
+    let roomId: number | null = null;
+    if (data.websiteConnectionId) {
+      const site = await db.from("website_connections").select("id,core_room_id")
+        .eq("id", data.websiteConnectionId).eq("workspace_id", workspaceId)
+        .is("widget_deleted_at", null).single();
+      if (site.error || !site.data) throw new Error("Choose a connected website in this workspace.");
+      roomId = site.data.core_room_id ? Number(site.data.core_room_id) : null;
+    }
+    const result = await db.from("knowledge_entries").insert({
+      workspace_id: workspaceId,
+      question: data.question,
+      answer: data.answer,
+      approved: true,
+      website_connection_id: data.websiteConnectionId || null,
+      room_id: roomId,
+    }).select("id,question,answer,website_connection_id,room_id").single();
     const saved = check(result.data, result.error);
-    await recordAudit(db, workspaceId, "knowledge.created", String(saved.id), { question: data.question });
-    return { id: saved.id, question: saved.question, answer: saved.answer };
+    await recordAudit(db, workspaceId, "knowledge.created", String(saved.id), {
+      question: data.question, websiteConnectionId: data.websiteConnectionId || null,
+    });
+    return saved;
   });
 
 export const deleteKnowledge = createServerFn({ method: "POST" })
@@ -872,4 +894,51 @@ export const updateProductServiceStatus = createServerFn({ method: "POST" })
     const saved = check(product, error);
     await recordAudit(db, workspaceId, "product_service.status_changed", String(saved.id), { active: data.active });
     return { product: saved };
+  });
+
+
+const widgetThemeSchema = z.object({
+  schemaVersion: z.literal(1),
+  headerBackground: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  headerText: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  chatBackground: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  fontFamily: z.enum(["system-ui","Inter","Roboto","Poppins","Open Sans","Lato","Montserrat","Nunito","serif","monospace"]),
+  botBubbleBackground: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  botBubbleText: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  userBubbleBackground: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  userBubbleText: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  sendButtonBackground: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  headerButtonBackground: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  footerBackground: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  matchChatBackground: z.boolean(),
+}).strict();
+
+export const getWebsiteWidgetTheme = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, websiteId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const { db, user, workspaceId } = await ensureWorkspace(data.token);
+    const owner = await db.from("workspaces").select("owner_id").eq("id", workspaceId).single();
+    if (owner.error || owner.data?.owner_id !== user.id) throw new Error("Only the account owner can customize this website widget.");
+    const site = await db.from("website_connections")
+      .select("id,name,domain,theme,theme_schema_version,theme_suggestions")
+      .eq("id", data.websiteId).eq("workspace_id", workspaceId).is("widget_deleted_at", null).single();
+    if (site.error || !site.data) throw new Error("Website connection not found.");
+    return { website: site.data };
+  });
+
+export const saveWebsiteWidgetTheme = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, websiteId: z.string().uuid(), theme: widgetThemeSchema }))
+  .handler(async ({ data }) => {
+    const { db, user, workspaceId } = await ensureWorkspace(data.token);
+    const owner = await db.from("workspaces").select("owner_id").eq("id", workspaceId).single();
+    if (owner.error || owner.data?.owner_id !== user.id) throw new Error("Only the account owner can customize this website widget.");
+    const theme = widgetThemeSchema.parse(data.theme);
+    const result = await db.from("website_connections")
+      .update({ theme, theme_schema_version: 1, theme_updated_at: new Date().toISOString() })
+      .eq("id", data.websiteId).eq("workspace_id", workspaceId).is("widget_deleted_at", null)
+      .select("id,theme,theme_schema_version,theme_updated_at").single();
+    const saved = check(result.data, result.error);
+    await recordAudit(db, workspaceId, "website.widget_theme_updated", data.websiteId);
+    return { website: saved };
   });

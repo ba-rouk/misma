@@ -1701,6 +1701,7 @@ function Dashboard() {
   // Forms in other tabs
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
+  const [knowledgeWebsiteId, setKnowledgeWebsiteId] = useState("");
   const [savingKnowledge, setSavingKnowledge] = useState(false);
 
   // Business profile form
@@ -4129,10 +4130,11 @@ function Dashboard() {
     setSavingKnowledge(true);
     try {
       await addKnowledge({
-        data: { token, question: newQuestion.trim(), answer: newAnswer.trim() },
+        data: { token, question: newQuestion.trim(), answer: newAnswer.trim(), websiteConnectionId: knowledgeWebsiteId || null },
       });
       setNewQuestion("");
       setNewAnswer("");
+      setKnowledgeWebsiteId("");
       loadData();
     } catch (cause) {
       alert(
@@ -5302,6 +5304,14 @@ function Dashboard() {
                 </p>
                 <form onSubmit={handleAddKnowledge}>
                   <div className="aichat-input-group">
+                    <label htmlFor="knowledge-website-room">Knowledge room</label>
+                    <select id="knowledge-website-room" className="aichat-input" value={knowledgeWebsiteId} onChange={(event) => setKnowledgeWebsiteId(event.target.value)}>
+                      <option value="">General workspace knowledge (available across channels)</option>
+                      {connectedWebsites.map((site) => <option key={site.id} value={site.id}>{site.name || site.domain} — website room</option>)}
+                    </select>
+                    <small>Choose a connected website to keep this knowledge inside that website's Core.01 room. General knowledge remains shared across the workspace.</small>
+                  </div>
+                  <div className="aichat-input-group">
                     <label htmlFor="k-question">Question / Trigger</label>
                     <input
                       id="k-question"
@@ -6003,12 +6013,15 @@ function Dashboard() {
                   </button>
                 </div>
                 <div className="aichat-website-card-details" hidden={!expandedWebsiteIds.includes(site.id)}>
-                <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
+                <p>This widget works with websites built in any backend language because Misma reads the public rendered HTTP response, not your server-side source code. JavaScript-heavy sites may need browser rendering support during scanning. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
                 <WebsiteSocialSettings
                   site={site}
                   token={token || ""}
                   onSaved={(website) => setConnectedWebsites((items) => items.map((item) => item.id === website.id ? { ...item, ...website } : item))}
                 />
+                <button type="button" className="aichat-action-btn" style={{ width: "100%", margin: "10px 0", background: "#16a34a", color: "#fff", borderColor: "#16a34a" }} onClick={() => navigate({ to: "/dashboard/websites/$siteId/customize", params: { siteId: site.id } })}>
+                  <span aria-hidden="true">◈</span> Customize widget <span aria-hidden="true">›</span>
+                </button>
                 <label className="aichat-widget-script-label">General website installation script</label>
                 <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-channels-1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
@@ -6023,15 +6036,45 @@ function Dashboard() {
                     setWebsiteActionId(site.id);
                     setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "info", message: "Scanning public pages and extracting business knowledge…" } }));
                     try {
-                      const result = await callWidgetFunction(
-                        { action: "scan-website", workspaceId: workspace.id, websiteId: site.id },
+                      const queued = await callWidgetFunction(
+                        { action: "scan-website", workspaceId: workspace.id, websiteId: site.id, maxPages: 50 },
                         controller.signal,
                       );
+                      const jobId = String(queued.jobId || "");
+                      if (!jobId) throw new Error("Misma did not return a scan job ID.");
+                      let finalJob: any = null;
+                      for (let attempt = 0; attempt < 90; attempt += 1) {
+                        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+                        const statusResult = await callWidgetFunction(
+                          { action: "scan-status", workspaceId: workspace.id, jobId },
+                          controller.signal,
+                        );
+                        const job = statusResult.job;
+                        if (!job) throw new Error("The scan job could not be found.");
+                        setWebsiteScanFeedback((current) => ({
+                          ...current,
+                          [site.id]: {
+                            kind: "info",
+                            message: job.status === "running"
+                              ? `Scanning website: ${job.pages_scanned || 0}/${job.pages_total || "discovering"} pages discovered…`
+                              : "Preparing website scan…",
+                          },
+                        }));
+                        if (job.status === "completed" || job.status === "failed") {
+                          finalJob = job;
+                          break;
+                        }
+                      }
+                      if (!finalJob) throw new Error("The scan is still running in the background. Refresh the website card to check its latest status.");
+                      if (finalJob.status === "failed") {
+                        const reason = Array.isArray(finalJob.errors) ? finalJob.errors[0]?.message : "";
+                        throw new Error(reason || "Website scan failed. Please retry.");
+                      }
                       setWebsiteScanFeedback((current) => ({
                         ...current,
                         [site.id]: {
                           kind: "success",
-                          message: `Scan complete: ${result.pagesScanned || 0} pages scanned, ${result.knowledgeSaved || 0} knowledge answers saved, and ${result.productSuggestions || 0} product/service suggestions added for review.`,
+                          message: `Scan complete: ${finalJob.pages_scanned || 0} pages scanned. Platform: ${finalJob.detected_platform || "HTTP-rendered website"}.`,
                         },
                       }));
                       loadData();
@@ -6066,7 +6109,7 @@ function Dashboard() {
                     {websiteScanFeedback[site.id].message}
                   </p>
                 )}
-                <small className="aichat-website-meta">Last activity: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
+                <small className="aichat-website-meta">Last activity: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}{site.detected_platform ? " · Platform: " + site.detected_platform : ""}</small>
                 <small className="aichat-website-meta">Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
                 </div>
               </article>)}

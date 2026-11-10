@@ -37,12 +37,12 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   assert.match(login, /emailRedirectTo: `\$\{window\.location\.origin\}\/dashboard`/);
   assert.match(login, /window\.location\.replace\(destination\)/);
   assert.match(login, /window\.location\.replace\(consumePostLoginDestination\(\)\)/);
-  assert.match(login, /target\.pathname !== "\/dashboard"/);
+  assert.match(login, /target\.pathname\.startsWith\("\/dashboard\/"\)/);
   assert.match(dashboard, /getMismaData/);
   assert.match(callback, /createFileRoute\("\/auth\/callback"\)/);
   assert.match(callback, /exchangeCodeForSession\(code\)/);
   assert.match(callback, /window\.location\.replace\(destination\)/);
-  assert.match(callback, /target\.pathname !== "\/dashboard"/);
+  assert.match(callback, /target\.pathname\.startsWith\("\/dashboard\/"\)/);
   assert.match(dashboard, /functions\/v1\/misma-chat/);
   assert.match(dashboard, /Authorization:\s*`Bearer \$\{token\}`/);
   assert.match(dashboard, /auth\.onAuthStateChange/);
@@ -1391,4 +1391,35 @@ test("Misma publishes a PNG favicon supported by browser and Google Search forma
   assert.match(root, /rel: "icon", href: "\/misma-favicon\.png", type: "image\/png", sizes: "48x48"/);
   assert.match(root, /title: "Misma \| Business AI, connected"/);
   assert.equal(icon.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+});
+
+test("website widget themes are owner-saved, safely validated, and applied inside the widget shadow root", async () => {
+  const migration = await read("../supabase/migrations/20261110100000_website_widget_customization_rooms_scan.sql");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const route = await read("../src/routes/dashboard/websites/$siteId/customize.tsx");
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(migration, /theme jsonb/);
+  assert.match(migration, /core_room_id/);
+  assert.match(api, /widgetThemeSchema/);
+  assert.match(api, /Only the account owner can customize this website widget/);
+  assert.match(route, /LIVE PREVIEW/);
+  assert.match(route, /WCAG AA/);
+  assert.match(runtime, /--misma-header-bg/);
+  assert.match(runtime, /theme\.matchChatBackground===true/);
+  assert.match(edge, /sanitizeWidgetTheme/);
+  assert.match(edge, /website_connection_id: websiteConnectionId/);
+});
+
+test("website knowledge is isolated by Core.01 website room and Misma identifies its model as Core.01", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const widget = await read("../supabase/functions/misma-widget/index.ts");
+  const chat = await read("../supabase/functions/misma-chat/index.ts");
+  assert.match(api, /websiteConnectionId/);
+  assert.match(api, /core_room_id/);
+  assert.match(dashboard, /knowledge-website-room/);
+  assert.match(widget, /websiteConnectionId\?: string/);
+  assert.match(widget, /Misma uses Core\.01/);
+  assert.match(chat, /answer that Misma uses Core\.01/);
 });

@@ -8,7 +8,7 @@ function safeDashboardDestination(value: string | null): string {
   if (!value || typeof window === "undefined") return "/dashboard";
   try {
     const target = new URL(value, window.location.origin);
-    if (target.origin !== window.location.origin || target.pathname !== "/dashboard") return "/dashboard";
+    if (target.origin !== window.location.origin || !(target.pathname === "/dashboard" || target.pathname.startsWith("/dashboard/"))) return "/dashboard";
     return target.pathname + target.search + target.hash;
   } catch {
     return "/dashboard";
@@ -238,7 +238,7 @@ function Login() {
           <h2>{signup ? "Create your account." : "Welcome back."}</h2>
           <p className="login-subtitle">
             {signup
-              ? "Create an account to start your workspace."
+              ? "Create an account to open your Misma house. Each connected website gets its own Core.01 room."
               : "Sign in to continue to your workspace."}
           </p>
           <form
