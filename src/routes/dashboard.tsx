@@ -229,6 +229,7 @@ function normalizeInstagramProfile(value: string): string | null {
 
 type WebsiteSocialDraft = {
   instagramUrl: string;
+  gmailAddress: string;
   whatsappCountryCode: string;
   whatsappNumber: string;
   whatsappMessage: string;
@@ -249,6 +250,7 @@ function WebsiteSocialSettings({
   const [status, setStatus] = useState("");
   const [draft, setDraft] = useState<WebsiteSocialDraft>({
     instagramUrl: site.instagram_url || "",
+    gmailAddress: site.gmail_address || "",
     whatsappCountryCode: site.whatsapp_country_code || "250",
     whatsappNumber: site.whatsapp_number || "",
     whatsappMessage: site.whatsapp_message || "",
@@ -256,6 +258,7 @@ function WebsiteSocialSettings({
 
   const currentDraft = (): WebsiteSocialDraft => ({
     instagramUrl: site.instagram_url || "",
+    gmailAddress: site.gmail_address || "",
     whatsappCountryCode: site.whatsapp_country_code || "250",
     whatsappNumber: site.whatsapp_number || "",
     whatsappMessage: site.whatsapp_message || "",
@@ -293,6 +296,12 @@ function WebsiteSocialSettings({
       }
     }
 
+    const gmailAddress = nextDraft.gmailAddress.trim().toLowerCase();
+    if (gmailAddress && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(gmailAddress)) {
+      setError("Enter a valid Gmail address.");
+      return;
+    }
+
     setSaving(true);
     try {
       const result = await saveWebsiteSocialLinks({
@@ -300,6 +309,7 @@ function WebsiteSocialSettings({
           token,
           websiteId: site.id,
           instagramUrl,
+          gmailAddress: gmailAddress || null,
           whatsappCountryCode,
           whatsappNumber,
           whatsappMessage,
@@ -308,11 +318,12 @@ function WebsiteSocialSettings({
       onSaved(result.website);
       setDraft({
         instagramUrl: result.website.instagram_url || "",
+        gmailAddress: result.website.gmail_address || "",
         whatsappCountryCode: result.website.whatsapp_country_code || "250",
         whatsappNumber: result.website.whatsapp_number || "",
         whatsappMessage: result.website.whatsapp_message || "",
       });
-      setStatus("Saved. The widget will show the updated links on the next website refresh.");
+      setStatus("Saved. Gmail will appear in the widget header after the next config refresh; no script update is needed.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save the website links.");
     } finally {
@@ -322,6 +333,10 @@ function WebsiteSocialSettings({
 
   async function removeInstagram() {
     await saveDraft({ ...draft, instagramUrl: "" });
+  }
+
+  async function removeGmail() {
+    await saveDraft({ ...draft, gmailAddress: "" });
   }
 
   async function removeWhatsApp() {
@@ -373,6 +388,31 @@ function WebsiteSocialSettings({
             {site.instagram_url && (
               <button type="button" className="aichat-social-remove" disabled={saving} onClick={() => void removeInstagram()}>
                 Remove Instagram
+              </button>
+            )}
+          </section>
+
+          <section className="aichat-social-channel">
+            <div className="aichat-social-channel-heading">
+              <strong>Gmail</strong>
+              <span>{site.gmail_address ? "Connected" : "Optional"}</span>
+            </div>
+            <label>
+              Gmail contact address
+              <input
+                value={draft.gmailAddress}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                maxLength={254}
+                placeholder="business@gmail.com"
+                onChange={(event) => setDraft((current) => ({ ...current, gmailAddress: event.target.value }))}
+              />
+            </label>
+            <small>Visitors can open a Gmail compose window addressed to this email.</small>
+            {site.gmail_address && (
+              <button type="button" className="aichat-social-remove" disabled={saving} onClick={() => void removeGmail()}>
+                Remove Gmail
               </button>
             )}
           </section>
