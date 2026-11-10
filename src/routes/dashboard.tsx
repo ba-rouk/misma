@@ -1283,109 +1283,38 @@ function getLoginGreeting(): string {
   return greeting;
 }
 
-// Helper to safely render basic markdown
-function MarkdownContent({ content }: { content: string }) {
-  const parts = content.split(/(```[\s\S]*?```)/g);
-
-  return (
-    <div className="aichat-markdown">
-      {parts.map((part, index) => {
-        if (part.startsWith("```") && part.endsWith("```")) {
-          const lines = part.slice(3, -3).trim().split("\n");
-          const code = lines.join("\n");
-          return (
-            <pre key={index}>
-              <code>{code}</code>
-            </pre>
-          );
-        }
-
-        const paragraphs = part.split(/\n\n+/);
-        return paragraphs.map((para, pIdx) => {
-          const trimmed = para.trim();
-          if (!trimmed) return null;
-
-          if (trimmed.startsWith("### ")) {
-            return <h3 key={`${index}-${pIdx}`}>{trimmed.slice(4)}</h3>;
-          }
-          if (trimmed.startsWith("## ")) {
-            return <h2 key={`${index}-${pIdx}`}>{trimmed.slice(3)}</h2>;
-          }
-          if (trimmed.startsWith("# ")) {
-            return <h1 key={`${index}-${pIdx}`}>{trimmed.slice(2)}</h1>;
-          }
-
-          if (
-            trimmed
-              .split("\n")
-              .every(
-                (l) => l.trim().startsWith("- ") || l.trim().startsWith("• "),
-              )
-          ) {
-            const items = trimmed
-              .split("\n")
-              .map((l) => l.replace(/^[-•]\s*/, ""));
-            return (
-              <ul key={`${index}-${pIdx}`}>
-                {items.map((item, iIdx) => (
-                  <li key={iIdx}>{formatInline(item)}</li>
-                ))}
-              </ul>
-            );
-          }
-
-          if (trimmed.split("\n").every((l) => /^\d+\.\s/.test(l.trim()))) {
-            const items = trimmed
-              .split("\n")
-              .map((l) => l.replace(/^\d+\.\s*/, ""));
-            return (
-              <ol key={`${index}-${pIdx}`}>
-                {items.map((item, iIdx) => (
-                  <li key={iIdx}>{formatInline(item)}</li>
-                ))}
-              </ol>
-            );
-          }
-
-          return <p key={`${index}-${pIdx}`}>{formatInline(trimmed)}</p>;
-        });
-      })}
-    </div>
-  );
+// Display assistant replies as clean text rather than exposing Markdown decoration.
+function plainTextMessage(content: string): string {
+  return content
+    .replace(/```[^\n]*\n?([\s\S]*?)```/g, "$1")
+    .replace(/^\s*(['"`]){3,}\s*$/gm, "")
+    .replace(/(^|\n)\s{0,3}#{1,6}\s+/g, "$1")
+    .replace(/(^|\n)\s*(?:[-*+•]|\d+[.)])\s+/g, "$1")
+    .replace(/\*\*([\s\S]*?)\*\*/g, "$1")
+    .replace(/__([\s\S]*?)__/g, "$1")
+    .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "$1")
+    .replace(/~~([\s\S]*?)~~/g, "$1")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1: $2")
+    .replace(/(^|\n)\s*>+\s?/g, "$1")
+    .replace(/^[ \t]*(?:-{3,}|_{3,}|\*{3,})[ \t]*$/gm, "")
+    .replace(/^\s*\|?[-: ]+\|[-: |]+\s*$/gm, "")
+    .replace(/[ \t]*\|[ \t]*/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
-function formatInline(text: string) {
-  const segments = text.split(
-    /(\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g,
+function MarkdownContent({ content }: { content: string }) {
+  const paragraphs = plainTextMessage(content).split(/\n\n+/);
+  return (
+    <div className="aichat-markdown">
+      {paragraphs.map((paragraph, index) => (
+        paragraph.trim()
+          ? <p key={index} style={{ whiteSpace: "pre-wrap" }}>{paragraph.trim()}</p>
+          : null
+      ))}
+    </div>
   );
-  return segments.map((seg, sIdx) => {
-    if (seg.startsWith("[") && seg.includes("](") && seg.endsWith(")")) {
-      const match = seg.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (match) {
-        return (
-          <a
-            key={sIdx}
-            href={match[2]}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#58a6ff", textDecoration: "underline" }}
-          >
-            {match[1]}
-          </a>
-        );
-      }
-    }
-    if (seg.startsWith("`") && seg.endsWith("`")) {
-      return <code key={sIdx}>{seg.slice(1, -1)}</code>;
-    }
-    if (seg.startsWith("**") && seg.endsWith("**")) {
-      return <strong key={sIdx}>{seg.slice(2, -2)}</strong>;
-    }
-    if (seg.startsWith("*") && seg.endsWith("*")) {
-      return <em key={sIdx}>{seg.slice(1, -1)}</em>;
-    }
-    return seg;
-  });
 }
 
 function Dashboard() {
