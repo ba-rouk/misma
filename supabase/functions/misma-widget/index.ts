@@ -810,7 +810,7 @@ function websiteScanSignal(parent: AbortSignal | undefined, timeoutMs: number): 
   const timeout = AbortSignal.timeout(timeoutMs);
   return parent ? AbortSignal.any([parent, timeout]) : timeout;
 }
-async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3, skipUrls: Set<string> = new Set()): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   // Restrict discovery and redirects to the same registrable domain (eTLD+1).
@@ -934,6 +934,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
     if (!parsed || !sameRegistrableDomain(parsed) || seen.has(parsed.href)) continue;
+    if (skipUrls.has(parsed.href)) continue;
     if (!(await allowedByRobots(parsed))) { if (onSkip) await onSkip(next, "Blocked by robots.txt"); continue; }
     if (!(await isPublicHostname(parsed.hostname))) { if (onSkip) await onSkip(next, "Hostname did not resolve to public IP addresses"); continue; }
     seen.add(parsed.href);
@@ -1260,12 +1261,23 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
   try {
     const previousResult = await db.from("website_scan_pages")
       .select("canonical_url,title,content_text,etag,last_modified,content_type,content_hash")
-      .eq("website_id", website.id).limit(maxPages);
+      .eq("website_id", website.id).limit(Math.max(maxPages, 100));
     const previousPages = new Map<string, AnyRecord>((previousResult.data || []).map((page: AnyRecord) => [String(page.canonical_url), page]));
     const jobResult = jobId
       ? await db.from("scan_jobs").select("discovered_urls").eq("id", jobId).eq("workspace_id", website.workspace_id).maybeSingle()
       : { data: null, error: null };
     const seedUrls = Array.isArray(jobResult.data?.discovered_urls) ? jobResult.data.discovered_urls.filter((url: unknown): url is string => typeof url === "string").slice(0, 100) : [];
+    const currentJobPages = jobId
+      ? await db.from("website_scan_pages").select("canonical_url,title,content_text,etag,last_modified,content_type")
+        .eq("website_id", website.id).eq("job_id", jobId).order("scanned_at", { ascending: true }).limit(maxPages)
+      : { data: [] as AnyRecord[], error: null };
+    const processedPages = (currentJobPages.data || []).map((row: AnyRecord) => ({
+      url: String(row.canonical_url), title: safeString(row.title, 240), text: safeString(row.content_text, 18000),
+      platform: "Previously scanned", themeSuggestions: extractThemeSuggestions(safeString(row.content_text, 18000)),
+      etag: row.etag || null, lastModified: row.last_modified || null, contentType: safeString(row.content_type, 100) || "text/html",
+    }));
+    const processedUrls = new Set<string>(processedPages.map((page: AnyRecord) => page.url));
+    const remainingPages = Math.max(0, maxPages - processedPages.length);
     const discovered = new Set<string>([website.website_url, ...seedUrls]);
     const persistDiscovered = async (url: string) => {
       if (!jobId || discovered.has(url)) return;
@@ -1292,7 +1304,14 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
         pages_skipped: pagesSkipped, errors: scanErrors, updated_at: new Date().toISOString(),
       }).eq("id", jobId);
     };
-    const pages = await crawlWebsite(website.website_url, maxPages, scanSignal, onProgress, previousPages, seedUrls, persistDiscovered, persistScannedPage, recordSkip, crawlDepth);
+    const crawledPages = await crawlWebsite(
+      website.website_url, remainingPages, scanSignal,
+      async (scanned, discoveredCount) => {
+        if (onProgress) await onProgress(processedPages.length + scanned, discoveredCount);
+      },
+      previousPages, seedUrls, persistDiscovered, persistScannedPage, recordSkip, crawlDepth, processedUrls,
+    );
+    const pages = [...processedPages, ...crawledPages];
     if (!pages.length) throw new Error("No readable public HTML pages were found.");
     const sourceText = pages
       .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
