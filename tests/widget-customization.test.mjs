@@ -85,3 +85,24 @@ test("dashboard typography is tokenized, self-hosted, and isolated from the live
   assert.match(runtime, /--misma-chat-bg/);
   assert.doesNotMatch(runtime, /--font-serif|--text-title-color/);
 });
+
+test("widget customizer matches website dashboard canvas and numbers sections in order", async () => {
+  const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
+  const css = await read("../src/components/website-widget-customizer.css");
+  const expected = [
+    'title:"Header"',
+    'title:"Chat background"',
+    '<h2>Message bubbles</h2>',
+    '<h2>Buttons</h2>',
+    '<h2>Typography</h2>',
+    '<h2>Footer</h2>',
+    '<h2>Accessibility and website colours</h2>',
+  ];
+  const positions = expected.map((label) => page.indexOf(label));
+  assert.ok(positions.every((position) => position >= 0));
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+  assert.ok(page.indexOf('className="misma-theme-save"') < page.indexOf('className="misma-theme-close"'));
+  assert.match(css, /background: linear-gradient\(135deg, #f4f8fd, #eef4fb\)/);
+  assert.match(css, /\.misma-theme-section \{[\s\S]*?border: 0;[\s\S]*?box-shadow: none;/);
+  assert.match(css, /\.misma-theme-preview-sticky,[\s\S]*?border: 0;/);
+});
