@@ -6126,6 +6126,7 @@ function Dashboard() {
                   </p>
                 )}
                 <small className="aichat-website-meta">Last activity: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}{site.detected_platform ? " · Platform: " + site.detected_platform : ""}</small>
+                <small className="aichat-website-meta">Website scans read publicly rendered HTTP responses, not PHP, Node.js, Go, Python, Ruby, Java, .NET or other server-side source code. Misma discovers HTML, sitemap, feed, structured data and document content; JavaScript-heavy rendering can use the optional headless-browser provider when configured.</small>
                 <small className="aichat-website-meta">Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
                 </div>
               </article>)}
