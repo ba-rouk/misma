@@ -441,13 +441,13 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
   let result: any = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,theme,theme_updated_at,core_room_id")
+    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,theme,theme_updated_at,core_room_id,updated_at")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
   if (!result.error && !result.data?.length) {
     // Keep older installs working when they still embed the original public_key.
     result = await db.from("website_connections")
-      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address")
+      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,updated_at")
       .eq("public_key", key)
       .is("widget_deleted_at", null);
   }
@@ -1770,7 +1770,7 @@ Deno.serve(async (request: Request) => {
         await db.from("website_connections").update({
           status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         }).eq("id", site.id);
-        const themeEtag = '"misma-theme-' + safeString(site.theme_updated_at, 80) + '"';
+        const themeEtag = '"misma-widget-config-' + safeString(site.theme_updated_at, 80) + '-' + safeString(site.updated_at, 80) + '"';
         const cacheHeaders = { ...cors, "Cache-Control": "public, max-age=60, stale-while-revalidate=30", "ETag": themeEtag };
         if (request.headers.get("if-none-match") === themeEtag) return new Response(null, { status: 304, headers: cacheHeaders });
         return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) }, cacheHeaders);
