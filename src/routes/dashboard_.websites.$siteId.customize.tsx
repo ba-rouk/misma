@@ -183,6 +183,9 @@ function WebsiteWidgetCustomizer() {
     <header className="misma-theme-toolbar">
       <button type="button" className="misma-theme-back" onClick={back}>← <span>Websites</span></button>
       <div className="misma-theme-title"><span className="misma-theme-eyebrow">WIDGET CUSTOMIZATION</span><h1>Customize widget</h1><p>{websiteName}{domain?" · "+domain:""}</p></div>
+      <button type="button" className="misma-theme-close" onClick={back} aria-label="Close customization" title="Close customization">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
       <button type="button" className="misma-theme-save" onClick={()=>void save()} disabled={!dirty||saving||!token}>{saving?"Saving…":"Save changes"}</button>
     </header>
     {message&&<div className={"misma-theme-notice is-"+message.kind} role="status">{message.text}</div>}
