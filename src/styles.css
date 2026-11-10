@@ -1,23 +1,57 @@
 :root {
-  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --text-title: 18px;
+  --text-heading: 20px;
+  --text-item: 16px;
+  --text-body: 14px;
+  --text-small: 14px;
+  --text-section: 14px;
+  --text-button: 15px;
+  --text-input: 16px;
+  --text-badge: 12px;
   --text-xs: 12px;
-  --text-sm: 13px;
+  --text-sm: 14px;
   --text-base: 16px;
   --text-md: 16px;
   --text-lg: 16px;
   --text-xl: 18px;
-  --text-2xl: 22px;
+  --text-2xl: 20px;
   --text-3xl: 26px;
   --text-4xl: 30px;
+  --lh-tight: 1.25;
+  --lh-heading: 1.3;
+  --lh-body: 1.45;
   --leading-tight: 1.25;
-  --leading-normal: 1.65;
-  --leading-relaxed: 1.65;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.45;
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
   --weight-bold: 700;
+  --text-title-color: #f5f4ef;
+  --text-primary-color: #ececea;
+  --text-muted-color: #9c9a95;
+  --text-section-color: #a8a6a0;
+  --text-disabled-color: #7f7e7a;
+  --text-link-color: #d97757;
+  --text-title-color-light: #20211f;
+  --text-primary-color-light: #282925;
+  --text-muted-color-light: #62645e;
+  --text-section-color-light: #555750;
+  --text-disabled-color-light: #777871;
+  --text-link-color-light: #b94f32;
+}
+:root[data-theme="light"],
+:root[data-color-scheme="light"],
+[data-theme="light"] {
+  --text-title-color: var(--text-title-color-light);
+  --text-primary-color: var(--text-primary-color-light);
+  --text-muted-color: var(--text-muted-color-light);
+  --text-section-color: var(--text-section-color-light);
+  --text-disabled-color: var(--text-disabled-color-light);
+  --text-link-color: var(--text-link-color-light);
 }
 
 * {
@@ -35,7 +69,7 @@ html {
 body {
   font-family: var(--font-sans);
   font-size: var(--text-base);
-  line-height: 1.65;
+  line-height: var(--lh-body);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -8410,3 +8444,87 @@ html, body, #app-root {
 .mw-match-toggle{display:flex;align-items:center;gap:9px;margin-bottom:12px;font-size:13px}.mw-section>small{display:block;color:#9aa6b5;font-size:11px;line-height:1.5}
 .mw-actions{display:flex;flex-direction:column;gap:10px}.mw-warning,.mw-error,.mw-success{grid-column:1/-1;margin:0;padding:12px 14px;border-radius:10px;font-size:13px}.mw-warning{background:#3a2d12;color:#fcd34d}.mw-error{background:#3a171b;color:#fda4af}.mw-success{background:#102f20;color:#86efac}.mw-save-bottom{grid-column:1/-1;width:100%;min-height:46px}
 @media(max-width:720px){.mw-custom-page{padding:12px 10px 28px}.mw-custom-heading{gap:8px}.mw-custom-heading h1{font-size:18px}.mw-custom-heading>button:first-child{padding:9px}.mw-custom-heading .mw-save{padding:10px}.mw-custom-controls{grid-template-columns:1fr;gap:10px}.mw-preview-sticky{padding:9px}.mw-preview-messages{min-height:128px}.mw-section{padding:14px}}
+
+
+/* MISMA DASHBOARD TYPOGRAPHY — all dashboard tabs share the .aichat shell.
+   The public site and independently themed embedded widget are intentionally excluded. */
+.aichat {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  color: var(--text-primary-color);
+}
+.aichat :where(h1, h2) {
+  font-family: var(--font-serif) !important;
+  font-size: var(--text-title) !important;
+  font-weight: var(--weight-regular) !important;
+  line-height: var(--lh-heading) !important;
+  letter-spacing: -0.01em !important;
+  color: var(--text-title-color) !important;
+}
+.aichat :where(h3, h4, h5, h6) {
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-item) !important;
+  font-weight: var(--weight-regular) !important;
+  line-height: var(--lh-body) !important;
+  letter-spacing: 0 !important;
+  color: var(--text-primary-color) !important;
+}
+.aichat :where(p, small, .aichat-description, .aichat-helper-text, .aichat-empty-state) {
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-small) !important;
+  font-weight: var(--weight-regular) !important;
+  line-height: var(--lh-body) !important;
+  color: var(--text-muted-color) !important;
+}
+.aichat :where(label, summary, dt, dd, li) {
+  font-family: var(--font-sans);
+  line-height: var(--lh-body);
+}
+.aichat :where(.aichat-settings-nav-button, [class*="section-label"], [class*="eyebrow"], [class*="nav-label"]) {
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-section) !important;
+  font-weight: var(--weight-regular) !important;
+  line-height: var(--lh-body) !important;
+  letter-spacing: 0 !important;
+  color: var(--text-section-color) !important;
+}
+.aichat :where([class*="row-title"], [class*="item-title"], [class*="card-title"], .aichat-setting-copy strong, .aichat-social-channel-heading strong) {
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-item) !important;
+  font-weight: var(--weight-regular) !important;
+  line-height: var(--lh-body) !important;
+  letter-spacing: 0 !important;
+  color: var(--text-primary-color) !important;
+}
+.aichat :where(button, [role="button"]) {
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-button) !important;
+  font-weight: var(--weight-medium) !important;
+  line-height: var(--lh-body) !important;
+  letter-spacing: 0 !important;
+}
+.aichat :where(input, select, textarea) {
+  font-family: var(--font-sans) !important;
+  font-size: max(16px, var(--text-input)) !important;
+  font-weight: var(--weight-regular) !important;
+  line-height: var(--lh-body) !important;
+  letter-spacing: 0 !important;
+  color: var(--text-primary-color);
+}
+.aichat :where([class*="badge"], [class*="pill"], [class*="tag"]) {
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-badge) !important;
+  font-weight: var(--weight-medium) !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0 !important;
+}
+.aichat :where(:disabled, [aria-disabled="true"]) {
+  color: var(--text-disabled-color) !important;
+}
+.aichat :where(p, small, .aichat-description, .aichat-helper-text) a:not([role="button"]):not([class*="button"]):not([class*="btn"]) {
+  color: var(--text-link-color) !important;
+}
+.aichat :where(code, pre, kbd, samp, .aichat-code-block, .aichat-script-box, [class*="code-preview"], [class*="script-preview"]) {
+  font-family: var(--font-mono) !important;
+}
