@@ -78,6 +78,8 @@ test("dashboard typography is tokenized, self-hosted, and isolated from the live
   assert.match(customizer, /background:#07111d/);
   assert.ok(customizer.includes("font-family:var(--font-serif)"));
   assert.ok(page.includes("misma-widget-preview-close"));
+  assert.match(page, /aria-label="Close customization"/);
+  assert.match(page, /className="misma-theme-close" onClick={back}/);
   assert.ok(page.includes("Header icon buttons (including close)"));
   assert.ok(page.includes('label:"Chat background"'));
   assert.match(runtime, /--misma-chat-bg/);

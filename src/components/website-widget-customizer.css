@@ -44,3 +44,129 @@
 .misma-widget-preview-close svg{display:block;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 
 .misma-theme-picker{color:var(--text-muted-color)}
+
+
+/* Keep the customizer chrome on the dashboard type scale; the preview remains site-themed. */
+.misma-theme-toolbar {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+.misma-theme-close {
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+  color: var(--text-primary-color);
+  cursor: pointer;
+}
+.misma-theme-close svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.misma-theme-close:hover {
+  color: var(--text-title-color);
+}
+.misma-theme-page,
+.misma-theme-page :where(button, input, select, textarea) {
+  font-family: var(--font-sans);
+}
+.misma-theme-page {
+  font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--lh-body);
+  letter-spacing: var(--letter-spacing-body);
+}
+.misma-theme-title h1,
+.misma-theme-section-heading h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  font-weight: var(--weight-regular);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--letter-spacing-title);
+  color: var(--text-title-color);
+}
+.misma-theme-section-heading p,
+.misma-theme-title p,
+.misma-theme-hint,
+.misma-theme-unsaved,
+.misma-theme-match-toggle small {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+  line-height: var(--lh-body);
+  color: var(--text-muted-color);
+}
+.misma-theme-color-label,
+.misma-theme-font-field > span,
+.misma-theme-match-toggle strong {
+  font-family: var(--font-sans);
+  font-size: var(--text-section);
+  font-weight: var(--weight-regular);
+  line-height: var(--lh-body);
+  color: var(--text-section-color);
+}
+.misma-theme-preview-heading strong {
+  font-family: var(--font-sans);
+  font-size: var(--text-item);
+  font-weight: var(--weight-regular);
+  line-height: var(--lh-body);
+  color: var(--text-title-color);
+}
+.misma-theme-back,
+.misma-theme-close,
+.misma-theme-save,
+.misma-theme-secondary,
+.misma-theme-reset,
+.misma-theme-error button {
+  font-family: var(--font-sans);
+  font-size: var(--text-button);
+  font-weight: var(--weight-medium);
+  line-height: var(--lh-body);
+  letter-spacing: var(--letter-spacing-body);
+}
+.misma-theme-font-field select,
+.misma-theme-hex {
+  font-size: max(16px, var(--text-input));
+  font-weight: var(--weight-regular);
+  line-height: var(--lh-body);
+}
+.misma-theme-hex,
+.misma-theme-picker {
+  font-family: var(--font-mono);
+}
+.misma-theme-section-heading > span,
+.misma-theme-eyebrow,
+.misma-theme-preview-live {
+  font-family: var(--font-sans);
+  font-size: var(--text-badge);
+  font-weight: var(--weight-medium);
+}
+.misma-theme-notice,
+.misma-theme-contrast-warning,
+.misma-theme-contrast-ok,
+.misma-theme-field-error {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  line-height: var(--lh-body);
+}
+@media (max-width: 640px) {
+  .misma-theme-toolbar {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .misma-theme-close {
+    width: 34px;
+    height: 34px;
+  }
+  .misma-theme-title p {
+    max-width: 27vw;
+  }
+}
