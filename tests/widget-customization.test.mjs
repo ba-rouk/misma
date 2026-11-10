@@ -17,6 +17,8 @@ test("website widget customizer matches production defaults and updates a real D
   assert.match(page, /misma-widget-preview-chat/);
   assert.match(page, /WCAG AA/);
   assert.match(page, /beforeunload/);
+  assert.match(page, /data-misma-customizer-font/);
+  assert.match(page, /display=swap/);
   assert.match(page, /saveWebsiteWidgetTheme/);
   assert.match(page, /getWebsiteWidgetTheme/);
   assert.match(css, /position:sticky/);
