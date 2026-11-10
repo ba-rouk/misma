@@ -224,3 +224,9 @@
     max-width: none;
   }
 }
+
+/* Accessibility status containers follow the same borderless section treatment. */
+.misma-theme-contrast-warning,
+.misma-theme-contrast-ok {
+  border: 0;
+}
