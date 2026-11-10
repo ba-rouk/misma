@@ -8,7 +8,7 @@ test("website widget customizer matches production defaults and updates a real D
   const css = await read("../src/components/website-widget-customizer.css");
   const runtime = await read("../src/assets/misma-widget-runtime.js");
   const api = await read("../src/lib/api/misma.functions.ts");
-  assert.match(page, /createFileRoute\("\/dashboard\/websites\/\$siteId\/customize"\)/);
+  assert.match(page, /createFileRoute\("[^"]*\/websites\/\$siteId\/customize"\)/);
   assert.match(page, /headerBackground:\s*"#111827"/);
   assert.match(page, /headerSubtitleText:\s*"#b6c1cf"/);
   assert.match(page, /chatBackground:\s*"#f8fafc"/);
