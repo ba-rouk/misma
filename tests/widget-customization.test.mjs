@@ -76,7 +76,7 @@ test("dashboard typography is tokenized, self-hosted, and isolated from the live
   assert.match(styles, /\\.aichat :where\\(code, pre/);
   assert.match(styles, /--text-muted-color-light/);
   assert.match(customizer, /background:#07111d/);
-  assert.match(customizer, /font-family:var\\(--font-serif\\)/);
+  assert.ok(customizer.includes("font-family:var(--font-serif)"));
   assert.ok(page.includes("misma-widget-preview-close"));
   assert.ok(page.includes("Header icon buttons (including close)"));
   assert.ok(page.includes('label:"Chat background"'));
