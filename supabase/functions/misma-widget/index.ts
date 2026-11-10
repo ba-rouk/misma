@@ -429,7 +429,7 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   try { origin = new URL(originHeader); } catch { throw new Error("The website origin is invalid."); }
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
-  let result = await db.from("website_connections")
+  let result: any = await db.from("website_connections")
     .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,theme,theme_updated_at,core_room_id")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
@@ -695,8 +695,8 @@ function detectWebsitePlatform(html: string, url: string, headers?: Headers): st
   const lower = html.toLowerCase();
   const powered = (headers?.get("x-powered-by") || "").toLowerCase();
   const server = (headers?.get("server") || "").toLowerCase();
-  if (/asp\\.net|\.net/i.test(powered)) return ".NET / ASP.NET";
-  if (/express|node\\.js/i.test(powered)) return "Node.js / Express";
+  if (/asp\.net|\.net/i.test(powered)) return ".NET / ASP.NET";
+  if (/express|node\.js/i.test(powered)) return "Node.js / Express";
   if (/php/i.test(powered) || server.includes("php")) return "PHP";
   if (/django|wsgi|gunicorn|werkzeug|flask/i.test(powered + " " + server)) return "Python";
   if (/rails|ruby|puma|passenger/i.test(powered + " " + server)) return "Ruby";
@@ -746,7 +746,7 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 40); pageNumber += 1) {
     const page = await document.getPage(pageNumber);
     const content = await page.getTextContent();
-    const text = content.items.map((item: { str?: string }) => typeof item.str === "string" ? item.str : "").join(" ");
+    const text = content.items.map((item) => "str" in item && typeof item.str === "string" ? item.str : "").join(" ");
     if (text.trim()) pages.push(text.trim());
   }
   return pages.join("\n\n").slice(0, 18000);
