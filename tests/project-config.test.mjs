@@ -920,7 +920,7 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
   const vite = await read("../vite.config.ts");
 
   assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
-  assert.ok(dashboard.includes("misma-widget.js?v=20261110-widget-theme-1"));
+  assert.ok(dashboard.includes("misma-widget.js?v=20261110-widget-theme-2"));
   assert.ok(dashboard.includes("data-site-key="));
   assert.ok(widgetRoute.includes('createFileRoute("/assets/misma-widget.js")'));
   assert.ok(widgetRoute.includes('import widgetRuntime from "../../assets/misma-widget-runtime.js?raw"'));
@@ -1041,8 +1041,8 @@ test("website Add channels saves Gmail and exposes a validated Gmail action in t
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   const widget = await read("../src/assets/misma-widget-runtime.js");
   assert.match(dashboard, /Gmail contact address/);
-  assert.match(dashboard, /gmailAddress: gmailAddress \\|\\| null/);
-  assert.match(api, /gmailAddress: z\\.string\\(\\)\\.email\\(\\)\\.max\\(254\\)\\.nullable\\(\\)/);
+  assert.match(dashboard, /gmailAddress: gmailAddress \|\| null/);
+  assert.match(api, /gmailAddress: z\.string\(\)\.email\(\)\.max\(254\)\.nullable\(\)/);
   assert.match(api, /gmail_address: gmailAddress/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS gmail_address text/);
   assert.match(migration, /website_connections_gmail_address_check/);
