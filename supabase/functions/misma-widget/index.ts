@@ -836,6 +836,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         });
         if (robots.ok) {
           const body = (await robots.text()).slice(0, 100000);
+          if (url.origin === first.origin) robotsText = body;
           let active = false;
           for (const line of body.split(/\r?\n/)) {
             const clean = line.split("#")[0].trim();
@@ -864,7 +865,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
     ].sort((a, b) => b.path.length - a.path.length);
     return matches.length === 0 || matches[0].allowed;
   };
-  const robotsText = "";
+  let robotsText = "";
   // Seed from robots-declared sitemaps, sitemap indexes, common feeds and the same-origin sitemap.
   const sitemapSeeds = [new URL("/sitemap.xml", first.origin).href, new URL("/sitemap_index.xml", first.origin).href, new URL("/sitemap-index.xml", first.origin).href];
   for (const line of robotsText.split(/\r?\n/)) {
@@ -958,7 +959,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         const location = response.headers.get("location");
         if (location) {
           const redirectUrl = new URL(location, parsed.href);
-          if (sameRegistrableDomain(redirectUrl) && isSafeWebsiteUrl(redirectUrl.href) && allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
+          if (sameRegistrableDomain(redirectUrl) && isSafeWebsiteUrl(redirectUrl.href) && await allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
         }
         continue;
       }
