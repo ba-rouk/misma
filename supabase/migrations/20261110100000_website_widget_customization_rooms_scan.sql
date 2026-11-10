@@ -153,7 +153,7 @@ with check (
   )
 );
 
--- Long-running scans are represented as resumable jobs and page queue rows.
+-- Long-running scans are represented as resumable jobs with discovered-URL and page checkpoints.
 create table if not exists public.scan_jobs (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,

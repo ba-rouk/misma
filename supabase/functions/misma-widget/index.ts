@@ -684,8 +684,17 @@ function extractEmbeddedData(html: string): string {
   }
   return parts.join("\n").slice(0, 24000);
 }
-function detectWebsitePlatform(html: string, url: string): string {
+function detectWebsitePlatform(html: string, url: string, headers?: Headers): string {
   const lower = html.toLowerCase();
+  const powered = (headers?.get("x-powered-by") || "").toLowerCase();
+  const server = (headers?.get("server") || "").toLowerCase();
+  if (/asp\\.net|\.net/i.test(powered)) return ".NET / ASP.NET";
+  if (/express|node\\.js/i.test(powered)) return "Node.js / Express";
+  if (/php/i.test(powered) || server.includes("php")) return "PHP";
+  if (/django|wsgi|gunicorn|werkzeug|flask/i.test(powered + " " + server)) return "Python";
+  if (/rails|ruby|puma|passenger/i.test(powered + " " + server)) return "Ruby";
+  if (/tomcat|jetty|servlet|spring/i.test(powered + " " + server)) return "Java";
+  if (/golang|go-http|fasthttp/i.test(powered + " " + server)) return "Go";
   if (lower.includes("wp-content") || lower.includes("wp-includes")) return "WordPress / PHP";
   if (lower.includes("cdn.shopify.com") || lower.includes("shopify-section")) return "Shopify";
   if (lower.includes("__next_data__") || lower.includes("/_next/")) return "Next.js";
@@ -770,6 +779,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   if (onDiscover) for (const seed of queue) await onDiscover(seed);
   const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }> = [];
   const robotsDisallow: string[] = [];
+  const robotsAllow: string[] = [];
   let robotsText = "";
   try {
     const robots = await fetch(new URL("/robots.txt", first.origin).href, {
@@ -791,7 +801,13 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       }
     }
   } catch { /* robots.txt unavailable: continue with conservative limits. */ }
-  const allowedByRobots = (url: URL) => !robotsDisallow.some((path) => url.pathname.startsWith(path));
+  const allowedByRobots = (url: URL) => {
+    const matches = [
+      ...robotsAllow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: true })),
+      ...robotsDisallow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: false })),
+    ].sort((a, b) => b.path.length - a.path.length);
+    return matches.length === 0 || matches[0].allowed;
+  };
   // Seed from robots-declared sitemaps, sitemap indexes, common feeds and the same-origin sitemap.
   const sitemapSeeds = [new URL("/sitemap.xml", first.origin).href, new URL("/sitemap_index.xml", first.origin).href, new URL("/sitemap-index.xml", first.origin).href];
   for (const line of robotsText.split(/\r?\n/)) {
@@ -906,7 +922,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       let text = isPdf ? await extractPdfText(bytes) : /text\\/html|application\\/xhtml\\+xml/.test(contentType)
         ? (cleanHtml(raw) + "\\n" + extractEmbeddedData(raw)).slice(0, 18000)
         : raw.replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000);
-      const platform = isPdf ? "PDF document" : detectWebsitePlatform(raw, parsed.href);
+      const platform = isPdf ? "PDF document" : detectWebsitePlatform(raw, parsed.href, response.headers);
       const themeSuggestions = isPdf ? {} : extractThemeSuggestions(raw);
       if (text.length < 120 && /text\/html|application\/xhtml\+xml/.test(contentType) && getEnv("BROWSERLESS_API_KEY")) {
         try {
