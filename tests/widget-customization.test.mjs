@@ -105,4 +105,5 @@ test("widget customizer matches website dashboard canvas and numbers sections in
   assert.match(css, /background: linear-gradient\(135deg, #f4f8fd, #eef4fb\)/);
   assert.match(css, /\.misma-theme-section \{[\s\S]*?border: 0;[\s\S]*?box-shadow: none;/);
   assert.match(css, /\.misma-theme-preview-sticky,[\s\S]*?border: 0;/);
+  assert.match(css, /\.misma-theme-contrast-warning,[\s\S]*?border: 0;/);
 });
