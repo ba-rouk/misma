@@ -125,6 +125,21 @@ function WebsiteWidgetCustomizer() {
     void load();return()=>{active=false;};
   },[siteId]);
   useEffect(()=>{
+    const googleFamilies: Partial<Record<FontName,string>> = {
+      Inter:"Inter", Roboto:"Roboto", Poppins:"Poppins", "Open Sans":"Open+Sans",
+      Lato:"Lato", Montserrat:"Montserrat", Nunito:"Nunito",
+    };
+    const family=googleFamilies[theme.fontFamily];
+    if(!family || document.querySelector('link[data-misma-customizer-font="'+family+'"]'))return;
+    try {
+      const link=document.createElement("link");
+      link.rel="stylesheet";
+      link.href="https://fonts.googleapis.com/css2?family="+family+"&display=swap";
+      link.dataset.mismaCustomizerFont=family;
+      document.head.appendChild(link);
+    } catch { /* The system font stack remains the CSP-safe fallback. */ }
+  },[theme.fontFamily]);
+  useEffect(()=>{
     if(!dirty)return;
     const protect=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
     window.addEventListener("beforeunload",protect);return()=>window.removeEventListener("beforeunload",protect);
