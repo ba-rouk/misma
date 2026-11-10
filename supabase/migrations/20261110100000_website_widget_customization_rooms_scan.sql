@@ -133,8 +133,22 @@ as $$
       )
       and e.value !~ '^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$'
     )
-    and coalesce(p_theme->>'matchChatBackground','true') in ('true','false');
+    and jsonb_typeof(p_theme->'schemaVersion') = 'number'
+    and jsonb_typeof(p_theme->'fontFamily') = 'string'
+    and jsonb_typeof(p_theme->'matchChatBackground') = 'boolean'
+    and (select count(*) = 14 from jsonb_object_keys(p_theme))
+    and (select count(*) = 11 from jsonb_each(p_theme) e where e.key in (
+      'headerBackground','headerText','chatBackground','textColor',
+      'botBubbleBackground','botBubbleText','userBubbleBackground','userBubbleText',
+      'sendButtonBackground','headerButtonBackground','footerBackground'
+    ) and jsonb_typeof(e.value) = 'string' and (e.value #>> '{}') ~ '^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$');
 $$;
+
+alter table public.website_connections
+  drop constraint if exists website_connections_theme_valid;
+alter table public.website_connections
+  add constraint website_connections_theme_valid
+  check (theme is null or public.misma_valid_widget_theme(theme));
 
 alter table public.website_connections enable row level security;
 drop policy if exists "website theme owner update" on public.website_connections;

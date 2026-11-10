@@ -100,7 +100,7 @@ function applyWidgetTheme(theme) {
   };
   Object.keys(colors).forEach(function(key){
     var value=key==="footerBackground"&&theme.matchChatBackground===true?theme.chatBackground:theme[key];
-    if(typeof value==="string" && /^#[0-9a-fA-F]{6}$/.test(value)) host.style.setProperty(colors[key],value);
+    if(typeof value==="string" && /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/.test(value)) host.style.setProperty(colors[key],value);
   });
   var fontStacks={
     "system-ui":"system-ui,-apple-system,BlinkMacSystemFont,sans-serif",

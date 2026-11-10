@@ -661,9 +661,16 @@ async function isPublicHostname(hostname: string): Promise<boolean> {
 }
 
 function decodeWebsiteBytes(bytes: Uint8Array, contentType: string): string {
-  const match = contentType.match(/charset\s*=\s*["']?([^;"'\s]+)/i);
-  const requested = (match?.[1] || "utf-8").toLowerCase();
-  const supported = new Set(["utf-8","iso-8859-1","windows-1252","shift_jis","gbk","gb18030","big5","euc-kr"]);
+  const declared = contentType.match(/charset\s*=\s*["']?([^;"'\s]+)/i);
+  const prefix = !declared
+    ? new TextDecoder("windows-1252").decode(bytes.subarray(0, Math.min(bytes.length, 4096)))
+    : "";
+  const meta = prefix.match(/<meta\b[^>]*charset\s*=\s*["']?\s*([^;"'\s/>]+)/i)
+    || prefix.match(/<meta\b[^>]*content=["'][^"']*charset=([^;"'\s]+)/i);
+  const bomLabel = bytes[0] === 0xff && bytes[1] === 0xfe ? "utf-16le"
+    : bytes[0] === 0xfe && bytes[1] === 0xff ? "utf-16be" : "";
+  const requested = (declared?.[1] || meta?.[1] || bomLabel || "utf-8").toLowerCase();
+  const supported = new Set(["utf-8","utf-16le","utf-16be","iso-8859-1","windows-1252","shift_jis","gbk","gb18030","big5","euc-kr"]);
   const label = supported.has(requested) ? requested : "utf-8";
   try { return new TextDecoder(label).decode(bytes); }
   catch { return new TextDecoder("utf-8").decode(bytes); }
@@ -742,7 +749,7 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
     const text = content.items.map((item: { str?: string }) => typeof item.str === "string" ? item.str : "").join(" ");
     if (text.trim()) pages.push(text.trim());
   }
-  return pages.join("\\n\\n").slice(0, 18000);
+  return pages.join("\n\n").slice(0, 18000);
 }
 async function fetchWebsiteWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
   let lastError: unknown = null;
@@ -824,8 +831,8 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
     });
     if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
       const sitemap = (await sitemapResponse.text()).slice(0, 1000000);
-      let locations = Array.from(sitemap.matchAll(/<loc>\\s*([^<]+)\\s*<\\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim());
-      if (/<sitemapindex\\b/i.test(sitemap)) {
+      let locations = Array.from(sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim());
+      if (/<sitemapindex\b/i.test(sitemap)) {
         for (const nestedHref of locations.slice(0, 8)) {
           try {
             const nestedUrl = new URL(nestedHref, first.origin);
@@ -836,7 +843,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
             });
             if (nestedResponse.ok) {
               const nestedXml = (await nestedResponse.text()).slice(0, 500000);
-              locations.push(...Array.from(nestedXml.matchAll(/<loc>\\s*([^<]+)\\s*<\\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim()));
+              locations.push(...Array.from(nestedXml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim()));
             }
           } catch { /* Skip an unavailable nested sitemap. */ }
         }
@@ -864,7 +871,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       });
       if (!feed.ok) continue;
       const xml = (await feed.text()).slice(0, 300000);
-      const links = Array.from(xml.matchAll(/<(?:link)\\b[^>]*>([^<]+)<\\/link>|<link\\b[^>]*href=["']([^"']+)["']/gi))
+      const links = Array.from(xml.matchAll(/<(?:link)\b[^>]*>([^<]+)<\/link>|<link\b[^>]*href=["']([^"']+)["']/gi))
         .map((match) => match[1] || match[2]).filter(Boolean);
       for (const link of links) {
         try { const linked = new URL(link, first.origin); if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && queue.length < 100 && !queue.includes(linked.href)) { queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href); } } catch {}
@@ -917,11 +924,11 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       if (bytes.byteLength > 1500000) { if (onSkip) await onSkip(parsed.href, "Page exceeds the 1.5 MB scan limit"); continue; }
       const isPdf = contentType.includes("application/pdf") || parsed.pathname.toLowerCase().endsWith(".pdf");
       const raw = isPdf ? "" : decodeWebsiteBytes(bytes, contentType);
-      const titleMatch = raw.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
+      const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
       const title = titleMatch ? cleanHtml(titleMatch[1]).slice(0, 240) : (decodeURIComponent(parsed.pathname.split("/").pop() || parsed.pathname).slice(0, 240));
-      let text = isPdf ? await extractPdfText(bytes) : /text\\/html|application\\/xhtml\\+xml/.test(contentType)
-        ? (cleanHtml(raw) + "\\n" + extractEmbeddedData(raw)).slice(0, 18000)
-        : raw.replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000);
+      let text = isPdf ? await extractPdfText(bytes) : /text\/html|application\/xhtml\+xml/.test(contentType)
+        ? (cleanHtml(raw) + "\n" + extractEmbeddedData(raw)).slice(0, 18000)
+        : raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000);
       const platform = isPdf ? "PDF document" : detectWebsitePlatform(raw, parsed.href, response.headers);
       const themeSuggestions = isPdf ? {} : extractThemeSuggestions(raw);
       if (text.length < 120 && /text\/html|application\/xhtml\+xml/.test(contentType) && getEnv("BROWSERLESS_API_KEY")) {

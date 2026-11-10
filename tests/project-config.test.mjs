@@ -1436,6 +1436,9 @@ test("website scans are safe, resumable and report rendered-content extraction",
   assert.match(widget, /isPublicHostname/);
   assert.match(widget, /retry-after/i);
   assert.match(widget, /robots\.txt/);
+  assert.ok(widget.includes("/<loc>\\s*([^<]+)\\s*<\\/loc>/gi"));
+  assert.ok(widget.includes("/text\\/html|application\\/xhtml\\+xml/"));
+  assert.ok(migration.includes("website_connections_theme_valid"));
   assert.match(widget, /application\/pdf/);
   assert.match(widget, /extractPdfText/);
   assert.match(widget, /BROWSERLESS_API_KEY/);
