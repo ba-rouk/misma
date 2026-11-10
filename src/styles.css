@@ -8605,3 +8605,24 @@ html, body, #app-root {
 .aichat-message-row.is-ai .aichat-markdown li {
   color: #ffffff !important;
 }
+
+
+/* Channel edit and remove actions use the same charcoal surface as Scan website. */
+.aichat-websites-tab .aichat-social-remove,
+.aichat-websites-tab .aichat-social-save {
+  background: #21262d !important;
+  color: #f0f3f8 !important;
+  border: 1px solid #303743 !important;
+  box-shadow: none !important;
+}
+.aichat-websites-tab .aichat-social-remove:hover,
+.aichat-websites-tab .aichat-social-save:hover {
+  background: #303743 !important;
+  color: #ffffff !important;
+  border-color: #465263 !important;
+}
+.aichat-websites-tab .aichat-social-remove:disabled,
+.aichat-websites-tab .aichat-social-save:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
