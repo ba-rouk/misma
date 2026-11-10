@@ -132,3 +132,13 @@ test("customizer preview stays sticky and color controls offer a wheel and more 
   assert.match(css, /\.misma-theme-preview-sticky\s*\{[\s\S]*?position: sticky;[\s\S]*?top: 68px;/);
   assert.match(css, /\.misma-theme-color-wheel\s*\{[\s\S]*?conic-gradient/);
 });
+
+
+test("saved-channel remove and save controls use the same charcoal surface as Scan website", async () => {
+  const styles = await read("../src/styles.css");
+  assert.match(
+    styles,
+    /\.aichat-websites-tab \.aichat-social-remove,[\s\S]*?\.aichat-websites-tab \.aichat-social-save \{[\s\S]*?background: #21262d !important;[\s\S]*?border: 1px solid #303743 !important/,
+  );
+  assert.match(styles, /\.aichat-websites-tab \.aichat-social-remove:hover,[\s\S]*?\.aichat-websites-tab \.aichat-social-save:hover[\s\S]*?background: #303743 !important/);
+});
