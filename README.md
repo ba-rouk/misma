@@ -139,7 +139,7 @@ The widget becomes verified when a page loads the script from the registered hos
 
 Each Misma workspace is the account owner's house. Every connected website receives its own Core.01 website room. Knowledge entered manually or imported from a file can be assigned to a specific connected website; unassigned knowledge remains workspace-wide. Website widget conversations are recorded as observed Core.01 experiences in that website's room.
 
-The website dashboard includes **Customize widget**. Themes are saved in `website_connections.theme` and served by the `misma-widget` configuration action. The widget applies validated theme values as Shadow DOM CSS custom properties and checks the theme with an ETag. Existing websites without a saved theme continue using the original widget CSS. When changing the widget runtime in future releases, bump the `?v=` value used in the website script; the current version is `20261110-widget-theme-1`.
+The website dashboard includes **Customize widget**. Themes are saved in `website_connections.theme` and served by the `misma-widget` configuration action. The widget applies validated theme values as Shadow DOM CSS custom properties and checks the theme with an ETag. Existing websites without a saved theme continue using the original widget CSS. When changing the widget runtime in future releases, bump the `?v=` value used in the website script; the current version is `20261110-widget-theme-2`.
 
 Apply these additive migrations in timestamp order:
 
