@@ -782,10 +782,19 @@ async function readWebsiteResponseBytes(response: Response, maximumBytes = 1_500
   }
   return result;
 }
+const websiteHostLastRequestAt = new Map<string, number>();
+async function paceWebsiteHost(url: string): Promise<void> {
+  const hostname = new URL(url).hostname.toLowerCase();
+  const last = websiteHostLastRequestAt.get(hostname) || 0;
+  const delay = 650 - (Date.now() - last);
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+  websiteHostLastRequestAt.set(hostname, Date.now());
+}
 async function fetchWebsiteWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
   let lastError: unknown = null;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
+      await paceWebsiteHost(url);
       const response = await fetch(url, init);
       if (![429,500,502,503,504].includes(response.status) || attempt === retries) return response;
       const retryAfter = response.headers.get("retry-after") || "";
@@ -832,7 +841,9 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
     const rules = { allow: [] as string[], disallow: [] as string[] };
     try {
       if (await isPublicHostname(url.hostname)) {
-        const robots = await fetch(new URL("/robots.txt", url.origin).href, {
+        const robotsUrl = new URL("/robots.txt", url.origin).href;
+        await paceWebsiteHost(robotsUrl);
+        const robots = await fetch(robotsUrl, {
           redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
           signal: websiteScanSignal(scanSignal, 5000),
         });
@@ -890,7 +901,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       signal: websiteScanSignal(scanSignal, 7000),
     });
     if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
-      const sitemap = (await sitemapResponse.text()).slice(0, 1000000);
+      const sitemap = new TextDecoder().decode(await readWebsiteResponseBytes(sitemapResponse, 1_000_000));
       let locations = Array.from(sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim());
       if (/<sitemapindex\b/i.test(sitemap)) {
         for (const nestedHref of locations.slice(0, 8)) {
@@ -902,7 +913,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
               signal: websiteScanSignal(scanSignal, 7000),
             });
             if (nestedResponse.ok) {
-              const nestedXml = (await nestedResponse.text()).slice(0, 500000);
+              const nestedXml = new TextDecoder().decode(await readWebsiteResponseBytes(nestedResponse, 500_000));
               locations.push(...Array.from(nestedXml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim()));
             }
           } catch { /* Skip an unavailable nested sitemap. */ }
@@ -925,12 +936,13 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   for (const feedPath of ["/feed","/feed.xml","/rss.xml","/atom.xml"]) {
     try {
       const feedUrl = new URL(feedPath, first.origin);
+      if (!(await isPublicHostname(feedUrl.hostname)) || !(await allowedByRobots(feedUrl))) continue;
       const feed = await fetchWebsiteWithRetry(feedUrl.href, {
         redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
         signal: websiteScanSignal(scanSignal, 5000),
       });
       if (!feed.ok) continue;
-      const xml = (await feed.text()).slice(0, 300000);
+      const xml = new TextDecoder().decode(await readWebsiteResponseBytes(feed, 300_000));
       const links = Array.from(xml.matchAll(/<(?:link)\b[^>]*>([^<]+)<\/link>|<link\b[^>]*href=["']([^"']+)["']/gi))
         .map((match) => match[1] || match[2]).filter(Boolean);
       for (const link of links) {
