@@ -1047,6 +1047,9 @@ test("website Add channels saves Gmail and exposes a validated Gmail action in t
   assert.match(migration, /ADD COLUMN IF NOT EXISTS gmail_address text/);
   assert.match(migration, /website_connections_gmail_address_check/);
   assert.match(edge, /gmail_url: gmailUrl/);
+  const configBlock = edge.slice(edge.indexOf('if (input.action === "widget-config")'), edge.indexOf('if (input.action === "close")'));
+  assert.match(configBlock, /misma-widget-config-/);
+  assert.doesNotMatch(configBlock, /updated_at: new Date\(\)\.toISOString\(\)/);
   assert.match(widget, /class='social-link gmail-link'/);
 });
 
