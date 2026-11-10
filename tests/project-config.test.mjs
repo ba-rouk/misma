@@ -878,7 +878,7 @@ test("website widget speech talk provides the dashboard voice controls and spoke
   assert.match(widget, /class='voice-control voice-stop/);
   assert.match(widget, /class='voice-control voice-end/);
   assert.match(widget, /voice:speakReply===true/);
-  assert.match(edge, /async function answerCustomer\(db: Db, workspaceId: string, message: string, voice = false\)/);
+  assert.match(edge, /async function answerCustomer\(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId\?: string, roomId\?: number\)/);
   assert.match(edge, /input\.voice === true/);
   assert.match(edge, /VOICE CONVERSATION/);
 });
@@ -920,7 +920,7 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
   const vite = await read("../vite.config.ts");
 
   assert.ok(dashboard.includes("https://misma.onrender.com/assets/misma-widget.js"));
-  assert.ok(dashboard.includes("misma-widget.js?v=20261107-widget-channels-1"));
+  assert.ok(dashboard.includes("misma-widget.js?v=20261110-widget-theme-1"));
   assert.ok(dashboard.includes("data-site-key="));
   assert.ok(widgetRoute.includes('createFileRoute("/assets/misma-widget.js")'));
   assert.ok(widgetRoute.includes('import widgetRuntime from "../../assets/misma-widget-runtime.js?raw"'));
@@ -1434,7 +1434,7 @@ test("website scans are safe, resumable and report rendered-content extraction",
   assert.match(scanMigration, /detected_platform/);
   assert.match(widget, /MismaBot/);
   assert.match(widget, /isPublicHostname/);
-  assert.match(widget, /Retry-After/);
+  assert.match(widget, /retry-after/i);
   assert.match(widget, /robots\.txt/);
   assert.match(widget, /application\/pdf/);
   assert.match(widget, /extractPdfText/);
