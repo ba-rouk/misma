@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4.4.3";
+import { getDomain } from "npm:tldts@6.1.86";
 import webpush from "web-push";
 
 const cors = {
@@ -812,47 +813,58 @@ function websiteScanSignal(parent: AbortSignal | undefined, timeoutMs: number): 
 async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
-  // Keep discovery same-origin rather than scanning sibling subdomains. This is intentionally
-  // stricter than registrable-domain matching and avoids crossing tenant-controlled subdomains.
+  // Restrict discovery and redirects to the same registrable domain (eTLD+1).
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
   const queue = Array.from(new Set([first.href, ...seedUrls])).slice(0, 100);
   const depthByUrl = new Map<string, number>(queue.map((url) => [url, url === first.href ? 0 : 1]));
   const seen = new Set<string>();
   if (onDiscover) for (const seed of queue) await onDiscover(seed);
   const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }> = [];
-  const robotsDisallow: string[] = [];
-  const robotsAllow: string[] = [];
-  let robotsText = "";
-  try {
-    const robots = await fetch(new URL("/robots.txt", first.origin).href, {
-      redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
-      signal: websiteScanSignal(scanSignal, 5000),
-    });
-    if (robots.ok) {
-      const body = (await robots.text()).slice(0, 100000);
-      robotsText = body;
-      let active = false;
-      for (const line of body.split(/\r?\n/)) {
-        const clean = line.split("#")[0].trim();
-        if (/^user-agent\s*:\s*\*/i.test(clean) || /^user-agent\s*:\s*MismaBot/i.test(clean)) active = true;
-        else if (/^user-agent\s*:/i.test(clean)) active = false;
-        else if (active && /^allow\s*:/i.test(clean)) {
-          const value = clean.split(":").slice(1).join(":").trim();
-          if (value) robotsAllow.push(value);
-        } else if (active && /^disallow\s*:/i.test(clean)) {
-          const value = clean.split(":").slice(1).join(":").trim();
-          if (value) robotsDisallow.push(value);
+  const registrableDomain = getDomain(first.hostname);
+  if (!registrableDomain) throw new Error("The website host does not have a valid registrable domain.");
+  const sameRegistrableDomain = (url: URL) => getDomain(url.hostname) === registrableDomain;
+  const robotsByOrigin = new Map<string, { allow: string[]; disallow: string[] }>();
+  const getRobotsRules = async (url: URL) => {
+    const cached = robotsByOrigin.get(url.origin);
+    if (cached) return cached;
+    const rules = { allow: [] as string[], disallow: [] as string[] };
+    try {
+      if (await isPublicHostname(url.hostname)) {
+        const robots = await fetch(new URL("/robots.txt", url.origin).href, {
+          redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
+          signal: websiteScanSignal(scanSignal, 5000),
+        });
+        if (robots.ok) {
+          const body = (await robots.text()).slice(0, 100000);
+          let active = false;
+          for (const line of body.split(/\r?\n/)) {
+            const clean = line.split("#")[0].trim();
+            if (/^user-agent\s*:/i.test(clean)) {
+              const agent = clean.split(":").slice(1).join(":").trim();
+              active = agent === "*" || /^mismabot(?:\/|$)/i.test(agent);
+            } else if (active && /^allow\s*:/i.test(clean)) {
+              const value = clean.split(":").slice(1).join(":").trim();
+              if (value) rules.allow.push(value);
+            } else if (active && /^disallow\s*:/i.test(clean)) {
+              const value = clean.split(":").slice(1).join(":").trim();
+              if (value) rules.disallow.push(value);
+            }
+          }
         }
       }
-    }
-  } catch { /* robots.txt unavailable: continue with conservative limits. */ }
-  const allowedByRobots = (url: URL) => {
+    } catch { /* robots.txt unavailable: continue with conservative limits. */ }
+    robotsByOrigin.set(url.origin, rules);
+    return rules;
+  };
+  const allowedByRobots = async (url: URL) => {
+    const rules = await getRobotsRules(url);
     const matches = [
-      ...robotsAllow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: true })),
-      ...robotsDisallow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: false })),
+      ...rules.allow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: true })),
+      ...rules.disallow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: false })),
     ].sort((a, b) => b.path.length - a.path.length);
     return matches.length === 0 || matches[0].allowed;
   };
+  const robotsText = "";
   // Seed from robots-declared sitemaps, sitemap indexes, common feeds and the same-origin sitemap.
   const sitemapSeeds = [new URL("/sitemap.xml", first.origin).href, new URL("/sitemap_index.xml", first.origin).href, new URL("/sitemap-index.xml", first.origin).href];
   for (const line of robotsText.split(/\r?\n/)) {
@@ -861,7 +873,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   }
   for (const sitemapHref of Array.from(new Set(sitemapSeeds)).slice(0, 6)) try {
     const sitemapUrl = new URL(sitemapHref);
-    if (sitemapUrl.origin !== first.origin || !(await isPublicHostname(sitemapUrl.hostname))) continue;
+    if (!sameRegistrableDomain(sitemapUrl) || !(await isPublicHostname(sitemapUrl.hostname)) || !(await allowedByRobots(sitemapUrl))) continue;
     const sitemapResponse = await fetchWebsiteWithRetry(sitemapUrl.href, {
       redirect: "manual",
       headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
@@ -874,7 +886,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         for (const nestedHref of locations.slice(0, 8)) {
           try {
             const nestedUrl = new URL(nestedHref, first.origin);
-            if (nestedUrl.origin !== first.origin || !(await isPublicHostname(nestedUrl.hostname))) continue;
+            if (!sameRegistrableDomain(nestedUrl) || !(await isPublicHostname(nestedUrl.hostname)) || !(await allowedByRobots(nestedUrl))) continue;
             const nestedResponse = await fetchWebsiteWithRetry(nestedUrl.href, {
               redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
               signal: websiteScanSignal(scanSignal, 7000),
@@ -889,7 +901,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       for (const location of locations) {
         try {
           const linked = new URL(location, first.origin); linked.hash = "";
-          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && linked.href !== first.href && queue.length < 100 && !queue.includes(linked.href)) {
+          if (sameRegistrableDomain(linked) && isSafeWebsiteUrl(linked.href) && await allowedByRobots(linked) && linked.href !== first.href && queue.length < 100 && !queue.includes(linked.href)) {
             queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href);
           }
         } catch { /* Ignore malformed or external sitemap entries. */ }
@@ -912,15 +924,15 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       const links = Array.from(xml.matchAll(/<(?:link)\b[^>]*>([^<]+)<\/link>|<link\b[^>]*href=["']([^"']+)["']/gi))
         .map((match) => match[1] || match[2]).filter(Boolean);
       for (const link of links) {
-        try { const linked = new URL(link, first.origin); if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && queue.length < 100 && !queue.includes(linked.href)) { queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href); } } catch {}
+        try { const linked = new URL(link, first.origin); if (sameRegistrableDomain(linked) && isSafeWebsiteUrl(linked.href) && await allowedByRobots(linked) && queue.length < 100 && !queue.includes(linked.href)) { queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href); } } catch {}
       }
     } catch { /* Feed discovery is optional. */ }
   }
   while (queue.length && pages.length < maxPages) {
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
-    if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href)) continue;
-    if (!allowedByRobots(parsed)) { if (onSkip) await onSkip(next, "Blocked by robots.txt"); continue; }
+    if (!parsed || !sameRegistrableDomain(parsed) || seen.has(parsed.href)) continue;
+    if (!(await allowedByRobots(parsed))) { if (onSkip) await onSkip(next, "Blocked by robots.txt"); continue; }
     if (!(await isPublicHostname(parsed.hostname))) { if (onSkip) await onSkip(next, "Hostname did not resolve to public IP addresses"); continue; }
     seen.add(parsed.href);
     try {
@@ -946,7 +958,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         const location = response.headers.get("location");
         if (location) {
           const redirectUrl = new URL(location, parsed.href);
-          if (redirectUrl.origin === first.origin && isSafeWebsiteUrl(redirectUrl.href) && allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
+          if (sameRegistrableDomain(redirectUrl) && isSafeWebsiteUrl(redirectUrl.href) && allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
         }
         continue;
       }
@@ -1002,7 +1014,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         try {
           const linked = new URL(match[1], parsed.href);
           const nextDepth = (depthByUrl.get(parsed.href) || 0) + 1;
-          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && nextDepth <= maxDepth && !seen.has(linked.href) && queue.length < 100 && !queue.includes(linked.href)) {
+          if (sameRegistrableDomain(linked) && isSafeWebsiteUrl(linked.href) && await allowedByRobots(linked) && nextDepth <= maxDepth && !seen.has(linked.href) && queue.length < 100 && !queue.includes(linked.href)) {
             queue.push(linked.href); depthByUrl.set(linked.href, nextDepth); if (onDiscover) await onDiscover(linked.href);
           }
         } catch { /* Ignore malformed links. */ }
