@@ -132,7 +132,7 @@ var voiceView=$(".voice-view"),voiceOrb=$(".voice-orb"),voiceStatus=$(".voice-st
 var busy=false,recognition=null,dictating=false,dictationSendAfterStop=false,voiceSession=false,voiceMuted=false,voiceModeChoice="hands-free",voiceState="idle",voiceRequestController=null,voiceSpeechCancel=null,finalTranscript="",interimTranscript="",typingBubble=null,conversationStatus="",visitorTyping=false,visitorTypingTimer=null,lastTypingSignalAt=0,historyPollTimer=null,widgetDestroyed=false;
 function setStatus(message){status.textContent=message||"";}
 function bubble(text,kind){var node=document.createElement("div");node.className="bubble "+kind;node.textContent=text;messages.appendChild(node);messages.scrollTop=messages.scrollHeight;return node;}
-function showTyping(){removeTyping();typingBubble=bubble("Misma is typing","ai typing");}
+function showTyping(){removeTyping();typingBubble=bubble("Misma is thinking","ai typing");}
 function removeTyping(){if(typingBubble&&typingBubble.parentNode)typingBubble.parentNode.removeChild(typingBubble);typingBubble=null;}
 function setVisitorTyping(next){
   if(visitorTypingTimer&&!next){window.clearTimeout(visitorTypingTimer);visitorTypingTimer=null;}
