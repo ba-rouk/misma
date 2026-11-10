@@ -112,3 +112,24 @@ test("widget customizer matches website dashboard canvas and numbers sections in
   assert.match(css, /\.misma-theme-preview-sticky,[\s\S]*?border: 0;/);
   assert.match(css, /\.misma-theme-contrast-warning,[\s\S]*?border: 0;/);
 });
+
+
+test("customizer loading uses an animated editor skeleton instead of a text loading card", async () => {
+  const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
+  const css = await read("../src/components/website-widget-customizer.css");
+  assert.match(page, /misma-theme-skeleton/);
+  assert.match(page, /aria-label="Loading widget settings"/);
+  assert.doesNotMatch(page, /Loading website widget settings/);
+  assert.match(css, /@keyframes misma-theme-shimmer/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+});
+
+test("widget live preview stays sticky and color controls expose a wheel and expanded preset palette", async () => {
+  const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
+  const css = await read("../src/components/website-widget-customizer.css");
+  assert.match(page, /misma-theme-preview-sticky/);
+  assert.match(page, /misma-theme-color-wheel/);
+  assert.match(page, /#f472b6/);
+  assert.match(css, /\.misma-theme-preview-sticky\s*\{[\s\S]*?position: sticky;[\s\S]*?top: 68px;/);
+  assert.match(css, /\.misma-theme-color-wheel\s*\{[\s\S]*?conic-gradient/);
+});
