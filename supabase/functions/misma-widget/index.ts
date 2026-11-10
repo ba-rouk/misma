@@ -1359,7 +1359,7 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
   }
 }
 
-async function processQueuedWebsiteScan(db: Db): Promise<AnyRecord> {
+async function processQueuedWebsiteScan(db: Db, preferredJobId?: string): Promise<AnyRecord> {
   const now = new Date().toISOString();
   const staleBefore = new Date(Date.now() - 180_000).toISOString();
   await db.from("scan_jobs").update({
@@ -1368,9 +1368,11 @@ async function processQueuedWebsiteScan(db: Db): Promise<AnyRecord> {
     updated_at: now,
   }).eq("status", "running").lt("updated_at", staleBefore);
 
-  const candidate = await db.from("scan_jobs")
+  let candidateQuery = db.from("scan_jobs")
     .select("id,workspace_id,website_id,max_pages,crawl_depth,pages_scanned,pages_skipped,errors")
-    .eq("status", "queued").order("created_at", { ascending: true }).limit(1).maybeSingle();
+    .eq("status", "queued");
+  if (preferredJobId) candidateQuery = candidateQuery.eq("id", preferredJobId);
+  const candidate = await candidateQuery.order("created_at", { ascending: true }).limit(1).maybeSingle();
   if (candidate.error) throw new Error("Could not load the queued website scan.");
   if (!candidate.data) return { processed: false, status: "idle" };
 
@@ -2086,7 +2088,7 @@ Deno.serve(async (request: Request) => {
         }
         jobId = String(createdJob.data.id);
       }
-      const scanTask = processQueuedWebsiteScan(db);
+      const scanTask = processQueuedWebsiteScan(db, jobId);
       const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
       if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(scanTask);
       else await scanTask;
