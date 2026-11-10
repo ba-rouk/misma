@@ -72,8 +72,8 @@ test("dashboard typography is tokenized, self-hosted, and isolated from the live
   assert.match(styles, /--text-body: 14px/);
   assert.match(styles, /--text-input: 16px/);
   assert.match(styles, /--text-link-color: #d97757/);
-  assert.match(styles, /\\.aichat :where\\(h1, h2\\)/);
-  assert.match(styles, /\\.aichat :where\\(code, pre/);
+  assert.ok(styles.includes(".aichat :where(h1, h2)"));
+  assert.ok(styles.includes(".aichat :where(code, pre"));
   assert.match(styles, /--text-muted-color-light/);
   assert.match(customizer, /background:#07111d/);
   assert.ok(customizer.includes("font-family:var(--font-serif)"));
