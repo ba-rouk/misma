@@ -94,13 +94,13 @@ test("widget customizer matches website dashboard canvas and numbers sections in
   const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
   const css = await read("../src/components/website-widget-customizer.css");
   const expected = [
-    'title:"Header"',
-    'title:"Chat background"',
-    '<h2>Message bubbles</h2>',
-    '<h2>Buttons</h2>',
-    '<h2>Typography</h2>',
-    '<h2>Footer</h2>',
-    '<h2>Accessibility and website colours</h2>',
+    'title="Header"',
+    'title="Chat background"',
+    'title="Message bubbles"',
+    'title="Buttons"',
+    'title="Typography"',
+    'title="Footer"',
+    'title="Accessibility and website colours"',
   ];
   const positions = expected.map((label) => page.indexOf(label));
   assert.ok(positions.every((position) => position >= 0));
@@ -124,13 +124,41 @@ test("customizer uses an animated skeleton instead of the old textual loading pa
   assert.match(css, /prefers-reduced-motion: reduce/);
 });
 
-test("customizer preview stays sticky and color controls offer a wheel and more presets", async () => {
+test("customizer uses a Figma-style popup color picker without the old wheel or swatch row", async () => {
   const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
   const css = await read("../src/components/website-widget-customizer.css");
-  assert.match(page, /misma-theme-color-wheel/);
-  assert.match(page, /#f472b6/);
-  assert.match(css, /\.misma-theme-preview-sticky\s*\{[\s\S]*?position: sticky;[\s\S]*?top: 68px;/);
-  assert.match(css, /\.misma-theme-color-wheel\s*\{[\s\S]*?conic-gradient/);
+
+  assert.match(page, /function hexToHsv/);
+  assert.match(page, /function hsvToHex/);
+  assert.match(page, /misma-theme-color-row/);
+  assert.match(page, /misma-theme-color-preview/);
+  assert.match(page, /misma-theme-saturation-plane/);
+  assert.match(page, /misma-theme-hue-control/);
+  assert.match(page, /misma-theme-picker-fields/);
+  assert.match(page, /misma-theme-document-palette/);
+  assert.match(page, /Document colors/);
+  assert.doesNotMatch(page, /misma-theme-color-wheel|misma-theme-presets|type="color"/);
+  assert.match(css, /\.misma-theme-color-popover/);
+  assert.match(css, /linear-gradient\(to top, #000, transparent\)/);
+  assert.match(css, /grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(css, /misma-theme-color-wheel|misma-theme-presets/);
+});
+
+test("widget customizer sections behave as a single-open accessible accordion", async () => {
+  const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
+  const css = await read("../src/components/website-widget-customizer.css");
+
+  assert.match(page, /useState<string \| null>\("01"\)/);
+  assert.match(page, /current\) => current === id \? null : id/);
+  assert.equal((page.match(/<ThemeAccordionSection/g) || []).length, 7);
+  assert.match(page, /aria-expanded=\{expanded\}/);
+  assert.match(page, /aria-controls=\{panelId\}/);
+  assert.match(page, /aria-hidden=\{!expanded\}/);
+  assert.match(page, /inert=\{!expanded \? true : undefined\}/);
+  assert.match(css, /grid-template-rows: 0fr/);
+  assert.match(css, /grid-template-rows: 1fr/);
+  assert.match(css, /transition: grid-template-rows/);
+  assert.match(css, /prefers-reduced-motion:reduce/);
 });
 
 
