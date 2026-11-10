@@ -1530,9 +1530,13 @@ test("Add channels rehydrates persisted social links and marks existing channels
   assert.match(dashboard, /site\.whatsapp_number \? "Added" : "Optional"/);
 });
 
-test("dashboard chat messages are bright white and recent chat titles match primary navigation typography", async () => {
+test("dashboard sent user and human-request message text is bright white throughout rendered content", async () => {
   const styles = await read("../src/styles.css");
-  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble,[\s\S]*?\.aichat-message-row\.is-ai \.aichat-bubble[\s\S]*?color: #ffffff !important/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble :where\(\*\)/);
+  assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble/);
+  assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble :where\(\)/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble[\s\S]*?color: #ffffff !important/);
   assert.match(styles, /\.aichat-chats-widget-item,[\s\S]*?font-size: var\(--text-base\);[\s\S]*?font-weight: var\(--weight-medium\)/);
 });
 
