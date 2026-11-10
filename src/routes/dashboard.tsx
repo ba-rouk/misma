@@ -264,6 +264,10 @@ function WebsiteSocialSettings({
     whatsappMessage: site.whatsapp_message || "",
   });
 
+  useEffect(() => {
+    if (!open) setDraft(currentDraft());
+  }, [open, site.id, site.instagram_url, site.gmail_address, site.whatsapp_country_code, site.whatsapp_number, site.whatsapp_message]);
+
   async function saveDraft(nextDraft: WebsiteSocialDraft) {
     setError("");
     setStatus("");
@@ -373,7 +377,7 @@ function WebsiteSocialSettings({
           <section className="aichat-social-channel">
             <div className="aichat-social-channel-heading">
               <strong>Instagram</strong>
-              <span>{site.instagram_url ? "Connected" : "Optional"}</span>
+              <span>{site.instagram_url ? "Added" : "Optional"}</span>
             </div>
             <label>
               Instagram URL or @handle
@@ -395,7 +399,7 @@ function WebsiteSocialSettings({
           <section className="aichat-social-channel">
             <div className="aichat-social-channel-heading">
               <strong>Gmail</strong>
-              <span>{site.gmail_address ? "Connected" : "Optional"}</span>
+              <span>{site.gmail_address ? "Added" : "Optional"}</span>
             </div>
             <label>
               Gmail contact address
@@ -420,7 +424,7 @@ function WebsiteSocialSettings({
           <section className="aichat-social-channel">
             <div className="aichat-social-channel-heading">
               <strong>WhatsApp</strong>
-              <span>{site.whatsapp_number ? "Connected" : "Optional"}</span>
+              <span>{site.whatsapp_number ? "Added" : "Optional"}</span>
             </div>
             <div className="aichat-whatsapp-number-row">
               <label>
@@ -5926,14 +5930,6 @@ function Dashboard() {
               }}>
                 <label>Website or preview URL<input className="aichat-input" type="url" placeholder="https://preview.example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
                 <label>Website name (optional)<input className="aichat-input" placeholder="My business website" value={websiteDraftName} onChange={(event) => setWebsiteDraftName(event.target.value)} /></label>
-                <label className="aichat-shared-widget-option">
-                  <input type="checkbox" checked={sharedWebsiteWidget} onChange={(event) => {
-                    const enabled = event.target.checked;
-                    setSharedWebsiteWidget(enabled);
-                    try { window.localStorage.setItem("misma_shared_website_widget", String(enabled)); } catch { /* Keep this session setting. */ }
-                  }} />
-                  <span><strong>Use one shared widget for all my websites</strong><br />All registered domains use the same widget key and workspace knowledge. Visitor conversations remain separated by website.</span>
-                </label>
                 <p className="aichat-website-setup-note">You do not need to publish the website first. Register its final domain or a preview/staging URL, then copy the general script below. For local testing, use <code>http://localhost:PORT</code>.</p>
                 <button type="submit" className="aichat-action-btn" style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }} disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
               </form>
@@ -5941,7 +5937,7 @@ function Dashboard() {
             <div className="aichat-card">
               <div className="aichat-panel-heading">
                 <button type="button" className="aichat-nav-btn" style={{ width: "100%", justifyContent: "space-between", textAlign: "left" }} aria-expanded={sharedWidgetExpanded} onClick={() => setSharedWidgetExpanded((value) => !value)}>
-                  <span><strong>One widget across your websites</strong><small style={{ display: "block" }}>Use one installation key and the same workspace knowledge on every registered domain.</small></span>
+                  <span><strong>One widget across your websites</strong><small className="aichat-shared-widget-summary">All registered domains use the same widget key and workspace knowledge.<br />Visitor conversations remain separated by website.</small></span>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="aichat-status-pill is-connected">{sharedWebsiteWidget ? "Shared" : "Separate"}</span><span aria-hidden="true">{sharedWidgetExpanded ? "⌄" : "›"}</span></span>
                 </button>
               </div>
@@ -5991,7 +5987,6 @@ function Dashboard() {
                   </button>
                 </div>
                 <div className="aichat-website-card-details" hidden={!expandedWebsiteIds.includes(site.id)}>
-                <p>This widget works with websites built in any backend language because Misma reads the public rendered HTTP response, not your server-side source code. JavaScript-heavy sites may need browser rendering support during scanning. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
                 <WebsiteSocialSettings
                   site={site}
                   token={token || ""}
@@ -6096,7 +6091,6 @@ function Dashboard() {
                   </p>
                 )}
                 <small className="aichat-website-meta">Last activity: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}{site.detected_platform ? " · Platform: " + site.detected_platform : ""}</small>
-                <small className="aichat-website-meta">Website scans read publicly rendered HTTP responses, not PHP, Node.js, Go, Python, Ruby, Java, .NET or other server-side source code. Misma discovers HTML, sitemap, feed, structured data and document content; JavaScript-heavy rendering can use the optional headless-browser provider when configured.</small>
                 <small className="aichat-website-meta">Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
                 </div>
               </article>)}
