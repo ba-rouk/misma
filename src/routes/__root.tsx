@@ -5,6 +5,10 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import "@fontsource-variable/inter/wght.css";
+import "@fontsource-variable/source-serif-4/wght.css";
+import interLatinFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
+import sourceSerifLatinFont from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -20,6 +24,8 @@ export const Route = createRootRoute({
       },
     ],
     links: [
+      { rel: "preload", href: interLatinFont, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+      { rel: "preload", href: sourceSerifLatinFont, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/misma-favicon.png", type: "image/png", sizes: "48x48" },
     ],

@@ -35,7 +35,7 @@ const COLOR_FIELDS: Array<{key: ColorKey; label: string; group: string}> = [
   {key:"textColor",label:"Composer and general text",group:"Text"},{key:"botBubbleBackground",label:"Misma message background",group:"Bubbles"},
   {key:"botBubbleText",label:"Misma message text",group:"Bubbles"},{key:"userBubbleBackground",label:"Visitor message background",group:"Bubbles"},
   {key:"userBubbleText",label:"Visitor message text",group:"Bubbles"},{key:"sendButtonBackground",label:"Send / voice button",group:"Buttons"},
-  {key:"headerButtonBackground",label:"Header icon buttons",group:"Buttons"},{key:"footerBackground",label:"Text-bar container",group:"Footer"},
+  {key:"headerButtonBackground",label:"Header icon buttons (including close)",group:"Buttons"},{key:"footerBackground",label:"Text-bar container",group:"Footer"},
 ];
 function parseTheme(value: unknown): WidgetTheme {
   const input = value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -190,7 +190,7 @@ function WebsiteWidgetCustomizer() {
       <div className="misma-theme-preview-heading"><div><strong>Live preview</strong><span>Updates as you edit</span></div><span className="misma-theme-preview-live"><i/> LIVE</span></div>
       <div className="misma-widget-preview" style={previewStyle}>
         <div className="misma-widget-preview-header"><div className="misma-widget-preview-brand"><strong>Misma</strong><small>Business assistant</small></div>
-          <button type="button" aria-label="WhatsApp">◔</button><button type="button" aria-label="Instagram">◎</button><button type="button" aria-label="Request a person">＋</button><button type="button" aria-label="Close preview">×</button></div>
+          <button type="button" aria-label="WhatsApp">◔</button><button type="button" aria-label="Instagram">◎</button><button type="button" aria-label="Request a person">＋</button><button type="button" className="misma-widget-preview-close" aria-label="Close preview" title="Close preview"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
         <div className="misma-widget-preview-chat">
           <div className="misma-widget-preview-bubble is-bot">Hello! I am Misma. How can I help you today?</div>
           <div className="misma-widget-preview-bubble is-user">Do you deliver to Kigali?</div>
