@@ -182,11 +182,7 @@ function WebsiteWidgetCustomizer() {
   return <main className="misma-theme-page">
     <header className="misma-theme-toolbar">
       <button type="button" className="misma-theme-back" onClick={back}>← <span>Websites</span></button>
-      <div className="misma-theme-title"><span className="misma-theme-eyebrow">WIDGET CUSTOMIZATION</span><h1>Customize widget</h1><p>{websiteName}{domain?" · "+domain:""}</p></div>
-      <button type="button" className="misma-theme-save" onClick={()=>void save()} disabled={!dirty||saving||!token}>{saving?"Saving…":"Save changes"}</button>
-      <button type="button" className="misma-theme-close" onClick={back} aria-label="Close customization" title="Close customization">
-        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>
-      </button>
+      <div className="misma-theme-title"><h1>Customize widget</h1><p>{websiteName}{domain?" · "+domain:""}</p></div>
     </header>
     {message&&<div className={"misma-theme-notice is-"+message.kind} role="status">{message.text}</div>}
     <section className="misma-theme-preview-sticky" aria-label="Live widget preview">
@@ -233,7 +229,7 @@ function WebsiteWidgetCustomizer() {
         <div className="misma-theme-section-heading"><span>07</span><div><h2>Accessibility and website colours</h2><p>Check WCAG AA contrast and reuse colours from the latest scan.</p></div></div>
         {failures.length?<div className="misma-theme-contrast-warning" role="status"><strong>Contrast needs attention</strong><span>{failures.map(item=>item.label+": "+item.ratio.toFixed(2)+":1").join(" · ")}. WCAG AA normally requires 4.5:1 for regular text.</span></div>:<div className="misma-theme-contrast-ok">Text contrast checks meet the 4.5:1 WCAG AA target for the sampled pairs.</div>}
         <button type="button" className="misma-theme-secondary" onClick={suggest}>✦ Suggest colours from my website</button>
-        <p className="misma-theme-hint">Suggestions use colours recorded by the latest rendered-page scan, including theme-colour metadata, CSS declarations and inline / SVG brand colours. Misma reads public rendered HTTP output; it does not read PHP, Node, Go, Python or other server-side source code.</p>
+        <p className="misma-theme-hint">Suggestions use colours recorded by the latest rendered-page scan, including theme-colour metadata, CSS declarations and inline / SVG brand colours.</p>
       </section>
       <div className="misma-theme-bottom-actions"><button type="button" className="misma-theme-reset" onClick={reset}>Reset to default</button><button type="button" className="misma-theme-save" onClick={()=>void save()} disabled={!dirty||saving||!token}>{saving?"Saving…":"Save changes"}</button></div>
       {dirty&&<p className="misma-theme-unsaved" role="status">You have unsaved changes.</p>}
