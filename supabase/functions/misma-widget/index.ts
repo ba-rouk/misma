@@ -866,6 +866,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
     return matches.length === 0 || matches[0].allowed;
   };
   let robotsText = "";
+  await getRobotsRules(first);
   // Seed from robots-declared sitemaps, sitemap indexes, common feeds and the same-origin sitemap.
   const sitemapSeeds = [new URL("/sitemap.xml", first.origin).href, new URL("/sitemap_index.xml", first.origin).href, new URL("/sitemap-index.xml", first.origin).href];
   for (const line of robotsText.split(/\r?\n/)) {
