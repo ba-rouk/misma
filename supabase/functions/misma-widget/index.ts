@@ -382,6 +382,9 @@ function sanitizeWidgetTheme(value: unknown): AnyRecord | null {
     if (typeof color !== "string" || !/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)) return null;
     result[key] = color.toLowerCase();
   }
+  const subtitle = value.headerSubtitleText === undefined ? "#b6c1cf" : value.headerSubtitleText;
+  if (typeof subtitle !== "string" || !/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(subtitle)) return null;
+  result.headerSubtitleText = subtitle.toLowerCase();
   if (typeof value.fontFamily !== "string" || !fonts.includes(value.fontFamily) || typeof value.matchChatBackground !== "boolean") return null;
   result.fontFamily = value.fontFamily;
   result.matchChatBackground = value.matchChatBackground;
@@ -751,6 +754,33 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   }
   return pages.join("\n\n").slice(0, 18000);
 }
+async function readWebsiteResponseBytes(response: Response, maximumBytes = 1_500_000): Promise<Uint8Array> {
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel("Website response exceeded the configured scan size limit").catch(() => {});
+        throw new Error("Page exceeds the 1.5 MB scan limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result;
+}
 async function fetchWebsiteWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
   let lastError: unknown = null;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -759,9 +789,12 @@ async function fetchWebsiteWithRetry(url: string, init: RequestInit, retries = 2
       if (![429,500,502,503,504].includes(response.status) || attempt === retries) return response;
       const retryAfter = response.headers.get("retry-after") || "";
       const seconds = Number(retryAfter);
+      const retryDate = Date.parse(retryAfter);
       const wait = Number.isFinite(seconds) && seconds > 0
         ? Math.min(4000, seconds * 1000)
-        : Math.min(3000, 500 * (2 ** attempt));
+        : Number.isFinite(retryDate) && retryDate > Date.now()
+          ? Math.min(4000, retryDate - Date.now())
+          : Math.min(3000, 500 * (2 ** attempt));
       await response.body?.cancel().catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, wait));
     } catch (error) {
@@ -779,6 +812,8 @@ function websiteScanSignal(parent: AbortSignal | undefined, timeoutMs: number): 
 async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
+  // Keep discovery same-origin rather than scanning sibling subdomains. This is intentionally
+  // stricter than registrable-domain matching and avoids crossing tenant-controlled subdomains.
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
   const queue = Array.from(new Set([first.href, ...seedUrls])).slice(0, 100);
   const depthByUrl = new Map<string, number>(queue.map((url) => [url, url === first.href ? 0 : 1]));
@@ -801,7 +836,10 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         const clean = line.split("#")[0].trim();
         if (/^user-agent\s*:\s*\*/i.test(clean) || /^user-agent\s*:\s*MismaBot/i.test(clean)) active = true;
         else if (/^user-agent\s*:/i.test(clean)) active = false;
-        else if (active && /^disallow\s*:/i.test(clean)) {
+        else if (active && /^allow\s*:/i.test(clean)) {
+          const value = clean.split(":").slice(1).join(":").trim();
+          if (value) robotsAllow.push(value);
+        } else if (active && /^disallow\s*:/i.test(clean)) {
           const value = clean.split(":").slice(1).join(":").trim();
           if (value) robotsDisallow.push(value);
         }
@@ -920,8 +958,13 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       }
       const declaredLength = Number(response.headers.get("content-length") || 0);
       if (declaredLength > 1500000) { if (onSkip) await onSkip(parsed.href, "Page exceeds the 1.5 MB scan limit"); continue; }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength > 1500000) { if (onSkip) await onSkip(parsed.href, "Page exceeds the 1.5 MB scan limit"); continue; }
+      let bytes: Uint8Array;
+      try {
+        bytes = await readWebsiteResponseBytes(response, 1_500_000);
+      } catch (error) {
+        if (onSkip) await onSkip(parsed.href, error instanceof Error ? error.message : "Page exceeds the 1.5 MB scan limit");
+        continue;
+      }
       const isPdf = contentType.includes("application/pdf") || parsed.pathname.toLowerCase().endsWith(".pdf");
       const raw = isPdf ? "" : decodeWebsiteBytes(bytes, contentType);
       const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
@@ -1888,7 +1931,8 @@ Deno.serve(async (request: Request) => {
         .eq("workspace_id", workspaceId)
         .single();
       if (websiteResult.error || !websiteResult.data) throw new Error("Website not found in the selected workspace.");
-      const maxPages = Math.max(1, Math.min(50, Number(input.maxPages) || 25));
+      const configuredPageLimit = Math.max(1, Math.min(100, Number(getEnv("MISMA_SCAN_MAX_PAGES")) || 50));
+      const maxPages = Math.max(1, Math.min(configuredPageLimit, Number(input.maxPages) || 25));
       const crawlDepth = Math.max(0, Math.min(8, Number(input.crawlDepth) || 3));
       const staleBefore = new Date(Date.now() - 180_000).toISOString();
       await db.from("scan_jobs").update({
