@@ -1535,7 +1535,7 @@ test("dashboard sent user and human-request message text is bright white through
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble/);
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble :where\(\*\)/);
   assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble/);
-  assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble :where\(\)/);
+  assert.match(styles, /\.aichat-message-row\.is-customer \.aichat-bubble :where\(\*\)/);
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble[\s\S]*?color: #ffffff !important/);
   assert.match(styles, /\.aichat-chats-widget-item,[\s\S]*?font-size: var\(--text-base\);[\s\S]*?font-weight: var\(--weight-medium\)/);
 });
