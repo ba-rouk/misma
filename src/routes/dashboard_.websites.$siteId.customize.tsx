@@ -211,17 +211,17 @@ function WebsiteWidgetCustomizer() {
         <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group===section.group).map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
       </section>)}
       <section className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>05</span><div><h2>Typography</h2><p>Choose a safe font family and general text colour.</p></div></div>
-        <label className="misma-theme-font-field"><span>Font family</span><select value={theme.fontFamily} onChange={e=>setTheme(current=>({...current,fontFamily:e.target.value as FontName}))}>{FONT_OPTIONS.map(font=><option key={font} value={font} style={{fontFamily:FONT_STACKS[font]}}>{font}</option>)}</select><small style={{fontFamily:FONT_STACKS[theme.fontFamily]}}>The quick brown fox jumps over the lazy dog.</small></label>
-        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Text").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
-      </section>
-      <section className="misma-theme-section">
         <div className="misma-theme-section-heading"><span>03</span><div><h2>Message bubbles</h2><p>Set separate surfaces and text colours for Misma and visitors.</p></div></div>
         <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Bubbles").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
       </section>
       <section className="misma-theme-section">
         <div className="misma-theme-section-heading"><span>04</span><div><h2>Buttons</h2><p>Set the send / voice action and header icon surfaces.</p></div></div>
         <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Buttons").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
+      </section>
+      <section className="misma-theme-section">
+        <div className="misma-theme-section-heading"><span>05</span><div><h2>Typography</h2><p>Choose a safe font family and general text colour.</p></div></div>
+        <label className="misma-theme-font-field"><span>Font family</span><select value={theme.fontFamily} onChange={e=>setTheme(current=>({...current,fontFamily:e.target.value as FontName}))}>{FONT_OPTIONS.map(font=><option key={font} value={font} style={{fontFamily:FONT_STACKS[font]}}>{font}</option>)}</select><small style={{fontFamily:FONT_STACKS[theme.fontFamily]}}>The quick brown fox jumps over the lazy dog.</small></label>
+        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Text").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
       </section>
       <section className="misma-theme-section">
         <div className="misma-theme-section-heading"><span>06</span><div><h2>Footer</h2><p>Style the text bar separately or link it to the chat canvas.</p></div></div>
