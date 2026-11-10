@@ -34,7 +34,7 @@ function consumePostLoginDestination(): string {
 export const Route = createFileRoute("/login")({ component: Login });
 
 function Login() {
-  const [signup, setSignup] = useState(false);
+  const [signup, setSignup] = useState(true);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");

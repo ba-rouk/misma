@@ -131,7 +131,7 @@ as $$
         'botBubbleBackground','botBubbleText','userBubbleBackground','userBubbleText',
         'sendButtonBackground','headerButtonBackground','footerBackground'
       )
-      and e.value !~ '^#[0-9A-Fa-f]{6}$'
+      and e.value !~ '^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$'
     )
     and coalesce(p_theme->>'matchChatBackground','true') in ('true','false');
 $$;

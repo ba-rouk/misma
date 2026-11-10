@@ -1423,3 +1423,25 @@ test("website knowledge is isolated by Core.01 website room and Misma identifies
   assert.match(widget, /Misma uses Core\.01/);
   assert.match(chat, /answer that Misma uses Core\.01/);
 });
+
+test("website scans are safe, resumable and report rendered-content extraction", async () => {
+  const migration = await read("../supabase/migrations/20261110100000_website_widget_customization_rooms_scan.sql");
+  const scanMigration = await read("../supabase/migrations/20261110103000_website_scan_metadata.sql");
+  const widget = await read("../supabase/functions/misma-widget/index.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(migration, /create table if not exists public\.scan_jobs/);
+  assert.match(migration, /create table if not exists public\.website_scan_pages/);
+  assert.match(scanMigration, /detected_platform/);
+  assert.match(widget, /MismaBot/);
+  assert.match(widget, /isPublicHostname/);
+  assert.match(widget, /Retry-After/);
+  assert.match(widget, /robots\.txt/);
+  assert.match(widget, /application\/pdf/);
+  assert.match(widget, /extractPdfText/);
+  assert.match(widget, /BROWSERLESS_API_KEY/);
+  assert.match(widget, /If-Modified-Since/);
+  assert.match(widget, /discovered_urls/);
+  assert.match(widget, /pages_skipped/);
+  assert.match(widget, /scan-status/);
+  assert.match(dashboard, /pages_skipped/);
+});

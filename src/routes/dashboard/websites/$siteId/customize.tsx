@@ -15,7 +15,7 @@ const DEFAULT_THEME: WidgetTheme = {
   headerBackground: "#111827", headerText: "#ffffff", chatBackground: "#f8fafc", textColor: "#182232",
   fontFamily: "Inter", botBubbleBackground: "#ffffff", botBubbleText: "#1a2635",
   userBubbleBackground: "#172033", userBubbleText: "#ffffff", sendButtonBackground: "#22c55e",
-  headerButtonBackground: "#334155", footerBackground: "#ffffff", matchChatBackground: true,
+  headerButtonBackground: "#ffffff1c", footerBackground: "#ffffff", matchChatBackground: true,
 };
 const FONT_OPTIONS: WidgetTheme["fontFamily"][] = ["system-ui","Inter","Roboto","Poppins","Open Sans","Lato","Montserrat","Nunito","serif","monospace"];
 const PRESETS = ["#111827","#f8fafc","#ffffff","#172033","#22c55e","#16a34a","#2563eb","#7c3aed","#f97316","#fce7f3","#0f766e","#334155"];
@@ -39,7 +39,7 @@ function ColorControl({label,value,onChange,pair}: {label:string;value:string;on
   const ratio = pair ? contrast(value,pair) : null;
   return <div className="mw-color-control">
     <div className="mw-color-title"><label>{label}</label>{ratio !== null && <small className={ratio>=4.5?"pass":"warn"}>{ratio.toFixed(2)}:1 {ratio>=4.5?"WCAG AA":"Below WCAG AA"}</small>}</div>
-    <div className="mw-color-inputs"><input aria-label={label+" color picker"} type="color" value={/^#[0-9a-fA-F]{6}$/.test(value)?value:"#000000"} onChange={e=>onChange(e.target.value)} /><input aria-label={label+" hex value"} value={value} maxLength={7} onChange={e=>onChange(e.target.value)} /></div>
+    <div className="mw-color-inputs"><input aria-label={label+" color picker"} type="color" value={/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)?value.slice(0,7):"#000000"} onChange={e=>onChange(e.target.value)} /><input aria-label={label+" hex value"} value={value} maxLength={9} onChange={e=>onChange(e.target.value)} /></div>
     <div className="mw-presets">{PRESETS.slice(0,8).map(color=><button type="button" key={color} title={color} style={{background:color}} onClick={()=>onChange(color)} aria-label={label+" preset "+color}/>)}</div>
   </div>;
 }
@@ -84,7 +84,7 @@ function CustomizeWidgetPage() {
   };
   const suggest=()=>{
     if(!suggestions){setError("No brand colors are available yet. Scan this website first, then try again.");return;}
-    setTheme(current=>({...current,...Object.fromEntries(Object.entries(suggestions).filter(([key,value])=>key in DEFAULT_THEME && typeof value==="string" && /^#[0-9a-fA-F]{6}$/.test(value))) }));
+    setTheme(current=>({...current,...Object.fromEntries(Object.entries(suggestions).filter(([key,value])=>key in DEFAULT_THEME && typeof value==="string" && /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value))) }));
     setError("");setSuccess("Website brand colors applied. Review the contrast warnings before saving.");
   };
   const reset=()=>{if(!window.confirm("Reset this widget to Misma's default appearance?"))return;setTheme(DEFAULT_THEME);setError("");setSuccess("");};
