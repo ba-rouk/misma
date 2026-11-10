@@ -1535,3 +1535,33 @@ test("dashboard chat messages are bright white and recent chat titles match prim
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble,[\s\S]*?\.aichat-message-row\.is-ai \.aichat-bubble[\s\S]*?color: #ffffff !important/);
   assert.match(styles, /\.aichat-chats-widget-item,[\s\S]*?font-size: var\(--text-base\);[\s\S]*?font-weight: var\(--weight-medium\)/);
 });
+
+
+test("saved website channels stay visible and cannot be replaced without removing them", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /if \(!open\) setDraft\(currentDraft\(\)\)/);
+  assert.match(dashboard, /value=\{draft\.instagramUrl\}/);
+  assert.match(dashboard, /readOnly=\{Boolean\(site\.instagram_url\)\}/);
+  assert.match(dashboard, /value=\{draft\.gmailAddress\}/);
+  assert.match(dashboard, /readOnly=\{Boolean\(site\.gmail_address\)\}/);
+  assert.match(dashboard, /value=\{draft\.whatsappNumber\}/);
+  assert.match(dashboard, /readOnly=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.match(dashboard, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.match(dashboard, /Remove Instagram/);
+  assert.match(dashboard, /Remove Gmail/);
+  assert.match(dashboard, /Remove WhatsApp/);
+});
+
+test("website connection actions and Add channels use Scan website dark-grey styling", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  assert.match(dashboard, /aichat-tab-view aichat-websites-tab/);
+  const copyLabel = dashboard.indexOf("Copy script");
+  const copyButtonStart = dashboard.lastIndexOf("<button", copyLabel);
+  assert.ok(copyLabel > 0 && copyButtonStart >= 0);
+  assert.match(dashboard.slice(copyButtonStart, copyLabel), /className="aichat-action-btn secondary"/);
+  assert.doesNotMatch(dashboard, /className="aichat-action-btn secondary is-danger"/);
+  assert.match(styles, /\.aichat-websites-tab \.aichat-action-btn,[\s\S]*?background: #21262d !important/);
+  assert.match(styles, /\.aichat-websites-tab \.aichat-social-dropdown[\s\S]*?background: #21262d !important/);
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble,[\s\S]*?\.aichat-message-row\.is-customer \.aichat-bubble[\s\S]*?color: #ffffff !important/);
+});
