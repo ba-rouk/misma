@@ -422,7 +422,14 @@ function getWebsiteWidgetSocialLinks(site: AnyRecord) {
   } catch {
     instagramUrl = null;
   }
-  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl, theme: sanitizeWidgetTheme(site.theme) };
+
+  const gmailAddress = safeString(site.gmail_address, 254).trim().toLowerCase();
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(gmailAddress);
+  const gmailUrl = validEmail
+    ? "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(gmailAddress)
+    : null;
+
+  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl, gmail_url: gmailUrl, theme: sanitizeWidgetTheme(site.theme) };
 }
 
 async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRecord> {
@@ -434,13 +441,13 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
   let result: any = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,theme,theme_updated_at,core_room_id")
+    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,theme,theme_updated_at,core_room_id")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
   if (!result.error && !result.data?.length) {
     // Keep older installs working when they still embed the original public_key.
     result = await db.from("website_connections")
-      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message")
+      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address")
       .eq("public_key", key)
       .is("widget_deleted_at", null);
   }
