@@ -75,7 +75,7 @@ test("dashboard typography is tokenized, self-hosted, and isolated from the live
   assert.ok(styles.includes(".aichat :where(h1, h2)"));
   assert.ok(styles.includes(".aichat :where(code, pre"));
   assert.match(styles, /--text-muted-color-light/);
-  assert.match(customizer, /background:#07111d/);
+  assert.match(customizer, /background: linear-gradient\(135deg, #f4f8fd, #eef4fb\)/);
   assert.ok(customizer.includes("font-family:var(--font-serif)"));
   assert.ok(page.includes("misma-widget-preview-close"));
   assert.match(page, /aria-label="Close customization"/);
