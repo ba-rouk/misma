@@ -1502,3 +1502,37 @@ test("website chat widget uses live news search and clean plain-text business re
   assert.match(widget, /return normalizeAssistantText\(answer\) \|\| answer\.trim\(\)/);
   assert.match(widget, /Promise\.all\(\[/);
 });
+
+
+
+test("connected website UI removes scanner copy and registration sharing checkbox", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const formStart = dashboard.indexOf('<form className="aichat-hub-form"');
+  const formEnd = dashboard.indexOf("</form>", formStart);
+  assert.ok(formStart >= 0 && formEnd > formStart);
+  const registrationForm = dashboard.slice(formStart, formEnd);
+  assert.doesNotMatch(registrationForm, /aichat-shared-widget-option|Use one shared widget for all my websites/);
+  assert.doesNotMatch(dashboard, /Website scans read publicly rendered HTTP responses/);
+  assert.doesNotMatch(dashboard, /This widget works with websites built in any backend language/);
+  assert.match(dashboard, /aichat-shared-widget-summary/);
+  assert.match(dashboard, /All registered domains use the same widget key and workspace knowledge\.<br \/>Visitor conversations remain separated by website\./);
+  assert.match(styles, /\.aichat-shared-widget-summary\s*\{[\s\S]*?line-height: 1\.4;/);
+});
+
+test("Add channels rehydrates persisted social links and marks existing channels as added", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /if \(!open\) setDraft\(currentDraft\(\)\)/);
+  assert.match(dashboard, /value=\{draft\.instagramUrl\}/);
+  assert.match(dashboard, /site\.instagram_url \? "Added" : "Optional"/);
+  assert.match(dashboard, /value=\{draft\.gmailAddress\}/);
+  assert.match(dashboard, /site\.gmail_address \? "Added" : "Optional"/);
+  assert.match(dashboard, /value=\{draft\.whatsappNumber\}/);
+  assert.match(dashboard, /site\.whatsapp_number \? "Added" : "Optional"/);
+});
+
+test("dashboard chat messages are bright white and recent chat titles match primary navigation typography", async () => {
+  const styles = await read("../src/styles.css");
+  assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble,[\s\S]*?\.aichat-message-row\.is-ai \.aichat-bubble[\s\S]*?color: #ffffff !important/);
+  assert.match(styles, /\.aichat-chats-widget-item,[\s\S]*?font-size: var\(--text-base\);[\s\S]*?font-weight: var\(--weight-medium\)/);
+});
