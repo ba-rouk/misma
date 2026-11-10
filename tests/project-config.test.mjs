@@ -1487,3 +1487,18 @@ test("dashboard chat strips Markdown markers from assistant messages before disp
   assert.ok(dashboard.includes("plainTextMessage(content)"));
   assert.ok(!dashboard.includes("function formatInline("));
 });
+
+test("website chat widget uses live news search and clean plain-text business responses", async () => {
+  const widget = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(widget, /function shouldSearchWeb\(message: string\)/);
+  assert.match(widget, /const newsLanguage =/);
+  assert.match(widget, /function searchLiveWeb\(/);
+  assert.match(widget, /getEnv\("TAVILY_API_KEY"\)/);
+  assert.match(widget, /getEnv\("BRAVE_SEARCH_API_KEY"\)/);
+  assert.match(widget, /LIVE WEB RESEARCH:/);
+  assert.match(widget, /LIVE SEARCH RESULTS:/);
+  assert.match(widget, /PLAIN-TEXT OUTPUT:/);
+  assert.match(widget, /function normalizeAssistantText\(/);
+  assert.match(widget, /return normalizeAssistantText\(answer\) \|\| answer\.trim\(\)/);
+  assert.match(widget, /Promise\.all\(\[/);
+});
