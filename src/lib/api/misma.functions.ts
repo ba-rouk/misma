@@ -53,7 +53,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("knowledge_entries").select("id,question,answer,source_type,source_ref,website_connection_id,room_id").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
         db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
-        db.from("website_connections").select("id,name,website_url,domain,public_key,widget_public_key,core_room_id,theme,theme_schema_version,theme_updated_at,theme_suggestions,detected_platform,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,widget_deleted_at,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: false }),
+        db.from("website_connections").select("id,name,website_url,domain,public_key,widget_public_key,core_room_id,theme,theme_schema_version,theme_updated_at,theme_suggestions,detected_platform,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,widget_deleted_at,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: false }),
         db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
         db.from("products_services").select("id,item_type,name,description,price_text,active,created_from,created_at").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -729,6 +729,7 @@ export const saveWebsiteSocialLinks = createServerFn({ method: "POST" })
     whatsappCountryCode: z.string().regex(/^\d{1,4}$/).nullable(),
     whatsappNumber: z.string().regex(/^\d{6,14}$/).nullable(),
     whatsappMessage: z.string().max(1000).nullable(),
+    gmailAddress: z.string().email().max(254).nullable(),
   }))
   .handler(async ({ data }) => {
     const { db, user, workspaceId } = await ensureWorkspace(data.token);
@@ -759,15 +760,17 @@ export const saveWebsiteSocialLinks = createServerFn({ method: "POST" })
       if (!whatsappMessage) throw new Error("A WhatsApp welcome message is required.");
     }
 
+    const gmailAddress = data.gmailAddress?.trim().toLowerCase() || null;
     const update = await db.from("website_connections").update({
       instagram_url: instagramUrl,
       whatsapp_country_code: whatsappNumber ? countryCode : null,
       whatsapp_number: whatsappNumber,
       whatsapp_message: whatsappNumber ? whatsappMessage : null,
+      gmail_address: gmailAddress,
       updated_at: new Date().toISOString(),
     }).eq("id", data.websiteId).eq("workspace_id", workspaceId)
       .is("widget_deleted_at", null)
-      .select("id,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message")
+      .select("id,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address")
       .single();
 
     if (update.error || !update.data) {
@@ -776,6 +779,7 @@ export const saveWebsiteSocialLinks = createServerFn({ method: "POST" })
     await recordAudit(db, workspaceId, "website.social_links_updated", data.websiteId, {
       instagram: Boolean(update.data.instagram_url),
       whatsapp: Boolean(update.data.whatsapp_number),
+      gmail: Boolean(update.data.gmail_address),
     });
     return { website: update.data };
   });

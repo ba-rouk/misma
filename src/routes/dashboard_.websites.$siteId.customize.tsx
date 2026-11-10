@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { getWebsiteWidgetTheme, saveWebsiteWidgetTheme } from "../../../../lib/api/misma.functions";
-import { getSupabaseClient } from "../../../../lib/supabase";
-import "../../../../components/website-widget-customizer.css";
+import { getWebsiteWidgetTheme, saveWebsiteWidgetTheme } from "../lib/api/misma.functions";
+import { getSupabaseClient } from "../lib/supabase";
+import "../components/website-widget-customizer.css";
 
 type FontName = "system-ui" | "Inter" | "Roboto" | "Poppins" | "Open Sans" | "Lato" | "Montserrat" | "Nunito" | "serif" | "monospace";
 type ColorKey = "headerBackground" | "headerText" | "headerSubtitleText" | "chatBackground" | "textColor" | "botBubbleBackground" | "botBubbleText" | "userBubbleBackground" | "userBubbleText" | "sendButtonBackground" | "headerButtonBackground" | "footerBackground";

@@ -422,7 +422,14 @@ function getWebsiteWidgetSocialLinks(site: AnyRecord) {
   } catch {
     instagramUrl = null;
   }
-  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl, theme: sanitizeWidgetTheme(site.theme) };
+
+  const gmailAddress = safeString(site.gmail_address, 254).trim().toLowerCase();
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(gmailAddress);
+  const gmailUrl = validEmail
+    ? "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(gmailAddress)
+    : null;
+
+  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl, gmail_url: gmailUrl, theme: sanitizeWidgetTheme(site.theme) };
 }
 
 async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRecord> {
@@ -434,13 +441,13 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
   let result: any = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,theme,theme_updated_at,core_room_id")
+    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,theme,theme_updated_at,core_room_id,updated_at")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
   if (!result.error && !result.data?.length) {
     // Keep older installs working when they still embed the original public_key.
     result = await db.from("website_connections")
-      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message")
+      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,updated_at")
       .eq("public_key", key)
       .is("widget_deleted_at", null);
   }
@@ -1760,10 +1767,12 @@ Deno.serve(async (request: Request) => {
     if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
+        // last_seen_at is operational activity, not an owner edit. Keep updated_at
+        // stable here so the config ETag changes only when saved settings change.
         await db.from("website_connections").update({
-          status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          status: "connected", last_seen_at: new Date().toISOString(),
         }).eq("id", site.id);
-        const themeEtag = '"misma-theme-' + safeString(site.theme_updated_at, 80) + '"';
+        const themeEtag = '"misma-widget-config-' + safeString(site.theme_updated_at, 80) + '-' + safeString(site.updated_at, 80) + '"';
         const cacheHeaders = { ...cors, "Cache-Control": "public, max-age=60, stale-while-revalidate=30", "ETag": themeEtag };
         if (request.headers.get("if-none-match") === themeEtag) return new Response(null, { status: 304, headers: cacheHeaders });
         return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) }, cacheHeaders);
