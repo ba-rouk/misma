@@ -8637,3 +8637,93 @@ html, body, #app-root {
 .aichat-message-row.is-customer .aichat-bubble :where(*) {
   color: #ffffff !important;
 }
+
+
+/* Match sidebar and handoff icons to the composer action icon weight. */
+.aichat-nav-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 18px;
+}
+.aichat-nav-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
+}
+.aichat-nav-caret {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 20px;
+}
+.aichat-nav-caret .aichat-nav-svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+}
+
+/* Put the per-request menu on the left edge of each request card. */
+.aichat-handoff-card {
+  padding: 0 0 12px 46px;
+}
+.aichat-handoff-menu {
+  top: 9px;
+  left: 0;
+  right: auto;
+}
+.aichat-handoff-menu .aichat-chat-context-menu,
+.aichat-human-request-list-menu .aichat-chat-context-menu {
+  top: calc(100% - 4px);
+  left: 0;
+  right: auto;
+}
+.aichat-handoff-more {
+  width: 34px;
+  height: 34px;
+}
+.aichat-handoff-more svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+/* Notifications use the same left-side action slot as the Customers list. */
+.aichat-human-request-list-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.aichat-human-request-list-menu {
+  position: relative;
+  z-index: 101;
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+.aichat-human-request-list-row .aichat-notification-item {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 12px;
+}
+.aichat-handoff-avatar svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
+}
+.aichat-notification-item-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: #a9c8ff;
+}
+.aichat-notification-item-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
+}

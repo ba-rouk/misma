@@ -109,6 +109,53 @@ function getUserMessageTextColor(hex: string): string {
   return contrastWithDark >= contrastWithWhite ? "#111827" : "#ffffff";
 }
 
+
+type DashboardNavIconKind = "workspace" | "images" | "library" | "manage" | "build" | "connect" | "chevron-down" | "chevron-right";
+
+function DashboardNavIcon({ kind }: { kind: DashboardNavIconKind }) {
+  return (
+    <svg
+      className="aichat-nav-svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {kind === "workspace" ? (
+        <><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="8" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /></>
+      ) : kind === "images" ? (
+        <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8.5" cy="9" r="1.5" /><path d="m21 15-5-5L5 20" /></>
+      ) : kind === "library" ? (
+        <><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" /><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h6" /></>
+      ) : kind === "manage" ? (
+        <><circle cx="9" cy="8" r="3.25" /><path d="M3 20a6 6 0 0 1 12 0M16 5.5a3 3 0 0 1 0 5.8M18 14a5 5 0 0 1 3 4.5" /></>
+      ) : kind === "build" ? (
+        <><path d="m4 7 8-4 8 4-8 4-8-4Z" /><path d="m4 12 8 4 8-4M4 17l8 4 8-4" /></>
+      ) : kind === "connect" ? (
+        <><path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L11 5" /><path d="M14 11a5 5 0 0 0-7.07 0l-2.12 2.12a5 5 0 0 0 7.07 7.07L13 19" /></>
+      ) : kind === "chevron-down" ? (
+        <path d="m6 9 6 6 6-6" />
+      ) : (
+        <path d="m9 6 6 6-6 6" />
+      )}
+    </svg>
+  );
+}
+
+function HumanRequestIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+    </svg>
+  );
+}
+
 function SettingsNavIcon({ kind }: { kind: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1413,6 +1460,7 @@ function Dashboard() {
   const [allNotifications, setAllNotifications] = useState<any[]>([]);
   const [selectedHumanRequestNotificationId, setSelectedHumanRequestNotificationId] = useState<number | null>(null);
   const [humanRequestMenuId, setHumanRequestMenuId] = useState<number | null>(null);
+  const [humanRequestDeletingId, setHumanRequestDeletingId] = useState<number | null>(null);
   const [productsServices, setProductsServices] = useState<any[]>([]);
   const [channelConnections, setChannelConnections] = useState<any[]>([]);
   const [channelEnvironment, setChannelEnvironment] = useState({ whatsappConfigured: false, phoneConfigured: false });
@@ -4311,6 +4359,37 @@ function Dashboard() {
     };
   }, [token, dashboardDataLoaded, workspace?.id, currentConversationId, isHumanHandoffConversation, activeConversation?.channel, activeTab, messages]);
 
+  const handleDeleteHumanRequest = async (requestId: number, visitorName: string) => {
+    if (!token || !Number.isSafeInteger(requestId) || requestId <= 0 || humanRequestDeletingId !== null) return;
+    const confirmed = window.confirm(
+      "Permanently delete the human assistance request from " + visitorName +
+      "? The request and its notification will be deleted permanently. The conversation history and messages will remain."
+    );
+    if (!confirmed) {
+      setHumanRequestMenuId(null);
+      return;
+    }
+
+    setHumanRequestDeletingId(requestId);
+    try {
+      await deleteHumanRequest({ data: { token, requestId } });
+      const relatedNotificationIds = allNotifications
+        .filter((item) => Number(item.human_request_id) === requestId)
+        .map((item) => Number(item.id));
+      setHumanHandoffs((items) => items.filter((item) => Number(item.id) !== requestId));
+      setAllNotifications((items) => items.filter((item) => Number(item.human_request_id) !== requestId));
+      setSelectedHumanRequestNotificationId((current) =>
+        current !== null && relatedNotificationIds.includes(current) ? null : current
+      );
+      setHumanRequestMenuId((current) => current === requestId ? null : current);
+      loadData();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Could not permanently delete this human request.");
+    } finally {
+      setHumanRequestDeletingId((current) => current === requestId ? null : current);
+    }
+  };
+
   return (
     <div className="aichat">
       {/* Mobile Translucent Backdrop */}
@@ -4416,34 +4495,34 @@ function Dashboard() {
         {/* Main sidebar navigation */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
           <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => setExpandedNavGroups((v) => ({ ...v, workspace: !v.workspace }))} aria-expanded={Boolean(expandedNavGroups.workspace)} data-tooltip="Workspace">
-            <span className="aichat-nav-icon">▦</span><span className="aichat-nav-label">Workspace</span><span className="aichat-nav-caret">{expandedNavGroups.workspace ? "⌄" : "›"}</span>
+            <span className="aichat-nav-icon"><DashboardNavIcon kind="workspace" /></span><span className="aichat-nav-label">Workspace</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.workspace ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.workspace && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "website-statistics" ? " active" : ""}`} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "websites" ? " active" : ""}`} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{connectedWebsites.length}</span></button>
           </div>}
           <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
-            <span className="aichat-nav-icon">▧</span><span className="aichat-nav-label">Images</span>
+            <span className="aichat-nav-icon"><DashboardNavIcon kind="images" /></span><span className="aichat-nav-label">Images</span>
           </button>
           <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
-            <span className="aichat-nav-icon">▤</span><span className="aichat-nav-label">Library</span>
+            <span className="aichat-nav-icon"><DashboardNavIcon kind="library" /></span><span className="aichat-nav-label">Library</span>
           </button>
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)} data-tooltip="Manage">
-            <span className="aichat-nav-icon">◉</span><span className="aichat-nav-label">Manage</span><span className="aichat-nav-caret">{expandedNavGroups.manage ? "⌄" : "›"}</span>
+            <span className="aichat-nav-icon"><DashboardNavIcon kind="manage" /></span><span className="aichat-nav-label">Manage</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.manage ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.manage && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadHumanRequestNotificationCount > 0 && <span>{unreadHumanRequestNotificationCount}</span>}</button>
           </div>}
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)} data-tooltip="Build">
-            <span className="aichat-nav-icon">⌘</span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret">{expandedNavGroups.build ? "⌄" : "›"}</span>
+            <span className="aichat-nav-icon"><DashboardNavIcon kind="build" /></span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.build ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.build && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
           </div>}
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, connect: !v.connect }))} aria-expanded={Boolean(expandedNavGroups.connect)} data-tooltip="Connect">
-            <span className="aichat-nav-icon">↗</span><span className="aichat-nav-label">Connect</span><span className="aichat-nav-caret">{expandedNavGroups.connect ? "⌄" : "›"}</span>
+            <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Connect</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.connect ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.connect && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "phone" ? " active" : ""}`} onClick={() => { setActiveTab("phone"); setMobileMenuOpen(false); }}>Phone</button>
@@ -6112,8 +6191,28 @@ function Dashboard() {
                   const requestId = Number(request.id);
                   const visitorName = request.visitor_name || request.contacts?.name || "Website visitor";
                   return <article className="aichat-handoff-card" key={request.id}>
+                    <div className="aichat-handoff-menu">
+                      <button
+                        type="button"
+                        className="aichat-handoff-more"
+                        aria-label={`More options for ${visitorName}`}
+                        title="More options"
+                        aria-expanded={humanRequestMenuId === requestId}
+                        disabled={humanRequestDeletingId === requestId}
+                        onClick={() => setHumanRequestMenuId((current) => current === requestId ? null : requestId)}
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
+                      </button>
+                      {humanRequestMenuId === requestId && (
+                        <div className="aichat-chat-context-menu" role="menu" aria-label={`Options for ${visitorName}`}>
+                          <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(requestId, visitorName)}>
+                            {humanRequestDeletingId === requestId ? "Deleting…" : "Delete request"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <button type="button" className="aichat-handoff-row" onClick={() => void selectConversation(Number(request.conversation_id))}>
-                      <span className="aichat-handoff-avatar">♙</span>
+                      <span className="aichat-handoff-avatar"><HumanRequestIcon /></span>
                       <span className="aichat-handoff-copy">
                         <strong>{visitorName}</strong>
                         <small>{request.visitor_email || request.contacts?.email || "Contact details not provided"} · {request.visitor_phone || request.contacts?.phone || "No phone"} · {request.created_at ? new Date(request.created_at).toLocaleString() : "New request"}</small>
@@ -6122,42 +6221,6 @@ function Dashboard() {
                       </span>
                       <span className={`aichat-status-pill is-${request.status}`}>{request.status}</span>
                     </button>
-                    <div className="aichat-handoff-menu">
-                      <button
-                        type="button"
-                        className="aichat-handoff-more"
-                        aria-label={`More options for ${visitorName}`}
-                        title="More options"
-                        aria-expanded={humanRequestMenuId === requestId}
-                        onClick={() => setHumanRequestMenuId((current) => current === requestId ? null : requestId)}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-                      </button>
-                      {humanRequestMenuId === requestId && (
-                        <div className="aichat-chat-context-menu" role="menu" aria-label={`Options for ${visitorName}`}>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="is-danger"
-                            onClick={async () => {
-                              if (!token) return;
-                              const confirmed = window.confirm(`Delete the human assistance request from ${visitorName}? Its request card and notification will be removed. The conversation record will be retained.`);
-                              if (!confirmed) return;
-                              try {
-                                await deleteHumanRequest({ data: { token, requestId } });
-                                setHumanHandoffs((items) => items.filter((item) => Number(item.id) !== requestId));
-                                setAllNotifications((items) => items.filter((item) => Number(item.human_request_id) !== requestId));
-                                setSelectedHumanRequestNotificationId(null);
-                                setHumanRequestMenuId(null);
-                                loadData();
-                              } catch (cause) {
-                                alert(cause instanceof Error ? cause.message : "Could not delete this human request.");
-                              }
-                            }}
-                          >Delete request</button>
-                        </div>
-                      )}
-                    </div>
                     {request.status !== "handled" && <button type="button" className="aichat-action-btn" onClick={async () => {
                       if (!token) return;
                       try { await updateHumanRequestStatus({ data: { token, requestId, status: "handled" } }); loadData(); }
@@ -6279,22 +6342,47 @@ function Dashboard() {
                       const website = connectedWebsites.find((entry) => Number(entry.id) === Number(item.website_connection_id));
                       const visitorName = String(request?.visitor_name || (item.title && !/requested a human|human request/i.test(item.title) ? item.title : "Website visitor"));
                       const isExpanded = selectedHumanRequestNotificationId === Number(item.id);
+                      const requestId = Number(item.human_request_id || request?.id || 0);
                       return (
                         <div key={item.id} className="aichat-human-request-entry">
-                          <button
-                            type="button"
-                            className={`aichat-notification-item${item.is_read ? " is-read" : ""}`}
-                            aria-expanded={isExpanded}
-                            onClick={() => void openHumanRequestNotification(item)}
-                          >
-                            <span className="aichat-notification-item-icon" aria-hidden="true">♙</span>
-                            <span className="aichat-notification-item-copy">
-                              <strong>{visitorName}</strong>
-                              <small>{website?.domain || website?.name || "Website visitor"} · {item.created_at ? new Date(item.created_at).toLocaleString() : "Human request"}</small>
-                              <span>{request?.reason || "Requested to speak with a person"}</span>
-                            </span>
-                            <span className="aichat-notification-open">{item.is_read ? "Opened" : "New"}</span>
-                          </button>
+                          <div className="aichat-human-request-list-row">
+                            {requestId > 0 && (
+                              <div className="aichat-human-request-list-menu">
+                                <button
+                                  type="button"
+                                  className="aichat-handoff-more"
+                                  aria-label={`More options for ${visitorName}`}
+                                  title="More options"
+                                  aria-expanded={humanRequestMenuId === requestId}
+                                  disabled={humanRequestDeletingId === requestId}
+                                  onClick={() => setHumanRequestMenuId((current) => current === requestId ? null : requestId)}
+                                >
+                                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
+                                </button>
+                                {humanRequestMenuId === requestId && (
+                                  <div className="aichat-chat-context-menu" role="menu" aria-label={`Options for ${visitorName}`}>
+                                    <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(requestId, visitorName)}>
+                                      {humanRequestDeletingId === requestId ? "Deleting…" : "Delete request"}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className={`aichat-notification-item${item.is_read ? " is-read" : ""}`}
+                              aria-expanded={isExpanded}
+                              onClick={() => void openHumanRequestNotification(item)}
+                            >
+                              <span className="aichat-notification-item-icon"><HumanRequestIcon /></span>
+                              <span className="aichat-notification-item-copy">
+                                <strong>{visitorName}</strong>
+                                <small>{website?.domain || website?.name || "Website visitor"} · {item.created_at ? new Date(item.created_at).toLocaleString() : "Human request"}</small>
+                                <span>{request?.reason || "Requested to speak with a person"}</span>
+                              </span>
+                              <span className="aichat-notification-open">{item.is_read ? "Opened" : "New"}</span>
+                            </button>
+                          </div>
                           {isExpanded && (
                             <div className="aichat-human-request-details">
                               <div><strong>Name</strong><span>{request?.visitor_name || visitorName}</span></div>

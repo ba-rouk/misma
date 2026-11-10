@@ -1382,19 +1382,39 @@ test("website and dashboard Speech Talk use short replies with bounded fast prov
 });
 
 
-test("human handoff requests stay in Manage customers, can be deleted individually, and stay out of Recents", async () => {
+test("human handoff requests can be permanently deleted from Customers and Notifications lists", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const api = await read("../src/lib/api/misma.functions.ts");
   const styles = await read("../src/styles.css");
 
-  assert.match(dashboard, /handoffConversationIds\.has\(Number\(item\.id\)\)/);
   assert.match(dashboard, /activeTab === "customers"/);
   assert.match(dashboard, /humanRequestMenuId/);
   assert.match(dashboard, /Delete request/);
   assert.match(dashboard, /deleteHumanRequest\(\{ data: \{ token, requestId \} \}\)/);
+
+  const customerCardStart = dashboard.indexOf('className="aichat-handoff-card"');
+  const menuStart = dashboard.indexOf('className="aichat-handoff-menu"', customerCardStart);
+  const rowStart = dashboard.indexOf('className="aichat-handoff-row"', customerCardStart);
+  assert.ok(customerCardStart >= 0 && menuStart > customerCardStart && rowStart > menuStart,
+    "the three-dot request menu must be placed before the request row on the left");
+
+  assert.match(dashboard, /aichat-human-request-list-row/);
+  assert.match(dashboard, /More options for \$\{visitorName\}/);
+  assert.match(dashboard, /requestId > 0/);
+  assert.match(dashboard, /setAllNotifications\(\(items\) => items\.filter\(\(item\) => Number\(item\.human_request_id\) !== requestId\)\)/);
+
   assert.match(api, /export const deleteHumanRequest = createServerFn/);
+  assert.match(api, /\.from\("workspace_notifications"\)[\s\S]*?\.delete\(\)/);
+  assert.match(api, /\.from\("human_requests"\)[\s\S]*?\.delete\(\)/);
   assert.match(api, /\.eq\("workspace_id", workspaceId\)/);
-  assert.match(styles, /\.aichat-handoff-more/);
+
+  assert.match(styles, /\.aichat-handoff-menu\s*\{[^}]*left:\s*0;[^}]*right:\s*auto/);
+  assert.match(styles, /\.aichat-human-request-list-row/);
+  assert.match(styles, /\.aichat-handoff-avatar svg/);
+  assert.match(styles, /\.aichat-nav-icon svg/);
+  assert.match(dashboard, /function DashboardNavIcon/);
+  assert.match(dashboard, /strokeWidth=\{2\.2\}/);
+  assert.doesNotMatch(dashboard, /aichat-handoff-avatar">♙|aichat-notification-item-icon" aria-hidden="true">♙/);
 });
 
 test("connected website detail cards start collapsed and can be expanded", async () => {
