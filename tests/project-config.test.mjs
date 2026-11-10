@@ -1394,7 +1394,7 @@ test("Misma publishes a PNG favicon supported by browser and Google Search forma
 });
 
 test("website widget themes are owner-saved, safely validated, and applied inside the widget shadow root", async () => {
-  const migration = await read("../supabase/migrations/20261110100000_website_widget_customization_rooms_scan.sql");
+  const migration = await read("../supabase/migrations/20261110084540_website_widget_customization_rooms_scan.sql");
   const api = await read("../src/lib/api/misma.functions.ts");
   const route = await read("../src/routes/dashboard/websites/$siteId/customize.tsx");
   const runtime = await read("../src/assets/misma-widget-runtime.js");
@@ -1425,8 +1425,8 @@ test("website knowledge is isolated by Core.01 website room and Misma identifies
 });
 
 test("website scans are safe, resumable and report rendered-content extraction", async () => {
-  const migration = await read("../supabase/migrations/20261110100000_website_widget_customization_rooms_scan.sql");
-  const scanMigration = await read("../supabase/migrations/20261110103000_website_scan_metadata.sql");
+  const migration = await read("../supabase/migrations/20261110084540_website_widget_customization_rooms_scan.sql");
+  const scanMigration = await read("../supabase/migrations/20261110084542_website_scan_metadata.sql");
   const widget = await read("../supabase/functions/misma-widget/index.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(migration, /create table if not exists public\.scan_jobs/);
