@@ -1444,6 +1444,7 @@ function Dashboard() {
   const [websiteActionId, setWebsiteActionId] = useState<string | null>(null);
   const [websiteScanFeedback, setWebsiteScanFeedback] = useState<Record<string, { kind: "success" | "error" | "info"; message: string }>>({});
   const [expandedWebsiteIds, setExpandedWebsiteIds] = useState<string[]>([]);
+  const [sharedWidgetExpanded, setSharedWidgetExpanded] = useState(false);
   const sharedWidgetPublicKey = connectedWebsites.length
     ? connectedWebsites[0].widget_public_key || connectedWebsites[0].public_key
     : "";
@@ -1701,6 +1702,7 @@ function Dashboard() {
   // Forms in other tabs
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
+  const [knowledgeWebsiteId, setKnowledgeWebsiteId] = useState("");
   const [savingKnowledge, setSavingKnowledge] = useState(false);
 
   // Business profile form
@@ -4113,7 +4115,7 @@ function Dashboard() {
     setKnowledgeUploadBusy(true);
     try {
       const content = await file.text();
-      const result = await callWidgetFunction({ action: "extract-knowledge", workspaceId: workspace.id, fileName: file.name, content });
+      const result = await callWidgetFunction({ action: "extract-knowledge", workspaceId: workspace.id, fileName: file.name, content, websiteId: knowledgeWebsiteId || null });
       alert(`Knowledge extraction complete. Saved ${result.knowledgeSaved || 0} FAQs and ${result.productSuggestions || 0} product/service suggestions for review.`);
       loadData();
     } catch (cause) {
@@ -4129,10 +4131,11 @@ function Dashboard() {
     setSavingKnowledge(true);
     try {
       await addKnowledge({
-        data: { token, question: newQuestion.trim(), answer: newAnswer.trim() },
+        data: { token, question: newQuestion.trim(), answer: newAnswer.trim(), websiteConnectionId: knowledgeWebsiteId || null },
       });
       setNewQuestion("");
       setNewAnswer("");
+      setKnowledgeWebsiteId("");
       loadData();
     } catch (cause) {
       alert(
@@ -5302,6 +5305,14 @@ function Dashboard() {
                 </p>
                 <form onSubmit={handleAddKnowledge}>
                   <div className="aichat-input-group">
+                    <label htmlFor="knowledge-website-room">Knowledge room</label>
+                    <select id="knowledge-website-room" className="aichat-input" value={knowledgeWebsiteId} onChange={(event) => setKnowledgeWebsiteId(event.target.value)}>
+                      <option value="">General workspace knowledge (available across channels)</option>
+                      {connectedWebsites.map((site) => <option key={site.id} value={site.id}>{site.name || site.domain} — website room</option>)}
+                    </select>
+                    <small>Choose a connected website to keep this knowledge inside that website's Core.01 room. General knowledge remains shared across the workspace. This selection also applies to imported knowledge files below.</small>
+                  </div>
+                  <div className="aichat-input-group">
                     <label htmlFor="k-question">Question / Trigger</label>
                     <input
                       id="k-question"
@@ -5954,32 +5965,39 @@ function Dashboard() {
                   <span><strong>Use one shared widget for all my websites</strong><br />All registered domains use the same widget key and workspace knowledge. Visitor conversations remain separated by website.</span>
                 </label>
                 <p className="aichat-website-setup-note">You do not need to publish the website first. Register its final domain or a preview/staging URL, then copy the general script below. For local testing, use <code>http://localhost:PORT</code>.</p>
-                <button type="submit" className="aichat-action-btn" disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
+                <button type="submit" className="aichat-action-btn" style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }} disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
               </form>
             </div>
             <div className="aichat-card">
-              <div className="aichat-panel-heading"><div><h3>One widget across your websites</h3><small>Use one installation key and the same workspace knowledge on every registered domain.</small></div><span className="aichat-status-pill is-connected">{sharedWebsiteWidget ? "Shared" : "Separate"}</span></div>
-              <p>Each domain is still validated against its registered hostname. Removing one domain does not remove the shared widget from other registered domains.</p>
-              <button type="button" className="aichat-action-btn secondary" disabled={!connectedWebsites.length} onClick={async () => {
-                if (!token) return;
-                try {
-                  const result = await shareWebsiteWidgetAcrossWorkspace({ data: { token } });
-                  setSharedWebsiteWidget(true);
-                  try { window.localStorage.setItem("misma_shared_website_widget", "true"); } catch { /* Keep session setting. */ }
-                  await loadData();
-                  alert("One widget is now shared across " + result.websiteCount + " connected websites.");
-                } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not share the widget."); }
-              }}>Use one widget for all connected websites</button>
-              {everyWebsiteUsesSharedWidget && (
-                <div className="aichat-shared-script">
-                  <label className="aichat-widget-script-label">General shared website script — paste this same script on every registered website</label>
-                  <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-channels-1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
-                  <button type="button" className="aichat-action-btn" onClick={() => {
-                    const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-channels-1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
-                    void navigator.clipboard.writeText(script).then(() => alert("Shared website widget script copied."));
-                  }}>Copy general script</button>
-                </div>
-              )}
+              <div className="aichat-panel-heading">
+                <button type="button" className="aichat-nav-btn" style={{ width: "100%", justifyContent: "space-between", textAlign: "left" }} aria-expanded={sharedWidgetExpanded} onClick={() => setSharedWidgetExpanded((value) => !value)}>
+                  <span><strong>One widget across your websites</strong><small style={{ display: "block" }}>Use one installation key and the same workspace knowledge on every registered domain.</small></span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="aichat-status-pill is-connected">{sharedWebsiteWidget ? "Shared" : "Separate"}</span><span aria-hidden="true">{sharedWidgetExpanded ? "⌄" : "›"}</span></span>
+                </button>
+              </div>
+              <div hidden={!sharedWidgetExpanded}>
+                <p>Each domain is still validated against its registered hostname. Removing one domain does not remove the shared widget from other registered domains.</p>
+                <button type="button" className="aichat-action-btn secondary" disabled={!connectedWebsites.length} onClick={async () => {
+                  if (!token) return;
+                  try {
+                    const result = await shareWebsiteWidgetAcrossWorkspace({ data: { token } });
+                    setSharedWebsiteWidget(true);
+                    try { window.localStorage.setItem("misma_shared_website_widget", "true"); } catch { /* Keep session setting. */ }
+                    await loadData();
+                    alert("One widget is now shared across " + result.websiteCount + " connected websites.");
+                  } catch (cause) { alert(cause instanceof Error ? cause.message : "Could not share the widget."); }
+                }}>Use one widget for all connected websites</button>
+                {everyWebsiteUsesSharedWidget && (
+                  <div className="aichat-shared-script">
+                    <label className="aichat-widget-script-label">General shared website script — paste this same script on every registered website</label>
+                    <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                    <button type="button" className="aichat-action-btn" onClick={() => {
+                      const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                      void navigator.clipboard.writeText(script).then(() => alert("Shared website widget script copied."));
+                    }}>Copy general script</button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="aichat-card"><h3>Connected websites ({connectedWebsites.length})</h3>
               {connectedWebsites.length === 0 ? <p>Your websites will appear here after you add them.</p> : connectedWebsites.map((site) => <article className={`aichat-website-card${!expandedWebsiteIds.includes(site.id) ? " is-minimized" : ""}`} key={site.id}>
@@ -6003,17 +6021,20 @@ function Dashboard() {
                   </button>
                 </div>
                 <div className="aichat-website-card-details" hidden={!expandedWebsiteIds.includes(site.id)}>
-                <p>This general HTML script works on the registered website, including an unpublished preview or staging version. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
+                <p>This widget works with websites built in any backend language because Misma reads the public rendered HTTP response, not your server-side source code. JavaScript-heavy sites may need browser rendering support during scanning. Create the connection now; Misma verifies it when the script first loads from the registered hostname.</p>
                 <WebsiteSocialSettings
                   site={site}
                   token={token || ""}
                   onSaved={(website) => setConnectedWebsites((items) => items.map((item) => item.id === website.id ? { ...item, ...website } : item))}
                 />
+                <button type="button" className="aichat-action-btn" style={{ width: "100%", margin: "10px 0", background: "#16a34a", color: "#fff", borderColor: "#16a34a" }} onClick={() => navigate({ to: "/dashboard/websites/$siteId/customize", params: { siteId: site.id } })}>
+                  <span aria-hidden="true">◈</span> Customize widget <span aria-hidden="true">›</span>
+                </button>
                 <label className="aichat-widget-script-label">General website installation script</label>
-                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-channels-1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261107-widget-channels-1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
@@ -6023,15 +6044,45 @@ function Dashboard() {
                     setWebsiteActionId(site.id);
                     setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "info", message: "Scanning public pages and extracting business knowledge…" } }));
                     try {
-                      const result = await callWidgetFunction(
-                        { action: "scan-website", workspaceId: workspace.id, websiteId: site.id },
+                      const queued = await callWidgetFunction(
+                        { action: "scan-website", workspaceId: workspace.id, websiteId: site.id, maxPages: 50, crawlDepth: 3 },
                         controller.signal,
                       );
+                      const jobId = String(queued.jobId || "");
+                      if (!jobId) throw new Error("Misma did not return a scan job ID.");
+                      let finalJob: any = null;
+                      for (let attempt = 0; attempt < 90; attempt += 1) {
+                        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+                        const statusResult = await callWidgetFunction(
+                          { action: "scan-status", workspaceId: workspace.id, jobId },
+                          controller.signal,
+                        );
+                        const job = statusResult.job;
+                        if (!job) throw new Error("The scan job could not be found.");
+                        setWebsiteScanFeedback((current) => ({
+                          ...current,
+                          [site.id]: {
+                            kind: "info",
+                            message: job.status === "running"
+                              ? `Scanning website: ${job.pages_scanned || 0}/${job.pages_total || "discovering"} pages discovered…`
+                              : "Preparing website scan…",
+                          },
+                        }));
+                        if (job.status === "completed" || job.status === "failed") {
+                          finalJob = job;
+                          break;
+                        }
+                      }
+                      if (!finalJob) throw new Error("The scan is still running in the background. Refresh the website card to check its latest status.");
+                      if (finalJob.status === "failed") {
+                        const reason = Array.isArray(finalJob.errors) ? finalJob.errors[0]?.message : "";
+                        throw new Error(reason || "Website scan failed. Please retry.");
+                      }
                       setWebsiteScanFeedback((current) => ({
                         ...current,
                         [site.id]: {
                           kind: "success",
-                          message: `Scan complete: ${result.pagesScanned || 0} pages scanned, ${result.knowledgeSaved || 0} knowledge answers saved, and ${result.productSuggestions || 0} product/service suggestions added for review.`,
+                          message: `Scan complete: ${finalJob.pages_scanned || 0} pages scanned, ${finalJob.pages_skipped || 0} skipped. Platform: ${finalJob.detected_platform || "HTTP-rendered website"}.${Array.isArray(finalJob.errors) && finalJob.errors.length ? " Skipped details: " + finalJob.errors.slice(0, 3).map((item: any) => item.message).join("; ") : ""}`,
                         },
                       }));
                       loadData();
@@ -6066,7 +6117,7 @@ function Dashboard() {
                     {websiteScanFeedback[site.id].message}
                   </p>
                 )}
-                <small className="aichat-website-meta">Last activity: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}</small>
+                <small className="aichat-website-meta">Last activity: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}{site.detected_platform ? " · Platform: " + site.detected_platform : ""}</small>
                 <small className="aichat-website-meta">Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
                 </div>
               </article>)}

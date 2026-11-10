@@ -4,7 +4,7 @@ import webpush from "web-push";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-twilio-signature, x-hub-signature-256",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, if-none-match, x-client-info, x-twilio-signature, x-hub-signature-256",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Cache-Control": "no-store",
 };
@@ -338,21 +338,25 @@ function parseJsonObject(answer: string): AnyRecord {
   if (!isRecord(parsed)) throw new Error("The extraction response was not an object.");
   return parsed;
 }
-async function loadBusinessContext(db: Db, workspaceId: string, voice = false) {
+async function loadBusinessContext(db: Db, workspaceId: string, voice = false, websiteConnectionId?: string, roomId?: number) {
+  let knowledgeQuery = db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true);
+  if (websiteConnectionId) knowledgeQuery = knowledgeQuery.or("website_connection_id.is.null,website_connection_id.eq." + websiteConnectionId);
+  let lessonsQuery = db.from("core_01_lessons").select("room_key,lesson").eq("workspace_id", workspaceId).eq("status", "approved");
+  if (roomId && Number.isSafeInteger(roomId)) lessonsQuery = lessonsQuery.eq("room_id", roomId);
   const [workspace, knowledge, products, lessons] = await Promise.all([
     db.from("workspaces").select("name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-    db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }).limit(voice ? 8 : 30),
+    knowledgeQuery.order("id", { ascending: false }).limit(voice ? 8 : 30),
     db.from("products_services").select("item_type,name,description,price_text").eq("workspace_id", workspaceId).eq("active", true).limit(voice ? 15 : 50),
-    db.from("core_01_lessons").select("room_key,lesson").eq("workspace_id", workspaceId).eq("status", "approved").order("confidence", { ascending: false }).limit(voice ? 6 : 12),
+    lessonsQuery.order("confidence", { ascending: false }).limit(voice ? 6 : 12),
   ]);
   if (workspace.error) throw new Error("Could not load the business profile.");
   return { workspace: workspace.data, knowledge: knowledge.data || [], products: products.data || [], core01: lessons.data || [] };
 }
-async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false): Promise<string> {
-  const context = await loadBusinessContext(db, workspaceId, voice);
+async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId?: string, roomId?: number): Promise<string> {
+  const context = await loadBusinessContext(db, workspaceId, voice, websiteConnectionId, roomId);
   const system = [
     "You are Misma, the business's website and messaging assistant.",
-    "PLATFORM IDENTITY: If asked who created, built, or developed Misma itself, answer: Misma was created by Misma Corporation. Do not attribute Misma's creation to the connected business; use supplied business facts only for questions about that business.",
+    "PLATFORM IDENTITY: If asked which model or knowledge model powers Misma, say that Misma uses Core.01. If asked who created, built, or developed Misma itself, answer: Misma was created by Misma Corporation. Do not attribute Misma's creation to the connected business; use supplied business facts only for questions about that business.",
     "Answer clearly and naturally. Use only the business facts supplied below for business-specific claims.",
     "Never invent prices, stock, availability, delivery promises, policies, contacts, or order details.",
     "When a business fact is missing, say so and offer a human handoff.",
@@ -366,6 +370,22 @@ async function answerCustomer(db: Db, workspaceId: string, message: string, voic
     "Business context: " + JSON.stringify(context),
   ].join("\n");
   return await generateText(system, message, undefined, undefined, voice);
+}
+
+function sanitizeWidgetTheme(value: unknown): AnyRecord | null {
+  if (!isRecord(value)) return null;
+  const colors = ["headerBackground","headerText","chatBackground","textColor","botBubbleBackground","botBubbleText","userBubbleBackground","userBubbleText","sendButtonBackground","headerButtonBackground","footerBackground"];
+  const fonts = ["system-ui","Inter","Roboto","Poppins","Open Sans","Lato","Montserrat","Nunito","serif","monospace"];
+  const result: AnyRecord = { schemaVersion: 1 };
+  for (const key of colors) {
+    const color = value[key];
+    if (typeof color !== "string" || !/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)) return null;
+    result[key] = color.toLowerCase();
+  }
+  if (typeof value.fontFamily !== "string" || !fonts.includes(value.fontFamily) || typeof value.matchChatBackground !== "boolean") return null;
+  result.fontFamily = value.fontFamily;
+  result.matchChatBackground = value.matchChatBackground;
+  return result;
 }
 
 function getWebsiteWidgetSocialLinks(site: AnyRecord) {
@@ -398,7 +418,7 @@ function getWebsiteWidgetSocialLinks(site: AnyRecord) {
   } catch {
     instagramUrl = null;
   }
-  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl };
+  return { whatsapp_url: whatsappUrl, instagram_url: instagramUrl, theme: sanitizeWidgetTheme(site.theme) };
 }
 
 async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRecord> {
@@ -409,8 +429,8 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   try { origin = new URL(originHeader); } catch { throw new Error("The website origin is invalid."); }
   if (origin.protocol !== "https:" && origin.hostname !== "localhost") throw new Error("The website widget must run on HTTPS.");
   const originHost = origin.hostname.toLowerCase().replace(/^www\./, "");
-  let result = await db.from("website_connections")
-    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message")
+  let result: any = await db.from("website_connections")
+    .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,theme,theme_updated_at,core_room_id")
     .eq("widget_public_key", key)
     .is("widget_deleted_at", null);
   if (!result.error && !result.data?.length) {
@@ -601,6 +621,7 @@ function isSafeWebsiteUrl(value: string): URL | null {
     const host = url.hostname.toLowerCase();
     if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return null;
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) return null;
+    if (url.port && url.port !== "80" && url.port !== "443") return null;
     if (url.username || url.password) return null;
     return url;
   } catch { return null; }
@@ -639,6 +660,73 @@ async function isPublicHostname(hostname: string): Promise<boolean> {
   }
 }
 
+function decodeWebsiteBytes(bytes: Uint8Array, contentType: string): string {
+  const declared = contentType.match(/charset\s*=\s*["']?([^;"'\s]+)/i);
+  const prefix = !declared
+    ? new TextDecoder("windows-1252").decode(bytes.subarray(0, Math.min(bytes.length, 4096)))
+    : "";
+  const meta = prefix.match(/<meta\b[^>]*charset\s*=\s*["']?\s*([^;"'\s/>]+)/i)
+    || prefix.match(/<meta\b[^>]*content=["'][^"']*charset=([^;"'\s]+)/i);
+  const bomLabel = bytes[0] === 0xff && bytes[1] === 0xfe ? "utf-16le"
+    : bytes[0] === 0xfe && bytes[1] === 0xff ? "utf-16be" : "";
+  const requested = (declared?.[1] || meta?.[1] || bomLabel || "utf-8").toLowerCase();
+  const supported = new Set(["utf-8","utf-16le","utf-16be","iso-8859-1","windows-1252","shift_jis","gbk","gb18030","big5","euc-kr"]);
+  const label = supported.has(requested) ? requested : "utf-8";
+  try { return new TextDecoder(label).decode(bytes); }
+  catch { return new TextDecoder("utf-8").decode(bytes); }
+}
+function extractEmbeddedData(html: string): string {
+  const parts: string[] = [];
+  const patterns = [
+    /<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i,
+    /<script[^>]+id=["']__NUXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i,
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
+  ];
+  for (const pattern of patterns) {
+    const matches = html.matchAll(new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g"));
+    for (const match of matches) parts.push(String(match[1] || "").slice(0, 12000));
+  }
+  for (const match of html.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:title|og:description|description|twitter:title|twitter:description)["'][^>]+content=["']([^"']+)["'][^>]*>/gi)) {
+    parts.push(String(match[1] || ""));
+  }
+  return parts.join("\n").slice(0, 24000);
+}
+function detectWebsitePlatform(html: string, url: string, headers?: Headers): string {
+  const lower = html.toLowerCase();
+  const powered = (headers?.get("x-powered-by") || "").toLowerCase();
+  const server = (headers?.get("server") || "").toLowerCase();
+  if (/asp\.net|\.net/i.test(powered)) return ".NET / ASP.NET";
+  if (/express|node\.js/i.test(powered)) return "Node.js / Express";
+  if (/php/i.test(powered) || server.includes("php")) return "PHP";
+  if (/django|wsgi|gunicorn|werkzeug|flask/i.test(powered + " " + server)) return "Python";
+  if (/rails|ruby|puma|passenger/i.test(powered + " " + server)) return "Ruby";
+  if (/tomcat|jetty|servlet|spring/i.test(powered + " " + server)) return "Java";
+  if (/golang|go-http|fasthttp/i.test(powered + " " + server)) return "Go";
+  if (lower.includes("wp-content") || lower.includes("wp-includes")) return "WordPress / PHP";
+  if (lower.includes("cdn.shopify.com") || lower.includes("shopify-section")) return "Shopify";
+  if (lower.includes("__next_data__") || lower.includes("/_next/")) return "Next.js";
+  if (lower.includes("__nuxt") || lower.includes("/_nuxt/")) return "Nuxt";
+  if (lower.includes("wixstatic.com") || lower.includes("wix.com")) return "Wix";
+  if (lower.includes("drupalsettings")) return "Drupal / PHP";
+  if (lower.includes("laravel_session")) return "Laravel / PHP";
+  if (lower.includes("ng-version") || lower.includes("ng-app")) return "Angular";
+  if (lower.includes("data-v-app") || lower.includes("vue")) return "Vue.js";
+  if (lower.includes("reactroot") || lower.includes("react")) return "React";
+  if (url.toLowerCase().endsWith(".php")) return "PHP";
+  return "HTML / HTTP-rendered site";
+}
+function extractThemeSuggestions(html: string): AnyRecord {
+  const colors = Array.from(html.matchAll(/(?:content|--[\w-]+|fill|stroke|color|background(?:-color)?)\s*[:=]\s*["']?(#[0-9a-fA-F]{6})/gi)).map((match) => match[1].toLowerCase());
+  const unique = Array.from(new Set(colors)).slice(0, 8);
+  const meta = html.match(/<meta[^>]+name=["']theme-color["'][^>]+content=["'](#[0-9a-fA-F]{6})["']/i);
+  const brand = meta?.[1]?.toLowerCase() || unique[0];
+  if (!brand) return {};
+  return {
+    headerBackground: brand,
+    sendButtonBackground: unique[1] || brand,
+    userBubbleBackground: unique[1] || brand,
+  };
+}
 function cleanHtml(html: string): string {
   return html
     .replace(/<(script|style|noscript|svg|nav|footer|header|form|iframe)[\s\S]*?<\/\1>/gi, " ")
@@ -650,33 +738,122 @@ function cleanHtml(html: string): string {
     .replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n")
     .trim().slice(0, 18000);
 }
+async function extractPdfText(bytes: Uint8Array): Promise<string> {
+  const pdfjs = await import("npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs");
+  const task = pdfjs.getDocument({ data: bytes, disableFontFace: true, useSystemFonts: true, isEvalSupported: false });
+  const document = await task.promise;
+  const pages: string[] = [];
+  for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 40); pageNumber += 1) {
+    const page = await document.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const text = content.items.map((item) => "str" in item && typeof item.str === "string" ? item.str : "").join(" ");
+    if (text.trim()) pages.push(text.trim());
+  }
+  return pages.join("\n\n").slice(0, 18000);
+}
+async function fetchWebsiteWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, init);
+      if (![429,500,502,503,504].includes(response.status) || attempt === retries) return response;
+      const retryAfter = response.headers.get("retry-after") || "";
+      const seconds = Number(retryAfter);
+      const wait = Number.isFinite(seconds) && seconds > 0
+        ? Math.min(4000, seconds * 1000)
+        : Math.min(3000, 500 * (2 ** attempt));
+      await response.body?.cancel().catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    } catch (error) {
+      lastError = error;
+      if (attempt === retries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(3000, 500 * (2 ** attempt))));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Website request failed after retries.");
+}
 function websiteScanSignal(parent: AbortSignal | undefined, timeoutMs: number): AbortSignal {
   const timeout = AbortSignal.timeout(timeoutMs);
   return parent ? AbortSignal.any([parent, timeout]) : timeout;
 }
-async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal): Promise<Array<{ url: string; title: string; text: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
-  const queue = [first.href];
+  const queue = Array.from(new Set([first.href, ...seedUrls])).slice(0, 100);
+  const depthByUrl = new Map<string, number>(queue.map((url) => [url, url === first.href ? 0 : 1]));
   const seen = new Set<string>();
-  const pages: Array<{ url: string; title: string; text: string }> = [];
-  // Seed the bounded crawl from a same-origin XML sitemap when the site publishes one.
+  if (onDiscover) for (const seed of queue) await onDiscover(seed);
+  const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }> = [];
+  const robotsDisallow: string[] = [];
+  const robotsAllow: string[] = [];
+  let robotsText = "";
   try {
-    const sitemapUrl = new URL("/sitemap.xml", first.origin);
-    const sitemapResponse = await fetch(sitemapUrl.href, {
+    const robots = await fetch(new URL("/robots.txt", first.origin).href, {
+      redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
+      signal: websiteScanSignal(scanSignal, 5000),
+    });
+    if (robots.ok) {
+      const body = (await robots.text()).slice(0, 100000);
+      robotsText = body;
+      let active = false;
+      for (const line of body.split(/\r?\n/)) {
+        const clean = line.split("#")[0].trim();
+        if (/^user-agent\s*:\s*\*/i.test(clean) || /^user-agent\s*:\s*MismaBot/i.test(clean)) active = true;
+        else if (/^user-agent\s*:/i.test(clean)) active = false;
+        else if (active && /^disallow\s*:/i.test(clean)) {
+          const value = clean.split(":").slice(1).join(":").trim();
+          if (value) robotsDisallow.push(value);
+        }
+      }
+    }
+  } catch { /* robots.txt unavailable: continue with conservative limits. */ }
+  const allowedByRobots = (url: URL) => {
+    const matches = [
+      ...robotsAllow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: true })),
+      ...robotsDisallow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: false })),
+    ].sort((a, b) => b.path.length - a.path.length);
+    return matches.length === 0 || matches[0].allowed;
+  };
+  // Seed from robots-declared sitemaps, sitemap indexes, common feeds and the same-origin sitemap.
+  const sitemapSeeds = [new URL("/sitemap.xml", first.origin).href, new URL("/sitemap_index.xml", first.origin).href, new URL("/sitemap-index.xml", first.origin).href];
+  for (const line of robotsText.split(/\r?\n/)) {
+    const match = line.match(/^\s*sitemap\s*:\s*(https?:\/\/\S+)/i);
+    if (match) sitemapSeeds.push(match[1]);
+  }
+  for (const sitemapHref of Array.from(new Set(sitemapSeeds)).slice(0, 6)) try {
+    const sitemapUrl = new URL(sitemapHref);
+    if (sitemapUrl.origin !== first.origin || !(await isPublicHostname(sitemapUrl.hostname))) continue;
+    const sitemapResponse = await fetchWebsiteWithRetry(sitemapUrl.href, {
       redirect: "manual",
-      headers: { "User-Agent": "MismaWebsiteScanner/1.0 (+https://misma.onrender.com)" },
+      headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
       signal: websiteScanSignal(scanSignal, 7000),
     });
     if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
       const sitemap = (await sitemapResponse.text()).slice(0, 1000000);
-      const locations = Array.from(sitemap.matchAll(new RegExp("<loc>\\s*([^<]+)\\s*</loc>", "gi"))).map((match) => match[1].replace(/&amp;/g, "&").trim());
+      let locations = Array.from(sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim());
+      if (/<sitemapindex\b/i.test(sitemap)) {
+        for (const nestedHref of locations.slice(0, 8)) {
+          try {
+            const nestedUrl = new URL(nestedHref, first.origin);
+            if (nestedUrl.origin !== first.origin || !(await isPublicHostname(nestedUrl.hostname))) continue;
+            const nestedResponse = await fetchWebsiteWithRetry(nestedUrl.href, {
+              redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
+              signal: websiteScanSignal(scanSignal, 7000),
+            });
+            if (nestedResponse.ok) {
+              const nestedXml = (await nestedResponse.text()).slice(0, 500000);
+              locations.push(...Array.from(nestedXml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim()));
+            }
+          } catch { /* Skip an unavailable nested sitemap. */ }
+        }
+      }
       for (const location of locations) {
         try {
-          const linked = new URL(location, first.origin);
-          linked.hash = "";
-          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && linked.href !== first.href && queue.length < 100) queue.push(linked.href);
+          const linked = new URL(location, first.origin); linked.hash = "";
+          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && linked.href !== first.href && queue.length < 100 && !queue.includes(linked.href)) {
+            queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href);
+          }
         } catch { /* Ignore malformed or external sitemap entries. */ }
       }
     }
@@ -684,42 +861,112 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
     if (scanSignal?.aborted) throw error;
     // A missing or inaccessible sitemap does not prevent normal same-domain link discovery.
   }
+  // RSS/Atom feeds are another discovery source for published service, product and FAQ pages.
+  for (const feedPath of ["/feed","/feed.xml","/rss.xml","/atom.xml"]) {
+    try {
+      const feedUrl = new URL(feedPath, first.origin);
+      const feed = await fetchWebsiteWithRetry(feedUrl.href, {
+        redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
+        signal: websiteScanSignal(scanSignal, 5000),
+      });
+      if (!feed.ok) continue;
+      const xml = (await feed.text()).slice(0, 300000);
+      const links = Array.from(xml.matchAll(/<(?:link)\b[^>]*>([^<]+)<\/link>|<link\b[^>]*href=["']([^"']+)["']/gi))
+        .map((match) => match[1] || match[2]).filter(Boolean);
+      for (const link of links) {
+        try { const linked = new URL(link, first.origin); if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && queue.length < 100 && !queue.includes(linked.href)) { queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href); } } catch {}
+      }
+    } catch { /* Feed discovery is optional. */ }
+  }
   while (queue.length && pages.length < maxPages) {
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
     if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href)) continue;
+    if (!allowedByRobots(parsed)) { if (onSkip) await onSkip(next, "Blocked by robots.txt"); continue; }
+    if (!(await isPublicHostname(parsed.hostname))) { if (onSkip) await onSkip(next, "Hostname did not resolve to public IP addresses"); continue; }
     seen.add(parsed.href);
     try {
-      const response = await fetch(parsed.href, {
-        redirect: "manual",
-        headers: { "User-Agent": "MismaWebsiteScanner/1.0 (+https://misma.onrender.com)" },
-        signal: websiteScanSignal(scanSignal, 9000),
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      const previous = previousPages.get(parsed.href);
+      const pageHeaders: Record<string,string> = { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" };
+      if (previous?.etag) pageHeaders["If-None-Match"] = String(previous.etag);
+      if (previous?.last_modified) pageHeaders["If-Modified-Since"] = String(previous.last_modified);
+      const response = await fetchWebsiteWithRetry(parsed.href, {
+        redirect: "manual", headers: pageHeaders, signal: websiteScanSignal(scanSignal, 9000),
       });
+      if (response.status === 304 && previous?.content_text) {
+        pages.push({
+          url: parsed.href, title: safeString(previous.title, 240), text: safeString(previous.content_text, 18000),
+          platform: "Unchanged", themeSuggestions: {}, etag: previous.etag || null,
+          lastModified: previous.last_modified || null, contentType: previous.content_type || "text/html",
+        });
+        if (onPage) await onPage(pages[pages.length - 1]);
+        if (onProgress) await onProgress(pages.length, Math.min(maxPages, pages.length + queue.length));
+        continue;
+      }
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         if (location) {
           const redirectUrl = new URL(location, parsed.href);
-          if (redirectUrl.origin === first.origin && isSafeWebsiteUrl(redirectUrl.href)) queue.unshift(redirectUrl.href);
+          if (redirectUrl.origin === first.origin && isSafeWebsiteUrl(redirectUrl.href) && allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
         }
         continue;
       }
-      if (!response.ok || !(response.headers.get("content-type") || "").toLowerCase().includes("text/html")) continue;
-      const raw = (await response.text()).slice(0, 500000);
+      if (!response.ok) { if (onSkip) await onSkip(parsed.href, "HTTP " + response.status); continue; }
+      const contentType = (response.headers.get("content-type") || "").toLowerCase();
+      if (!/(text\/html|application\/xhtml\+xml|text\/plain|application\/json|application\/xml|text\/xml|application\/pdf)/.test(contentType) && !parsed.pathname.toLowerCase().endsWith(".pdf")) {
+        if (onSkip) await onSkip(parsed.href, "Unsupported content type: " + (contentType || "unknown"));
+        continue;
+      }
+      const declaredLength = Number(response.headers.get("content-length") || 0);
+      if (declaredLength > 1500000) { if (onSkip) await onSkip(parsed.href, "Page exceeds the 1.5 MB scan limit"); continue; }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength > 1500000) { if (onSkip) await onSkip(parsed.href, "Page exceeds the 1.5 MB scan limit"); continue; }
+      const isPdf = contentType.includes("application/pdf") || parsed.pathname.toLowerCase().endsWith(".pdf");
+      const raw = isPdf ? "" : decodeWebsiteBytes(bytes, contentType);
       const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const title = titleMatch ? cleanHtml(titleMatch[1]).slice(0, 240) : parsed.pathname;
-      const text = cleanHtml(raw);
-      if (text.length > 120) pages.push({ url: parsed.href, title, text });
+      const title = titleMatch ? cleanHtml(titleMatch[1]).slice(0, 240) : (decodeURIComponent(parsed.pathname.split("/").pop() || parsed.pathname).slice(0, 240));
+      let text = isPdf ? await extractPdfText(bytes) : /text\/html|application\/xhtml\+xml/.test(contentType)
+        ? (cleanHtml(raw) + "\n" + extractEmbeddedData(raw)).slice(0, 18000)
+        : raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000);
+      const platform = isPdf ? "PDF document" : detectWebsitePlatform(raw, parsed.href, response.headers);
+      const themeSuggestions = isPdf ? {} : extractThemeSuggestions(raw);
+      if (text.length < 120 && /text\/html|application\/xhtml\+xml/.test(contentType) && getEnv("BROWSERLESS_API_KEY")) {
+        try {
+          const rendered = await fetch("https://production-sfo.browserless.io/content?token=" + encodeURIComponent(getEnv("BROWSERLESS_API_KEY")), {
+            method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "MismaBot/1.0" },
+            body: JSON.stringify({ url: parsed.href }), signal: websiteScanSignal(scanSignal, 12000),
+          });
+          if (rendered.ok) {
+            const renderedHtml = (await rendered.text()).slice(0, 500000);
+            const renderedText = (cleanHtml(renderedHtml) + "\n" + extractEmbeddedData(renderedHtml)).slice(0, 18000);
+            if (renderedText.length > text.length) text = renderedText;
+          }
+        } catch { /* Browser rendering is optional; static extraction remains available. */ }
+      }
+      if (text.length > 120) {
+        pages.push({
+          url: parsed.href, title, text, platform, themeSuggestions,
+          etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified"), contentType,
+        });
+        if (onPage) await onPage(pages[pages.length - 1]);
+      }
+      if (onProgress) await onProgress(pages.length, Math.min(maxPages, pages.length + queue.length));
       const links = raw.match(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi) || [];
       for (const link of links) {
         const match = link.match(/href\s*=\s*["']([^"']+)["']/i);
         if (!match) continue;
         try {
           const linked = new URL(match[1], parsed.href);
-          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && !seen.has(linked.href) && queue.length < 100) queue.push(linked.href);
+          const nextDepth = (depthByUrl.get(parsed.href) || 0) + 1;
+          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && nextDepth <= maxDepth && !seen.has(linked.href) && queue.length < 100 && !queue.includes(linked.href)) {
+            queue.push(linked.href); depthByUrl.set(linked.href, nextDepth); if (onDiscover) await onDiscover(linked.href);
+          }
         } catch { /* Ignore malformed links. */ }
       }
     } catch (error) {
       if (scanSignal?.aborted) throw error;
+      if (onSkip) await onSkip(parsed.href, error instanceof Error ? error.message.slice(0, 240) : "Page fetch failed");
       console.warn("[misma-widget] Website scan skipped a page:", error instanceof Error ? error.name : "unknown");
     }
   }
@@ -759,7 +1006,7 @@ async function extractBusinessData(inputText: string, sourceName: string, scanSi
   }
   throw new Error("Website extraction failed.");
 }
-async function persistExtracted(db: Db, workspaceId: string, sourceType: string, sourceRef: string, extracted: AnyRecord) {
+async function persistExtracted(db: Db, workspaceId: string, sourceType: string, sourceRef: string, extracted: AnyRecord, websiteConnectionId: string | null = null, roomId: number | null = null) {
   const faqs = Array.isArray(extracted.faqs) ? extracted.faqs.slice(0, 25) : [];
   const items = Array.isArray(extracted.items) ? extracted.items.slice(0, 20) : [];
   const normalizedSourceRef = sourceRef.slice(0, 1500);
@@ -817,6 +1064,8 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
       approved: true,
       source_type: sourceType,
       source_ref: normalizedSourceRef,
+      website_connection_id: websiteConnectionId,
+      room_id: roomId,
     });
     knowledgeByQuestion.set(question.toLocaleLowerCase(), {
       id: null, question, answer, source_type: sourceType, source_ref: normalizedSourceRef,
@@ -949,23 +1198,61 @@ async function createWebsiteScanRun(db: Db, website: AnyRecord, automatic: boole
   return String(created.data.id);
 }
 
-async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 25, parentSignal?: AbortSignal) {
+async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, maxPages = 25, parentSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, jobId?: string, crawlDepth = 3) {
   const scanSignal = parentSignal || AbortSignal.timeout(100_000);
   try {
-    const pages = await crawlWebsite(website.website_url, maxPages, scanSignal);
+    const previousResult = await db.from("website_scan_pages")
+      .select("canonical_url,title,content_text,etag,last_modified,content_type,content_hash")
+      .eq("website_id", website.id).limit(maxPages);
+    const previousPages = new Map<string, AnyRecord>((previousResult.data || []).map((page: AnyRecord) => [String(page.canonical_url), page]));
+    const jobResult = jobId
+      ? await db.from("scan_jobs").select("discovered_urls").eq("id", jobId).eq("workspace_id", website.workspace_id).maybeSingle()
+      : { data: null, error: null };
+    const seedUrls = Array.isArray(jobResult.data?.discovered_urls) ? jobResult.data.discovered_urls.filter((url: unknown): url is string => typeof url === "string").slice(0, 100) : [];
+    const discovered = new Set<string>([website.website_url, ...seedUrls]);
+    const persistDiscovered = async (url: string) => {
+      if (!jobId || discovered.has(url)) return;
+      discovered.add(url);
+      await db.from("scan_jobs").update({ discovered_urls: Array.from(discovered).slice(0, 100), updated_at: new Date().toISOString() }).eq("id", jobId);
+    };
+    const persistScannedPage = async (page: { url: string; title: string; text: string; contentType: string; etag: string | null; lastModified: string | null }) => {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(page.text));
+      const contentHash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2,"0")).join("");
+      const savedPage = await db.from("website_scan_pages").upsert({
+        workspace_id: website.workspace_id, website_id: website.id, job_id: jobId || null,
+        canonical_url: page.url, content_hash: contentHash, title: page.title,
+        content_text: page.text, content_type: page.contentType, etag: page.etag,
+        last_modified: page.lastModified, scanned_at: new Date().toISOString(),
+      }, { onConflict: "website_id,canonical_url" });
+      if (savedPage.error) console.warn("[misma-widget] Could not persist a scanned page checkpoint.", savedPage.error.code);
+    };
+    let pagesSkipped = 0;
+    const scanErrors: AnyRecord[] = [];
+    const recordSkip = async (url: string, reason: string) => {
+      pagesSkipped += 1;
+      if (scanErrors.length < 60) scanErrors.push({ url: url.slice(0, 1000), message: reason.slice(0, 300) });
+      if (jobId) await db.from("scan_jobs").update({
+        pages_skipped: pagesSkipped, errors: scanErrors, updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
+    };
+    const pages = await crawlWebsite(website.website_url, maxPages, scanSignal, onProgress, previousPages, seedUrls, persistDiscovered, persistScannedPage, recordSkip, crawlDepth);
     if (!pages.length) throw new Error("No readable public HTML pages were found.");
     const sourceText = pages
       .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
       .join("\n\n")
       .slice(0, 45000);
     const extracted = await extractBusinessData(sourceText, website.website_url, scanSignal);
-    const saved = await persistExtracted(db, website.workspace_id, "website", website.website_url, extracted);
+    const saved = await persistExtracted(db, website.workspace_id, "website", website.website_url, extracted, String(website.id), Number(website.core_room_id) || null);
+    const detectedPlatform = pages.find((page) => page.platform && page.platform !== "Unchanged")?.platform || website.detected_platform || "HTTP-rendered website";
+    const themeSuggestions = pages.map((page) => page.themeSuggestions).find((item) => Object.keys(item || {}).length > 0) || website.theme_suggestions || {};
     const summary = safeString(extracted.summary, 3000) || "Scanned " + pages.length + " public pages.";
 
     const [runUpdate, websiteUpdate] = await Promise.all([
       db.from("website_scan_runs").update({
         status: "completed",
         pages_scanned: pages.length,
+        pages_total: pages.length,
+        detected_platform: detectedPlatform,
         summary,
         error: null,
         completed_at: new Date().toISOString(),
@@ -973,12 +1260,14 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
       db.from("website_connections").update({
         last_scanned_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
+        detected_platform: detectedPlatform,
+        theme_suggestions: themeSuggestions,
       }).eq("id", website.id).eq("workspace_id", website.workspace_id),
     ]);
     if (runUpdate.error || websiteUpdate.error) {
       throw new Error("Website knowledge was extracted, but the scan status could not be finalized.");
     }
-    return { pagesScanned: pages.length, summary, ...saved };
+    return { pagesScanned: pages.length, pagesSkipped, scanErrors, detectedPlatform, themeSuggestions, summary, ...saved };
   } catch (error) {
     const message = scanSignal.aborted ? "Website scan timed out before it could finish." :
       error instanceof Error ? error.message : "Website scanning failed.";
@@ -1273,7 +1562,13 @@ Deno.serve(async (request: Request) => {
     if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
-        return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) });
+        await db.from("website_connections").update({
+          status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }).eq("id", site.id);
+        const themeEtag = '"misma-theme-' + safeString(site.theme_updated_at, 80) + '"';
+        const cacheHeaders = { ...cors, "Cache-Control": "public, max-age=60, stale-while-revalidate=30", "ETag": themeEtag };
+        if (request.headers.get("if-none-match") === themeEtag) return new Response(null, { status: 304, headers: cacheHeaders });
+        return respond(200, { ok: true, ...getWebsiteWidgetSocialLinks(site) }, cacheHeaders);
       }
       if (input.action === "close") {
         const visitorId = safeString(input.visitorId, 120);
@@ -1389,7 +1684,7 @@ Deno.serve(async (request: Request) => {
         });
       }
       let answer = "";
-      try { answer = await answerCustomer(db, site.workspace_id, message, input.voice === true); }
+      try { answer = await answerCustomer(db, site.workspace_id, message, input.voice === true, String(site.id), Number(site.core_room_id) || undefined); }
       catch { answer = "I cannot access that business information right now. You can ask to speak with a member of the team."; }
       const aiMessage = await db.from("messages").insert({
         conversation_id: conversation.id,
@@ -1398,6 +1693,33 @@ Deno.serve(async (request: Request) => {
         is_voice: voice,
       }).select("id").single();
       if (aiMessage.error) throw new Error("Could not save the Misma reply.");
+      if (site.core_room_id && userMessage.data?.id && aiMessage.data?.id) {
+        try {
+          const observed = await db.from("core_01_experiences").insert({
+            workspace_id: site.workspace_id,
+            room_id: Number(site.core_room_id),
+            room_key: "website",
+            question: message.slice(0, 2000),
+            primary_response: answer.slice(0, 8000),
+            provider: "widget",
+            model: "Core.01",
+                        status: "observed",
+            feedback: "unrated",
+          }).select("id").single();
+          if (!observed.error && observed.data?.id) {
+            await db.from("core_01_training_examples").insert({
+              workspace_id: site.workspace_id,
+              room_id: Number(site.core_room_id),
+              experience_id: observed.data.id,
+              question: message.slice(0, 2000),
+              expected_response: answer.slice(0, 8000),
+              status: "pending",
+            });
+          }
+        } catch (learningError) {
+          console.warn("[misma-widget] Core.01 website-room observation was not saved.", learningError instanceof Error ? learningError.name : "unknown");
+        }
+      }
       await db.from("conversations").update({
         latest_text: voice ? "Voice conversation" : answer.slice(0, 200),
         visitor_typing_until: null,
@@ -1549,25 +1871,98 @@ Deno.serve(async (request: Request) => {
       const result = await recommendOfferingsFromDemand(db, workspaceId);
       return respond(200, { ok: true, ...result });
     }
+    if (input.action === "scan-status") {
+      const jobId = safeString(input.jobId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error("A valid scan job is required.");
+      const result = await db.from("scan_jobs")
+        .select("id,status,pages_total,pages_scanned,pages_skipped,detected_platform,errors,created_at,updated_at,completed_at")
+        .eq("id", jobId).eq("workspace_id", workspaceId).maybeSingle();
+      if (result.error || !result.data) throw new Error("Scan job not found.");
+      return respond(200, { ok: true, job: result.data });
+    }
     if (input.action === "scan-website") {
       const websiteId = safeString(input.websiteId, 80);
       const websiteResult = await db.from("website_connections")
-        .select("id,workspace_id,website_url,domain,last_scanned_at,status")
+        .select("id,workspace_id,website_url,domain,last_scanned_at,status,core_room_id,name,detected_platform,theme_suggestions")
         .eq("id", websiteId)
         .eq("workspace_id", workspaceId)
         .single();
       if (websiteResult.error || !websiteResult.data) throw new Error("Website not found in the selected workspace.");
-      const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
-      if (!scanId) throw new Error("Could not start the website scan.");
-      const result = await performWebsiteScan(db, websiteResult.data, scanId);
-      return respond(200, { ok: true, ...result });
+      const maxPages = Math.max(1, Math.min(50, Number(input.maxPages) || 25));
+      const crawlDepth = Math.max(0, Math.min(8, Number(input.crawlDepth) || 3));
+      const staleBefore = new Date(Date.now() - 180_000).toISOString();
+      await db.from("scan_jobs").update({
+        status: "failed", errors: [{ message: "The previous scan worker stopped reporting progress; retry to resume from saved page URLs." }],
+        completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }).eq("website_id", websiteId).eq("workspace_id", workspaceId).eq("status", "running").lt("updated_at", staleBefore);
+      const failedJob = await db.from("scan_jobs").select("id")
+        .eq("website_id", websiteId).eq("workspace_id", workspaceId).eq("status", "failed")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      let jobId = "";
+      if (failedJob.data?.id) {
+        jobId = String(failedJob.data.id);
+        const resumed = await db.from("scan_jobs").update({
+          status: "queued", max_pages: maxPages, crawl_depth: crawlDepth, pages_total: 0, pages_scanned: 0, pages_skipped: 0,
+          cursor: 0, errors: [], started_at: null, completed_at: null, updated_at: new Date().toISOString(),
+        }).eq("id", jobId).eq("workspace_id", workspaceId);
+        if (resumed.error) throw new Error("Could not resume the previous scan job.");
+      } else {
+        const createdJob = await db.from("scan_jobs").insert({
+          workspace_id: workspaceId, website_id: websiteId, status: "queued", max_pages: maxPages, crawl_depth: crawlDepth,
+          pages_total: 0, pages_scanned: 0, pages_skipped: 0, errors: [], discovered_urls: [],
+        }).select("id").single();
+        if (createdJob.error || !createdJob.data) {
+          if (createdJob.error?.code === "23505") throw new Error("A scan is already running for this website. Wait for it to finish.");
+          throw new Error("Could not queue the website scan.");
+        }
+        jobId = String(createdJob.data.id);
+      }
+      const scanTask = (async () => {
+        try {
+          await db.from("scan_jobs").update({ status: "running", started_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", jobId);
+          const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
+          if (!scanId) throw new Error("Could not start the website scan.");
+          const result = await performWebsiteScan(db, websiteResult.data, scanId, maxPages, undefined, async (scanned, discovered) => {
+            await db.from("scan_jobs").update({
+              pages_scanned: scanned, pages_total: discovered, cursor: scanned, updated_at: new Date().toISOString(),
+            }).eq("id", jobId);
+          }, jobId, crawlDepth);
+          await db.from("scan_jobs").update({
+            status: "completed", pages_scanned: result.pagesScanned, pages_total: result.pagesScanned,
+            pages_skipped: result.pagesSkipped || 0, detected_platform: result.detectedPlatform || null,
+            errors: result.scanErrors || [],
+            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          }).eq("id", jobId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Website scan failed.";
+          await db.from("scan_jobs").update({
+            status: "failed", errors: [{ message: message.slice(0, 500) }],
+            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          }).eq("id", jobId);
+          console.error("[misma-widget] Background scan job failed.", { jobId, reason: message.slice(0, 300) });
+        }
+      })();
+      const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
+      if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(scanTask);
+      else await scanTask;
+      return respond(202, { ok: true, jobId, status: "queued", maxPages });
     }
     if (input.action === "extract-knowledge") {
       const fileName = safeString(input.fileName, 180) || "Uploaded business document";
       const content = safeString(input.content, 90000);
       if (content.length < 30) throw new Error("The uploaded file contains too little readable text.");
+      let websiteConnectionId: string | null = null;
+      let roomId: number | null = null;
+      const requestedWebsiteId = safeString(input.websiteId, 80);
+      if (requestedWebsiteId) {
+        const site = await db.from("website_connections").select("id,core_room_id")
+          .eq("id", requestedWebsiteId).eq("workspace_id", workspaceId).is("widget_deleted_at", null).single();
+        if (site.error || !site.data) throw new Error("Choose a connected website in this workspace.");
+        websiteConnectionId = String(site.data.id);
+        roomId = Number(site.data.core_room_id) || null;
+      }
       const extracted = await extractBusinessData(content, fileName);
-      const saved = await persistExtracted(db, workspaceId, "file_upload", fileName, extracted);
+      const saved = await persistExtracted(db, workspaceId, "file_upload", fileName, extracted, websiteConnectionId, roomId);
       return respond(200, { ok: true, summary: safeString(extracted.summary, 3000), ...saved });
     }
     if (input.action === "save-channel") {

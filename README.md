@@ -133,3 +133,47 @@ Agnes 3.0 Flash screens media prompts and supplied reference images before gener
 From **Dashboard → Connect → Website**, register the website's real domain or its preview/staging URL. You can create the connection and copy its general HTML script before publishing the site; publication is not required to issue the site key. Paste the generated snippet into each page before the closing `</body>` tag.
 
 The widget becomes verified when a page loads the script from the registered hostname. Use the exact hostname you registered (for example, a preview subdomain). HTTPS is required for hosted preview/staging pages; local development is supported on `http://localhost:PORT`. The site key is restricted to that registered hostname and should not be shared across unrelated websites. A website content scan still requires the page to be reachable by Misma's scanner; the chat widget can be installed and tested separately on a browser-accessible preview page.
+
+
+## Website widget customization and Core.01 rooms
+
+Each Misma workspace is the account owner's house. Every connected website receives its own Core.01 website room. Knowledge entered manually or imported from a file can be assigned to a specific connected website; unassigned knowledge remains workspace-wide. Website widget conversations are recorded as observed Core.01 experiences in that website's room.
+
+The website dashboard includes **Customize widget**. Themes are saved in `website_connections.theme` and served by the `misma-widget` configuration action. The widget applies validated theme values as Shadow DOM CSS custom properties and checks the theme with an ETag. Existing websites without a saved theme continue using the original widget CSS. When changing the widget runtime in future releases, bump the `?v=` value used in the website script; the current version is `20261110-widget-theme-1`.
+
+Apply these additive migrations in timestamp order:
+
+- `20261110100000_website_widget_customization_rooms_scan.sql`
+- `20261110103000_website_scan_metadata.sql`
+
+The scanner reads public HTTP-rendered responses, not server-side source files, so it can inspect public sites regardless of whether they are built with PHP, Node, Go, Python, Ruby, Java, .NET, WordPress, Shopify, Wix or static HTML. It follows robots.txt disallow rules, restricts scanning to safe same-origin HTTP(S) URLs on ports 80/443, validates public DNS addresses and redirects, limits each response to 1.5 MB, and caps a scan at 50 pages and depth 8. It discovers pages from sitemap XML and RSS/Atom feeds, handles HTML, XHTML, text, JSON, XML and PDF, decodes common legacy character sets, and can use embedded Next.js/Nuxt/JSON-LD data. It stores page checkpoints with content hashes, ETags and Last-Modified values, and persists discovered URLs and progress so a failed scan can be resumed. Scan progress and skipped-page reasons are available from the website card.
+
+For JavaScript-heavy sites whose rendered HTML contains little content, configure the optional Browserless secret in Supabase Edge Function Secrets:
+
+```text
+BROWSERLESS_API_KEY
+```
+
+Without this secret, the scanner still reads server-rendered HTML and embedded framework data, but cannot guarantee extraction of client-rendered SPA content. Never expose this key in frontend environment variables.
+
+### Deploying these changes
+
+Run the checks before merging:
+
+```sh
+bun install
+bun run typecheck
+bun test
+bun run build
+```
+
+Apply database migrations to the Misma Supabase project, then deploy the updated widget function:
+
+```sh
+supabase link --project-ref grlrrmebnthxguluybgb
+supabase db push
+supabase functions deploy misma-widget
+supabase functions deploy misma-chat
+```
+
+Render's `misma` service in the Intelle workspace deploys the dashboard and bundled widget asset from the merged `main` commit. Verify the deployment is live before testing the new customization route.

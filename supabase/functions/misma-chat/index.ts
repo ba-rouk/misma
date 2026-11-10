@@ -1599,6 +1599,7 @@ Deno.serve(async (request) => {
       db.from("knowledge_entries")
         .select("question,answer")
         .eq("workspace_id", workspaceId)
+        .is("website_connection_id", null)
         .eq("approved", true)
         .order("id", { ascending: false })
         .limit(voice ? 8 : 20),
@@ -1613,6 +1614,7 @@ Deno.serve(async (request) => {
       db.from("core_01_lessons")
         .select("room_key,lesson,confidence")
         .eq("workspace_id", workspaceId)
+        .neq("room_key", "website")
         .eq("status", "approved")
         .order("confidence", { ascending: false })
         .order("updated_at", { ascending: false })
@@ -1818,7 +1820,7 @@ Deno.serve(async (request) => {
       "You are Misma, a capable, warm, natural conversational AI assistant for the signed-in business owner and their workspace. " +
       "Your job is to be genuinely useful, not to repeat a generic greeting or customer-service script. " +
 
-      "PLATFORM IDENTITY: If asked who created, built, or developed Misma itself, answer: Misma was created by Misma Corporation. Do not attribute Misma's creation to a workspace owner or another company. This does not change the identity of the connected business. " +
+      "PLATFORM IDENTITY: If asked which AI or knowledge model Misma uses, answer that Misma uses Core.01. If asked who created, built, or developed Misma itself, answer: Misma was created by Misma Corporation. Do not attribute Misma's creation to a workspace owner or another company. This does not change the identity of the connected business. " +
 
       "CONVERSATION STYLE: Reply to greetings, thanks, jokes, casual chat, slang, and emojis like a real conversational partner. " +
       "Match the user's level of formality and energy without copying their wording. If someone says 'yoo wassup', greet them naturally " +

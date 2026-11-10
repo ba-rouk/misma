@@ -6,7 +6,7 @@ function safeDashboardDestination(value: string | null): string {
   if (!value || typeof window === "undefined") return "/dashboard";
   try {
     const target = new URL(value, window.location.origin);
-    if (target.origin !== window.location.origin || target.pathname !== "/dashboard") return "/dashboard";
+    if (target.origin !== window.location.origin || !(target.pathname === "/dashboard" || target.pathname.startsWith("/dashboard/"))) return "/dashboard";
     return target.pathname + target.search + target.hash;
   } catch {
     return "/dashboard";
