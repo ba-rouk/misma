@@ -5990,9 +5990,9 @@ function Dashboard() {
                 {everyWebsiteUsesSharedWidget && (
                   <div className="aichat-shared-script">
                     <label className="aichat-widget-script-label">General shared website script — paste this same script on every registered website</label>
-                    <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                    <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-2" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                     <button type="button" className="aichat-action-btn" onClick={() => {
-                      const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                      const script = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-2" data-site-key="${sharedWidgetPublicKey}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                       void navigator.clipboard.writeText(script).then(() => alert("Shared website widget script copied."));
                     }}>Copy general script</button>
                   </div>
@@ -6031,16 +6031,16 @@ function Dashboard() {
                   <span aria-hidden="true">◈</span> Customize widget <span aria-hidden="true">›</span>
                 </button>
                 <label className="aichat-widget-script-label">General website installation script</label>
-                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
+                <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-2" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
                   <button type="button" className="aichat-action-btn" onClick={() => {
-                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-1" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
+                    const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-2" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
                   <button type="button" className="aichat-action-btn secondary" disabled={websiteActionId === site.id} onClick={async () => {
                     if (!workspace?.id) return;
                     const controller = new AbortController();
-                    const timeoutId = window.setTimeout(() => controller.abort(), 112_000);
+                    const timeoutId = window.setTimeout(() => controller.abort(), 390_000);
                     setWebsiteActionId(site.id);
                     setWebsiteScanFeedback((current) => ({ ...current, [site.id]: { kind: "info", message: "Scanning public pages and extracting business knowledge…" } }));
                     try {
@@ -6051,7 +6051,7 @@ function Dashboard() {
                       const jobId = String(queued.jobId || "");
                       if (!jobId) throw new Error("Misma did not return a scan job ID.");
                       let finalJob: any = null;
-                      for (let attempt = 0; attempt < 90; attempt += 1) {
+                      for (let attempt = 0; attempt < 300; attempt += 1) {
                         await new Promise((resolve) => window.setTimeout(resolve, 1200));
                         const statusResult = await callWidgetFunction(
                           { action: "scan-status", workspaceId: workspace.id, jobId },
@@ -6065,7 +6065,9 @@ function Dashboard() {
                             kind: "info",
                             message: job.status === "running"
                               ? `Scanning website: ${job.pages_scanned || 0}/${job.pages_total || "discovering"} pages discovered…`
-                              : "Preparing website scan…",
+                              : job.status === "queued"
+                                ? `Scan queued / resuming: ${job.pages_scanned || 0}/${job.pages_total || "discovering"} pages saved…`
+                                : "Preparing website scan…",
                           },
                         }));
                         if (job.status === "completed" || job.status === "failed") {
@@ -6073,7 +6075,13 @@ function Dashboard() {
                           break;
                         }
                       }
-                      if (!finalJob) throw new Error("The scan is still running in the background. Refresh the website card to check its latest status.");
+                      if (!finalJob) {
+                        setWebsiteScanFeedback((current) => ({
+                          ...current,
+                          [site.id]: { kind: "info", message: "The scan is still queued or running. Saved progress will resume automatically; refresh this card to see the latest report." },
+                        }));
+                        return;
+                      }
                       if (finalJob.status === "failed") {
                         const reason = Array.isArray(finalJob.errors) ? finalJob.errors[0]?.message : "";
                         throw new Error(reason || "Website scan failed. Please retry.");
@@ -6093,7 +6101,7 @@ function Dashboard() {
                         [site.id]: {
                           kind: "error",
                           message: timedOut
-                            ? "The scan timed out. Misma marked this attempt as failed; please try again."
+                            ? "This scan pass reached its time budget. Saved progress is queued and Misma will resume it automatically."
                             : cause instanceof Error
                               ? cause.message
                               : "The scan failed. Please try again.",
@@ -6118,6 +6126,7 @@ function Dashboard() {
                   </p>
                 )}
                 <small className="aichat-website-meta">Last activity: {site.last_seen_at ? new Date(site.last_seen_at).toLocaleString() : "Not verified yet"} · Last scanned: {site.last_scanned_at ? new Date(site.last_scanned_at).toLocaleString() : "Never"}{site.detected_platform ? " · Platform: " + site.detected_platform : ""}</small>
+                <small className="aichat-website-meta">Website scans read publicly rendered HTTP responses, not PHP, Node.js, Go, Python, Ruby, Java, .NET or other server-side source code. Misma discovers HTML, sitemap, feed, structured data and document content; JavaScript-heavy rendering can use the optional headless-browser provider when configured.</small>
                 <small className="aichat-website-meta">Add this same snippet to each page on the registered live, preview, or staging hostname before the closing &lt;/body&gt; tag. No platform-specific plugin is required. The widget only accepts the hostname you registered; use HTTPS for preview/staging sites or localhost for local testing. Keep the site key unchanged.</small>
                 </div>
               </article>)}

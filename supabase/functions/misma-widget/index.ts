@@ -1,10 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4.4.3";
+import { getDomain } from "npm:tldts@6.1.86";
 import webpush from "web-push";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, if-none-match, x-client-info, x-twilio-signature, x-hub-signature-256",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, if-none-match, x-client-info, x-twilio-signature, x-hub-signature-256, x-misma-scan-worker",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Cache-Control": "no-store",
 };
@@ -382,6 +383,9 @@ function sanitizeWidgetTheme(value: unknown): AnyRecord | null {
     if (typeof color !== "string" || !/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)) return null;
     result[key] = color.toLowerCase();
   }
+  const subtitle = value.headerSubtitleText === undefined ? "#b6c1cf" : value.headerSubtitleText;
+  if (typeof subtitle !== "string" || !/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(subtitle)) return null;
+  result.headerSubtitleText = subtitle.toLowerCase();
   if (typeof value.fontFamily !== "string" || !fonts.includes(value.fontFamily) || typeof value.matchChatBackground !== "boolean") return null;
   result.fontFamily = value.fontFamily;
   result.matchChatBackground = value.matchChatBackground;
@@ -751,17 +755,56 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   }
   return pages.join("\n\n").slice(0, 18000);
 }
+async function readWebsiteResponseBytes(response: Response, maximumBytes = 1_500_000): Promise<Uint8Array> {
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel("Website response exceeded the configured scan size limit").catch(() => {});
+        throw new Error("Page exceeds the 1.5 MB scan limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result;
+}
+const websiteHostLastRequestAt = new Map<string, number>();
+async function paceWebsiteHost(url: string): Promise<void> {
+  const hostname = new URL(url).hostname.toLowerCase();
+  const last = websiteHostLastRequestAt.get(hostname) || 0;
+  const delay = 650 - (Date.now() - last);
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+  websiteHostLastRequestAt.set(hostname, Date.now());
+}
 async function fetchWebsiteWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
   let lastError: unknown = null;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
+      await paceWebsiteHost(url);
       const response = await fetch(url, init);
       if (![429,500,502,503,504].includes(response.status) || attempt === retries) return response;
       const retryAfter = response.headers.get("retry-after") || "";
       const seconds = Number(retryAfter);
+      const retryDate = Date.parse(retryAfter);
       const wait = Number.isFinite(seconds) && seconds > 0
         ? Math.min(4000, seconds * 1000)
-        : Math.min(3000, 500 * (2 ** attempt));
+        : Number.isFinite(retryDate) && retryDate > Date.now()
+          ? Math.min(4000, retryDate - Date.now())
+          : Math.min(3000, 500 * (2 ** attempt));
       await response.body?.cancel().catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, wait));
     } catch (error) {
@@ -776,45 +819,73 @@ function websiteScanSignal(parent: AbortSignal | undefined, timeoutMs: number): 
   const timeout = AbortSignal.timeout(timeoutMs);
   return parent ? AbortSignal.any([parent, timeout]) : timeout;
 }
-async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3, skipUrls: Set<string> = new Set()): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
+  // Restrict discovery and redirects to the same registrable domain (eTLD+1).
   if (!(await isPublicHostname(first.hostname))) throw new Error("The website hostname does not resolve exclusively to public IP addresses.");
+  first.hash = "";
   const queue = Array.from(new Set([first.href, ...seedUrls])).slice(0, 100);
   const depthByUrl = new Map<string, number>(queue.map((url) => [url, url === first.href ? 0 : 1]));
+  const redirectHops = new Map<string, number>();
   const seen = new Set<string>();
   if (onDiscover) for (const seed of queue) await onDiscover(seed);
   const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }> = [];
-  const robotsDisallow: string[] = [];
-  const robotsAllow: string[] = [];
-  let robotsText = "";
-  try {
-    const robots = await fetch(new URL("/robots.txt", first.origin).href, {
-      redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
-      signal: websiteScanSignal(scanSignal, 5000),
-    });
-    if (robots.ok) {
-      const body = (await robots.text()).slice(0, 100000);
-      robotsText = body;
-      let active = false;
-      for (const line of body.split(/\r?\n/)) {
-        const clean = line.split("#")[0].trim();
-        if (/^user-agent\s*:\s*\*/i.test(clean) || /^user-agent\s*:\s*MismaBot/i.test(clean)) active = true;
-        else if (/^user-agent\s*:/i.test(clean)) active = false;
-        else if (active && /^disallow\s*:/i.test(clean)) {
-          const value = clean.split(":").slice(1).join(":").trim();
-          if (value) robotsDisallow.push(value);
+  const registrableDomain = getDomain(first.hostname);
+  if (!registrableDomain) throw new Error("The website host does not have a valid registrable domain.");
+  const sameRegistrableDomain = (url: URL) => getDomain(url.hostname) === registrableDomain;
+  const robotsByOrigin = new Map<string, { allow: string[]; disallow: string[] }>();
+  const getRobotsRules = async (url: URL) => {
+    const cached = robotsByOrigin.get(url.origin);
+    if (cached) return cached;
+    const rules = { allow: [] as string[], disallow: [] as string[] };
+    try {
+      if (await isPublicHostname(url.hostname)) {
+        const robotsUrl = new URL("/robots.txt", url.origin).href;
+        await paceWebsiteHost(robotsUrl);
+        const robots = await fetch(robotsUrl, {
+          redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
+          signal: websiteScanSignal(scanSignal, 5000),
+        });
+        if (robots.ok) {
+          const body = (await robots.text()).slice(0, 100000);
+          if (url.origin === first.origin) robotsText = body;
+          let active = false;
+          for (const line of body.split(/\r?\n/)) {
+            const clean = line.split("#")[0].trim();
+            if (/^user-agent\s*:/i.test(clean)) {
+              const agent = clean.split(":").slice(1).join(":").trim();
+              active = agent === "*" || /^mismabot(?:\/|$)/i.test(agent);
+            } else if (active && /^allow\s*:/i.test(clean)) {
+              const value = clean.split(":").slice(1).join(":").trim();
+              if (value) rules.allow.push(value);
+            } else if (active && /^disallow\s*:/i.test(clean)) {
+              const value = clean.split(":").slice(1).join(":").trim();
+              if (value) rules.disallow.push(value);
+            }
+          }
+        } else if (robots.status >= 500) {
+          // RFC 9309 treats robots server errors as unavailable; fail closed for this host.
+          rules.disallow.push("/");
         }
       }
+    } catch {
+      // A network failure is also fail-closed so temporary robots outages do not bypass policy.
+      rules.disallow.push("/");
     }
-  } catch { /* robots.txt unavailable: continue with conservative limits. */ }
-  const allowedByRobots = (url: URL) => {
+    robotsByOrigin.set(url.origin, rules);
+    return rules;
+  };
+  const allowedByRobots = async (url: URL) => {
+    const rules = await getRobotsRules(url);
     const matches = [
-      ...robotsAllow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: true })),
-      ...robotsDisallow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: false })),
+      ...rules.allow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: true })),
+      ...rules.disallow.filter((path) => url.pathname.startsWith(path)).map((path) => ({ path, allowed: false })),
     ].sort((a, b) => b.path.length - a.path.length);
     return matches.length === 0 || matches[0].allowed;
   };
+  let robotsText = "";
+  await getRobotsRules(first);
   // Seed from robots-declared sitemaps, sitemap indexes, common feeds and the same-origin sitemap.
   const sitemapSeeds = [new URL("/sitemap.xml", first.origin).href, new URL("/sitemap_index.xml", first.origin).href, new URL("/sitemap-index.xml", first.origin).href];
   for (const line of robotsText.split(/\r?\n/)) {
@@ -823,26 +894,26 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   }
   for (const sitemapHref of Array.from(new Set(sitemapSeeds)).slice(0, 6)) try {
     const sitemapUrl = new URL(sitemapHref);
-    if (sitemapUrl.origin !== first.origin || !(await isPublicHostname(sitemapUrl.hostname))) continue;
+    if (!sameRegistrableDomain(sitemapUrl) || !(await isPublicHostname(sitemapUrl.hostname)) || !(await allowedByRobots(sitemapUrl))) continue;
     const sitemapResponse = await fetchWebsiteWithRetry(sitemapUrl.href, {
       redirect: "manual",
       headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
       signal: websiteScanSignal(scanSignal, 7000),
     });
     if (sitemapResponse.ok && (sitemapResponse.headers.get("content-type") || "").toLowerCase().includes("xml")) {
-      const sitemap = (await sitemapResponse.text()).slice(0, 1000000);
+      const sitemap = new TextDecoder().decode(await readWebsiteResponseBytes(sitemapResponse, 1_000_000));
       let locations = Array.from(sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim());
       if (/<sitemapindex\b/i.test(sitemap)) {
         for (const nestedHref of locations.slice(0, 8)) {
           try {
             const nestedUrl = new URL(nestedHref, first.origin);
-            if (nestedUrl.origin !== first.origin || !(await isPublicHostname(nestedUrl.hostname))) continue;
+            if (!sameRegistrableDomain(nestedUrl) || !(await isPublicHostname(nestedUrl.hostname)) || !(await allowedByRobots(nestedUrl))) continue;
             const nestedResponse = await fetchWebsiteWithRetry(nestedUrl.href, {
               redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
               signal: websiteScanSignal(scanSignal, 7000),
             });
             if (nestedResponse.ok) {
-              const nestedXml = (await nestedResponse.text()).slice(0, 500000);
+              const nestedXml = new TextDecoder().decode(await readWebsiteResponseBytes(nestedResponse, 500_000));
               locations.push(...Array.from(nestedXml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)).map((match) => match[1].replace(/&amp;/g, "&").trim()));
             }
           } catch { /* Skip an unavailable nested sitemap. */ }
@@ -851,7 +922,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       for (const location of locations) {
         try {
           const linked = new URL(location, first.origin); linked.hash = "";
-          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && linked.href !== first.href && queue.length < 100 && !queue.includes(linked.href)) {
+          if (sameRegistrableDomain(linked) && isSafeWebsiteUrl(linked.href) && await allowedByRobots(linked) && linked.href !== first.href && queue.length < 100 && !queue.includes(linked.href)) {
             queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href);
           }
         } catch { /* Ignore malformed or external sitemap entries. */ }
@@ -865,24 +936,26 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   for (const feedPath of ["/feed","/feed.xml","/rss.xml","/atom.xml"]) {
     try {
       const feedUrl = new URL(feedPath, first.origin);
+      if (!(await isPublicHostname(feedUrl.hostname)) || !(await allowedByRobots(feedUrl))) continue;
       const feed = await fetchWebsiteWithRetry(feedUrl.href, {
         redirect: "manual", headers: { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" },
         signal: websiteScanSignal(scanSignal, 5000),
       });
       if (!feed.ok) continue;
-      const xml = (await feed.text()).slice(0, 300000);
+      const xml = new TextDecoder().decode(await readWebsiteResponseBytes(feed, 300_000));
       const links = Array.from(xml.matchAll(/<(?:link)\b[^>]*>([^<]+)<\/link>|<link\b[^>]*href=["']([^"']+)["']/gi))
         .map((match) => match[1] || match[2]).filter(Boolean);
       for (const link of links) {
-        try { const linked = new URL(link, first.origin); if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && queue.length < 100 && !queue.includes(linked.href)) { queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href); } } catch {}
+        try { const linked = new URL(link, first.origin); if (sameRegistrableDomain(linked) && isSafeWebsiteUrl(linked.href) && await allowedByRobots(linked) && queue.length < 100 && !queue.includes(linked.href)) { queue.push(linked.href); depthByUrl.set(linked.href, 0); if (onDiscover) await onDiscover(linked.href); } } catch {}
       }
     } catch { /* Feed discovery is optional. */ }
   }
   while (queue.length && pages.length < maxPages) {
     const next = queue.shift()!;
     const parsed = isSafeWebsiteUrl(next);
-    if (!parsed || parsed.origin !== first.origin || seen.has(parsed.href)) continue;
-    if (!allowedByRobots(parsed)) { if (onSkip) await onSkip(next, "Blocked by robots.txt"); continue; }
+    if (!parsed || !sameRegistrableDomain(parsed) || seen.has(parsed.href)) continue;
+    if (skipUrls.has(parsed.href)) continue;
+    if (!(await allowedByRobots(parsed))) { if (onSkip) await onSkip(next, "Blocked by robots.txt"); continue; }
     if (!(await isPublicHostname(parsed.hostname))) { if (onSkip) await onSkip(next, "Hostname did not resolve to public IP addresses"); continue; }
     seen.add(parsed.href);
     try {
@@ -901,14 +974,22 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
           lastModified: previous.last_modified || null, contentType: previous.content_type || "text/html",
         });
         if (onPage) await onPage(pages[pages.length - 1]);
-        if (onProgress) await onProgress(pages.length, Math.min(maxPages, pages.length + queue.length));
+        if (onProgress) await onProgress(pages.length, Math.min(skipUrls.size + maxPages, skipUrls.size + pages.length + queue.length));
         continue;
       }
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         if (location) {
           const redirectUrl = new URL(location, parsed.href);
-          if (redirectUrl.origin === first.origin && isSafeWebsiteUrl(redirectUrl.href) && allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) queue.unshift(redirectUrl.href);
+          const hops = (redirectHops.get(parsed.href) || 0) + 1;
+          if (hops > 5) {
+            if (onSkip) await onSkip(parsed.href, "Redirect limit exceeded (5 hops)");
+          } else if (sameRegistrableDomain(redirectUrl) && isSafeWebsiteUrl(redirectUrl.href)
+            && await allowedByRobots(redirectUrl) && await isPublicHostname(redirectUrl.hostname)) {
+            redirectUrl.hash = "";
+            redirectHops.set(redirectUrl.href, hops);
+            if (!seen.has(redirectUrl.href) && !queue.includes(redirectUrl.href)) queue.unshift(redirectUrl.href);
+          }
         }
         continue;
       }
@@ -920,8 +1001,13 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       }
       const declaredLength = Number(response.headers.get("content-length") || 0);
       if (declaredLength > 1500000) { if (onSkip) await onSkip(parsed.href, "Page exceeds the 1.5 MB scan limit"); continue; }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength > 1500000) { if (onSkip) await onSkip(parsed.href, "Page exceeds the 1.5 MB scan limit"); continue; }
+      let bytes: Uint8Array;
+      try {
+        bytes = await readWebsiteResponseBytes(response, 1_500_000);
+      } catch (error) {
+        if (onSkip) await onSkip(parsed.href, error instanceof Error ? error.message : "Page exceeds the 1.5 MB scan limit");
+        continue;
+      }
       const isPdf = contentType.includes("application/pdf") || parsed.pathname.toLowerCase().endsWith(".pdf");
       const raw = isPdf ? "" : decodeWebsiteBytes(bytes, contentType);
       const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
@@ -951,7 +1037,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         });
         if (onPage) await onPage(pages[pages.length - 1]);
       }
-      if (onProgress) await onProgress(pages.length, Math.min(maxPages, pages.length + queue.length));
+      if (onProgress) await onProgress(pages.length, Math.min(skipUrls.size + maxPages, skipUrls.size + pages.length + queue.length));
       const links = raw.match(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi) || [];
       for (const link of links) {
         const match = link.match(/href\s*=\s*["']([^"']+)["']/i);
@@ -959,7 +1045,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         try {
           const linked = new URL(match[1], parsed.href);
           const nextDepth = (depthByUrl.get(parsed.href) || 0) + 1;
-          if (linked.origin === first.origin && isSafeWebsiteUrl(linked.href) && allowedByRobots(linked) && nextDepth <= maxDepth && !seen.has(linked.href) && queue.length < 100 && !queue.includes(linked.href)) {
+          if (sameRegistrableDomain(linked) && isSafeWebsiteUrl(linked.href) && await allowedByRobots(linked) && nextDepth <= maxDepth && !seen.has(linked.href) && queue.length < 100 && !queue.includes(linked.href)) {
             queue.push(linked.href); depthByUrl.set(linked.href, nextDepth); if (onDiscover) await onDiscover(linked.href);
           }
         } catch { /* Ignore malformed links. */ }
@@ -1203,12 +1289,23 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
   try {
     const previousResult = await db.from("website_scan_pages")
       .select("canonical_url,title,content_text,etag,last_modified,content_type,content_hash")
-      .eq("website_id", website.id).limit(maxPages);
+      .eq("website_id", website.id).limit(Math.max(maxPages, 100));
     const previousPages = new Map<string, AnyRecord>((previousResult.data || []).map((page: AnyRecord) => [String(page.canonical_url), page]));
     const jobResult = jobId
       ? await db.from("scan_jobs").select("discovered_urls").eq("id", jobId).eq("workspace_id", website.workspace_id).maybeSingle()
       : { data: null, error: null };
     const seedUrls = Array.isArray(jobResult.data?.discovered_urls) ? jobResult.data.discovered_urls.filter((url: unknown): url is string => typeof url === "string").slice(0, 100) : [];
+    const currentJobPages = jobId
+      ? await db.from("website_scan_pages").select("canonical_url,title,content_text,etag,last_modified,content_type")
+        .eq("website_id", website.id).eq("job_id", jobId).order("scanned_at", { ascending: true }).limit(maxPages)
+      : { data: [] as AnyRecord[], error: null };
+    const processedPages = (currentJobPages.data || []).map((row: AnyRecord) => ({
+      url: String(row.canonical_url), title: safeString(row.title, 240), text: safeString(row.content_text, 18000),
+      platform: "Previously scanned", themeSuggestions: extractThemeSuggestions(safeString(row.content_text, 18000)),
+      etag: row.etag || null, lastModified: row.last_modified || null, contentType: safeString(row.content_type, 100) || "text/html",
+    }));
+    const processedUrls = new Set<string>(processedPages.map((page: AnyRecord) => page.url));
+    const remainingPages = Math.max(0, maxPages - processedPages.length);
     const discovered = new Set<string>([website.website_url, ...seedUrls]);
     const persistDiscovered = async (url: string) => {
       if (!jobId || discovered.has(url)) return;
@@ -1235,7 +1332,14 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
         pages_skipped: pagesSkipped, errors: scanErrors, updated_at: new Date().toISOString(),
       }).eq("id", jobId);
     };
-    const pages = await crawlWebsite(website.website_url, maxPages, scanSignal, onProgress, previousPages, seedUrls, persistDiscovered, persistScannedPage, recordSkip, crawlDepth);
+    const crawledPages = await crawlWebsite(
+      website.website_url, remainingPages, scanSignal,
+      async (scanned, discoveredCount) => {
+        if (onProgress) await onProgress(processedPages.length + scanned, discoveredCount);
+      },
+      previousPages, seedUrls, persistDiscovered, persistScannedPage, recordSkip, crawlDepth, processedUrls,
+    );
+    const pages = [...processedPages, ...crawledPages];
     if (!pages.length) throw new Error("No readable public HTML pages were found.");
     const sourceText = pages
       .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
@@ -1280,6 +1384,92 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
       completed_at: new Date().toISOString(),
     }).eq("id", scanId);
     throw error;
+  }
+}
+
+async function processQueuedWebsiteScan(db: Db, preferredJobId?: string): Promise<AnyRecord> {
+  const now = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - 180_000).toISOString();
+  await db.from("scan_jobs").update({
+    status: "queued",
+    errors: [{ message: "Recovered an interrupted scan. Continuing from saved page checkpoints." }],
+    updated_at: now,
+  }).eq("status", "running").lt("updated_at", staleBefore);
+
+  let candidateQuery = db.from("scan_jobs")
+    .select("id,workspace_id,website_id,max_pages,crawl_depth,pages_scanned,pages_skipped,errors")
+    .eq("status", "queued");
+  if (preferredJobId) candidateQuery = candidateQuery.eq("id", preferredJobId);
+  const candidate = await candidateQuery.order("created_at", { ascending: true }).limit(1).maybeSingle();
+  if (candidate.error) throw new Error("Could not load the queued website scan.");
+  if (!candidate.data) return { processed: false, status: "idle" };
+
+  const claim = await db.from("scan_jobs").update({
+    status: "running", started_at: now, updated_at: now,
+  }).eq("id", candidate.data.id).eq("status", "queued")
+    .select("id,workspace_id,website_id,max_pages,crawl_depth,pages_scanned,pages_skipped")
+    .maybeSingle();
+  if (claim.error) throw new Error("Could not claim the queued website scan.");
+  if (!claim.data) return { processed: false, status: "already-claimed" };
+
+  const job = claim.data;
+  const jobId = String(job.id);
+  try {
+    const websiteResult = await db.from("website_connections")
+      .select("id,workspace_id,website_url,domain,last_scanned_at,status,core_room_id,name,detected_platform,theme_suggestions")
+      .eq("id", job.website_id).eq("workspace_id", job.workspace_id).is("widget_deleted_at", null).maybeSingle();
+    if (websiteResult.error || !websiteResult.data) throw new Error("The connected website for this scan no longer exists.");
+
+    await db.from("website_scan_runs").update({
+      status: "failed", error: "Worker restarted; scan continued from saved page checkpoints.",
+      completed_at: now,
+    }).eq("website_id", job.website_id).in("status", ["queued", "scanning"]).lt("started_at", staleBefore);
+
+    const configuredPageLimit = Math.max(1, Math.min(100, Number(getEnv("MISMA_SCAN_MAX_PAGES")) || 50));
+    const maxPages = Math.max(1, Math.min(configuredPageLimit, Number(job.max_pages) || configuredPageLimit));
+    const crawlDepth = Math.max(0, Math.min(8, Number(job.crawl_depth) || 3));
+    const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
+    if (!scanId) throw new Error("Could not start the queued website scan.");
+
+    const result = await performWebsiteScan(
+      db, websiteResult.data, scanId, maxPages, undefined,
+      async (scanned, discovered) => {
+        await db.from("scan_jobs").update({
+          pages_scanned: scanned,
+          pages_total: Math.max(scanned, discovered),
+          cursor: scanned,
+          updated_at: new Date().toISOString(),
+        }).eq("id", jobId);
+      },
+      jobId,
+      crawlDepth,
+    );
+
+    const completed = await db.from("scan_jobs").update({
+      status: "completed",
+      pages_scanned: result.pagesScanned,
+      pages_total: result.pagesScanned,
+      pages_skipped: Number(job.pages_skipped || 0) + Number(result.pagesSkipped || 0),
+      detected_platform: result.detectedPlatform || null,
+      errors: result.scanErrors || [],
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    if (completed.error) throw new Error("The scan finished but its job status could not be saved.");
+    return { processed: true, status: "completed", jobId, pagesScanned: result.pagesScanned, detectedPlatform: result.detectedPlatform };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Website scan failed.";
+    const resumable = /timed out|timeout|aborted|worker terminated/i.test(message);
+    await db.from("scan_jobs").update({
+      status: resumable ? "queued" : "failed",
+      errors: [{ message: resumable
+        ? "This scan pass reached its time budget. Saved pages are checkpointed and the queue will resume automatically."
+        : message.slice(0, 500) }],
+      completed_at: resumable ? null : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    console.error("[misma-widget] Scan worker pass ended.", { jobId, resumable, reason: message.slice(0, 300) });
+    return { processed: true, status: resumable ? "queued" : "failed", jobId, error: message.slice(0, 300) };
   }
 }
 
@@ -1559,6 +1749,14 @@ Deno.serve(async (request: Request) => {
   if (!isRecord(input)) return respond(400, { error: "Invalid request." });
 
   try {
+    if (input.action === "scan-worker") {
+      const suppliedToken = request.headers.get("x-misma-scan-worker") || "";
+      if (!suppliedToken) return respond(401, { error: "Unauthorized scan worker." });
+      const tokenCheck = await db.rpc("misma_validate_scan_worker_token", { p_token: suppliedToken });
+      if (tokenCheck.error || tokenCheck.data !== true) return respond(401, { error: "Unauthorized scan worker." });
+      const result = await processQueuedWebsiteScan(db);
+      return respond(200, { ok: true, ...result });
+    }
     if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
       if (input.action === "widget-config") {
@@ -1888,7 +2086,8 @@ Deno.serve(async (request: Request) => {
         .eq("workspace_id", workspaceId)
         .single();
       if (websiteResult.error || !websiteResult.data) throw new Error("Website not found in the selected workspace.");
-      const maxPages = Math.max(1, Math.min(50, Number(input.maxPages) || 25));
+      const configuredPageLimit = Math.max(1, Math.min(100, Number(getEnv("MISMA_SCAN_MAX_PAGES")) || 50));
+      const maxPages = Math.max(1, Math.min(configuredPageLimit, Number(input.maxPages) || configuredPageLimit));
       const crawlDepth = Math.max(0, Math.min(8, Number(input.crawlDepth) || 3));
       const staleBefore = new Date(Date.now() - 180_000).toISOString();
       await db.from("scan_jobs").update({
@@ -1902,14 +2101,14 @@ Deno.serve(async (request: Request) => {
       if (failedJob.data?.id) {
         jobId = String(failedJob.data.id);
         const resumed = await db.from("scan_jobs").update({
-          status: "queued", max_pages: maxPages, crawl_depth: crawlDepth, pages_total: 0, pages_scanned: 0, pages_skipped: 0,
-          cursor: 0, errors: [], started_at: null, completed_at: null, updated_at: new Date().toISOString(),
+          status: "queued", max_pages: maxPages, crawl_depth: crawlDepth,
+          errors: [], started_at: null, completed_at: null, updated_at: new Date().toISOString(),
         }).eq("id", jobId).eq("workspace_id", workspaceId);
         if (resumed.error) throw new Error("Could not resume the previous scan job.");
       } else {
         const createdJob = await db.from("scan_jobs").insert({
           workspace_id: workspaceId, website_id: websiteId, status: "queued", max_pages: maxPages, crawl_depth: crawlDepth,
-          pages_total: 0, pages_scanned: 0, pages_skipped: 0, errors: [], discovered_urls: [],
+          pages_total: 0, pages_scanned: 0, pages_skipped: 0, cursor: 0, errors: [], discovered_urls: [],
         }).select("id").single();
         if (createdJob.error || !createdJob.data) {
           if (createdJob.error?.code === "23505") throw new Error("A scan is already running for this website. Wait for it to finish.");
@@ -1917,31 +2116,7 @@ Deno.serve(async (request: Request) => {
         }
         jobId = String(createdJob.data.id);
       }
-      const scanTask = (async () => {
-        try {
-          await db.from("scan_jobs").update({ status: "running", started_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", jobId);
-          const scanId = await createWebsiteScanRun(db, websiteResult.data, false);
-          if (!scanId) throw new Error("Could not start the website scan.");
-          const result = await performWebsiteScan(db, websiteResult.data, scanId, maxPages, undefined, async (scanned, discovered) => {
-            await db.from("scan_jobs").update({
-              pages_scanned: scanned, pages_total: discovered, cursor: scanned, updated_at: new Date().toISOString(),
-            }).eq("id", jobId);
-          }, jobId, crawlDepth);
-          await db.from("scan_jobs").update({
-            status: "completed", pages_scanned: result.pagesScanned, pages_total: result.pagesScanned,
-            pages_skipped: result.pagesSkipped || 0, detected_platform: result.detectedPlatform || null,
-            errors: result.scanErrors || [],
-            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-          }).eq("id", jobId);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Website scan failed.";
-          await db.from("scan_jobs").update({
-            status: "failed", errors: [{ message: message.slice(0, 500) }],
-            completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-          }).eq("id", jobId);
-          console.error("[misma-widget] Background scan job failed.", { jobId, reason: message.slice(0, 300) });
-        }
-      })();
+      const scanTask = processQueuedWebsiteScan(db, jobId);
       const runtime = (globalThis as unknown as AnyRecord).EdgeRuntime;
       if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(scanTask);
       else await scanTask;
