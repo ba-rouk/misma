@@ -1,5 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { getWebsiteWidgetTheme, saveWebsiteWidgetTheme } from "../lib/api/misma.functions";
 import { getSupabaseClient } from "../lib/supabase";
 import "../components/website-widget-customizer.css";
@@ -72,24 +81,373 @@ function contrastRatio(foreground: string, background: string): number {
   const a=luminance(toHex(fg)),b=luminance(toHex(bg));
   return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
 }
-function ColorControl({label,value,onChange}:{label:string;value:string;onChange:(value:string)=>void}) {
-  const [draft,setDraft]=useState(value);
-  useEffect(()=>setDraft(value),[value]);
-  return <div className="misma-theme-color-control">
-    <label className="misma-theme-color-label">{label}</label>
-    <div className="misma-theme-color-inputs">
-      <label className="misma-theme-picker" title={"Choose "+label}>
-        <input className="misma-theme-color-wheel-input" aria-label={label+" color wheel"} type="color" value={value.slice(0,7)} onChange={e=>{setDraft(e.target.value);onChange(e.target.value.toLowerCase());}} />
-        <span className="misma-theme-color-wheel" aria-hidden="true" />
-        <span className="misma-theme-color-value">{value.toLowerCase()}</span>
-      </label>
-      <input aria-label={label+" hex value"} className={"misma-theme-hex"+(HEX.test(draft)?"":" is-invalid")} value={draft} maxLength={9} spellCheck={false}
-        onChange={e=>{const v=e.target.value;setDraft(v);if(HEX.test(v))onChange(v.toLowerCase());}} onBlur={()=>{if(!HEX.test(draft))setDraft(value);}} />
-    </div>
-    <div className="misma-theme-presets">{PRESETS.map(p=><button key={p} type="button" title={p} aria-label={label+" "+p} className={value.toLowerCase()===p?"is-selected":""} style={{background:p}} onClick={()=>{setDraft(p);onChange(p);}} />)}</div>
-    {!HEX.test(draft)&&<small className="misma-theme-field-error">Use #RRGGBB or #RRGGBBAA.</small>}
-  </div>;
+type HsvColor = {
+  h: number;
+  s: number;
+  v: number;
+};
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
+
+function normalizePickerHex(input: string): string | null {
+  let hex = input.trim().replace(/^#/, "");
+
+  if (/^[0-9a-f]{3}$/i.test(hex)) {
+    hex = hex.split("").map((character) => character + character).join("");
+  }
+
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+  return "#" + hex.toLowerCase();
+}
+
+function hexToHsv(input: string): HsvColor {
+  const normalized = normalizePickerHex(input.slice(0, 7)) ?? "#000000";
+  const hex = normalized.slice(1);
+
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+
+  if (delta !== 0) {
+    if (max === r) h = 60 * (((g - b) / delta) % 6);
+    else if (max === g) h = 60 * ((b - r) / delta + 2);
+    else h = 60 * ((r - g) / delta + 4);
+  }
+
+  if (h < 0) h += 360;
+
+  return {
+    h,
+    s: max === 0 ? 0 : delta / max,
+    v: max,
+  };
+}
+
+function hsvToHex({ h, s, v }: HsvColor): string {
+  const hue = ((h % 360) + 360) % 360;
+  const chroma = v * s;
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = v - chroma;
+
+  let rgb: [number, number, number];
+
+  if (hue < 60) rgb = [chroma, x, 0];
+  else if (hue < 120) rgb = [x, chroma, 0];
+  else if (hue < 180) rgb = [0, chroma, x];
+  else if (hue < 240) rgb = [0, x, chroma];
+  else if (hue < 300) rgb = [x, 0, chroma];
+  else rgb = [chroma, 0, x];
+
+  return "#" + rgb
+    .map((channel) => Math.round((channel + m) * 255).toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function preserveExistingAlpha(nextHex: string, current: string): string {
+  return current.length === 9 ? nextHex + current.slice(7, 9) : nextHex;
+}
+
+function ColorControl({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hsv, setHsv] = useState<HsvColor>(() => hexToHsv(value));
+  const [hexDraft, setHexDraft] = useState(value.slice(1, 7).toUpperCase());
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setHsv(hexToHsv(value));
+    setHexDraft(value.slice(1, 7).toUpperCase());
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handleOutside);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  function applyHex(input: string) {
+    const normalized = normalizePickerHex(input);
+    if (!normalized) return;
+
+    setHsv(hexToHsv(normalized));
+    setHexDraft(normalized.slice(1, 7).toUpperCase());
+    onChange(preserveExistingAlpha(normalized, value));
+  }
+
+  function commitHsv(next: HsvColor) {
+    const safe: HsvColor = {
+      h: ((next.h % 360) + 360) % 360,
+      s: clamp01(next.s),
+      v: clamp01(next.v),
+    };
+    const hex = hsvToHex(safe);
+
+    setHsv(safe);
+    setHexDraft(hex.slice(1).toUpperCase());
+    onChange(preserveExistingAlpha(hex, value));
+  }
+
+  function updatePlane(event: ReactPointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    commitHsv({
+      ...hsv,
+      s: clamp01((event.clientX - rect.left) / rect.width),
+      v: 1 - clamp01((event.clientY - rect.top) / rect.height),
+    });
+  }
+
+  function handlePlaneKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 0.1 : 0.02;
+    const next = { ...hsv };
+
+    switch (event.key) {
+      case "ArrowLeft":
+        next.s -= step;
+        break;
+      case "ArrowRight":
+        next.s += step;
+        break;
+      case "ArrowUp":
+        next.v += step;
+        break;
+      case "ArrowDown":
+        next.v -= step;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    commitHsv(next);
+  }
+
+  const hueColor = hsvToHex({ h: hsv.h, s: 1, v: 1 });
+
+  const handleHexInput = (input: string) => {
+    const next = input.replace(/^#/, "").replace(/[^0-9a-f]/gi, "").slice(0, 6).toUpperCase();
+    setHexDraft(next);
+    if (next.length === 6) applyHex(next);
+  };
+
+  const restoreHexDraft = () => {
+    if (!normalizePickerHex(hexDraft)) {
+      setHexDraft(value.slice(1, 7).toUpperCase());
+    }
+  };
+
+  return (
+    <div className="misma-theme-color-control" ref={rootRef}>
+      <div className="misma-theme-color-label">{label}</div>
+
+      <div className="misma-theme-color-row">
+        <button
+          type="button"
+          className="misma-theme-color-preview"
+          style={{ backgroundColor: value }}
+          aria-label={"Choose " + label + " color"}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        />
+        <input
+          type="text"
+          className="misma-theme-color-code"
+          aria-label={label + " Hex color"}
+          value={hexDraft}
+          maxLength={6}
+          spellCheck={false}
+          onChange={(event) => handleHexInput(event.target.value)}
+          onBlur={restoreHexDraft}
+        />
+      </div>
+
+      {open && (
+        <div className="misma-theme-color-popover" role="dialog" aria-label={label + " color picker"}>
+          <div className="misma-theme-popover-heading">
+            <strong>Color</strong>
+            <button type="button" aria-label="Close color picker" onClick={() => setOpen(false)}>
+              ×
+            </button>
+          </div>
+
+          <div
+            className="misma-theme-saturation-plane"
+            style={{ "--misma-picker-hue": hueColor } as CSSProperties}
+            role="group"
+            aria-label="Color saturation and brightness"
+            tabIndex={0}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              updatePlane(event);
+            }}
+            onPointerMove={(event) => {
+              if (event.buttons === 1) updatePlane(event);
+            }}
+            onKeyDown={handlePlaneKeyDown}
+          >
+            <span
+              className="misma-theme-saturation-indicator"
+              style={{
+                left: (hsv.s * 100) + "%",
+                top: ((1 - hsv.v) * 100) + "%",
+              }}
+            />
+          </div>
+
+          <div className="misma-theme-hue-control">
+            <input
+              type="range"
+              min="0"
+              max="360"
+              step="1"
+              value={hsv.h}
+              aria-label="Hue"
+              onChange={(event) => commitHsv({ ...hsv, h: Number(event.target.value) })}
+            />
+          </div>
+
+          <div className="misma-theme-picker-fields">
+            <label>
+              <span>Format</span>
+              <select value="hex" aria-label="Color format" onChange={() => undefined}>
+                <option value="hex">Hex</option>
+              </select>
+            </label>
+
+            <label className="misma-theme-picker-hex-field">
+              <span>Hex</span>
+              <input
+                type="text"
+                value={hexDraft}
+                maxLength={6}
+                spellCheck={false}
+                aria-label="Hex color value"
+                aria-invalid={hexDraft.length !== 6}
+                onChange={(event) => handleHexInput(event.target.value)}
+                onBlur={restoreHexDraft}
+              />
+            </label>
+          </div>
+
+          <div className="misma-theme-document-palette">
+            <span>Document colors</span>
+            <div className="misma-theme-palette-grid">
+              {PRESETS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  title={color}
+                  aria-label={"Select " + color}
+                  className={value.slice(0, 7).toLowerCase() === color ? "is-selected" : ""}
+                  style={{ backgroundColor: color }}
+                  onClick={() => applyHex(color)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThemeAccordionSection({
+  id,
+  title,
+  copy,
+  expanded,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  copy: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const panelId = "misma-theme-panel-" + id;
+
+  return (
+    <section className={"misma-theme-section " + (expanded ? "is-expanded" : "is-collapsed")}>
+      <header className="misma-theme-section-heading">
+        <button
+          type="button"
+          className="misma-theme-section-trigger"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          aria-label={(expanded ? "Collapse " : "Expand ") + title + " settings"}
+          onClick={onToggle}
+        >
+          <span className="misma-theme-section-number">{id}</span>
+          <span className="misma-theme-section-copy">
+            <span className="misma-theme-section-title" role="heading" aria-level={2}>{title}</span>
+            <span className="misma-theme-section-description">{copy}</span>
+          </span>
+          <svg
+            className={"misma-theme-accordion-icon" + (expanded ? " is-open" : "")}
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            aria-hidden="true"
+          >
+            <path
+              d="m9 18 6-6-6-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </header>
+
+      <div
+        id={panelId}
+        className={"misma-theme-section-panel" + (expanded ? " is-expanded" : "")}
+        role="region"
+        aria-label={title + " settings"}
+        aria-hidden={!expanded}
+      >
+        <div className="misma-theme-section-panel-inner" inert={!expanded ? true : undefined}>
+          {children}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export const Route = createFileRoute("/dashboard/websites/$siteId/customize")({component:WebsiteWidgetCustomizer});
 
 function WebsiteWidgetCustomizer() {
@@ -99,6 +457,10 @@ function WebsiteWidgetCustomizer() {
   const [themeSuggestions,setThemeSuggestions]=useState<Record<string,unknown>>({});
   const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false);
   const [message,setMessage]=useState<{kind:"success"|"error"|"info";text:string}|null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>("01");
+  const toggleSection = (id: string) => {
+    setExpandedSection((current) => current === id ? null : id);
+  };
   const dirty=useMemo(()=>JSON.stringify(theme)!==JSON.stringify(savedTheme),[theme,savedTheme]);
   const footer=theme.matchChatBackground?theme.chatBackground:theme.footerBackground;
   const previewStyle={
@@ -227,40 +589,153 @@ function WebsiteWidgetCustomizer() {
       </div>
     </section>
     <div className="misma-theme-content">
-      {[
-        {id:"01",title:"Header",copy:"Control the widget title, subtitle and header surface.",group:"Header"},
-        {id:"02",title:"Chat background",copy:"Set the canvas behind the conversation.",group:"Chat"},
-      ].map(section=><section key={section.id} className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>{section.id}</span><div><h2>{section.title}</h2><p>{section.copy}</p></div></div>
-        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group===section.group).map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
-      </section>)}
-      <section className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>03</span><div><h2>Message bubbles</h2><p>Set separate surfaces and text colours for Misma and visitors.</p></div></div>
-        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Bubbles").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
-      </section>
-      <section className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>04</span><div><h2>Buttons</h2><p>Set the send / voice action and header icon surfaces.</p></div></div>
-        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Buttons").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
-      </section>
-      <section className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>05</span><div><h2>Typography</h2><p>Choose a safe font family and general text colour.</p></div></div>
-        <label className="misma-theme-font-field"><span>Font family</span><select value={theme.fontFamily} onChange={e=>setTheme(current=>({...current,fontFamily:e.target.value as FontName}))}>{FONT_OPTIONS.map(font=><option key={font} value={font} style={{fontFamily:FONT_STACKS[font]}}>{font}</option>)}</select><small style={{fontFamily:FONT_STACKS[theme.fontFamily]}}>The quick brown fox jumps over the lazy dog.</small></label>
-        <div className="misma-theme-controls">{COLOR_FIELDS.filter(field=>field.group==="Text").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
-      </section>
-      <section className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>06</span><div><h2>Footer</h2><p>Style the text bar separately or link it to the chat canvas.</p></div></div>
-        <label className="misma-theme-match-toggle"><input type="checkbox" checked={theme.matchChatBackground} onChange={e=>setTheme(current=>({...current,matchChatBackground:e.target.checked}))}/><span><strong>Match chat background</strong><small>Use the chat background as the footer surface.</small></span></label>
-        <div className={theme.matchChatBackground?"misma-theme-controls is-disabled":"misma-theme-controls"}>{COLOR_FIELDS.filter(field=>field.group==="Footer").map(field=><ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={value=>setColor(field.key,value)}/>)}</div>
-        {theme.matchChatBackground&&<small className="misma-theme-hint">The text-bar container is using {theme.chatBackground}.</small>}
-      </section>
-      <section className="misma-theme-section">
-        <div className="misma-theme-section-heading"><span>07</span><div><h2>Accessibility and website colours</h2><p>Check WCAG AA contrast and reuse colours from the latest scan.</p></div></div>
-        {failures.length?<div className="misma-theme-contrast-warning" role="status"><strong>Contrast needs attention</strong><span>{failures.map(item=>item.label+": "+item.ratio.toFixed(2)+":1").join(" · ")}. WCAG AA normally requires 4.5:1 for regular text.</span></div>:<div className="misma-theme-contrast-ok">Text contrast checks meet the 4.5:1 WCAG AA target for the sampled pairs.</div>}
-        <button type="button" className="misma-theme-secondary" onClick={suggest}>✦ Suggest colours from my website</button>
-        <p className="misma-theme-hint">Suggestions use colours recorded by the latest rendered-page scan, including theme-colour metadata, CSS declarations and inline / SVG brand colours.</p>
-      </section>
-      <div className="misma-theme-bottom-actions"><button type="button" className="misma-theme-reset" onClick={reset}>Reset to default</button><button type="button" className="misma-theme-save" onClick={()=>void save()} disabled={!dirty||saving||!token}>{saving?"Saving…":"Save changes"}</button></div>
-      {dirty&&<p className="misma-theme-unsaved" role="status">You have unsaved changes.</p>}
+      <ThemeAccordionSection
+        id="01"
+        title="Header"
+        copy="Control the widget title, subtitle and header surface."
+        expanded={expandedSection === "01"}
+        onToggle={() => toggleSection("01")}
+      >
+        <div className="misma-theme-controls">
+          {COLOR_FIELDS.filter((field) => field.group === "Header").map((field) => (
+            <ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={(value) => setColor(field.key, value)} />
+          ))}
+        </div>
+      </ThemeAccordionSection>
+
+      <ThemeAccordionSection
+        id="02"
+        title="Chat background"
+        copy="Set the canvas behind the conversation."
+        expanded={expandedSection === "02"}
+        onToggle={() => toggleSection("02")}
+      >
+        <div className="misma-theme-controls">
+          {COLOR_FIELDS.filter((field) => field.group === "Chat").map((field) => (
+            <ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={(value) => setColor(field.key, value)} />
+          ))}
+        </div>
+      </ThemeAccordionSection>
+
+      <ThemeAccordionSection
+        id="03"
+        title="Message bubbles"
+        copy="Set separate surfaces and text colours for Misma and visitors."
+        expanded={expandedSection === "03"}
+        onToggle={() => toggleSection("03")}
+      >
+        <div className="misma-theme-controls">
+          {COLOR_FIELDS.filter((field) => field.group === "Bubbles").map((field) => (
+            <ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={(value) => setColor(field.key, value)} />
+          ))}
+        </div>
+      </ThemeAccordionSection>
+
+      <ThemeAccordionSection
+        id="04"
+        title="Buttons"
+        copy="Set the send / voice action and header icon surfaces."
+        expanded={expandedSection === "04"}
+        onToggle={() => toggleSection("04")}
+      >
+        <div className="misma-theme-controls">
+          {COLOR_FIELDS.filter((field) => field.group === "Buttons").map((field) => (
+            <ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={(value) => setColor(field.key, value)} />
+          ))}
+        </div>
+      </ThemeAccordionSection>
+
+      <ThemeAccordionSection
+        id="05"
+        title="Typography"
+        copy="Choose a safe font family and general text colour."
+        expanded={expandedSection === "05"}
+        onToggle={() => toggleSection("05")}
+      >
+        <label className="misma-theme-font-field">
+          <span>Font family</span>
+          <select
+            value={theme.fontFamily}
+            onChange={(event) => setTheme((current) => ({ ...current, fontFamily: event.target.value as FontName }))}
+          >
+            {FONT_OPTIONS.map((font) => (
+              <option key={font} value={font} style={{ fontFamily: FONT_STACKS[font] }}>{font}</option>
+            ))}
+          </select>
+          <small style={{ fontFamily: FONT_STACKS[theme.fontFamily] }}>
+            The quick brown fox jumps over the lazy dog.
+          </small>
+        </label>
+        <div className="misma-theme-controls">
+          {COLOR_FIELDS.filter((field) => field.group === "Text").map((field) => (
+            <ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={(value) => setColor(field.key, value)} />
+          ))}
+        </div>
+      </ThemeAccordionSection>
+
+      <ThemeAccordionSection
+        id="06"
+        title="Footer"
+        copy="Style the text bar separately or link it to the chat canvas."
+        expanded={expandedSection === "06"}
+        onToggle={() => toggleSection("06")}
+      >
+        <label className="misma-theme-match-toggle">
+          <input
+            type="checkbox"
+            checked={theme.matchChatBackground}
+            onChange={(event) => setTheme((current) => ({ ...current, matchChatBackground: event.target.checked }))}
+          />
+          <span>
+            <strong>Match chat background</strong>
+            <small>Use the chat background as the footer surface.</small>
+          </span>
+        </label>
+        <div className={theme.matchChatBackground ? "misma-theme-controls is-disabled" : "misma-theme-controls"}>
+          {COLOR_FIELDS.filter((field) => field.group === "Footer").map((field) => (
+            <ColorControl key={field.key} label={field.label} value={theme[field.key]} onChange={(value) => setColor(field.key, value)} />
+          ))}
+        </div>
+        {theme.matchChatBackground && (
+          <small className="misma-theme-hint">The text-bar container is using {theme.chatBackground}.</small>
+        )}
+      </ThemeAccordionSection>
+
+      <ThemeAccordionSection
+        id="07"
+        title="Accessibility and website colours"
+        copy="Check WCAG AA contrast and reuse colours from the latest scan."
+        expanded={expandedSection === "07"}
+        onToggle={() => toggleSection("07")}
+      >
+        {failures.length ? (
+          <div className="misma-theme-contrast-warning" role="status">
+            <strong>Contrast needs attention</strong>
+            <span>
+              {failures.map((item) => item.label + ": " + item.ratio.toFixed(2) + ":1").join(" · ")}.
+              {" "}WCAG AA normally requires 4.5:1 for regular text.
+            </span>
+          </div>
+        ) : (
+          <div className="misma-theme-contrast-ok">
+            Text contrast checks meet the 4.5:1 WCAG AA target for the sampled pairs.
+          </div>
+        )}
+        <button type="button" className="misma-theme-secondary" onClick={suggest}>
+          ✦ Suggest colours from my website
+        </button>
+        <p className="misma-theme-hint">
+          Suggestions use colours recorded by the latest rendered-page scan, including theme-colour metadata, CSS declarations and inline / SVG brand colours.
+        </p>
+      </ThemeAccordionSection>
+
+      <div className="misma-theme-bottom-actions">
+        <button type="button" className="misma-theme-reset" onClick={reset}>Reset to default</button>
+        <button type="button" className="misma-theme-save" onClick={() => void save()} disabled={!dirty || saving || !token}>
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+      </div>
+      {dirty && <p className="misma-theme-unsaved" role="status">You have unsaved changes.</p>}
     </div>
   </main>;
 }
