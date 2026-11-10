@@ -53,3 +53,33 @@ test("scanner rechecks public DNS before page requests, honors robots allow rule
   assert.match(edge, /processQueuedWebsiteScan/);
   assert.match(edge, /misma_validate_scan_worker_token/);
 });
+
+
+test("dashboard typography is tokenized, self-hosted, and isolated from the live site widget", async () => {
+  const root = await read("../src/routes/__root.tsx");
+  const styles = await read("../src/styles.css");
+  const customizer = await read("../src/components/website-widget-customizer.css");
+  const page = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+
+  assert.ok(root.includes("@fontsource-variable/inter/wght.css"));
+  assert.ok(root.includes("@fontsource-variable/source-serif-4/wght.css"));
+  assert.ok(root.includes('rel: "preload"'));
+  assert.ok(root.includes("font/woff2"));
+  assert.match(styles, /--font-serif: "Source Serif 4 Variable"/);
+  assert.match(styles, /--font-sans: "Inter Variable"/);
+  assert.match(styles, /--text-title: 18px/);
+  assert.match(styles, /--text-body: 14px/);
+  assert.match(styles, /--text-input: 16px/);
+  assert.match(styles, /--text-link-color: #d97757/);
+  assert.match(styles, /\\.aichat :where\\(h1, h2\\)/);
+  assert.match(styles, /\\.aichat :where\\(code, pre/);
+  assert.match(styles, /--text-muted-color-light/);
+  assert.match(customizer, /background:#07111d/);
+  assert.match(customizer, /font-family:var\\(--font-serif\\)/);
+  assert.ok(page.includes("misma-widget-preview-close"));
+  assert.ok(page.includes("Header icon buttons (including close)"));
+  assert.ok(page.includes('label:"Chat background"'));
+  assert.match(runtime, /--misma-chat-bg/);
+  assert.doesNotMatch(runtime, /--font-serif|--text-title-color/);
+});
