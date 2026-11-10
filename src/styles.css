@@ -8626,3 +8626,14 @@ html, body, #app-root {
   opacity: .55;
   cursor: not-allowed;
 }
+
+
+/* Force all content inside sent user and human-request messages to bright white.
+   The dashboard renders both user and assistant bodies through MarkdownContent,
+   so target descendants as well as the outer bubble to defeat inherited/legacy colors. */
+.aichat-message-row.is-user .aichat-bubble,
+.aichat-message-row.is-user .aichat-bubble :where(*),
+.aichat-message-row.is-customer .aichat-bubble,
+.aichat-message-row.is-customer .aichat-bubble :where(*) {
+  color: #ffffff !important;
+}
