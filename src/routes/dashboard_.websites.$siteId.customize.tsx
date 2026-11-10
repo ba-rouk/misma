@@ -22,7 +22,11 @@ const DEFAULT_THEME: WidgetTheme = {
 };
 const FONT_OPTIONS: FontName[] = ["system-ui", "Inter", "Roboto", "Poppins", "Open Sans", "Lato", "Montserrat", "Nunito", "serif", "monospace"];
 const HEX = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
-const PRESETS = ["#ffffff", "#111827", "#172033", "#f8fafc", "#22c55e", "#2563eb", "#0f766e", "#f3e8ff"];
+const PRESETS = [
+  "#ffffff", "#f8fafc", "#e2e8f0", "#94a3b8", "#64748b", "#334155", "#172033", "#090a0c",
+  "#dc2626", "#ea580c", "#f59e0b", "#eab308", "#84cc16", "#22c55e", "#0d9488", "#06b6d4",
+  "#2563eb", "#4f46e5", "#7c3aed", "#db2777", "#f472b6",
+];
 const FONT_STACKS: Record<FontName, string> = {
   "system-ui": "system-ui,-apple-system,BlinkMacSystemFont,sans-serif", Inter: "Inter,system-ui,sans-serif",
   Roboto: "Roboto,Arial,sans-serif", Poppins: "Poppins,system-ui,sans-serif", "Open Sans": "'Open Sans',Arial,sans-serif",
@@ -75,8 +79,9 @@ function ColorControl({label,value,onChange}:{label:string;value:string;onChange
     <label className="misma-theme-color-label">{label}</label>
     <div className="misma-theme-color-inputs">
       <label className="misma-theme-picker" title={"Choose "+label}>
-        <input aria-label={label+" color picker"} type="color" value={value.slice(0,7)} onChange={e=>{setDraft(e.target.value);onChange(e.target.value.toLowerCase());}} />
-        <span>{value.toLowerCase()}</span>
+        <input className="misma-theme-color-wheel-input" aria-label={label+" color wheel"} type="color" value={value.slice(0,7)} onChange={e=>{setDraft(e.target.value);onChange(e.target.value.toLowerCase());}} />
+        <span className="misma-theme-color-wheel" aria-hidden="true" />
+        <span className="misma-theme-color-value">{value.toLowerCase()}</span>
       </label>
       <input aria-label={label+" hex value"} className={"misma-theme-hex"+(HEX.test(draft)?"":" is-invalid")} value={draft} maxLength={9} spellCheck={false}
         onChange={e=>{const v=e.target.value;setDraft(v);if(HEX.test(v))onChange(v.toLowerCase());}} onBlur={()=>{if(!HEX.test(draft))setDraft(value);}} />
@@ -176,7 +181,30 @@ function WebsiteWidgetCustomizer() {
     {label:"Visitor bubble",ratio:contrastRatio(theme.userBubbleText,theme.userBubbleBackground)},
   ];
   const failures=contrasts.filter(item=>item.ratio<4.5);
-  if(loading)return <main className="misma-theme-page"><div className="misma-theme-loading">Loading website widget settings…</div></main>;
+  if(loading)return <main className="misma-theme-page" aria-busy="true">
+    <div className="misma-theme-skeleton" role="status" aria-label="Loading widget settings">
+      <header className="misma-theme-skeleton-toolbar">
+        <span className="misma-theme-skeleton-back" />
+        <span className="misma-theme-skeleton-title" />
+      </header>
+      <section className="misma-theme-skeleton-preview">
+        <div className="misma-theme-skeleton-heading"><i /><i /></div>
+        <div className="misma-theme-skeleton-widget">
+          <div className="misma-theme-skeleton-widget-header"><i /><span /><b /><b /><b /></div>
+          <div className="misma-theme-skeleton-chat">
+            <i className="is-left" /><i className="is-right" /><i className="is-left is-wide" />
+          </div>
+          <div className="misma-theme-skeleton-footer"><i /><b /><b /></div>
+        </div>
+      </section>
+      <div className="misma-theme-skeleton-sections">
+        {Array.from({length:7},(_,index)=><section className="misma-theme-skeleton-card" key={index}>
+          <div className="misma-theme-skeleton-card-heading"><i /><span /><b /></div>
+          <div className="misma-theme-skeleton-fields"><i /><i /></div>
+        </section>)}
+      </div>
+    </div>
+  </main>;
   if(message?.kind==="error"&&!token)return <main className="misma-theme-page"><div className="misma-theme-error">{message.text}<button onClick={()=>void navigate({to:"/dashboard"})}>Back to websites</button></div></main>;
 
   return <main className="misma-theme-page">

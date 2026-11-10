@@ -386,6 +386,7 @@ function WebsiteSocialSettings({
                 type="text"
                 placeholder="https://instagram.com/yourbusiness or @yourbusiness"
                 autoComplete="url"
+                readOnly={Boolean(site.instagram_url)}
                 onChange={(event) => setDraft((current) => ({ ...current, instagramUrl: event.target.value }))}
               />
             </label>
@@ -410,6 +411,7 @@ function WebsiteSocialSettings({
                 autoComplete="email"
                 maxLength={254}
                 placeholder="business@gmail.com"
+                readOnly={Boolean(site.gmail_address)}
                 onChange={(event) => setDraft((current) => ({ ...current, gmailAddress: event.target.value }))}
               />
             </label>
@@ -431,6 +433,7 @@ function WebsiteSocialSettings({
                 Country code
                 <select
                   value={draft.whatsappCountryCode}
+                  disabled={Boolean(site.whatsapp_number)}
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappCountryCode: event.target.value }))}
                 >
                   {!WEBSITE_PHONE_COUNTRY_CODES.some((country) => country.code === draft.whatsappCountryCode) && (
@@ -448,6 +451,7 @@ function WebsiteSocialSettings({
                   inputMode="tel"
                   autoComplete="tel-national"
                   value={draft.whatsappNumber}
+                  readOnly={Boolean(site.whatsapp_number)}
                   placeholder="e.g. 788123456"
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappNumber: event.target.value }))}
                 />
@@ -458,6 +462,7 @@ function WebsiteSocialSettings({
               <textarea
                 rows={3}
                 value={draft.whatsappMessage}
+                readOnly={Boolean(site.whatsapp_number)}
                 placeholder="Hello! How can we help you today?"
                 onChange={(event) => setDraft((current) => ({ ...current, whatsappMessage: event.target.value }))}
               />
@@ -5904,7 +5909,7 @@ function Dashboard() {
         )}
 
         {activeTab === "websites" && (
-          <div className="aichat-tab-view"><div className="aichat-tab-content">
+          <div className="aichat-tab-view aichat-websites-tab"><div className="aichat-tab-content">
             <div className="aichat-tab-header"><h2>Websites</h2><p>Connect a published website or register an unpublished draft, staging, or preview URL before launch.</p></div>
             <div className="aichat-card">
               <h3>Register a website or preview URL</h3>
@@ -5931,7 +5936,7 @@ function Dashboard() {
                 <label>Website or preview URL<input className="aichat-input" type="url" placeholder="https://preview.example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
                 <label>Website name (optional)<input className="aichat-input" placeholder="My business website" value={websiteDraftName} onChange={(event) => setWebsiteDraftName(event.target.value)} /></label>
                 <p className="aichat-website-setup-note">You do not need to publish the website first. Register its final domain or a preview/staging URL, then copy the general script below. For local testing, use <code>http://localhost:PORT</code>.</p>
-                <button type="submit" className="aichat-action-btn" style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }} disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
+                <button type="submit" className="aichat-action-btn secondary" disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
               </form>
             </div>
             <div className="aichat-card">
@@ -5992,13 +5997,13 @@ function Dashboard() {
                   token={token || ""}
                   onSaved={(website) => setConnectedWebsites((items) => items.map((item) => item.id === website.id ? { ...item, ...website } : item))}
                 />
-                <button type="button" className="aichat-action-btn" style={{ width: "100%", margin: "10px 0", background: "#16a34a", color: "#fff", borderColor: "#16a34a" }} onClick={() => navigate({ to: "/dashboard/websites/$siteId/customize", params: { siteId: site.id } })}>
+                <button type="button" className="aichat-action-btn secondary" style={{ width: "100%", margin: "10px 0" }} onClick={() => navigate({ to: "/dashboard/websites/$siteId/customize", params: { siteId: site.id } })}>
                   <span aria-hidden="true">◈</span> Customize widget <span aria-hidden="true">›</span>
                 </button>
                 <label className="aichat-widget-script-label">General website installation script</label>
                 <pre className="aichat-widget-script"><code>{`<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-2" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`}</code></pre>
                 <div className="aichat-website-actions">
-                  <button type="button" className="aichat-action-btn" onClick={() => {
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => {
                     const snippet = `<script defer src="https://misma.onrender.com/assets/misma-widget.js?v=20261110-widget-theme-2" data-site-key="${site.widget_public_key || site.public_key}" data-endpoint="${supabaseApiBase}/functions/v1/misma-widget"></script>`;
                     void navigator.clipboard.writeText(snippet).then(() => alert("Widget installation script copied."));
                   }}>Copy script</button>
@@ -6077,7 +6082,7 @@ function Dashboard() {
                       setWebsiteActionId((current) => current === site.id ? null : current);
                     }
                   }}>{websiteActionId === site.id ? "Scanning…" : "Scan website"}</button>
-                  <button type="button" className="aichat-action-btn secondary is-danger" onClick={async () => {
+                  <button type="button" className="aichat-action-btn secondary" onClick={async () => {
                     if (!token || !window.confirm("Delete the connection for " + (site.domain || site.website_url) + "? This deactivates its widget key on this domain immediately, so the Misma launcher will no longer appear here. Other registered domains using the same shared key remain active. Visitor history is preserved.")) return;
                     try {
                       await deleteWebsiteConnection({ data: { token, websiteId: site.id } });
