@@ -1034,6 +1034,22 @@ test("connected website settings and social widget controls stay accessible on m
 });
 
 
+test("website Add channels saves Gmail and exposes a validated Gmail action in the widget header", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const migration = await read("../supabase/migrations/20261110120300_website_gmail_channel.sql");
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  const widget = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(dashboard, /Gmail contact address/);
+  assert.match(dashboard, /gmailAddress: gmailAddress \\|\\| null/);
+  assert.match(api, /gmailAddress: z\\.string\\(\\)\\.email\\(\\)\\.max\\(254\\)\\.nullable\\(\\)/);
+  assert.match(api, /gmail_address: gmailAddress/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS gmail_address text/);
+  assert.match(migration, /website_connections_gmail_address_check/);
+  assert.match(edge, /gmail_url: gmailUrl/);
+  assert.match(widget, /class='social-link gmail-link'/);
+});
+
 test("widget heartbeat returns website social links and the header reveals only validated destinations", async () => {
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   const widget = await read("../src/assets/misma-widget-runtime.js");
@@ -1396,7 +1412,7 @@ test("Misma publishes a PNG favicon supported by browser and Google Search forma
 test("website widget themes are owner-saved, safely validated, and applied inside the widget shadow root", async () => {
   const migration = await read("../supabase/migrations/20261110084540_website_widget_customization_rooms_scan.sql");
   const api = await read("../src/lib/api/misma.functions.ts");
-  const route = await read("../src/routes/dashboard/websites/$siteId/customize.tsx");
+  const route = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
   const runtime = await read("../src/assets/misma-widget-runtime.js");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   assert.match(migration, /theme jsonb/);
