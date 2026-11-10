@@ -267,7 +267,7 @@ function ColorControl({
 
   return (
     <div className="misma-theme-color-control" ref={rootRef}>
-      <label className="misma-theme-color-label">{label}</label>
+      <div className="misma-theme-color-label">{label}</div>
 
       <div className="misma-theme-color-row">
         <button
