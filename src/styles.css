@@ -8536,3 +8536,28 @@ html, body, #app-root {
 .aichat :where(code, pre, kbd, samp, .aichat-code-block, .aichat-script-box, [class*="code-preview"], [class*="script-preview"]) {
   font-family: var(--font-mono) !important;
 }
+
+
+/* Keep dashboard conversation text bright and clearly readable. */
+.aichat-message-row.is-user .aichat-bubble,
+.aichat-message-row.is-ai .aichat-bubble,
+.aichat-message-row.is-ai .aichat-markdown,
+.aichat-message-row.is-ai .aichat-markdown p,
+.aichat-message-row.is-ai .aichat-markdown li {
+  color: #ffffff !important;
+}
+
+/* Recent conversation titles use the same type treatment as Workspace and Manage. */
+.aichat-chats-widget-item,
+.aichat-chats-widget-item-text {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-normal);
+}
+.aichat-shared-widget-summary {
+  display: block;
+  max-width: 480px;
+  white-space: normal;
+  line-height: 1.4;
+}
