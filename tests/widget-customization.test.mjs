@@ -35,6 +35,10 @@ test("theme validation migration remains compatible with old themes and adds sub
   assert.match(api, /\.strict\(\)/);
   assert.match(api, /Only the account owner can customize this website widget/);
   assert.match(edge, /headerSubtitleText/);
+  const workerMigration = await read("../supabase/migrations/20261110120000_misma_scan_worker_cron.sql");
+  assert.match(workerMigration, /misma_validate_scan_worker_token/);
+  assert.match(workerMigration, /vault\\.create_secret/);
+  assert.match(workerMigration, /cron\\.schedule/);
 });
 
 test("scanner rechecks public DNS before page requests, honors robots allow rules and spaces page fetches", async () => {
@@ -43,4 +47,9 @@ test("scanner rechecks public DNS before page requests, honors robots allow rule
   assert.match(edge, /isPublicHostname\(parsed\.hostname\)/);
   assert.match(edge, /650\)/);
   assert.match(edge, /retry-after/i);
+  assert.match(edge, /sameRegistrableDomain/);
+  assert.match(edge, /Redirect limit exceeded \\(5 hops\\)/);
+  assert.match(edge, /readWebsiteResponseBytes/);
+  assert.match(edge, /processQueuedWebsiteScan/);
+  assert.match(edge, /misma_validate_scan_worker_token/);
 });
