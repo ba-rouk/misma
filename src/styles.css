@@ -8561,3 +8561,47 @@ html, body, #app-root {
   white-space: normal;
   line-height: 1.4;
 }
+
+
+/* Website connection actions use the same charcoal grey as Scan website. */
+.aichat-websites-tab .aichat-action-btn,
+.aichat-websites-tab .aichat-action-btn.secondary,
+.aichat-websites-tab .aichat-action-btn.is-danger,
+.aichat-websites-tab .aichat-social-dropdown {
+  background: #21262d !important;
+  color: #f0f3f8 !important;
+  border: 1px solid #303743 !important;
+}
+.aichat-websites-tab .aichat-action-btn:hover,
+.aichat-websites-tab .aichat-action-btn.secondary:hover,
+.aichat-websites-tab .aichat-action-btn.is-danger:hover,
+.aichat-websites-tab .aichat-social-dropdown:hover,
+.aichat-websites-tab .aichat-social-dropdown[aria-expanded="true"] {
+  background: #303743 !important;
+  color: #ffffff !important;
+  border-color: #465263 !important;
+}
+.aichat-websites-tab .aichat-action-btn.is-danger { box-shadow: none !important; }
+.aichat-websites-tab .aichat-social-dropdown {
+  min-height: 44px;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+.aichat-websites-tab .aichat-social-form input[readonly],
+.aichat-websites-tab .aichat-social-form textarea[readonly],
+.aichat-websites-tab .aichat-social-form select:disabled {
+  opacity: 1;
+  background: #0d131c;
+  color: #f0f3f8;
+  cursor: default;
+}
+
+/* User, assistant and human-request messages all use white foreground text. */
+.aichat-message-row.is-user .aichat-bubble,
+.aichat-message-row.is-ai .aichat-bubble,
+.aichat-message-row.is-customer .aichat-bubble,
+.aichat-message-row.is-ai .aichat-markdown,
+.aichat-message-row.is-ai .aichat-markdown p,
+.aichat-message-row.is-ai .aichat-markdown li {
+  color: #ffffff !important;
+}
