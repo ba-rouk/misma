@@ -1287,6 +1287,7 @@ function getLoginGreeting(): string {
 function plainTextMessage(content: string): string {
   return content
     .replace(/```[^\n]*\n?([\s\S]*?)```/g, "$1")
+    .replace(/^\s*(?:'''|""")([\s\S]*?)(?:'''|""")\s*$/gm, "$1")
     .replace(/^\s*(['"`]){3,}\s*$/gm, "")
     .replace(/(^|\n)\s{0,3}#{1,6}\s+/g, "$1")
     .replace(/(^|\n)\s*(?:[-*+•]|\d+[.)])\s+/g, "$1")
