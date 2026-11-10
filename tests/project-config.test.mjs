@@ -1410,6 +1410,9 @@ test("human handoff requests can be permanently deleted from Customers and Notif
 
   assert.match(styles, /\.aichat-handoff-menu\s*\{[^}]*left:\s*0;[^}]*right:\s*auto/);
   assert.match(styles, /\.aichat-human-request-list-row/);
+  assert.match(styles, /\.aichat-human-request-list-menu\\s*\\{[^}]*order:\\s*2;[^}]*margin-left:\\s*auto/);
+  assert.match(styles, /\.aichat-human-request-list-menu \.aichat-chat-context-menu\\s*\\{[^}]*left:\\s*auto;[^}]*right:\\s*0/);
+  assert.match(styles, /\.aichat-nav-btn\\[aria-expanded\\][\\s\\S]*?color:\\s*#ffffff/);
   assert.match(styles, /\.aichat-handoff-avatar svg/);
   assert.match(styles, /\.aichat-nav-icon svg/);
   assert.match(dashboard, /function DashboardNavIcon/);
