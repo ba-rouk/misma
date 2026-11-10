@@ -552,6 +552,7 @@
   position: absolute;
   top: calc(100% + 9px);
   left: 50%;
+  transform: translateX(-50%);
   z-index: 80;
   width: min(320px, calc(100vw - 44px));
   padding: 13px;
