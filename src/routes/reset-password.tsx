@@ -187,11 +187,12 @@ function ResetPassword() {
             ? cause.message
             : "This reset link could not be verified. Request a new reset email.";
         if (active) {
-          setPageMessage(
-            /expired|otp|invalid|verifier|session|token|not a password-reset/i.test(message)
+          const friendly = /session|jwt|not authenticated/i.test(message)
+            ? "Your password-reset session is missing or has expired. Request a new reset email from the login page."
+            : /expired|otp|invalid|verifier|session|token|not a password-reset/i.test(message)
               ? authRedirectErrorMessage({ ...params, error: params.error || message })
-              : message,
-          );
+              : message;
+          setPageMessage(friendly);
           setPageState("invalid");
         }
       }
@@ -226,7 +227,7 @@ function ResetPassword() {
       const supabase = getSupabaseClient();
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
-      if (!sessionData.session || !hasSessionStorageFlag(RECOVERY_SESSION_KEY)) {
+      if (!sessionData.session || pageState !== "ready") {
         setPageMessage("Your password-reset session has expired. Request a new reset email from the login page.");
         clearSessionStorageFlag(RECOVERY_SESSION_KEY);
         setPageState("invalid");
