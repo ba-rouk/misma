@@ -96,7 +96,7 @@ function Login() {
       if (!email) throw new Error("Enter your email address first.");
       const { error: resetError } =
         await getSupabaseClient().auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/login`,
+          redirectTo: `${window.location.origin}/reset-password`,
         });
       if (resetError) throw resetError;
       setError("Password reset instructions have been sent to your email.");
@@ -170,7 +170,7 @@ function Login() {
               name: normalizedName,
               username: normalizedUsername,
             },
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: `${window.location.origin}/auth/confirmed`,
           },
         });
         if (signupError) throw signupError;
