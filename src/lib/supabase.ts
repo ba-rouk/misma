@@ -12,6 +12,21 @@ export function getSupabaseConfig(): MismaSupabaseConfig | null {
   return { url, publishableKey };
 }
 
+// Snapshot the landing URL before the singleton client is created. The public
+// confirmation/reset routes consume PKCE codes, implicit-flow tokens, or
+// token_hash values explicitly after reading this immutable first URL.
+const initialAuthRedirectHref =
+  typeof window !== "undefined" ? window.location.href : null;
+
+export function getInitialAuthRedirectUrl(): URL | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URL(initialAuthRedirectHref || window.location.href);
+  } catch {
+    return new URL(window.location.href);
+  }
+}
+
 let client: SupabaseClient | null = null;
 export function getSupabaseClient(): SupabaseClient {
   const config = getSupabaseConfig();
@@ -25,6 +40,10 @@ export function getSupabaseClient(): SupabaseClient {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
+        // Email landing routes snapshot the URL before this client is created,
+        // then call exchangeCodeForSession / setSession / verifyOtp explicitly.
+        // Keeping URL detection off prevents the SDK consuming the code/hash
+        // before the route can distinguish signup confirmation from recovery.
         detectSessionInUrl: false,
         flowType: "pkce",
       },

@@ -34,7 +34,7 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   assert.match(login, /resetPasswordForEmail/);
   assert.match(login, /signInWithOAuth/);
   assert.match(login, /redirectTo: `\$\{window\.location\.origin\}\/auth\/callback`/);
-  assert.match(login, /emailRedirectTo: `\$\{window\.location\.origin\}\/dashboard`/);
+  assert.match(login, /emailRedirectTo: `\$\{window\.location\.origin\}\/auth\/confirmed`/);
   assert.match(login, /window\.location\.replace\(destination\)/);
   assert.match(login, /window\.location\.replace\(consumePostLoginDestination\(\)\)/);
   assert.match(login, /target\.pathname\.startsWith\("\/dashboard\/"\)/);
@@ -1591,4 +1591,57 @@ test("website connection actions and Add channels use Scan website dark-grey sty
   assert.match(styles, /\.aichat-websites-tab \.aichat-action-btn,[\s\S]*?background: #21262d !important/);
   assert.match(styles, /\.aichat-websites-tab \.aichat-social-dropdown[\s\S]*?background: #21262d !important/);
   assert.match(styles, /\.aichat-message-row\.is-user \.aichat-bubble,[\s\S]*?\.aichat-message-row\.is-customer \.aichat-bubble[\s\S]*?color: #ffffff !important/);
+});
+
+
+test("email confirmation and recovery links land on public Misma routes and handle both URL flows", async () => {
+  const login = await read("../src/routes/login.tsx");
+  const client = await read("../src/lib/supabase.ts");
+  const redirect = await read("../src/lib/auth-redirect.ts");
+  const layout = await read("../src/components/auth-flow-layout.tsx");
+  const reset = await read("../src/routes/reset-password.tsx");
+  const confirmed = await read("../src/routes/auth/confirmed.tsx");
+  const tokenConfirm = await read("../src/routes/auth/confirm.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const templates = await read("../docs/supabase-auth-email-templates.md");
+
+  assert.match(login, /emailRedirectTo: `\$\{window\.location\.origin\}\/auth\/confirmed`/);
+  assert.match(login, /redirectTo: `\$\{window\.location\.origin\}\/reset-password`/);
+  assert.match(confirmed, /auth\.resend\(\{[\s\S]*type: "signup"[\s\S]*emailRedirectTo: window\.location\.origin \+ "\/auth\/confirmed"/);
+  assert.match(reset, /exchangeCodeForSession\(params\.code\)/);
+  assert.match(reset, /verifyOtp\([\s\S]*token_hash: params\.tokenHash[\s\S]*type: "recovery"/);
+  assert.match(reset, /setSession\(\{[\s\S]*access_token: params\.accessToken[\s\S]*refresh_token: params\.refreshToken/);
+  assert.match(reset, /onAuthStateChange\([\s\S]*"PASSWORD_RECOVERY"/);
+  assert.match(reset, /auth\.getSession\(\)/);
+  assert.match(reset, /sessionStorage/);
+  assert.match(reset, /updateUser\(\{ password \}\)/);
+  assert.match(reset, /Password updated\./);
+  assert.match(confirmed, /Email confirmed\./);
+  assert.match(confirmed, /Your email address is verified\. You can now log in to Misma\./);
+  assert.match(confirmed, /auth\.resend/);
+  assert.match(tokenConfirm, /verifyOtp\(\{[\s\S]*token_hash: params\.tokenHash/);
+  assert.match(redirect, /url\.hash/);
+  assert.match(redirect, /url\.search/);
+  assert.match(client, /getInitialAuthRedirectUrl/);
+  assert.match(client, /detectSessionInUrl: false/);
+  assert.match(layout, /misma-auth-flow-card/);
+  assert.match(dashboard, /"\/reset-password", "\/auth\/confirmed", "\/auth\/confirm"/);
+  assert.match(styles, /\.misma-auth-flow-page/);
+  assert.match(styles, /:focus-visible/);
+  assert.match(styles, /prefers-reduced-motion: reduce/);
+  assert.match(templates, /type=signup/);
+  assert.match(templates, /type=recovery/);
+});
+
+test("auth email landing routes do not require a login guard and are generated from route files", async () => {
+  const reset = await read("../src/routes/reset-password.tsx");
+  const confirmed = await read("../src/routes/auth/confirmed.tsx");
+  const tokenConfirm = await read("../src/routes/auth/confirm.tsx");
+  const tree = await read("../src/routeTree.gen.ts");
+  assert.match(reset, /createFileRoute\("\/reset-password"\)/);
+  assert.match(confirmed, /createFileRoute\("\/auth\/confirmed"\)/);
+  assert.match(tokenConfirm, /createFileRoute\("\/auth\/confirm"\)/);
+  // TanStack Router regenerates this file during typecheck/build.
+  assert.match(tree, /createFileRoute|RootRouteChildren|FileRoutesByFullPath/);
 });

@@ -1819,6 +1819,12 @@ function Dashboard() {
       const { data: { subscription } } = getSupabaseClient().auth.onAuthStateChange(
         (event, session) => {
           if (!active) return;
+          // Auth links are handled by public landing routes and must never be
+          // hijacked by dashboard session navigation.
+          if (
+            typeof window !== "undefined" &&
+            ["/reset-password", "/auth/confirmed", "/auth/confirm"].includes(window.location.pathname)
+          ) return;
           if (!session) {
             profileAvatarPathRef.current = null;
             profileAvatarPreviewUrlRef.current = null;
