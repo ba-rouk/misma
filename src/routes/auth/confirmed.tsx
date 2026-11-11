@@ -58,6 +58,7 @@ function EmailConfirmed() {
 
         if (!hasAuthRedirectMaterial(params)) {
           if (hasSessionStorageFlag(EMAIL_CONFIRMED_KEY)) {
+            clearSessionStorageFlag(EMAIL_CONFIRMED_KEY);
             if (active) setPageState("confirmed");
           } else if (active) {
             setPageState("neutral");
