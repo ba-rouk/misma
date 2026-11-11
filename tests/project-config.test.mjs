@@ -34,7 +34,7 @@ test("auth and dashboard calls use Misma Supabase and the authenticated chat fun
   assert.match(login, /resetPasswordForEmail/);
   assert.match(login, /signInWithOAuth/);
   assert.match(login, /redirectTo: `\$\{window\.location\.origin\}\/auth\/callback`/);
-  assert.match(login, /emailRedirectTo: `\$\{window\.location\.origin\}\/dashboard`/);
+  assert.match(login, /emailRedirectTo: `\$\{window\.location\.origin\}\/auth\/confirmed`/);
   assert.match(login, /window\.location\.replace\(destination\)/);
   assert.match(login, /window\.location\.replace\(consumePostLoginDestination\(\)\)/);
   assert.match(login, /target\.pathname\.startsWith\("\/dashboard\/"\)/);
