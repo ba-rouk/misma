@@ -1,11 +1,10 @@
+import { getInitialAuthRedirectUrl } from "./supabase";
+
 /**
  * Captured while the route modules are evaluated, before an auth page creates
  * the lazy Supabase client. detectSessionInUrl is disabled, so the URL remains
  * intact until one of the public auth routes verifies it explicitly.
  */
-const initialAuthRedirectHref =
-  typeof window !== "undefined" ? window.location.href : null;
-
 export type AuthRedirectParams = {
   code: string | null;
   tokenHash: string | null;
@@ -31,12 +30,7 @@ export function readInitialAuthRedirectParams(): AuthRedirectParams {
     };
   }
 
-  let url: URL;
-  try {
-    url = new URL(initialAuthRedirectHref || window.location.href);
-  } catch {
-    url = new URL(window.location.href);
-  }
+  const url = getInitialAuthRedirectUrl() ?? new URL(window.location.href);
 
   const query = new URLSearchParams(url.search);
   const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
