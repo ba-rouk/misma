@@ -31,7 +31,12 @@ function ConfirmEmailToken() {
       }
 
       if (params.error || params.errorCode) {
-        fail(authRedirectErrorMessage(params));
+        const destination = params.type === "recovery" ? "/reset-password" : "/auth/confirmed";
+        window.location.replace(
+          destination +
+            "?error=" + encodeURIComponent(params.error || "access_denied") +
+            "&error_code=" + encodeURIComponent(params.errorCode || "otp_expired"),
+        );
         return;
       }
 
@@ -60,10 +65,12 @@ function ConfirmEmailToken() {
         window.location.replace("/auth/confirmed");
       } catch (cause) {
         const text = cause instanceof Error ? cause.message : "";
-        fail(
-          /expired|otp|invalid|token|verifier/i.test(text)
-            ? authRedirectErrorMessage({ ...params, error: params.error || text })
-            : "This email link could not be verified. It may have expired or already been used. Request a new email and open the newest link.",
+        const errorCode = /already used|consumed/i.test(text)
+          ? "otp_already_used"
+          : "otp_expired";
+        const destination = params.type === "recovery" ? "/reset-password" : "/auth/confirmed";
+        window.location.replace(
+          destination + "?error=access_denied&error_code=" + encodeURIComponent(errorCode),
         );
       }
     };
