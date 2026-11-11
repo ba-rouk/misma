@@ -107,7 +107,12 @@ function EmailConfirmed() {
 
         setSessionStorageFlag(EMAIL_CONFIRMED_KEY);
         clearAuthRedirectUrl();
-        if (active) setPageState("confirmed");
+        if (active) {
+          setPageState("confirmed");
+          // This was a one-time handoff from /auth/confirm, not a permanent
+          // "confirmed" cache for future visits to this public route.
+          clearSessionStorageFlag(EMAIL_CONFIRMED_KEY);
+        }
       } catch (cause) {
         clearSessionStorageFlag(EMAIL_CONFIRMED_KEY);
         const message = cause instanceof Error ? cause.message : "";
