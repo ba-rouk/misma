@@ -8746,3 +8746,195 @@ html, body, #app-root {
 .aichat-nav-btn[aria-expanded] .aichat-nav-caret {
   color: #ffffff !important;
 }
+\n\n/* Public Misma auth landing pages: confirmation and password recovery. */
+.misma-auth-flow-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 28px 16px;
+  background:
+    radial-gradient(circle at 14% 9%, rgba(22,163,74,.12), transparent 31%),
+    radial-gradient(circle at 89% 88%, rgba(77,141,255,.09), transparent 30%),
+    #090b0e;
+  color: #f4f7fb;
+}
+.misma-auth-flow-shell {
+  width: min(100%, 420px);
+  margin: auto;
+}
+.misma-auth-flow-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 0 auto 22px;
+  color: #f4f7fb;
+  font-family: var(--font-serif);
+  font-size: 23px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.misma-auth-flow-mark,
+.misma-auth-flow-mark svg {
+  display: block;
+  width: 34px;
+  height: 34px;
+}
+.misma-auth-flow-mark { color: #4ade80; }
+.misma-auth-flow-card {
+  width: 100%;
+  padding: clamp(22px, 5vw, 32px);
+  border: 1px solid #2b3542;
+  border-radius: 18px;
+  background: linear-gradient(155deg, rgba(21,29,40,.98), rgba(13,18,26,.98));
+  box-shadow: 0 24px 70px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.035);
+}
+.misma-auth-flow-header { margin: 0 0 25px; }
+.misma-auth-flow-eyebrow {
+  margin: 0 0 14px;
+  color: #4ade80;
+  font: 700 11px/1.4 var(--font-sans);
+  letter-spacing: .14em;
+}
+.misma-auth-flow-header h1 {
+  margin: 0 0 12px;
+  color: #f4f7fb;
+  font: 400 clamp(28px, 7vw, 34px)/1.16 var(--font-serif);
+  letter-spacing: -.025em;
+}
+.misma-auth-flow-description {
+  margin: 0;
+  color: #a5b1c0;
+  font: 400 14px/1.65 var(--font-sans);
+}
+.misma-auth-flow-form { display: grid; gap: 17px; }
+.misma-auth-flow-field {
+  display: grid;
+  gap: 8px;
+  color: #c4cfdd;
+  font: 500 13px/1.4 var(--font-sans);
+}
+.misma-auth-flow-field input,
+.misma-auth-flow-password {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #354154;
+  border-radius: 10px;
+  background: #0d141e;
+  color: #f4f7fb;
+}
+.misma-auth-flow-field input {
+  box-sizing: border-box;
+  padding: 0 14px;
+  font: 400 16px/1.4 var(--font-sans);
+  outline: none;
+}
+.misma-auth-flow-field input::placeholder { color: #718096; }
+.misma-auth-flow-field input:focus,
+.misma-auth-flow-password:focus-within {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74,222,128,.13);
+}
+.misma-auth-flow-password {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.misma-auth-flow-password input {
+  flex: 1 1 auto;
+  width: 1px;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.misma-auth-flow-password input:focus { box-shadow: none; }
+.misma-auth-flow-toggle {
+  flex: none;
+  min-width: 55px;
+  min-height: 44px;
+  margin-right: 3px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a8e6bb;
+  font: 600 12px/1 var(--font-sans);
+  cursor: pointer;
+}
+.misma-auth-flow-toggle:hover { background: rgba(74,222,128,.08); color: #d6fbe0; }
+.misma-auth-flow-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  padding: 0 16px;
+  border: 1px solid #16a34a;
+  border-radius: 10px;
+  background: #16a34a;
+  color: #06140b;
+  font: 700 14px/1.4 var(--font-sans);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.misma-auth-flow-button:hover:not(:disabled) {
+  border-color: #22c55e;
+  background: #22c55e;
+  transform: translateY(-1px);
+}
+.misma-auth-flow-button:disabled { opacity: .58; cursor: wait; }
+.misma-auth-flow-secondary {
+  display: block;
+  width: fit-content;
+  margin: 18px auto 0;
+  color: #a8e6bb;
+  font: 600 13px/1.5 var(--font-sans);
+  text-decoration: none;
+}
+.misma-auth-flow-secondary:hover { color: #fff; text-decoration: underline; }
+.misma-auth-flow-status,
+.misma-auth-flow-hint {
+  margin: 0 0 17px;
+  color: #93a2b5;
+  font: 400 13px/1.6 var(--font-sans);
+}
+.misma-auth-flow-error,
+.misma-auth-flow-success {
+  margin: 0 0 15px;
+  padding: 11px 12px;
+  border: 1px solid rgba(248,113,113,.25);
+  border-radius: 9px;
+  background: rgba(127,29,29,.15);
+  color: #fecaca;
+  font: 400 13px/1.55 var(--font-sans);
+}
+.misma-auth-flow-success {
+  border-color: rgba(74,222,128,.24);
+  background: rgba(22,163,74,.1);
+  color: #bbf7d0;
+}
+.misma-auth-flow-footer {
+  margin: 18px 0 0;
+  color: #68778b;
+  font: 400 11px/1.5 var(--font-sans);
+  text-align: center;
+}
+.misma-auth-flow-footer span { padding: 0 5px; color: #4ade80; }
+.misma-auth-flow-page :focus-visible {
+  outline: 2px solid #86efac;
+  outline-offset: 3px;
+}
+@media (max-width: 380px) {
+  .misma-auth-flow-page { padding: 20px 12px; }
+  .misma-auth-flow-card { padding: 21px 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .misma-auth-flow-button { transition: none; }
+  .misma-auth-flow-button:hover:not(:disabled) { transform: none; }
+}
