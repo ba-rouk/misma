@@ -8746,7 +8746,9 @@ html, body, #app-root {
 .aichat-nav-btn[aria-expanded] .aichat-nav-caret {
   color: #ffffff !important;
 }
-\n\n/* Public Misma auth landing pages: confirmation and password recovery. */
+
+
+/* Public Misma auth landing pages: confirmation and password recovery. */
 .misma-auth-flow-page {
   min-height: 100dvh;
   display: grid;
