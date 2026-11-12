@@ -9318,3 +9318,166 @@ html, body, #app-root {
 @media (max-width: 720px) {
   .misma-site .misma-feedback { grid-template-columns: 1fr; padding: 48px 6vw; gap: 24px; }
 }
+
+
+/* Customer request cards place the overflow menu on the far right. */
+.aichat-handoff-card {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  position: relative;
+  padding: 0 0 13px !important;
+}
+.aichat-handoff-card .aichat-handoff-row {
+  order: 1;
+  flex: 1 1 240px;
+  min-width: 0;
+  width: auto;
+  padding-right: 10px;
+}
+.aichat-handoff-card .aichat-handoff-menu {
+  order: 2;
+  position: relative !important;
+  inset: auto !important;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  z-index: 102;
+}
+.aichat-handoff-card .aichat-handoff-menu .aichat-chat-context-menu {
+  top: calc(100% - 4px);
+  right: 0;
+  left: auto;
+}
+.aichat-handoff-card > .aichat-action-btn {
+  order: 3;
+  margin: 0 0 0 48px !important;
+}
+
+/* Compact dark-blue request confirmation with white Cancel and OK buttons. */
+.aichat-request-delete-dialog,
+.aichat-account-delete-dialog {
+  width: min(360px, 100%);
+  padding: 20px;
+  border: 1px solid #304b70;
+  border-radius: 16px;
+  background: linear-gradient(155deg, #14243a, #0d1829);
+  color: #f3f6fb;
+  box-shadow: 0 24px 90px rgba(0,0,0,.66), inset 0 1px 0 rgba(255,255,255,.035);
+}
+.aichat-request-delete-dialog h2,
+.aichat-account-delete-dialog h2 {
+  margin: 0 0 7px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.aichat-request-delete-dialog p,
+.aichat-account-delete-dialog p {
+  margin: 0;
+  color: #bac9dc;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.aichat-request-delete-dialog .aichat-confirm-actions,
+.aichat-account-delete-dialog .aichat-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 17px;
+}
+.aichat-request-confirm-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #f0f3f7;
+  border-radius: 8px;
+  background: #f2f5f9;
+  color: #101a28;
+  font: 650 12px/1.25 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-request-confirm-button:hover:not(:disabled) {
+  background: #ffffff;
+}
+.aichat-request-confirm-button:disabled {
+  opacity: .56;
+  cursor: wait;
+}
+.aichat-request-delete-error {
+  margin-top: 10px !important;
+  color: #ffb9b5 !important;
+}
+.aichat-account-delete-confirm {
+  display: grid;
+  gap: 7px;
+  margin-top: 15px;
+  color: #d5dfec;
+  font: 550 12px/1.4 var(--font-sans);
+}
+.aichat-account-delete-confirm .aichat-input {
+  min-height: 40px;
+  background: #0a1423;
+  border-color: #385273;
+}
+
+/* Profile and staff-management controls. */
+.aichat-settings-delete-account {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  margin-top: 16px;
+  padding: 0 12px;
+  border: 1px solid rgba(248,113,113,.42);
+  border-radius: 8px;
+  background: rgba(127,29,29,.14);
+  color: #ffaaa5;
+  font: 600 12px/1.3 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-settings-delete-account:hover {
+  background: rgba(127,29,29,.24);
+}
+.aichat-staff-access-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 4px 14px;
+}
+.aichat-staff-access-form > .aichat-settings-hint,
+.aichat-staff-access-form > .aichat-profile-error,
+.aichat-staff-access-form > .aichat-settings-status,
+.aichat-staff-access-form > button {
+  grid-column: 1 / -1;
+}
+.aichat-staff-access-form > button { width: fit-content; }
+.aichat-staff-access-card .aichat-settings-section-heading { margin-bottom: 14px; }
+.aichat-settings-content #misma-voice-choice {
+  border-color: #405777;
+  background: #101c2d;
+  color: #ffffff;
+}
+.aichat-settings-content #misma-voice-choice option {
+  background: #101c2d;
+  color: #ffffff;
+}
+.aichat-settings-content #misma-voice-choice:focus {
+  border-color: #e2e8f0;
+  box-shadow: 0 0 0 3px rgba(226,232,240,.1);
+}
+
+@media (max-width: 640px) {
+  .aichat-staff-access-form { grid-template-columns: 1fr; }
+  .aichat-staff-access-form > button { width: 100%; }
+  .aichat-handoff-card .aichat-handoff-row { flex-basis: 100%; }
+  .aichat-handoff-card .aichat-handoff-menu { margin-left: auto; }
+  .aichat-request-delete-dialog .aichat-confirm-actions,
+  .aichat-account-delete-dialog .aichat-confirm-actions { flex-direction: row; }
+  .aichat-request-confirm-button { flex: 1; }
+}
