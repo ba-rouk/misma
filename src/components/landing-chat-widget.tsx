@@ -4,6 +4,32 @@ import { MismaIcon } from "./misma-icon";
 
 type GuestMessage = { id: string; role: "user" | "ai"; text: string };
 
+function GmailIcon() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <circle cx="24" cy="24" r="23" fill="#fff" />
+      <path d="M12 35V16" fill="none" stroke="url(#misma-gmail-left)" strokeWidth="7" strokeLinecap="round" />
+      <path d="M12 16 24 26" fill="none" stroke="#EA4335" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M24 26 36 16" fill="none" stroke="url(#misma-gmail-top)" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M36 16V35" fill="none" stroke="url(#misma-gmail-right)" strokeWidth="7" strokeLinecap="round" />
+      <defs>
+        <linearGradient id="misma-gmail-left" x1="12" y1="15" x2="12" y2="35" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#EA719B" />
+          <stop offset=".45" stopColor="#EA4335" />
+        </linearGradient>
+        <linearGradient id="misma-gmail-top" x1="24" y1="26" x2="36" y2="16" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#EA4335" />
+          <stop offset=".65" stopColor="#FBBC04" />
+        </linearGradient>
+        <linearGradient id="misma-gmail-right" x1="36" y1="16" x2="36" y2="35" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#34A853" />
+          <stop offset="1" stopColor="#4285F4" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
 export function LandingChatWidget() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -73,19 +99,28 @@ export function LandingChatWidget() {
       {open && (
         <section className="misma-guest-panel" aria-label="Chat with Misma">
           <header className="misma-guest-header">
-            <div className="misma-guest-brand-mark" aria-hidden="true">M</div>
             <div className="misma-guest-heading">
-              <strong>Chat with Misma</strong>
-              <span><i /> Online preview</span>
+              <strong>Misma</strong>
+              <span>Business assistant</span>
             </div>
-            <button type="button" className="misma-guest-close" onClick={() => setOpen(false)} aria-label="Close chat">×</button>
+            <a
+              className="misma-guest-gmail"
+              href="https://mail.google.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open Gmail"
+              title="Gmail"
+            >
+              <GmailIcon />
+            </a>
+            <button type="button" className="misma-guest-close" onClick={() => setOpen(false)} aria-label="Close chat" title="Close">×</button>
           </header>
           <div className="misma-guest-messages" ref={scrollRef} aria-live="polite">
             {messages.length === 0 ? (
               <div className="misma-guest-welcome">
-                <div className="misma-guest-welcome-icon">✦</div>
-                <h3>Welcome to Misma.</h3>
-                <p>Ask how Misma works, explore its business AI features, or tell us what you want to test.</p>
+                <div className="misma-guest-welcome-icon"><MismaIcon size={22} /></div>
+                <h3>Hello! I am Misma.</h3>
+                <p>How can I help you today? Explore what Misma can do for your business.</p>
                 <div className="misma-guest-prompts">
                   {["What can Misma do for my business?", "How does the AI learn about my products?", "Can I try Misma?"].map((prompt) => (
                     <button type="button" key={prompt} onClick={() => { setDraft(prompt); inputRef.current?.focus(); }}>{prompt}<span>↗</span></button>
@@ -104,21 +139,25 @@ export function LandingChatWidget() {
             )}
           </div>
           {error && <p className="misma-guest-error" role="alert">{error}</p>}
-          <form className="misma-guest-composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
-            <textarea
-              ref={inputRef}
-              rows={1}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Ask Misma anything…"
-              aria-label="Message Misma"
-              maxLength={2000}
-              disabled={busy}
-            />
-            <button type="submit" disabled={!draft.trim() || busy} aria-label="Send message">↑</button>
-          </form>
-          <p className="misma-guest-privacy">Temporary guest preview. Chats are not saved to a Misma account.</p>
+          <div className="misma-guest-composer-wrap">
+            <form className="misma-guest-composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Message Misma…"
+                aria-label="Message Misma"
+                maxLength={2000}
+                disabled={busy}
+              />
+              <button type="submit" disabled={!draft.trim() || busy} aria-label="Send message" title="Send message">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
+              </button>
+            </form>
+            <p className="misma-guest-privacy">Temporary guest preview. Chats are not saved to a Misma account.</p>
+          </div>
         </section>
       )}
       <button

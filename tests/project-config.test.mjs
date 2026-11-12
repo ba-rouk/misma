@@ -1645,3 +1645,22 @@ test("auth email landing routes do not require a login guard and are generated f
   // TanStack Router regenerates this file during typecheck/build.
   assert.match(tree, /createFileRoute|RootRouteChildren|FileRoutesByFullPath/);
 });
+
+
+test("landing page chat matches the embedded widget design and uses the branded Gmail icon", async () => {
+  const landing = await read("../src/routes/index.tsx");
+  const landingWidget = await read("../src/components/landing-chat-widget.tsx");
+  const styles = await read("../src/styles.css");
+  const embed = await read("../src/assets/misma-widget-runtime.js");
+
+  assert.doesNotMatch(landing, /href="#product">Product/);
+  assert.match(landing, /All rights reserved/);
+  assert.match(landingWidget, /Business assistant/);
+  assert.match(landingWidget, /misma-guest-gmail/);
+  assert.match(landingWidget, /viewBox="0 0 48 48"/);
+  assert.ok(styles.includes(".misma-guest-header {"));
+  assert.ok(styles.includes("background: #111827"));
+  assert.ok(styles.includes("background: #f8fafc"));
+  assert.match(embed, /viewBox='0 0 48 48'/);
+  assert.doesNotThrow(() => new Function(embed), "the hosted widget must remain valid JavaScript");
+});
