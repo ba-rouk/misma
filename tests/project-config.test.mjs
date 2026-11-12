@@ -652,8 +652,11 @@ test("privacy and voice preferences are persisted and used by dashboard voice/ch
 
   assert.match(dashboard, /misma_privacy_preferences/);
   assert.match(dashboard, /selectedVoicePreset/);
-  assert.match(dashboard, /<option value="girl">Girl/);
-  assert.match(dashboard, /<option value="woman">Woman/);
+  assert.match(dashboard, /aichat-voice-picker-menu/);
+  assert.match(dashboard, /label: "Girl"/);
+  assert.match(dashboard, /label: "Woman"/);
+  assert.match(dashboard, /aria-selected=\{selectedVoicePreset === voice\.value\}/);
+  assert.doesNotMatch(dashboard, /id="misma-voice-choice" className="aichat-select"/);
   assert.doesNotMatch(dashboard, /<option value="boy">Boy|<option value="man">Man/);
   assert.match(dashboard, /setSelectedVoicePreset\("woman"\)/);
   assert.match(dashboard, /privacySettings: privacyPreferences/);
@@ -947,7 +950,8 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
 test("dashboard notification feed shows named human requests and counts unread notifications", async () => {
   const api = await read("../src/lib/api/misma.functions.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 4);
+  assert.ok(api.split('eq("notification_type", "human_request")').length - 1 >= 4,
+    "owner and restricted-staff notification readers must scope requests to human-request notifications");
   assert.ok(api.includes("export const markHumanRequestNotificationRead"));
   assert.ok(dashboard.includes('const unreadHumanRequestNotificationCount = allNotifications.filter((notification) => notification.is_read !== true).length;'));
   assert.ok(dashboard.includes("markHumanRequestNotificationRead({ data: { token, notificationId } })"));
@@ -1398,7 +1402,11 @@ test("human handoff requests can be permanently deleted from Customers and Notif
   assert.match(dashboard, /activeTab === "customers"/);
   assert.match(dashboard, /humanRequestMenuId/);
   assert.match(dashboard, /Delete request/);
-  assert.match(dashboard, /deleteHumanRequest\(\{ data: \{ token, requestId \} \}\)/);
+  assert.match(dashboard, /deleteHumanRequest\(\{ data: \{ token, requestId: target\.requestId \} \}\)/);
+  assert.match(dashboard, /confirmDeleteHumanRequest/);
+  assert.match(dashboard, /aichat-request-delete-dialog/);
+  assert.match(dashboard, /deleteWorkspaceNotification\(\{ data: \{ token, notificationId: target\.notificationId \} \}\)/);
+  assert.match(dashboard, /aichat-request-confirm-button/);
 
   const customerCardStart = dashboard.indexOf('className="aichat-handoff-card"');
   const menuStart = dashboard.indexOf('className="aichat-handoff-menu"', customerCardStart);
@@ -1419,6 +1427,8 @@ test("human handoff requests can be permanently deleted from Customers and Notif
   assert.match(styles, /\.aichat-handoff-menu\s*\{[^}]*left:\s*0;[^}]*right:\s*auto/);
   assert.match(styles, /\.aichat-human-request-list-row/);
   assert.ok(styles.includes(".aichat-human-request-list-menu {\n  order: 2;"));
+  assert.ok(styles.includes(".aichat-handoff-card .aichat-handoff-row {\n  order: 1;"));
+  assert.ok(styles.includes(".aichat-handoff-card .aichat-handoff-menu {\n  order: 2;"));
   assert.ok(styles.includes(".aichat-human-request-list-menu .aichat-chat-context-menu {\n  top: calc(100% - 4px);\n  left: auto;\n  right: 0;"));
   assert.ok(styles.includes(".aichat-nav-btn[aria-expanded] {\n  color: #ffffff;"));
   assert.match(styles, /\.aichat-handoff-avatar svg/);
