@@ -54,6 +54,40 @@ export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
 type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "settings";
 
+type MismaAiSettings = {
+  assistantMode: "Sales & customer support" | "Customer support" | "Sales assistant";
+  responseTone: "Professional and friendly" | "Warm and conversational" | "Formal";
+  responseLength: "Concise" | "Balanced" | "Detailed";
+  languageMode: "Match visitor language" | "Business primary language" | "English";
+  autoReply: boolean;
+  useBusinessKnowledge: boolean;
+  avoidUnverifiedClaims: boolean;
+  askClarifyingQuestions: boolean;
+  qualifyLeads: boolean;
+  captureOrders: boolean;
+  respectBusinessHours: boolean;
+  humanHandoff: boolean;
+  welcomeGreeting: boolean;
+  protectSensitiveData: boolean;
+};
+
+const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
+  assistantMode: "Sales & customer support",
+  responseTone: "Professional and friendly",
+  responseLength: "Balanced",
+  languageMode: "Match visitor language",
+  autoReply: true,
+  useBusinessKnowledge: true,
+  avoidUnverifiedClaims: true,
+  askClarifyingQuestions: true,
+  qualifyLeads: true,
+  captureOrders: true,
+  respectBusinessHours: true,
+  humanHandoff: true,
+  welcomeGreeting: true,
+  protectSensitiveData: true,
+};
+
 type UnreadVisitorMessage = {
   id: number;
   conversationId: number;
@@ -1617,6 +1651,32 @@ function Dashboard() {
   const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
   const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
+  const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("misma_ai_settings");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<MismaAiSettings>;
+        setAiSettings({ ...DEFAULT_MISMA_AI_SETTINGS, ...parsed });
+      }
+    } catch {
+      // Keep the stored defaults if previous device settings cannot be read.
+    } finally {
+      setSettingsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    try {
+      localStorage.setItem("misma_ai_settings", JSON.stringify(aiSettings));
+    } catch {
+      // The existing AI defaults remain usable for the current session.
+    }
+  }, [aiSettings, settingsLoaded]);
+
   useEffect(() => {
     try {
       const savedAccent = localStorage.getItem("misma_accent_color");
