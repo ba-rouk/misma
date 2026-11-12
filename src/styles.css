@@ -9159,7 +9159,7 @@ html, body, #app-root {
 
 /* Sidebar recent titles use the same compact type size as the main nav. */
 .aichat-chats-widget-item-text {
-  font-size: var(--text-button) !important;
+  font-size: 11px !important;
   font-weight: var(--weight-medium) !important;
 }
 
@@ -9215,3 +9215,372 @@ html, body, #app-root {
   opacity: .58;
   cursor: wait;
 }
+
+
+/* Landing navigation: keep only the brand and account actions on mobile. */
+@media (max-width: 800px) {
+  .misma-site .nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 64px;
+    padding: 0 5vw;
+  }
+  .misma-site .nav-links { display: none !important; }
+  .misma-site .nav-actions { display: flex !important; flex: none; gap: 7px; }
+  .misma-site .nav-login,
+  .misma-site .nav-cta { min-height: 36px; padding: 0 11px; font-size: 11px; }
+  .misma-site .brand { font-size: 18px; gap: 8px; }
+}
+
+/* Remove labels that floated beside expanded sidebar navigation items. */
+.aichat-side.is-collapsed [data-tooltip]:hover::after { display: none !important; }
+
+/* Enabled website registration is visually ready to submit. */
+.aichat-websites-tab .aichat-hub-form button[type="submit"]:not(:disabled) {
+  border: 1px solid #e2e6eb !important;
+  background: linear-gradient(110deg, #f3f5f7, #b9c3cf) !important;
+  color: #101820 !important;
+}
+.aichat-websites-tab .aichat-hub-form button[type="submit"]:not(:disabled):hover {
+  background: linear-gradient(110deg, #fff, #c8d0da) !important;
+}
+
+/* Connect > WhatsApp reuses Add channels-style fields and a white Save action. */
+.aichat-whatsapp-connect-fields { display: grid; gap: 15px; }
+.aichat-whatsapp-connect-card .aichat-panel-heading { margin-bottom: 16px; }
+.aichat-whatsapp-connect-card .aichat-panel-heading h3 { margin: 0; }
+.aichat-whatsapp-connect-card .aichat-whatsapp-number-row {
+  display: grid; grid-template-columns: minmax(125px,.8fr) minmax(0,1.2fr); gap: 12px;
+}
+.aichat-whatsapp-connect-card label {
+  display: grid; gap: 7px; color: #c8d0da;
+  font: 500 var(--text-sm)/1.4 var(--font-sans);
+}
+.aichat-whatsapp-connect-card input,
+.aichat-whatsapp-connect-card select,
+.aichat-whatsapp-connect-card textarea { box-sizing: border-box; }
+.aichat-whatsapp-default-message textarea { min-height: 86px; }
+.aichat-whatsapp-connect-save {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 42px; margin-top: 15px; padding: 0 20px;
+  border: 1px solid #e2e6eb; border-radius: 9px;
+  background: linear-gradient(110deg, #f3f5f7, #b9c3cf);
+  color: #101820; font: 700 var(--text-sm)/1.4 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-whatsapp-connect-save:hover:not(:disabled) { background: linear-gradient(110deg,#fff,#c8d0da); }
+.aichat-whatsapp-connect-save:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 520px) {
+  .aichat-whatsapp-connect-card .aichat-whatsapp-number-row { grid-template-columns: 1fr; }
+}
+
+/* Feedback section on the public Misma landing page. */
+.misma-site .misma-feedback {
+  display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr);
+  gap: clamp(28px,6vw,80px); align-items: start;
+  margin: 0; padding: clamp(42px,7vw,84px) 7vw;
+  border-top: 1px solid #20242a; background: #0d1014;
+}
+.misma-site .misma-feedback-heading .eyebrow { margin-bottom: 14px; }
+.misma-site .misma-feedback-heading h2 {
+  margin: 0; color: #f3f5f8;
+  font-size: clamp(26px,3.2vw,38px); line-height: 1.08; letter-spacing: -.045em;
+}
+.misma-feedback-form { display: grid; gap: 14px; max-width: 680px; }
+.misma-feedback-form label { display: grid; gap: 7px; color: #c6ccd5; font-size: 13px; font-weight: 550; }
+.misma-feedback-form input,
+.misma-feedback-form textarea {
+  width: 100%; box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid #303743; border-radius: 10px;
+  background: #171b22; color: #f3f5f8; font: 400 14px/1.5 var(--font-sans);
+  outline: none; resize: vertical;
+}
+.misma-feedback-form input { min-height: 46px; }
+.misma-feedback-form textarea { min-height: 110px; }
+.misma-feedback-form input:focus,
+.misma-feedback-form textarea:focus { border-color: #b9c3cf; box-shadow: 0 0 0 3px rgba(185,195,207,.11); }
+.misma-feedback-form input::placeholder,
+.misma-feedback-form textarea::placeholder { color: #778392; }
+.misma-feedback-send {
+  min-height: 44px; width: fit-content; min-width: 118px; padding: 0 22px;
+  border: 1px solid #e2e6eb; border-radius: 9px;
+  background: linear-gradient(110deg,#f3f5f7,#b9c3cf); color: #101820;
+  font: 700 13px/1.4 var(--font-sans); cursor: pointer;
+}
+.misma-feedback-send:hover:not(:disabled) { background: linear-gradient(110deg,#fff,#c8d0da); }
+.misma-feedback-send:disabled { opacity: .55; cursor: wait; }
+.misma-feedback-error,
+.misma-feedback-status { margin: 0; font-size: 13px; line-height: 1.5; }
+.misma-feedback-error { color: #f0a7a7; }
+.misma-feedback-status { color: #cbd5e1; }
+.misma-feedback-trap { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 720px) {
+  .misma-site .misma-feedback { grid-template-columns: 1fr; padding: 48px 6vw; gap: 24px; }
+}
+
+
+/* Customer request cards place the overflow menu on the far right. */
+.aichat-handoff-card {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  position: relative;
+  padding: 0 0 13px !important;
+}
+.aichat-handoff-card .aichat-handoff-row {
+  order: 1;
+  flex: 1 1 240px;
+  min-width: 0;
+  width: auto;
+  padding-right: 10px;
+}
+.aichat-handoff-card .aichat-handoff-menu {
+  order: 2;
+  position: relative !important;
+  inset: auto !important;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  z-index: 102;
+}
+.aichat-handoff-card .aichat-handoff-menu .aichat-chat-context-menu {
+  top: calc(100% - 4px);
+  right: 0;
+  left: auto;
+}
+.aichat-handoff-card > .aichat-action-btn {
+  order: 3;
+  margin: 0 0 0 48px !important;
+}
+
+/* Compact dark-blue request confirmation with white Cancel and OK buttons. */
+.aichat-request-delete-dialog,
+.aichat-account-delete-dialog {
+  width: min(360px, 100%);
+  padding: 20px;
+  border: 1px solid #304b70;
+  border-radius: 16px;
+  background: linear-gradient(155deg, #14243a, #0d1829);
+  color: #f3f6fb;
+  box-shadow: 0 24px 90px rgba(0,0,0,.66), inset 0 1px 0 rgba(255,255,255,.035);
+}
+.aichat-request-delete-dialog h2,
+.aichat-account-delete-dialog h2 {
+  margin: 0 0 7px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.aichat-request-delete-dialog p,
+.aichat-account-delete-dialog p {
+  margin: 0;
+  color: #bac9dc;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.aichat-request-delete-dialog .aichat-confirm-actions,
+.aichat-account-delete-dialog .aichat-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 17px;
+}
+.aichat-request-confirm-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #f0f3f7;
+  border-radius: 8px;
+  background: #f2f5f9;
+  color: #101a28;
+  font: 650 12px/1.25 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-request-confirm-button:hover:not(:disabled) {
+  background: #ffffff;
+}
+.aichat-request-confirm-button:disabled {
+  opacity: .56;
+  cursor: wait;
+}
+.aichat-request-delete-error {
+  margin-top: 10px !important;
+  color: #ffb9b5 !important;
+}
+.aichat-account-delete-confirm {
+  display: grid;
+  gap: 7px;
+  margin-top: 15px;
+  color: #d5dfec;
+  font: 550 12px/1.4 var(--font-sans);
+}
+.aichat-account-delete-confirm .aichat-input {
+  min-height: 40px;
+  background: #0a1423;
+  border-color: #385273;
+}
+
+/* Profile and staff-management controls. */
+.aichat-settings-delete-account {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  margin-top: 16px;
+  padding: 0 12px;
+  border: 1px solid rgba(248,113,113,.42);
+  border-radius: 8px;
+  background: rgba(127,29,29,.14);
+  color: #ffaaa5;
+  font: 600 12px/1.3 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-settings-delete-account:hover {
+  background: rgba(127,29,29,.24);
+}
+.aichat-staff-access-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 4px 14px;
+}
+.aichat-staff-access-form > .aichat-settings-hint,
+.aichat-staff-access-form > .aichat-profile-error,
+.aichat-staff-access-form > .aichat-settings-status,
+.aichat-staff-access-form > button {
+  grid-column: 1 / -1;
+}
+.aichat-staff-access-form > button { width: fit-content; }
+.aichat-staff-access-card .aichat-settings-section-heading { margin-bottom: 14px; }
+.aichat-settings-content #misma-voice-choice {
+  border-color: #405777;
+  background: #101c2d;
+  color: #ffffff;
+}
+.aichat-settings-content #misma-voice-choice option {
+  background: #101c2d;
+  color: #ffffff;
+}
+.aichat-settings-content #misma-voice-choice:focus {
+  border-color: #e2e8f0;
+  box-shadow: 0 0 0 3px rgba(226,232,240,.1);
+}
+
+@media (max-width: 640px) {
+  .aichat-staff-access-form { grid-template-columns: 1fr; }
+  .aichat-staff-access-form > button { width: 100%; }
+  .aichat-handoff-card .aichat-handoff-row { flex-basis: 100%; }
+  .aichat-handoff-card .aichat-handoff-menu { margin-left: auto; }
+  .aichat-request-delete-dialog .aichat-confirm-actions,
+  .aichat-account-delete-dialog .aichat-confirm-actions { flex-direction: row; }
+  .aichat-request-confirm-button { flex: 1; }
+}
+
+
+/* App-styled voice selector popup; avoid the device-native select menu. */
+.aichat-voice-picker {
+  position: relative;
+  width: 100%;
+}
+.aichat-voice-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #35465d;
+  border-radius: 9px;
+  background: #101a29;
+  color: #f4f7fb;
+  font: 500 13px/1.4 var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.aichat-voice-picker-trigger:hover,
+.aichat-voice-picker-trigger[aria-expanded="true"] {
+  border-color: #7899c4;
+  background: #15243a;
+}
+.aichat-voice-picker-trigger svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.aichat-voice-picker-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  z-index: 180;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #385274;
+  border-radius: 11px;
+  background: #101d30;
+  box-shadow: 0 15px 38px rgba(0,0,0,.52);
+}
+.aichat-voice-picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #eef4fc;
+  text-align: left;
+  cursor: pointer;
+}
+.aichat-voice-picker-option:hover,
+.aichat-voice-picker-option.is-selected {
+  border-color: rgba(139,174,222,.27);
+  background: #1a2b43;
+}
+.aichat-voice-picker-option > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+.aichat-voice-picker-option strong {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 650;
+}
+.aichat-voice-picker-option small {
+  color: #9eb1c9;
+  font-size: 10px;
+}
+.aichat-voice-picker-check {
+  color: #dce9fb;
+  font-size: 13px;
+  font-weight: 700;
+}
+.aichat-staff-signout {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin: 4px 0 0 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a8b5c8;
+  font: 500 11px/1.2 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-staff-signout:hover { color: #ffffff; }

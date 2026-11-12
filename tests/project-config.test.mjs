@@ -652,10 +652,13 @@ test("privacy and voice preferences are persisted and used by dashboard voice/ch
 
   assert.match(dashboard, /misma_privacy_preferences/);
   assert.match(dashboard, /selectedVoicePreset/);
-  assert.match(dashboard, /<option value="girl">Girl/);
-  assert.match(dashboard, /<option value="woman">Woman/);
-  assert.match(dashboard, /<option value="boy">Boy/);
-  assert.match(dashboard, /<option value="man">Man/);
+  assert.match(dashboard, /aichat-voice-picker-menu/);
+  assert.match(dashboard, /label: "Girl"/);
+  assert.match(dashboard, /label: "Woman"/);
+  assert.match(dashboard, /aria-selected=\{selectedVoicePreset === voice\.value\}/);
+  assert.doesNotMatch(dashboard, /id="misma-voice-choice" className="aichat-select"/);
+  assert.doesNotMatch(dashboard, /<option value="boy">Boy|<option value="man">Man/);
+  assert.match(dashboard, /setSelectedVoicePreset\("woman"\)/);
   assert.match(dashboard, /privacySettings: privacyPreferences/);
   assert.match(edgeFunction, /useConversationHistory = privacySettings\.useConversationHistory !== false/);
   assert.match(edgeFunction, /if \(useConversationHistory\)/);
@@ -947,7 +950,8 @@ test("website widget uses a permanent URL backed by a live, non-cacheable server
 test("dashboard notification feed shows named human requests and counts unread notifications", async () => {
   const api = await read("../src/lib/api/misma.functions.ts");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.equal(api.split('eq("notification_type", "human_request")').length - 1, 4);
+  assert.ok(api.split('eq("notification_type", "human_request")').length - 1 >= 4,
+    "owner and restricted-staff notification readers must scope requests to human-request notifications");
   assert.ok(api.includes("export const markHumanRequestNotificationRead"));
   assert.ok(dashboard.includes('const unreadHumanRequestNotificationCount = allNotifications.filter((notification) => notification.is_read !== true).length;'));
   assert.ok(dashboard.includes("markHumanRequestNotificationRead({ data: { token, notificationId } })"));
@@ -1398,7 +1402,11 @@ test("human handoff requests can be permanently deleted from Customers and Notif
   assert.match(dashboard, /activeTab === "customers"/);
   assert.match(dashboard, /humanRequestMenuId/);
   assert.match(dashboard, /Delete request/);
-  assert.match(dashboard, /deleteHumanRequest\(\{ data: \{ token, requestId \} \}\)/);
+  assert.match(dashboard, /deleteHumanRequest\(\{ data: \{ token, requestId: target\.requestId \} \}\)/);
+  assert.match(dashboard, /confirmDeleteHumanRequest/);
+  assert.match(dashboard, /aichat-request-delete-dialog/);
+  assert.match(dashboard, /deleteWorkspaceNotification\(\{ data: \{ token, notificationId: target\.notificationId \} \}\)/);
+  assert.match(dashboard, /aichat-request-confirm-button/);
 
   const customerCardStart = dashboard.indexOf('className="aichat-handoff-card"');
   const menuStart = dashboard.indexOf('className="aichat-handoff-menu"', customerCardStart);
@@ -1409,7 +1417,7 @@ test("human handoff requests can be permanently deleted from Customers and Notif
   assert.match(dashboard, /aichat-human-request-list-row/);
   assert.match(dashboard, /More options for \$\{visitorName\}/);
   assert.match(dashboard, /requestId > 0/);
-  assert.match(dashboard, /setAllNotifications\(\(items\) => items\.filter\(\(item\) => Number\(item\.human_request_id\) !== requestId\)\)/);
+  assert.match(dashboard, /setAllNotifications\(\(items\) => items\.filter\(\(item\) => Number\(item\.human_request_id\) !== target\.requestId\)\)/);
 
   assert.match(api, /export const deleteHumanRequest = createServerFn/);
   assert.match(api, /\.from\("workspace_notifications"\)[\s\S]*?\.delete\(\)/);
@@ -1419,6 +1427,8 @@ test("human handoff requests can be permanently deleted from Customers and Notif
   assert.match(styles, /\.aichat-handoff-menu\s*\{[^}]*left:\s*0;[^}]*right:\s*auto/);
   assert.match(styles, /\.aichat-human-request-list-row/);
   assert.ok(styles.includes(".aichat-human-request-list-menu {\n  order: 2;"));
+  assert.ok(styles.includes(".aichat-handoff-card .aichat-handoff-row {\n  order: 1;"));
+  assert.ok(styles.includes(".aichat-handoff-card .aichat-handoff-menu {\n  order: 2;"));
   assert.ok(styles.includes(".aichat-human-request-list-menu .aichat-chat-context-menu {\n  top: calc(100% - 4px);\n  left: auto;\n  right: 0;"));
   assert.ok(styles.includes(".aichat-nav-btn[aria-expanded] {\n  color: #ffffff;"));
   assert.match(styles, /\.aichat-handoff-avatar svg/);
@@ -1673,4 +1683,64 @@ test("landing page chat matches the embedded widget design and uses the branded 
   assert.ok(styles.includes("background: #f8fafc"));
   assert.match(embed, /viewBox='0 0 48 48'/);
   assert.doesNotThrow(() => new Function(embed), "the hosted widget must remain valid JavaScript");
+});
+
+
+test("Misma landing feedback, WhatsApp settings and sidebar defaults are wired", async () => {
+  const landing = await read("../src/routes/index.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const feedback = await read("../supabase/functions/misma-feedback/index.ts");
+  const config = await read("../supabase/config.toml");
+
+  assert.match(landing, /misma-feedback/);
+  assert.match(landing, /email: normalizedEmail/);
+  assert.match(landing, /comment: message/);
+  assert.match(dashboard, /workspace: false/);
+  assert.doesNotMatch(dashboard, /setActiveTab\("website-connect"\).*Website/);
+  assert.match(dashboard, /WhatsAppConnectionCard/);
+  assert.match(dashboard, /Default message/);
+  assert.doesNotMatch(dashboard, /<option value="boy">Boy|<option value="man">Man/);
+  assert.match(styles, /\.misma-feedback-send/);
+  assert.match(styles, /aichat-whatsapp-connect-save/);
+  assert.match(feedback, /rukundobarouk33@gmail\.com/);
+  assert.match(feedback, /gmail\.send|messages\/send/);
+  assert.match(config, /\[functions\.misma-feedback\][\s\S]*?verify_jwt = false/);
+});
+
+
+test("restricted support staff can only access customer and notification controls", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const context = await read("../src/lib/api/workspace-context.server.ts");
+  const migration = await read("../supabase/migrations/20261112103500_misma_support_staff_access.sql");
+  const admin = await read("../supabase/functions/misma-workspace-admin/index.ts");
+  const config = await read("../supabase/config.toml");
+  const styles = await read("../src/styles.css");
+
+  assert.doesNotMatch(dashboard, /<h3>Assistant profile<\/h3>|Recommended business assistant profile/);
+  assert.doesNotMatch(dashboard, /id="settings-general"|<button[^>]*>Phone<\/button>/);
+  assert.match(dashboard, /aichat-voice-picker-menu/);
+  assert.match(dashboard, /aichat-request-delete-dialog/);
+  assert.match(dashboard, /aichat-settings-delete-account/);
+  assert.match(dashboard, /aichat-staff-access-card/);
+  assert.match(dashboard, /workspace\?\.name \|\| "Your business"/);
+  assert.match(dashboard, /handleDeleteHumanRequest\(request \? requestId : null, visitorName, Number\(item\.id\)\)/);
+
+  assert.match(context, /workspace_staff_access/);
+  assert.match(context, /allowSupportAccess = false/);
+  assert.match(context, /only access Customers and Notifications/);
+  assert.match(api, /accessMode: "support"/);
+  assert.match(api, /export const deleteWorkspaceNotification/);
+  assert.match(api, /if \(!isSupport\) \{/);
+
+  assert.match(migration, /Misma support staff blocked/);
+  assert.match(migration, /Misma owners and support can delete human requests/);
+  assert.match(migration, /Misma owners and support can delete request notifications/);
+  assert.match(migration, /guard_misma_support_updates/);
+  assert.match(admin, /auth\.admin\.createUser/);
+  assert.match(admin, /auth\.admin\.deleteUser/);
+  assert.match(config, /\[functions\.misma-workspace-admin\][\s\S]*?verify_jwt = false/);
+  assert.match(styles, /\.aichat-voice-picker-menu/);
+  assert.match(styles, /\.aichat-request-confirm-button/);
 });

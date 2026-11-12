@@ -31,6 +31,8 @@ import {
   createProductService,
   updateHumanRequestStatus,
   deleteHumanRequest,
+  deleteWorkspaceNotification,
+  saveWorkspaceName,
   updateProductServiceStatus,
   createWorkspaceLibraryFile,
   deleteWorkspaceLibraryFile,
@@ -51,15 +53,6 @@ const MAX_IMAGE_UPLOAD_MB = 25;
 export const Route = createFileRoute("/dashboard")({ component: Dashboard });
 
 type TabId = "workspace" | "website-statistics" | "websites" | "customers" | "notifications" | "products" | "build" | "knowledge" | "connect" | "phone" | "website-connect" | "whatsapp" | "images" | "library" | "manage" | "settings";
-
-type UnreadVisitorMessage = {
-  id: number;
-  conversationId: number;
-  text: string;
-  created_at: string;
-  channel: string;
-  conversationTitle: string;
-};
 
 type MismaAiSettings = {
   assistantMode: "Sales & customer support" | "Customer support" | "Sales assistant";
@@ -94,6 +87,16 @@ const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
   welcomeGreeting: true,
   protectSensitiveData: true,
 };
+
+type UnreadVisitorMessage = {
+  id: number;
+  conversationId: number;
+  text: string;
+  created_at: string;
+  channel: string;
+  conversationTitle: string;
+};
+
 
 function getUserMessageTextColor(hex: string): string {
   const toLinear = (channel: string) => {
@@ -528,6 +531,108 @@ function WebsiteSocialSettings({
         </div>
       )}
     </div>
+  );
+}
+
+
+function WhatsAppConnectionCard({
+  site,
+  token,
+  onSaved,
+}: {
+  site: any;
+  token: string;
+  onSaved: (website: any) => void;
+}) {
+  const [countryCode, setCountryCode] = useState(String(site.whatsapp_country_code || "250"));
+  const [phoneNumber, setPhoneNumber] = useState(String(site.whatsapp_number || ""));
+  const [defaultMessage, setDefaultMessage] = useState(String(site.whatsapp_message || "Hello! How can we help you today?"));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    setCountryCode(String(site.whatsapp_country_code || "250"));
+    setPhoneNumber(String(site.whatsapp_number || ""));
+    setDefaultMessage(String(site.whatsapp_message || "Hello! How can we help you today?"));
+  }, [site.id, site.whatsapp_country_code, site.whatsapp_number, site.whatsapp_message]);
+
+  const save = async () => {
+    setError("");
+    setStatus("");
+    const subscriberNumber = phoneNumber.replace(/\D/g, "").replace(/^0+/, "");
+    const normalizedCountryCode = countryCode.replace(/\D/g, "");
+    if (!subscriberNumber) {
+      setError("Enter a WhatsApp phone number.");
+      return;
+    }
+    const totalDigits = normalizedCountryCode.length + subscriberNumber.length;
+    if (!normalizedCountryCode || normalizedCountryCode.length > 4 || totalDigits < 7 || totalDigits > 15) {
+      setError("Enter a valid WhatsApp number with its country code.");
+      return;
+    }
+    const message = defaultMessage.trim();
+    if (!message) {
+      setError("Enter a default message.");
+      return;
+    }
+    if (!token || saving) return;
+
+    setSaving(true);
+    try {
+      const result = await saveWebsiteSocialLinks({
+        data: {
+          token,
+          websiteId: site.id,
+          instagramUrl: site.instagram_url || null,
+          gmailAddress: site.gmail_address || null,
+          whatsappCountryCode: normalizedCountryCode,
+          whatsappNumber: subscriberNumber,
+          whatsappMessage: message,
+        },
+      });
+      onSaved(result.website);
+      setStatus("Saved.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save WhatsApp settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="aichat-card aichat-whatsapp-connect-card">
+      <div className="aichat-panel-heading">
+        <h3>{site.name || site.domain || "Website"}</h3>
+        <span className="aichat-status-pill">{site.whatsapp_number ? "Added" : "Not added"}</span>
+      </div>
+      <div className="aichat-whatsapp-connect-fields">
+        <div className="aichat-whatsapp-number-row">
+          <label>
+            Country code
+            <select className="aichat-select" value={countryCode} onChange={(event) => setCountryCode(event.target.value)}>
+              {!WEBSITE_PHONE_COUNTRY_CODES.some((country) => country.code === countryCode) && <option value={countryCode}>+{countryCode}</option>}
+              {WEBSITE_PHONE_COUNTRY_CODES.map((country) => (
+                <option key={country.name} value={country.code}>{country.flag} {country.name} (+{country.code})</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Phone number
+            <input className="aichat-input" type="tel" inputMode="tel" autoComplete="tel-national" value={phoneNumber} placeholder="e.g. 788123456" onChange={(event) => setPhoneNumber(event.target.value)} />
+          </label>
+        </div>
+        <label className="aichat-whatsapp-default-message">
+          Default message
+          <textarea className="aichat-textarea" rows={3} maxLength={500} value={defaultMessage} placeholder="Hello! How can we help you today?" onChange={(event) => setDefaultMessage(event.target.value)} />
+        </label>
+      </div>
+      {error && <p className="aichat-social-error" role="alert">{error}</p>}
+      {status && <p className="aichat-social-success" role="status">{status}</p>}
+      <button type="button" className="aichat-whatsapp-connect-save" disabled={saving || !phoneNumber.trim() || !defaultMessage.trim()} onClick={() => void save()}>
+        {saving ? "Saving…" : "Save"}
+      </button>
+    </section>
   );
 }
 
@@ -1411,7 +1516,9 @@ function Dashboard() {
     previousDashboardTabRef.current = activeTab;
   }, [activeTab]);
 
-  const canGoBack = activeTab !== "workspace" || dashboardTabHistory.length > 0;
+  const [staffMode, setStaffMode] = useState(false);
+  const [staffTitle, setStaffTitle] = useState("");
+  const canGoBack = !staffMode && (activeTab !== "workspace" || dashboardTabHistory.length > 0);
   const handleDashboardBack = () => {
     const previousTab = dashboardTabHistory[dashboardTabHistory.length - 1];
     if (previousTab) {
@@ -1423,7 +1530,7 @@ function Dashboard() {
     }
     setMobileMenuOpen(false);
   };
-  const [expandedNavGroups, setExpandedNavGroups] = useState<Record<string, boolean>>({ workspace: true, manage: false, build: false, connect: false });
+  const [expandedNavGroups, setExpandedNavGroups] = useState<Record<string, boolean>>({ workspace: false, manage: false, build: false, connect: false });
   const [greeting, setGreeting] = useState("Welcome back");
   const hasChosenGreetingRef = useRef(false);
 
@@ -1461,6 +1568,22 @@ function Dashboard() {
   const [selectedHumanRequestNotificationId, setSelectedHumanRequestNotificationId] = useState<number | null>(null);
   const [humanRequestMenuId, setHumanRequestMenuId] = useState<number | null>(null);
   const [humanRequestDeletingId, setHumanRequestDeletingId] = useState<number | null>(null);
+  const [deleteRequestTarget, setDeleteRequestTarget] = useState<{ requestId: number | null; notificationId: number | null; visitorName: string } | null>(null);
+  const [deleteRequestError, setDeleteRequestError] = useState("");
+  const [staffNameDraft, setStaffNameDraft] = useState("");
+  const [staffEmailDraft, setStaffEmailDraft] = useState("");
+  const [staffPasswordDraft, setStaffPasswordDraft] = useState("");
+  const [staffAccountBusy, setStaffAccountBusy] = useState(false);
+  const [staffAccountMessage, setStaffAccountMessage] = useState("");
+  const [staffAccountError, setStaffAccountError] = useState("");
+  const [accountDeleteOpen, setAccountDeleteOpen] = useState(false);
+  const [accountDeleteConfirmation, setAccountDeleteConfirmation] = useState("");
+  const [accountDeleting, setAccountDeleting] = useState(false);
+  const [accountDeleteError, setAccountDeleteError] = useState("");
+  const [businessNameDraft, setBusinessNameDraft] = useState("");
+  const [businessNameSaving, setBusinessNameSaving] = useState(false);
+  const [businessNameSaved, setBusinessNameSaved] = useState(false);
+  const [businessNameError, setBusinessNameError] = useState("");
   const [productsServices, setProductsServices] = useState<any[]>([]);
   const [channelConnections, setChannelConnections] = useState<any[]>([]);
   const [channelEnvironment, setChannelEnvironment] = useState({ whatsappConfigured: false, phoneConfigured: false });
@@ -1505,6 +1628,7 @@ function Dashboard() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
+  const [staffTitleDraft, setStaffTitleDraft] = useState("");
   const [profileAvatarFile, setProfileAvatarFile] = useState<File | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -1526,6 +1650,7 @@ function Dashboard() {
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
+  const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -1537,7 +1662,7 @@ function Dashboard() {
         setAiSettings({ ...DEFAULT_MISMA_AI_SETTINGS, ...parsed });
       }
     } catch {
-      // Keep the recommended defaults if saved preferences cannot be read.
+      // Keep the stored defaults if previous device settings cannot be read.
     } finally {
       setSettingsLoaded(true);
     }
@@ -1548,7 +1673,7 @@ function Dashboard() {
     try {
       localStorage.setItem("misma_ai_settings", JSON.stringify(aiSettings));
     } catch {
-      // The preferences remain usable for this session if browser storage is unavailable.
+      // The existing AI defaults remain usable for the current session.
     }
   }, [aiSettings, settingsLoaded]);
 
@@ -1568,7 +1693,12 @@ function Dashboard() {
         const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
         setNotificationPreferences((current) => ({ ...current, ...parsed }));
       }
-      if (savedVoice && ["girl", "woman", "boy", "man"].includes(savedVoice)) setSelectedVoicePreset(savedVoice as MismaVoicePreset);
+      if (savedVoice === "girl" || savedVoice === "woman") setSelectedVoicePreset(savedVoice);
+      else if (savedVoice === "boy" || savedVoice === "man") {
+        setSelectedVoicePreset("woman");
+        localStorage.setItem("misma_voice_preset", "woman");
+        localStorage.removeItem("misma_voice_uri");
+      }
       if (savedAutoSpeak === "true") setAutoSpeakReplies(true);
     } catch {
       // Keep accessible defaults if browser preferences cannot be read.
@@ -1612,10 +1742,6 @@ function Dashboard() {
     window.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", refreshVoices);
   }, []);
-
-  const updateAiSetting = <K extends keyof MismaAiSettings>(key: K, value: MismaAiSettings[K]) => {
-    setAiSettings((current) => ({ ...current, [key]: value }));
-  };
 
   const toggleChatActivityNotifications = async () => {
     const currentlyEnabled = notificationPreferences.chatActivity;
@@ -2144,20 +2270,35 @@ function Dashboard() {
   }, [dashboardDataLoaded, unreadVisitorMessages, notificationPreferences.chatActivity]);
 
   const applyDashboardData = (data: any, refreshChannelStatus = true) => {
+    const supportMode = data.accessMode === "support";
+    setStaffMode(supportMode);
+    setStaffTitle(supportMode ? String(data.staffTitle || "Customer support") : "");
     setWorkspace(data.workspace);
-    setConversations(data.conversations ?? []);
-    setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
-    setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
-    setOrders(data.orders ?? []);
-    setKnowledgeList(data.knowledge ?? []);
+    setBusinessNameDraft(String(data.workspace?.name || ""));
+    setConversations(supportMode ? [] : data.conversations ?? []);
+    setUnreadVisitorMessages(supportMode ? [] : data.unreadVisitorMessages ?? []);
+    setUnreadVisitorCount(supportMode ? 0 : data.unreadVisitorCount ?? 0);
+    setOrders(supportMode ? [] : data.orders ?? []);
+    setKnowledgeList(supportMode ? [] : data.knowledge ?? []);
     setCustomers(data.customers ?? []);
-    setConnectedWebsites(data.websites ?? []);
+    setConnectedWebsites(supportMode ? [] : data.websites ?? []);
     setHumanHandoffs(data.handoffs ?? []);
     setAllNotifications(data.notifications ?? []);
-    setProductsServices(data.products ?? []);
-    setChannelConnections(data.channelConnections ?? []);
+    setProductsServices(supportMode ? [] : data.products ?? []);
+    setChannelConnections(supportMode ? [] : data.channelConnections ?? []);
+    if (supportMode) {
+      activeConversationIdRef.current = null;
+      setCurrentConversationId(null);
+      setPendingRestoreConversationId(null);
+      setMessages([]);
+      setWorkspaceAssets([]);
+      setWorkspaceAssetsLoaded(false);
+      setActiveTab("customers");
+      setChatActionMenuId(null);
+      setProfileMenuOpen(false);
+    }
 
-    if (refreshChannelStatus && data.workspace?.id) {
+    if (refreshChannelStatus && !supportMode && data.workspace?.id) {
       void callWidgetFunction({ action: "connection-status", workspaceId: data.workspace.id })
         .then((status) => setChannelEnvironment({
           whatsappConfigured: Boolean(status.whatsappConfigured),
@@ -2238,6 +2379,8 @@ function Dashboard() {
               savedAt: Date.now(),
               data: {
                 workspace: data.workspace,
+                accessMode: data.accessMode || "owner",
+                staffTitle: data.staffTitle || null,
                 conversations: data.conversations ?? [],
                 orders: data.orders ?? [],
                 knowledge: data.knowledge ?? [],
@@ -2454,7 +2597,7 @@ function Dashboard() {
     convId: number,
     options: { activateWorkspace?: boolean; isRestore?: boolean } = {},
   ) => {
-    if (!token) return;
+    if (!token || staffMode) return;
     if (!options.isRestore) setPendingRestoreConversationId(null);
     chatViewVersionRef.current += 1;
     const conversationLoadVersion = chatViewVersionRef.current;
@@ -2855,6 +2998,128 @@ function Dashboard() {
       setProfileError(cause instanceof Error ? cause.message : "Could not save your profile.");
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const saveBusinessName = async () => {
+    const name = businessNameDraft.trim();
+    if (!token || businessNameSaving) return;
+    if (name.length < 2 || name.length > 120) {
+      setBusinessNameError("Enter a business name between 2 and 120 characters.");
+      return;
+    }
+    setBusinessNameSaving(true);
+    setBusinessNameError("");
+    setBusinessNameSaved(false);
+    try {
+      const result = await saveWorkspaceName({ data: { token, name } });
+      setWorkspace((current: any) => current ? { ...current, ...result.workspace } : current);
+      setBusinessNameDraft(result.workspace.name);
+      setBusinessNameSaved(true);
+      window.setTimeout(() => setBusinessNameSaved(false), 3000);
+    } catch (cause) {
+      setBusinessNameError(cause instanceof Error ? cause.message : "Could not update the business name.");
+    } finally {
+      setBusinessNameSaving(false);
+    }
+  };
+
+  const createSupportAccount = async () => {
+    if (!token || !workspace?.id || staffAccountBusy) return;
+    setStaffAccountError("");
+    setStaffAccountMessage("");
+    const name = staffNameDraft.trim();
+    const title = staffTitleDraft.trim();
+    const email = staffEmailDraft.trim().toLowerCase();
+    if (name.length < 2 || name.length > 80) {
+      setStaffAccountError("Enter a staff name between 2 and 80 characters.");
+      return;
+    }
+    if (title.length < 2 || title.length > 60) {
+      setStaffAccountError("Enter a role between 2 and 60 characters.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      setStaffAccountError("Enter a valid staff email address.");
+      return;
+    }
+    if (staffPasswordDraft.length < 8) {
+      setStaffAccountError("Use a password with at least 8 characters.");
+      return;
+    }
+
+    setStaffAccountBusy(true);
+    try {
+      const { error } = await getSupabaseClient().functions.invoke("misma-workspace-admin", {
+        body: {
+          action: "create-support-user",
+          workspaceId: workspace.id,
+          name,
+          title,
+          email,
+          password: staffPasswordDraft,
+        },
+      });
+      if (error) {
+        let message = error.message || "Could not create the staff account.";
+        const context = (error as { context?: unknown }).context;
+        if (context instanceof Response) {
+          try {
+            const body = await context.clone().json() as { error?: string };
+            if (body.error) message = body.error;
+          } catch {
+            // Use the Functions client's error text.
+          }
+        }
+        throw new Error(message);
+      }
+      setStaffNameDraft("");
+      setStaffTitleDraft("");
+      setStaffEmailDraft("");
+      setStaffPasswordDraft("");
+      setStaffAccountMessage("Staff account created. They can sign in with these credentials.");
+    } catch (cause) {
+      setStaffAccountError(cause instanceof Error ? cause.message : "Could not create the staff account.");
+    } finally {
+      setStaffAccountBusy(false);
+    }
+  };
+
+  const deleteOwnerAccount = async () => {
+    if (!token || !workspace?.id || accountDeleting || accountDeleteConfirmation.trim() !== "DELETE") return;
+    setAccountDeleting(true);
+    setAccountDeleteError("");
+    try {
+      const { error } = await getSupabaseClient().functions.invoke("misma-workspace-admin", {
+        body: { action: "delete-account", workspaceId: workspace.id, confirmation: "DELETE" },
+      });
+      if (error) {
+        let message = error.message || "Could not delete this account.";
+        const context = (error as { context?: unknown }).context;
+        if (context instanceof Response) {
+          try {
+            const body = await context.clone().json() as { error?: string };
+            if (body.error) message = body.error;
+          } catch {
+            // Use the Functions client's error text.
+          }
+        }
+        throw new Error(message);
+      }
+
+      setAccountDeleteOpen(false);
+      try {
+        ["misma_id_token", "misma_email", "misma_sidebar_open", "misma_dashboard_view_v1"].forEach((key) => sessionStorage.removeItem(key));
+        if (dashboardUserId) sessionStorage.removeItem("misma_dashboard_bootstrap_v1_" + dashboardUserId);
+        await getSupabaseClient().auth.signOut({ scope: "global" });
+      } catch {
+        // The account has already been removed. Clear the local app session regardless.
+      }
+      window.location.replace("/login");
+    } catch (cause) {
+      setAccountDeleteError(cause instanceof Error ? cause.message : "Could not delete this account.");
+    } finally {
+      setAccountDeleting(false);
     }
   };
 
@@ -4244,7 +4509,7 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
-  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-general","label":"General","icon":"general"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
+  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
   const filteredSettingsNavItems = settingsNavItems.filter((item) =>
     !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
   );
@@ -4365,34 +4630,50 @@ function Dashboard() {
     };
   }, [token, dashboardDataLoaded, workspace?.id, currentConversationId, isHumanHandoffConversation, activeConversation?.channel, activeTab, messages]);
 
-  const handleDeleteHumanRequest = async (requestId: number, visitorName: string) => {
-    if (!token || !Number.isSafeInteger(requestId) || requestId <= 0 || humanRequestDeletingId !== null) return;
-    const confirmed = window.confirm(
-      "Permanently delete the human assistance request from " + visitorName +
-      "? The request and its notification will be deleted permanently. The conversation history and messages will remain."
-    );
-    if (!confirmed) {
-      setHumanRequestMenuId(null);
-      return;
-    }
+  const handleDeleteHumanRequest = (
+    requestId: number | null,
+    visitorName: string,
+    notificationId: number | null = null,
+  ) => {
+    if (!token || humanRequestDeletingId !== null) return;
+    if (requestId !== null && (!Number.isSafeInteger(requestId) || requestId <= 0)) return;
+    if (notificationId !== null && (!Number.isSafeInteger(notificationId) || notificationId <= 0)) return;
+    if (requestId === null && notificationId === null) return;
+    setDeleteRequestError("");
+    setDeleteRequestTarget({ requestId, notificationId, visitorName });
+    setHumanRequestMenuId(null);
+  };
 
-    setHumanRequestDeletingId(requestId);
+  const confirmDeleteHumanRequest = async () => {
+    const target = deleteRequestTarget;
+    if (!token || !target || humanRequestDeletingId !== null) return;
+    const busyId = target.requestId ?? -target.notificationId!;
+    setHumanRequestDeletingId(busyId);
+    setDeleteRequestError("");
     try {
-      await deleteHumanRequest({ data: { token, requestId } });
-      const relatedNotificationIds = allNotifications
-        .filter((item) => Number(item.human_request_id) === requestId)
-        .map((item) => Number(item.id));
-      setHumanHandoffs((items) => items.filter((item) => Number(item.id) !== requestId));
-      setAllNotifications((items) => items.filter((item) => Number(item.human_request_id) !== requestId));
-      setSelectedHumanRequestNotificationId((current) =>
-        current !== null && relatedNotificationIds.includes(current) ? null : current
-      );
-      setHumanRequestMenuId((current) => current === requestId ? null : current);
+      if (target.requestId !== null) {
+        await deleteHumanRequest({ data: { token, requestId: target.requestId } });
+        const relatedNotificationIds = allNotifications
+          .filter((item) => Number(item.human_request_id) === target.requestId)
+          .map((item) => Number(item.id));
+        setHumanHandoffs((items) => items.filter((item) => Number(item.id) !== target.requestId));
+        setAllNotifications((items) => items.filter((item) => Number(item.human_request_id) !== target.requestId));
+        setSelectedHumanRequestNotificationId((current) =>
+          current !== null && relatedNotificationIds.includes(current) ? null : current
+        );
+        setHumanRequestMenuId((current) => current === target.requestId ? null : current);
+      } else if (target.notificationId !== null) {
+        await deleteWorkspaceNotification({ data: { token, notificationId: target.notificationId } });
+        setAllNotifications((items) => items.filter((item) => Number(item.id) !== target.notificationId));
+        setSelectedHumanRequestNotificationId((current) => current === target.notificationId ? null : current);
+        setHumanRequestMenuId(null);
+      }
+      setDeleteRequestTarget(null);
       loadData();
     } catch (cause) {
-      alert(cause instanceof Error ? cause.message : "Could not permanently delete this human request.");
+      setDeleteRequestError(cause instanceof Error ? cause.message : "Could not delete this request.");
     } finally {
-      setHumanRequestDeletingId((current) => current === requestId ? null : current);
+      setHumanRequestDeletingId(null);
     }
   };
 
@@ -4472,12 +4753,13 @@ function Dashboard() {
         </div>
 
         {/* New Chat Button */}
+        {!staffMode && (
         <div className="aichat-newchat-wrap">
           <button
             type="button"
             className="aichat-newchat"
             onClick={handleNewChat}
-            data-tooltip="New chat"
+           
           >
             <span className="aichat-newchat-plus">
               <svg
@@ -4497,10 +4779,24 @@ function Dashboard() {
             <span className="aichat-newchat-text">New chat</span>
           </button>
         </div>
+        )}
 
         {/* Main sidebar navigation */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
-          <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => setExpandedNavGroups((v) => ({ ...v, workspace: !v.workspace }))} aria-expanded={Boolean(expandedNavGroups.workspace)} data-tooltip="Workspace">
+          {staffMode ? (
+            <>
+              <button type="button" className={`aichat-nav-btn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>
+                <span className="aichat-nav-icon"><DashboardNavIcon kind="manage" /></span><span className="aichat-nav-label">Customers</span>
+              </button>
+              <button type="button" className={`aichat-nav-btn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>
+                <span className="aichat-nav-icon"><DashboardNavIcon kind="manage" /></span><span className="aichat-nav-label">Notifications</span>
+                {unreadHumanRequestNotificationCount > 0 && <span className="aichat-nav-badge">{unreadHumanRequestNotificationCount}</span>}
+              </button>
+            </>
+          ) : (
+            <>
+
+          <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => setExpandedNavGroups((v) => ({ ...v, workspace: !v.workspace }))} aria-expanded={Boolean(expandedNavGroups.workspace)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="workspace" /></span><span className="aichat-nav-label">Workspace</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.workspace ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.workspace && <div className="aichat-nav-submenu">
@@ -4513,31 +4809,33 @@ function Dashboard() {
           <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="library" /></span><span className="aichat-nav-label">Library</span>
           </button>
-          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)} data-tooltip="Manage">
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="manage" /></span><span className="aichat-nav-label">Manage</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.manage ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.manage && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadHumanRequestNotificationCount > 0 && <span>{unreadHumanRequestNotificationCount}</span>}</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)} data-tooltip="Build">
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="build" /></span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.build ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.build && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, connect: !v.connect }))} aria-expanded={Boolean(expandedNavGroups.connect)} data-tooltip="Connect">
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, connect: !v.connect }))} aria-expanded={Boolean(expandedNavGroups.connect)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Connect</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.connect ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.connect && <div className="aichat-nav-submenu">
-            <button type="button" className={`aichat-nav-subbtn${activeTab === "phone" ? " active" : ""}`} onClick={() => { setActiveTab("phone"); setMobileMenuOpen(false); }}>Phone</button>
-            <button type="button" className={`aichat-nav-subbtn${activeTab === "website-connect" ? " active" : ""}`} onClick={() => { setActiveTab("website-connect"); setMobileMenuOpen(false); }}>Website</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "whatsapp" ? " active" : ""}`} onClick={() => { setActiveTab("whatsapp"); setMobileMenuOpen(false); }}>WhatsApp</button>
           </div>}
-                </nav>
+                
+            </>
+          )}
+        </nav>
 
         {/* ── Chats and tasks widget (Cloud AI style) ── */}
+        {!staffMode && (
         <div className="aichat-chats-widget">
           <div className="aichat-chats-widget-header">
             <button
@@ -4641,9 +4939,25 @@ function Dashboard() {
             </div>
           )}
         </div>
+        )}
 
         {/* User Profile Card */}
         <div className="aichat-side-user">
+          {staffMode ? (
+            <div className="aichat-user-profile aichat-staff-sidebar-profile" aria-label="Staff account">
+              {profileImage ? (
+                <img className="aichat-user-avatar" src={profileImage} alt="" />
+              ) : (
+                <span className="aichat-user-avatar">{profileName[0]?.toUpperCase() ?? "S"}</span>
+              )}
+              <span className="aichat-user-info">
+                <b>{profileName}</b>
+                <small>{staffTitle || "Customer support"}</small>
+                <button type="button" className="aichat-staff-signout" onClick={() => void signOut()}>Sign out</button>
+              </span>
+            </div>
+          ) : (
+            <>
           {profileMenuOpen && (
             <div className="aichat-profile-menu">
               <span>{profileEmail || "Signed in"}</span>
@@ -4682,7 +4996,7 @@ function Dashboard() {
             )}
             <span className="aichat-user-info">
               <b>{profileName}</b>
-              <small>Your business</small>
+              <small>{workspace?.name || "Your business"}</small>
             </span>
           </button>
           <button
@@ -4695,6 +5009,8 @@ function Dashboard() {
           >
             •••
           </button>
+            </>
+          )}
         </div>
       </aside>
 
@@ -5740,7 +6056,7 @@ function Dashboard() {
         )}
 
         {/* ── View 5: AI Settings for business and website assistants ── */}
-        {activeTab === "settings" && (
+        {!staffMode && activeTab === "settings" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content aichat-settings-content">
               <div className="aichat-tab-header">
@@ -5802,56 +6118,54 @@ function Dashboard() {
                     {profileSaving ? "Saving…" : profileAvatarPreparing ? "Preparing photo…" : "Save changes"}
                   </button>
                 </div>
+                <div className="aichat-profile-edit-row">
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-business-name">Business name</label>
+                    <input id="misma-business-name" className="aichat-input" value={businessNameDraft} maxLength={120} onChange={(event) => setBusinessNameDraft(event.target.value)} placeholder="Your business name" />
+                  </div>
+                  <button type="button" className="aichat-action-btn" onClick={() => void saveBusinessName()} disabled={businessNameSaving}>
+                    {businessNameSaving ? "Saving…" : "Save business name"}
+                  </button>
+                </div>
+                {businessNameError && <p className="aichat-profile-error" role="alert">{businessNameError}</p>}
+                {businessNameSaved && <p className="aichat-settings-status" role="status">Business name updated.</p>}
+<section className="aichat-card aichat-settings-card aichat-staff-access-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M17 7a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4.5 5" /></svg></span>
+                  <span><h3>Team access</h3><p>Create a restricted account for customer requests.</p></span>
+                </div>
+                <form className="aichat-staff-access-form" onSubmit={(event) => { event.preventDefault(); void createSupportAccount(); }}>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-role">Role / title</label>
+                    <input id="misma-staff-role" className="aichat-input" maxLength={60} value={staffTitleDraft} onChange={(event) => setStaffTitleDraft(event.target.value)} placeholder="Customer support" required />
+                  </div>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-name">Name</label>
+                    <input id="misma-staff-name" className="aichat-input" maxLength={80} value={staffNameDraft} onChange={(event) => setStaffNameDraft(event.target.value)} placeholder="Staff name" autoComplete="name" required />
+                  </div>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-email">Email</label>
+                    <input id="misma-staff-email" className="aichat-input" type="email" maxLength={254} value={staffEmailDraft} onChange={(event) => setStaffEmailDraft(event.target.value)} placeholder="staff@example.com" autoComplete="email" required />
+                  </div>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-password">Password</label>
+                    <input id="misma-staff-password" className="aichat-input" type="password" minLength={8} maxLength={128} value={staffPasswordDraft} onChange={(event) => setStaffPasswordDraft(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" required />
+                  </div>
+                  <p className="aichat-settings-hint">Staff can view and manage Customers and Notifications only. They cannot open Recents, change settings, or edit business information.</p>
+                  {staffAccountError && <p className="aichat-profile-error" role="alert">{staffAccountError}</p>}
+                  {staffAccountMessage && <p className="aichat-settings-status" role="status">{staffAccountMessage}</p>}
+                  <button type="submit" className="aichat-action-btn" disabled={staffAccountBusy || !staffNameDraft.trim() || !staffEmailDraft.trim() || !staffPasswordDraft || !staffTitleDraft.trim()}>
+                    {staffAccountBusy ? "Creating…" : "Create staff account"}
+                  </button>
+                </form>
+              </section>
+                <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
+                  Delete account
+                </button>
                 {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
                 {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
                 {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
                 {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
-              </section>
-              <div className="aichat-settings-divider-label" id="settings-general">General</div>
-              <div className="aichat-settings-intro">
-                <span className="aichat-settings-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg></span>
-                <span><strong>Recommended business assistant profile</strong><small>Recommended defaults for a helpful, accurate, and trustworthy assistant on business websites.</small></span>
-                <span className="aichat-settings-saved">{settingsLoaded ? "Saved on this device" : "Loading settings…"}</span>
-              </div>
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/></svg></span>
-                  <span><h3>Assistant profile</h3><p>Choose the job Misma should do and the way it should communicate.</p></span>
-                </div>
-                <div className="aichat-settings-select-grid">
-                  <div className="aichat-input-group"><label htmlFor="misma-assistant-mode">Primary role</label><select id="misma-assistant-mode" className="aichat-select" value={aiSettings.assistantMode} onChange={(event) => updateAiSetting("assistantMode", event.target.value as MismaAiSettings["assistantMode"])}><option>Sales &amp; customer support</option><option>Customer support</option><option>Sales assistant</option></select></div>
-                  <div className="aichat-input-group"><label htmlFor="misma-response-tone">Response tone</label><select id="misma-response-tone" className="aichat-select" value={aiSettings.responseTone} onChange={(event) => updateAiSetting("responseTone", event.target.value as MismaAiSettings["responseTone"])}><option>Professional and friendly</option><option>Warm and conversational</option><option>Formal</option></select></div>
-                  <div className="aichat-input-group"><label htmlFor="misma-response-length">Response length</label><select id="misma-response-length" className="aichat-select" value={aiSettings.responseLength} onChange={(event) => updateAiSetting("responseLength", event.target.value as MismaAiSettings["responseLength"])}><option>Concise</option><option>Balanced</option><option>Detailed</option></select></div>
-                  <div className="aichat-input-group"><label htmlFor="misma-language-mode">Reply language</label><select id="misma-language-mode" className="aichat-select" value={aiSettings.languageMode} onChange={(event) => updateAiSetting("languageMode", event.target.value as MismaAiSettings["languageMode"])}><option>Match visitor language</option><option>Business primary language</option><option>English</option></select></div>
-                </div>
-              </section>
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2" fill="#11141a"/><circle cx="16" cy="12" r="2" fill="#11141a"/><circle cx="10" cy="19" r="2" fill="#11141a"/></svg></span>
-                  <span><h3>Knowledge and answer quality</h3><p>Keep customer answers accurate, consistent, and aligned with approved business information.</p></span>
-                </div>
-                <SettingsToggle title="Use business knowledge first" description="Prioritize approved FAQs, products, services, policies, and business information." checked={aiSettings.useBusinessKnowledge} onToggle={() => updateAiSetting("useBusinessKnowledge", !aiSettings.useBusinessKnowledge)} />
-                <SettingsToggle title="Avoid unverified promises" description="Do not invent prices, stock levels, delivery times, opening hours, or policy details." checked={aiSettings.avoidUnverifiedClaims} onToggle={() => updateAiSetting("avoidUnverifiedClaims", !aiSettings.avoidUnverifiedClaims)} />
-                <SettingsToggle title="Ask when details are missing" description="Ask a short clarifying question instead of guessing when a request is unclear." checked={aiSettings.askClarifyingQuestions} onToggle={() => updateAiSetting("askClarifyingQuestions", !aiSettings.askClarifyingQuestions)} />
-                <SettingsToggle title="Reply automatically" description="Let Misma answer incoming website questions using configured business knowledge." checked={aiSettings.autoReply} onToggle={() => updateAiSetting("autoReply", !aiSettings.autoReply)} />
-              </section>
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 4h18v13H3z"/><path d="M8 21h8M12 17v4M7 9h10M7 13h6"/></svg></span>
-                  <span><h3>Website and sales experience</h3><p>Help visitors discover your business, make decisions, and complete the next step.</p></span>
-                </div>
-                <SettingsToggle title="Show a welcome greeting" description="Start new website conversations with a brief, friendly introduction." checked={aiSettings.welcomeGreeting} onToggle={() => updateAiSetting("welcomeGreeting", !aiSettings.welcomeGreeting)} />
-                <SettingsToggle title="Qualify interested leads" description="Ask for relevant contact and requirement details when a visitor shows interest." checked={aiSettings.qualifyLeads} onToggle={() => updateAiSetting("qualifyLeads", !aiSettings.qualifyLeads)} />
-                <SettingsToggle title="Capture order details" description="Collect item, quantity, delivery, and contact details before confirming an order." checked={aiSettings.captureOrders} onToggle={() => updateAiSetting("captureOrders", !aiSettings.captureOrders)} />
-                <SettingsToggle title="Respect business hours" description="Use saved opening hours and never imply that the business is open when it is closed." checked={aiSettings.respectBusinessHours} onToggle={() => updateAiSetting("respectBusinessHours", !aiSettings.respectBusinessHours)} />
-              </section>
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg></span>
-                  <span><h3>Customer care and privacy</h3><p>Protect customers and make it easy for your team to take over when needed.</p></span>
-                </div>
-                <SettingsToggle title="Offer human handoff" description="Route complaints, sensitive issues, and requests for a real person to your team." checked={aiSettings.humanHandoff} onToggle={() => updateAiSetting("humanHandoff", !aiSettings.humanHandoff)} />
-                <SettingsToggle title="Protect sensitive information" description="Never ask customers to share passwords, full payment card details, or private account credentials." checked={aiSettings.protectSensitiveData} onToggle={() => updateAiSetting("protectSensitiveData", !aiSettings.protectSensitiveData)} />
               </section>
               <section id="settings-accent" className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
@@ -5900,8 +6214,43 @@ function Dashboard() {
                 <MicrophoneAccessPanel />
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
-                    <label htmlFor="misma-voice-choice">Read-aloud voice</label>
-                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option><option value="boy">Boy</option><option value="man">Man</option></select>
+                    <label id="misma-voice-choice-label">Read-aloud voice</label>
+                    <div className="aichat-voice-picker" onKeyDown={(event) => { if (event.key === "Escape") setVoiceMenuOpen(false); }}>
+                      <button
+                        type="button"
+                        className="aichat-voice-picker-trigger"
+                        aria-haspopup="listbox"
+                        aria-expanded={voiceMenuOpen}
+                        aria-labelledby="misma-voice-choice-label"
+                        onClick={() => setVoiceMenuOpen((open) => !open)}
+                      >
+                        <span>{selectedVoicePreset === "girl" ? "Girl" : "Woman"}</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                      </button>
+                      {voiceMenuOpen && (
+                        <div className="aichat-voice-picker-menu" role="listbox" aria-labelledby="misma-voice-choice-label">
+                          {([
+                            { value: "girl", label: "Girl", detail: "Higher-pitched voice" },
+                            { value: "woman", label: "Woman", detail: "Natural adult voice" },
+                          ] as const).map((voice) => (
+                            <button
+                              key={voice.value}
+                              type="button"
+                              role="option"
+                              aria-selected={selectedVoicePreset === voice.value}
+                              className={`aichat-voice-picker-option${selectedVoicePreset === voice.value ? " is-selected" : ""}`}
+                              onClick={() => {
+                                setSelectedVoicePreset(voice.value);
+                                setVoiceMenuOpen(false);
+                              }}
+                            >
+                              <span><strong>{voice.label}</strong><small>{voice.detail}</small></span>
+                              {selectedVoicePreset === voice.value && <span className="aichat-voice-picker-check" aria-hidden="true">✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
@@ -6217,7 +6566,7 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <button type="button" className="aichat-handoff-row" onClick={() => void selectConversation(Number(request.conversation_id))}>
+                    <button type="button" className="aichat-handoff-row" disabled={staffMode} onClick={() => void selectConversation(Number(request.conversation_id))}>
                       <span className="aichat-handoff-avatar"><HumanRequestIcon /></span>
                       <span className="aichat-handoff-copy">
                         <strong>{visitorName}</strong>
@@ -6303,29 +6652,29 @@ function Dashboard() {
           <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Website connection</h2><p>Connect a published website or register an unpublished preview/staging URL before launch. Misma provides a general HTML script, so a live production site or CMS-specific plugin is not required.</p></div><div className="aichat-card"><h3>Install the general Misma script</h3><p>Register the exact domain or preview hostname, copy its generated script from Website connections, and paste it before the closing &lt;/body&gt; tag. The widget verifies the connection when that page first loads.</p><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open Website connections</button></div></div></div>
         )}
         {activeTab === "whatsapp" && (
-          <div className="aichat-tab-view"><div className="aichat-tab-content">
-            <div className="aichat-tab-header"><h2>Connect WhatsApp</h2><p>Connect a Meta WhatsApp Business Cloud API phone number. Incoming messages and AI replies will appear in your Misma inbox.</p></div>
-            <div className="aichat-card">
-              <div className="aichat-panel-heading"><h3>WhatsApp Business Cloud API</h3><span className={`aichat-status-pill ${channelConnections.find((item) => item.channel === "whatsapp")?.status === "connected" ? "is-connected" : "is-pending"}`}>{channelConnections.find((item) => item.channel === "whatsapp")?.status || "Not configured"}</span></div>
-              <label>Meta Phone Number ID<input className="aichat-input" placeholder="Phone Number ID from WhatsApp Manager" value={whatsappPhoneNumberId || channelConnections.find((item) => item.channel === "whatsapp")?.external_id || ""} onChange={(event) => setWhatsappPhoneNumberId(event.target.value)} /></label>
-              <label>WhatsApp Business number (display only)<input className="aichat-input" placeholder="+250…" value={whatsappPhoneNumber} onChange={(event) => setWhatsappPhoneNumber(event.target.value)} /></label>
-              <div className="aichat-channel-setup">
-                <strong>1. Add these secrets in Supabase → Edge Functions → Secrets</strong>
-                <code>WHATSAPP_ACCESS_TOKEN</code><code>WHATSAPP_VERIFY_TOKEN</code><code>META_APP_SECRET</code>
-                <strong>2. Set the Meta webhook callback URL</strong>
-                <pre><code>{`${supabaseApiBase}/functions/v1/misma-widget?channel=whatsapp`}</code></pre>
-                <small>Use the same WHATSAPP_VERIFY_TOKEN value in Meta's webhook verification field. Subscribe the WhatsApp Business Account to the messages webhook field.</small>
-                <small>Keep access tokens and the Meta app secret in Supabase function secrets only. Never paste them into this dashboard or website code.</small>
+          <div className="aichat-tab-view">
+            <div className="aichat-tab-content">
+              <div className="aichat-tab-header">
+                <h2>WhatsApp</h2>
+                <p>Add a phone number and default message for each connected website.</p>
               </div>
-              {!channelEnvironment.whatsappConfigured && <p className="aichat-integration-warning">Meta webhook credentials are not detected in Supabase function secrets yet.</p>}
-              <div className="aichat-website-actions">
-                <button type="button" className="aichat-action-btn" disabled={channelBusy === "whatsapp" || !whatsappPhoneNumberId.trim()} onClick={() => void handleSaveChannel("whatsapp")}>{channelBusy === "whatsapp" ? "Saving…" : "Save WhatsApp number"}</button>
-                <button type="button" className="aichat-action-btn secondary" disabled={channelBusy === "whatsapp-test" || !channelEnvironment.whatsappConfigured} onClick={() => void handleTestChannel("whatsapp")}>{channelBusy === "whatsapp-test" ? "Verifying…" : "Verify connection"}</button>
-              </div>
+              {connectedWebsites.length === 0 ? (
+                <div className="aichat-card">
+                  <h3>No website connected</h3>
+                  <p>Connect a website first to add its WhatsApp contact details.</p>
+                  <button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open websites</button>
+                </div>
+              ) : connectedWebsites.map((site) => (
+                <WhatsAppConnectionCard
+                  key={site.id}
+                  site={site}
+                  token={token || ""}
+                  onSaved={(updatedSite) => setConnectedWebsites((items) => items.map((item) => item.id === updatedSite.id ? updatedSite : item))}
+                />
+              ))}
             </div>
-          </div></div>
+          </div>
         )}
-
         {activeTab === "notifications" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
@@ -6352,7 +6701,7 @@ function Dashboard() {
                       return (
                         <div key={item.id} className="aichat-human-request-entry">
                           <div className="aichat-human-request-list-row">
-                            {requestId > 0 && (
+                            {Number(item.id) > 0 && (
                               <div className="aichat-human-request-list-menu">
                                 <button
                                   type="button"
@@ -6367,8 +6716,8 @@ function Dashboard() {
                                 </button>
                                 {humanRequestMenuId === requestId && (
                                   <div className="aichat-chat-context-menu" role="menu" aria-label={`Options for ${visitorName}`}>
-                                    <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(requestId, visitorName)}>
-                                      {humanRequestDeletingId === requestId ? "Deleting…" : "Delete request"}
+                                    <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(request ? requestId : null, visitorName, Number(item.id))}>
+                                      {humanRequestDeletingId === requestId ? "Deleting…" : requestId > 0 ? "Delete request" : "Delete notification"}
                                     </button>
                                   </div>
                                 )}
@@ -6398,7 +6747,7 @@ function Dashboard() {
                               <div><strong>Website</strong><span>{website?.domain || website?.name || "Website visitor"}</span></div>
                               <div><strong>Requested</strong><span>{request?.created_at ? new Date(request.created_at).toLocaleString() : item.created_at ? new Date(item.created_at).toLocaleString() : "Unknown"}</span></div>
                               <div><strong>Status</strong><span>{request?.status === "handled" ? "Handled" : "Pending"}</span></div>
-                              {item.conversation_id && (
+                              {item.conversation_id && !staffMode && (
                                 <button type="button" className="aichat-action-btn secondary" onClick={() => void selectConversation(Number(item.conversation_id))}>
                                   Open conversation
                                 </button>
@@ -6412,6 +6761,40 @@ function Dashboard() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {deleteRequestTarget && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && humanRequestDeletingId === null) { setDeleteRequestTarget(null); setDeleteRequestError(""); } }}>
+            <section className="aichat-confirm-dialog aichat-request-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-request-title">
+              <h2 id="misma-delete-request-title">Delete request?</h2>
+              <p>{deleteRequestTarget.requestId !== null
+                ? "This removes the request and its notification. Chat history stays."
+                : "This notification will be permanently removed."}</p>
+              {deleteRequestError && <p className="aichat-request-delete-error" role="alert">{deleteRequestError}</p>}
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-request-confirm-button" disabled={humanRequestDeletingId !== null} onClick={() => { setDeleteRequestTarget(null); setDeleteRequestError(""); }}>Cancel</button>
+                <button type="button" className="aichat-request-confirm-button" disabled={humanRequestDeletingId !== null} onClick={() => void confirmDeleteHumanRequest()}>{humanRequestDeletingId !== null ? "…" : "OK"}</button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {accountDeleteOpen && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !accountDeleting) setAccountDeleteOpen(false); }}>
+            <section className="aichat-confirm-dialog aichat-account-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-account-title">
+              <h2 id="misma-delete-account-title">Delete account?</h2>
+              <p>This permanently deletes your Misma workspace, customer records, conversations, websites, settings and stored files.</p>
+              <label className="aichat-account-delete-confirm">
+                Type DELETE to confirm
+                <input className="aichat-input" value={accountDeleteConfirmation} onChange={(event) => setAccountDeleteConfirmation(event.target.value)} autoComplete="off" />
+              </label>
+              {accountDeleteError && <p className="aichat-request-delete-error" role="alert">{accountDeleteError}</p>}
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-request-confirm-button" disabled={accountDeleting} onClick={() => setAccountDeleteOpen(false)}>Cancel</button>
+                <button type="button" className="aichat-request-confirm-button" disabled={accountDeleting || accountDeleteConfirmation.trim() !== "DELETE"} onClick={() => void deleteOwnerAccount()}>{accountDeleting ? "Deleting…" : "OK"}</button>
+              </div>
+            </section>
           </div>
         )}
 

@@ -1,3 +1,5 @@
+import { useState, type FormEvent } from "react";
+import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 import { MismaIcon } from "../components/misma-icon";
 import { createFileRoute } from "@tanstack/react-router";
 import { LandingChatWidget } from "../components/landing-chat-widget";
@@ -69,8 +71,114 @@ function Index() {
 
       <section className="cta" id="contact"><div><p className="eyebrow">READY WHEN YOU ARE</p><h2>Put your customer conversations to work.</h2></div><a className="primary big" href="/login?mode=signup">Get started</a></section>
 
+      <FeedbackSection />
       <footer className="misma-site-footer"><div className="brand"><MismaIcon size={24} className="brand-mark-svg" /><span>Misma</span></div><span>Business AI, connected.</span><small>© {new Date().getFullYear()} Misma. All rights reserved.</small></footer>
       <LandingChatWidget />
     </main>
+  );
+}
+
+
+function FeedbackSection() {
+  const [email, setEmail] = useState("");
+  const [comment, setComment] = useState("");
+  const [websiteTrap, setWebsiteTrap] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+
+  const submitFeedback = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setStatus("");
+    const normalizedEmail = email.trim().toLowerCase();
+    const message = comment.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalizedEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (message.length < 5 || message.length > 4000) {
+      setError("Enter feedback between 5 and 4,000 characters.");
+      return;
+    }
+    if (!getSupabaseConfig()) {
+      setError("Feedback is temporarily unavailable.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { error: invokeError } = await getSupabaseClient().functions.invoke("misma-feedback", {
+        body: {
+          email: normalizedEmail,
+          comment: message,
+          website: window.location.origin,
+          websiteTrap,
+        },
+      });
+      if (invokeError) {
+        let message = invokeError.message || "Could not send feedback.";
+        const context = (invokeError as { context?: unknown }).context;
+        if (context instanceof Response) {
+          try {
+            const result = await context.clone().json() as { error?: string };
+            if (result.error) message = result.error;
+          } catch {
+            // Use the function client's fallback message.
+          }
+        }
+        throw new Error(message);
+      }
+      setEmail("");
+      setComment("");
+      setWebsiteTrap("");
+      setStatus("Feedback sent. Thank you.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not send feedback. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="misma-feedback" aria-labelledby="misma-feedback-title">
+      <div className="misma-feedback-heading">
+        <p className="eyebrow">YOUR FEEDBACK</p>
+        <h2 id="misma-feedback-title">Help improve Misma.</h2>
+      </div>
+      <form className="misma-feedback-form" onSubmit={(event) => void submitFeedback(event)}>
+        <label>
+          Email
+          <input
+            type="email"
+            autoComplete="email"
+            maxLength={254}
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          Feedback
+          <textarea
+            rows={4}
+            maxLength={4000}
+            placeholder="Share your feedback…"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            required
+          />
+        </label>
+        <div className="misma-feedback-trap" aria-hidden="true">
+          <input type="text" name="company_website" tabIndex={-1} autoComplete="off" value={websiteTrap} onChange={(event) => setWebsiteTrap(event.target.value)} />
+        </div>
+        {error && <p className="misma-feedback-error" role="alert">{error}</p>}
+        {status && <p className="misma-feedback-status" role="status">{status}</p>}
+        <button type="submit" className="misma-feedback-send" disabled={busy || !email.trim() || !comment.trim()}>
+          {busy ? "Sending…" : "Send"}
+        </button>
+      </form>
+    </section>
   );
 }
