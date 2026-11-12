@@ -654,8 +654,8 @@ test("privacy and voice preferences are persisted and used by dashboard voice/ch
   assert.match(dashboard, /selectedVoicePreset/);
   assert.match(dashboard, /<option value="girl">Girl/);
   assert.match(dashboard, /<option value="woman">Woman/);
-  assert.match(dashboard, /<option value="boy">Boy/);
-  assert.match(dashboard, /<option value="man">Man/);
+  assert.doesNotMatch(dashboard, /<option value="boy">Boy|<option value="man">Man/);
+  assert.match(dashboard, /setSelectedVoicePreset\("woman"\)/);
   assert.match(dashboard, /privacySettings: privacyPreferences/);
   assert.match(edgeFunction, /useConversationHistory = privacySettings\.useConversationHistory !== false/);
   assert.match(edgeFunction, /if \(useConversationHistory\)/);
@@ -1673,4 +1673,27 @@ test("landing page chat matches the embedded widget design and uses the branded 
   assert.ok(styles.includes("background: #f8fafc"));
   assert.match(embed, /viewBox='0 0 48 48'/);
   assert.doesNotThrow(() => new Function(embed), "the hosted widget must remain valid JavaScript");
+});
+
+
+test("Misma landing feedback, WhatsApp settings and sidebar defaults are wired", async () => {
+  const landing = await read("../src/routes/index.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+  const feedback = await read("../supabase/functions/misma-feedback/index.ts");
+  const config = await read("../supabase/config.toml");
+
+  assert.match(landing, /misma-feedback/);
+  assert.match(landing, /email: normalizedEmail/);
+  assert.match(landing, /comment: message/);
+  assert.match(dashboard, /workspace: false/);
+  assert.doesNotMatch(dashboard, /setActiveTab\("website-connect"\).*Website/);
+  assert.match(dashboard, /WhatsAppConnectionCard/);
+  assert.match(dashboard, /Default message/);
+  assert.doesNotMatch(dashboard, /<option value="boy">Boy|<option value="man">Man/);
+  assert.match(styles, /\.misma-feedback-send/);
+  assert.match(styles, /aichat-whatsapp-connect-save/);
+  assert.match(feedback, /rukundobarouk33@gmail\.com/);
+  assert.match(feedback, /gmail\.send|messages\/send/);
+  assert.match(config, /\[functions\.misma-feedback\][\s\S]*?verify_jwt = false/);
 });
