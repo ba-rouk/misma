@@ -1417,7 +1417,7 @@ test("human handoff requests can be permanently deleted from Customers and Notif
   assert.match(dashboard, /aichat-human-request-list-row/);
   assert.match(dashboard, /More options for \$\{visitorName\}/);
   assert.match(dashboard, /requestId > 0/);
-  assert.match(dashboard, /setAllNotifications\(\(items\) => items\.filter\(\(item\) => Number\(item\.human_request_id\) !== requestId\)\)/);
+  assert.match(dashboard, /setAllNotifications\(\(items\) => items\.filter\(\(item\) => Number\(item\.human_request_id\) !== target\.requestId\)\)/);
 
   assert.match(api, /export const deleteHumanRequest = createServerFn/);
   assert.match(api, /\.from\("workspace_notifications"\)[\s\S]*?\.delete\(\)/);
