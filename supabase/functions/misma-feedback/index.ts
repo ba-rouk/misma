@@ -28,11 +28,15 @@ function jsonResponse(body: Record<string, unknown>, status: number, origin: str
   });
 }
 
-function base64Url(value: string): string {
+function base64(value: string): string {
   const bytes = new TextEncoder().encode(value);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return btoa(binary);
+}
+
+function base64Url(value: string): string {
+  return base64(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function allowedEmail(value: string): boolean {
@@ -152,7 +156,7 @@ Deno.serve(async (request: Request) => {
       "Content-Type: text/plain; charset=UTF-8",
       "Content-Transfer-Encoding: base64",
       "",
-      base64Url(plainText),
+      base64(plainText),
     ].join("\r\n");
 
     const sendResponse = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
