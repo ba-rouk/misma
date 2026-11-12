@@ -15,7 +15,7 @@ export const Route = createFileRoute("/auth/confirm")({
 
 function ConfirmEmailToken() {
   const started = useRef(false);
-  const [message, setMessage] = useState("Verifying your secure email link. Please wait.");
+  const [message, setMessage] = useState("Please wait…");
 
   useEffect(() => {
     if (started.current) return;
@@ -79,13 +79,9 @@ function ConfirmEmailToken() {
   }, []);
 
   return (
-    <AuthFlowLayout
-      eyebrow="SECURE MISMA LINK"
-      title="Verifying your email."
-      description={message}
-    >
+    <AuthFlowLayout title="Verifying link">
       <p className="misma-auth-flow-status" role="status" aria-live="polite">
-        You can close this page after Misma finishes verifying your link.
+        {message}
       </p>
       <a className="misma-auth-flow-secondary" href="/login">Back to login</a>
     </AuthFlowLayout>
