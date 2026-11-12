@@ -20,7 +20,7 @@ function Index() {
           <MismaIcon size={26} className="brand-mark-svg" />
           <span>Misma</span>
         </a>
-        <div className="nav-links"><a href="#home">Home</a><a href="#product">Product</a><a href="#about">About</a><a href="#how">How it works</a><a href="#features">Features</a><a href="#contact">Contact</a></div>
+        <div className="nav-links"><a href="#home">Home</a><a href="#about">About</a><a href="#how">How it works</a><a href="#features">Features</a><a href="#contact">Contact</a></div>
         <div className="nav-actions">
           <a href="/login" className="nav-login">Log in</a>
           <a href="/login?mode=signup" className="nav-cta">Get started</a>
@@ -69,7 +69,7 @@ function Index() {
 
       <section className="cta" id="contact"><div><p className="eyebrow">READY WHEN YOU ARE</p><h2>Put your customer conversations to work.</h2></div><a className="primary big" href="/login?mode=signup">Get started</a></section>
 
-      <footer><div className="brand"><MismaIcon size={24} className="brand-mark-svg" /><span>Misma</span></div><span>Business AI, connected.</span></footer>
+      <footer className="misma-site-footer"><div className="brand"><MismaIcon size={24} className="brand-mark-svg" /><span>Misma</span></div><span>Business AI, connected.</span><small>© {new Date().getFullYear()} Misma. All rights reserved.</small></footer>
       <LandingChatWidget />
     </main>
   );
