@@ -2381,6 +2381,8 @@ function Dashboard() {
               savedAt: Date.now(),
               data: {
                 workspace: data.workspace,
+                accessMode: data.accessMode || "owner",
+                staffTitle: data.staffTitle || null,
                 conversations: data.conversations ?? [],
                 orders: data.orders ?? [],
                 knowledge: data.knowledge ?? [],
@@ -4753,6 +4755,7 @@ function Dashboard() {
         </div>
 
         {/* New Chat Button */}
+        {!staffMode && (
         <div className="aichat-newchat-wrap">
           <button
             type="button"
@@ -4778,9 +4781,23 @@ function Dashboard() {
             <span className="aichat-newchat-text">New chat</span>
           </button>
         </div>
+        )}
 
         {/* Main sidebar navigation */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
+          {staffMode ? (
+            <>
+              <button type="button" className={`aichat-nav-btn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>
+                <span className="aichat-nav-icon"><DashboardNavIcon kind="manage" /></span><span className="aichat-nav-label">Customers</span>
+              </button>
+              <button type="button" className={`aichat-nav-btn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>
+                <span className="aichat-nav-icon"><DashboardNavIcon kind="manage" /></span><span className="aichat-nav-label">Notifications</span>
+                {unreadHumanRequestNotificationCount > 0 && <span className="aichat-nav-badge">{unreadHumanRequestNotificationCount}</span>}
+              </button>
+            </>
+          ) : (
+            <>
+
           <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => setExpandedNavGroups((v) => ({ ...v, workspace: !v.workspace }))} aria-expanded={Boolean(expandedNavGroups.workspace)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="workspace" /></span><span className="aichat-nav-label">Workspace</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.workspace ? "chevron-down" : "chevron-right"} /></span>
           </button>
@@ -4812,12 +4829,15 @@ function Dashboard() {
             <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Connect</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.connect ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.connect && <div className="aichat-nav-submenu">
-            <button type="button" className={`aichat-nav-subbtn${activeTab === "phone" ? " active" : ""}`} onClick={() => { setActiveTab("phone"); setMobileMenuOpen(false); }}>Phone</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "whatsapp" ? " active" : ""}`} onClick={() => { setActiveTab("whatsapp"); setMobileMenuOpen(false); }}>WhatsApp</button>
           </div>}
-                </nav>
+                
+            </>
+          )}
+        </nav>
 
         {/* ── Chats and tasks widget (Cloud AI style) ── */}
+        {!staffMode && (
         <div className="aichat-chats-widget">
           <div className="aichat-chats-widget-header">
             <button
@@ -4921,9 +4941,24 @@ function Dashboard() {
             </div>
           )}
         </div>
+        )}
 
         {/* User Profile Card */}
         <div className="aichat-side-user">
+          {staffMode ? (
+            <div className="aichat-user-profile aichat-staff-sidebar-profile" aria-label="Staff account">
+              {profileImage ? (
+                <img className="aichat-user-avatar" src={profileImage} alt="" />
+              ) : (
+                <span className="aichat-user-avatar">{profileName[0]?.toUpperCase() ?? "S"}</span>
+              )}
+              <span className="aichat-user-info">
+                <b>{profileName}</b>
+                <small>{staffTitle || "Customer support"}</small>
+              </span>
+            </div>
+          ) : (
+            <>
           {profileMenuOpen && (
             <div className="aichat-profile-menu">
               <span>{profileEmail || "Signed in"}</span>
@@ -4962,7 +4997,7 @@ function Dashboard() {
             )}
             <span className="aichat-user-info">
               <b>{profileName}</b>
-              <small>Your business</small>
+              <small>{workspace?.name || "Your business"}</small>
             </span>
           </button>
           <button
@@ -4975,7 +5010,9 @@ function Dashboard() {
           >
             •••
           </button>
-        </div>
+            </>
+          )}
+        </div>>
       </aside>
 
       {/* ── Main Content Area ── */}
@@ -6020,7 +6057,7 @@ function Dashboard() {
         )}
 
         {/* ── View 5: AI Settings for business and website assistants ── */}
-        {activeTab === "settings" && (
+        {!staffMode && activeTab === "settings" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content aichat-settings-content">
               <div className="aichat-tab-header">
