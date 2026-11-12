@@ -50,7 +50,6 @@ declare
 begin
   foreach t in array array[
     'conversations',
-    'messages',
     'orders',
     'knowledge_entries',
     'audit_events',
