@@ -6506,7 +6506,7 @@ function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <button type="button" className="aichat-handoff-row" onClick={() => void selectConversation(Number(request.conversation_id))}>
+                    <button type="button" className="aichat-handoff-row" disabled={staffMode} onClick={() => void selectConversation(Number(request.conversation_id))}>
                       <span className="aichat-handoff-avatar"><HumanRequestIcon /></span>
                       <span className="aichat-handoff-copy">
                         <strong>{visitorName}</strong>
@@ -6687,7 +6687,7 @@ function Dashboard() {
                               <div><strong>Website</strong><span>{website?.domain || website?.name || "Website visitor"}</span></div>
                               <div><strong>Requested</strong><span>{request?.created_at ? new Date(request.created_at).toLocaleString() : item.created_at ? new Date(item.created_at).toLocaleString() : "Unknown"}</span></div>
                               <div><strong>Status</strong><span>{request?.status === "handled" ? "Handled" : "Pending"}</span></div>
-                              {item.conversation_id && (
+                              {item.conversation_id && !staffMode && (
                                 <button type="button" className="aichat-action-btn secondary" onClick={() => void selectConversation(Number(item.conversation_id))}>
                                   Open conversation
                                 </button>
