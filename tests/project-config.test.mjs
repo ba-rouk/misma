@@ -1697,3 +1697,40 @@ test("Misma landing feedback, WhatsApp settings and sidebar defaults are wired",
   assert.match(feedback, /gmail\.send|messages\/send/);
   assert.match(config, /\[functions\.misma-feedback\][\s\S]*?verify_jwt = false/);
 });
+
+
+test("restricted support staff can only access customer and notification controls", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const context = await read("../src/lib/api/workspace-context.server.ts");
+  const migration = await read("../supabase/migrations/20261112103500_misma_support_staff_access.sql");
+  const admin = await read("../supabase/functions/misma-workspace-admin/index.ts");
+  const config = await read("../supabase/config.toml");
+  const styles = await read("../src/styles.css");
+
+  assert.doesNotMatch(dashboard, /<h3>Assistant profile<\/h3>|Recommended business assistant profile/);
+  assert.doesNotMatch(dashboard, /id="settings-general"|<button[^>]*>Phone<\/button>/);
+  assert.match(dashboard, /aichat-voice-picker-menu/);
+  assert.match(dashboard, /aichat-request-delete-dialog/);
+  assert.match(dashboard, /aichat-settings-delete-account/);
+  assert.match(dashboard, /aichat-staff-access-card/);
+  assert.match(dashboard, /workspace\?\.name \|\| "Your business"/);
+  assert.match(dashboard, /handleDeleteHumanRequest\(request \? requestId : null, visitorName, Number\(item\.id\)\)/);
+
+  assert.match(context, /workspace_staff_access/);
+  assert.match(context, /allowSupportAccess = false/);
+  assert.match(context, /only access Customers and Notifications/);
+  assert.match(api, /accessMode: "support"/);
+  assert.match(api, /export const deleteWorkspaceNotification/);
+  assert.match(api, /if \(!isSupport\) \{/);
+
+  assert.match(migration, /Misma support staff blocked/);
+  assert.match(migration, /Misma owners and support can delete human requests/);
+  assert.match(migration, /Misma owners and support can delete request notifications/);
+  assert.match(migration, /guard_misma_support_updates/);
+  assert.match(admin, /auth\.admin\.createUser/);
+  assert.match(admin, /auth\.admin\.deleteUser/);
+  assert.match(config, /\[functions\.misma-workspace-admin\][\s\S]*?verify_jwt = false/);
+  assert.match(styles, /\.aichat-voice-picker-menu/);
+  assert.match(styles, /\.aichat-request-confirm-button/);
+});
