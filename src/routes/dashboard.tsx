@@ -1516,6 +1516,8 @@ function Dashboard() {
     previousDashboardTabRef.current = activeTab;
   }, [activeTab]);
 
+  const [staffMode, setStaffMode] = useState(false);
+  const [staffTitle, setStaffTitle] = useState("");
   const canGoBack = !staffMode && (activeTab !== "workspace" || dashboardTabHistory.length > 0);
   const handleDashboardBack = () => {
     const previousTab = dashboardTabHistory[dashboardTabHistory.length - 1];
@@ -1568,8 +1570,6 @@ function Dashboard() {
   const [humanRequestDeletingId, setHumanRequestDeletingId] = useState<number | null>(null);
   const [deleteRequestTarget, setDeleteRequestTarget] = useState<{ requestId: number | null; notificationId: number | null; visitorName: string } | null>(null);
   const [deleteRequestError, setDeleteRequestError] = useState("");
-  const [staffMode, setStaffMode] = useState(false);
-  const [staffTitle, setStaffTitle] = useState("");
   const [staffNameDraft, setStaffNameDraft] = useState("");
   const [staffEmailDraft, setStaffEmailDraft] = useState("");
   const [staffPasswordDraft, setStaffPasswordDraft] = useState("");
