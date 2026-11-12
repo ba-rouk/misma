@@ -356,7 +356,7 @@ export const markHumanRequestNotificationRead = createServerFn({ method: "POST" 
 export const deleteWorkspaceNotification = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth, notificationId: z.number().int().positive() }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token, undefined, true);
+    const { db, workspaceId, isSupport } = await ensureWorkspace(data.token, undefined, true);
     const { data: deleted, error } = await db.from("workspace_notifications")
       .delete()
       .eq("id", data.notificationId)
@@ -366,7 +366,9 @@ export const deleteWorkspaceNotification = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error("Could not delete this notification.");
     if (!deleted) throw new Error("Notification not found.");
-    await recordAudit(db, workspaceId, "notification.deleted", String(data.notificationId), { notificationType: "human_request" });
+    if (!isSupport) {
+      await recordAudit(db, workspaceId, "notification.deleted", String(data.notificationId), { notificationType: "human_request" });
+    }
     return { ok: true, notificationId: Number(deleted.id) };
   });
 
