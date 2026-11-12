@@ -918,7 +918,7 @@ export const updateHumanRequestStatus = createServerFn({ method: "POST" })
     status: z.enum(["pending", "handled"]),
   }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token, undefined, true);
+    const { db, workspaceId, isSupport } = await ensureWorkspace(data.token, undefined, true);
     const { data: request, error } = await db.from("human_requests")
       .update({
         status: data.status,
@@ -929,12 +929,14 @@ export const updateHumanRequestStatus = createServerFn({ method: "POST" })
       .select("id,conversation_id,status,handled_at")
       .single();
     const saved = check(request, error);
-    if (data.status === "handled") {
-      await db.from("conversations").update({ status: "AI", updated_at: new Date().toISOString() })
-        .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
-    } else {
-      await db.from("conversations").update({ status: "Needs you", updated_at: new Date().toISOString() })
-        .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
+    if (!isSupport) {
+      if (data.status === "handled") {
+        await db.from("conversations").update({ status: "AI", updated_at: new Date().toISOString() })
+          .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
+      } else {
+        await db.from("conversations").update({ status: "Needs you", updated_at: new Date().toISOString() })
+          .eq("id", saved.conversation_id).eq("workspace_id", workspaceId);
+      }
     }
     return { request: saved };
   });
