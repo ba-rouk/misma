@@ -4614,10 +4614,10 @@ function Dashboard() {
             <button type="button" className={`aichat-nav-subbtn${activeTab === "website-statistics" ? " active" : ""}`} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "websites" ? " active" : ""}`} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{connectedWebsites.length}</span></button>
           </div>}
-          <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }}>
+          <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="images" /></span><span className="aichat-nav-label">Images</span>
           </button>
-          <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }}>
+          <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="library" /></span><span className="aichat-nav-label">Library</span>
           </button>
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)}>
