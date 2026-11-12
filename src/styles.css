@@ -9135,3 +9135,83 @@ html, body, #app-root {
   .misma-auth-flow-button { transition: none; }
   .misma-auth-flow-button:hover:not(:disabled) { transform: none; }
 }
+
+
+/* Mobile auth: keep the Misma mark, remove the large promotional copy. */
+@media (max-width: 900px) {
+  .auth-page .login-promo {
+    min-height: 76px;
+    padding: 76px 8vw 0;
+  }
+  .auth-page .login-promo-copy,
+  .auth-page .login-orbit {
+    display: none !important;
+  }
+  .auth-page .login-brand {
+    top: 22px;
+    left: 8vw;
+  }
+  .auth-page .login-panel {
+    min-height: auto;
+    padding: 22px 8vw 48px;
+  }
+}
+
+/* Sidebar recent titles use the same compact type size as the main nav. */
+.aichat-chats-widget-item-text {
+  font-size: var(--text-button) !important;
+  font-weight: var(--weight-medium) !important;
+}
+
+/* Keep Images and Library labels/icons bright white in the sidebar. */
+.aichat-side .aichat-nav-btn[data-tooltip="Images"],
+.aichat-side .aichat-nav-btn[data-tooltip="Library"],
+.aichat-side .aichat-nav-btn[data-tooltip="Images"] .aichat-nav-icon,
+.aichat-side .aichat-nav-btn[data-tooltip="Library"] .aichat-nav-icon,
+.aichat-side .aichat-nav-btn[data-tooltip="Images"] .aichat-nav-label,
+.aichat-side .aichat-nav-btn[data-tooltip="Library"] .aichat-nav-label {
+  color: #ffffff !important;
+}
+
+/* Settings section labels and icons have clear white contrast. */
+.aichat-settings-content > .aichat-tab-header h2,
+.aichat-settings-content .aichat-settings-nav-button,
+.aichat-settings-content .aichat-settings-nav-button > span:last-child,
+.aichat-settings-content .aichat-settings-nav-icon,
+.aichat-settings-content .aichat-settings-profile-head h3,
+.aichat-settings-content .aichat-settings-section-heading h3,
+.aichat-settings-content .aichat-settings-section-icon,
+.aichat-settings-content .aichat-settings-intro-icon,
+.aichat-settings-content .aichat-settings-intro strong {
+  color: #ffffff !important;
+}
+.aichat-settings-content .aichat-settings-nav-button:hover {
+  background: #252a32 !important;
+  color: #ffffff !important;
+}
+.aichat-settings-content .aichat-settings-nav-icon svg,
+.aichat-settings-content .aichat-settings-section-icon svg,
+.aichat-settings-content .aichat-settings-intro-icon svg {
+  color: #ffffff !important;
+}
+
+/* Settings actions match the white-grey buttons used on Misma auth pages. */
+.aichat-settings-content .aichat-action-btn,
+.aichat-settings-content .aichat-action-btn.secondary,
+.aichat-settings-content .aichat-settings-logout-button {
+  border: 1px solid #e2e6eb !important;
+  background: linear-gradient(110deg, #f3f5f7, #b9c3cf) !important;
+  color: #101820 !important;
+  box-shadow: none !important;
+}
+.aichat-settings-content .aichat-action-btn:hover:not(:disabled),
+.aichat-settings-content .aichat-settings-logout-button:hover:not(:disabled) {
+  background: linear-gradient(110deg, #ffffff, #c8d0da) !important;
+  color: #101820 !important;
+  filter: brightness(1.02);
+}
+.aichat-settings-content .aichat-action-btn:disabled,
+.aichat-settings-content .aichat-settings-logout-button:disabled {
+  opacity: .58;
+  cursor: wait;
+}
