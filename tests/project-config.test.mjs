@@ -205,6 +205,12 @@ test("landing Get started opens the complete account creation form", async () =>
   assert.match(landing, /href="\/login" className="nav-login"/);
   assert.match(login, /const \[signup, setSignup\] = useState\(false\)/);
   assert.match(login, /name="username"|autoComplete="username"/);
+  assert.match(login, /MismaIcon size=\\{32\\}/);
+  const styles = await read("../src/styles.css");
+  assert.match(styles, /\\.auth-page \\.login-promo-copy,[\\s\\S]*?display: none !important/);
+  assert.match(styles, /\\.aichat-chats-widget-item-text[\\s\\S]*?font-size: var\\(--text-button\\)/);
+  assert.match(styles, /data-tooltip="Images"[\\s\\S]*?color: #ffffff !important/);
+  assert.match(styles, /\\.aichat-settings-content \\.aichat-action-btn\\.secondary/);
   assert.match(login, /fullName/);
   assert.match(login, /confirmPassword/);
   assert.match(login, /password !== confirmPassword/);
