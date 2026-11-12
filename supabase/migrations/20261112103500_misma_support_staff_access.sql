@@ -14,6 +14,7 @@ create table if not exists public.workspace_staff_access (
 alter table public.workspace_staff_access enable row level security;
 revoke all on public.workspace_staff_access from anon;
 grant select on public.workspace_staff_access to authenticated;
+grant all on public.workspace_staff_access to service_role;
 
 drop policy if exists "Misma staff can read own access marker" on public.workspace_staff_access;
 create policy "Misma staff can read own access marker"
@@ -106,6 +107,25 @@ drop policy if exists "Misma support staff cannot insert notifications" on publi
 create policy "Misma support staff cannot insert notifications"
   on public.workspace_notifications as restrictive for insert to authenticated
   with check (not public.is_misma_support_member(workspace_id));
+
+-- The inbox removal endpoints rely on DELETE permissions. Keep these limited to
+-- workspace owners/admins and designated support users, and to human-request rows.
+drop policy if exists "Misma owners and support can delete human requests" on public.human_requests;
+create policy "Misma owners and support can delete human requests"
+  on public.human_requests
+  for delete
+  to authenticated
+  using (can_manage_workspace(workspace_id) or public.is_misma_support_member(workspace_id));
+
+drop policy if exists "Misma owners and support can delete request notifications" on public.workspace_notifications;
+create policy "Misma owners and support can delete request notifications"
+  on public.workspace_notifications
+  for delete
+  to authenticated
+  using (
+    notification_type = 'human_request'
+    and (can_manage_workspace(workspace_id) or public.is_misma_support_member(workspace_id))
+  );
 
 create or replace function public.guard_misma_support_updates()
 returns trigger
