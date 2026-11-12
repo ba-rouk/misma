@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.misma-widget]
 verify_jwt = false
+
+[functions.misma-feedback]
+verify_jwt = false
