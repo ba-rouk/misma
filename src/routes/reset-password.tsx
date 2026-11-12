@@ -276,11 +276,7 @@ function ResetPassword() {
 
   if (pageState === "checking") {
     return (
-      <AuthFlowLayout
-        eyebrow="SECURE ACCOUNT ACCESS"
-        title="Checking your reset link."
-        description="Misma is verifying your password-reset session before showing the form."
-      >
+      <AuthFlowLayout title="Verifying reset link">
         <p className="misma-auth-flow-status" role="status" aria-live="polite">
           Please wait…
         </p>
@@ -290,16 +286,9 @@ function ResetPassword() {
 
   if (pageState === "invalid") {
     return (
-      <AuthFlowLayout
-        eyebrow="PASSWORD RESET"
-        title="This reset link can't be used."
-        description="The link may have expired, already been used, or could not be verified."
-      >
+      <AuthFlowLayout title="Reset link unavailable">
         <p className="misma-auth-flow-error" role="alert">
           {pageMessage || "Request a new reset email and open the newest link."}
-        </p>
-        <p className="misma-auth-flow-hint">
-          Request a new password-reset email from the Misma login page, then open the newest link.
         </p>
         <a className="misma-auth-flow-button" href="/login">
           Back to login
@@ -310,11 +299,7 @@ function ResetPassword() {
 
   if (pageState === "updated") {
     return (
-      <AuthFlowLayout
-        eyebrow="PASSWORD RESET"
-        title="Password updated."
-        description="Your Misma password has been changed successfully. You can now log in with your new password."
-      >
+      <AuthFlowLayout title="Password updated">
         <button
           className="misma-auth-flow-button"
           type="button"
@@ -328,11 +313,7 @@ function ResetPassword() {
   }
 
   return (
-    <AuthFlowLayout
-      eyebrow="PASSWORD RESET"
-      title="Choose a new password."
-      description="Create a new password for your Misma account. Use at least 8 characters."
-    >
+    <AuthFlowLayout title="Set a new password">
       <form className="misma-auth-flow-form" onSubmit={(event) => void submit(event)} noValidate>
         <label className="misma-auth-flow-field">
           New password
@@ -343,7 +324,7 @@ function ResetPassword() {
               value={password}
               minLength={8}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="At least 8 characters"
+              placeholder="New password"
               aria-describedby={formError ? "misma-reset-error" : undefined}
               required
             />
@@ -362,7 +343,7 @@ function ResetPassword() {
               value={confirmPassword}
               minLength={8}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="Enter the new password again"
+              placeholder="Confirm password"
               aria-describedby={formError ? "misma-reset-error" : undefined}
               required
             />
