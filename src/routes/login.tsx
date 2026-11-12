@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { MismaIcon } from "../components/misma-icon";
 import { useEffect, useState } from "react";
 import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 
@@ -34,7 +35,7 @@ function consumePostLoginDestination(): string {
 export const Route = createFileRoute("/login")({ component: Login });
 
 function Login() {
-  const [signup, setSignup] = useState(true);
+  const [signup, setSignup] = useState(false);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -208,13 +209,8 @@ function Login() {
     <main className="auth-page">
       <section className="login-promo">
         <a href="/" className="login-brand">
-          <span className="login-brand-icon">
-            <svg width="22" height="22" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-              <circle cx="50" cy="50" r="50" fill="white" fillOpacity="0.12"/>
-              <polyline points="16,52 28,64 46,40" stroke="white" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
-              <polyline points="32,52 44,64 62,40" stroke="white" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </span>Misma
+          <MismaIcon size={32} className="login-brand-icon" />
+          <span>Misma</span>
         </a>
         <div className="login-orbit" aria-hidden="true">
           <span>✦</span>
