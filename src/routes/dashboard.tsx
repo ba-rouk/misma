@@ -31,6 +31,8 @@ import {
   createProductService,
   updateHumanRequestStatus,
   deleteHumanRequest,
+  deleteWorkspaceNotification,
+  saveWorkspaceName,
   updateProductServiceStatus,
   createWorkspaceLibraryFile,
   deleteWorkspaceLibraryFile,
@@ -1513,7 +1515,7 @@ function Dashboard() {
     previousDashboardTabRef.current = activeTab;
   }, [activeTab]);
 
-  const canGoBack = activeTab !== "workspace" || dashboardTabHistory.length > 0;
+  const canGoBack = !staffMode && (activeTab !== "workspace" || dashboardTabHistory.length > 0);
   const handleDashboardBack = () => {
     const previousTab = dashboardTabHistory[dashboardTabHistory.length - 1];
     if (previousTab) {
@@ -1563,6 +1565,24 @@ function Dashboard() {
   const [selectedHumanRequestNotificationId, setSelectedHumanRequestNotificationId] = useState<number | null>(null);
   const [humanRequestMenuId, setHumanRequestMenuId] = useState<number | null>(null);
   const [humanRequestDeletingId, setHumanRequestDeletingId] = useState<number | null>(null);
+  const [deleteRequestTarget, setDeleteRequestTarget] = useState<{ requestId: number | null; notificationId: number | null; visitorName: string } | null>(null);
+  const [deleteRequestError, setDeleteRequestError] = useState("");
+  const [staffMode, setStaffMode] = useState(false);
+  const [staffTitle, setStaffTitle] = useState("");
+  const [staffNameDraft, setStaffNameDraft] = useState("");
+  const [staffEmailDraft, setStaffEmailDraft] = useState("");
+  const [staffPasswordDraft, setStaffPasswordDraft] = useState("");
+  const [staffAccountBusy, setStaffAccountBusy] = useState(false);
+  const [staffAccountMessage, setStaffAccountMessage] = useState("");
+  const [staffAccountError, setStaffAccountError] = useState("");
+  const [accountDeleteOpen, setAccountDeleteOpen] = useState(false);
+  const [accountDeleteConfirmation, setAccountDeleteConfirmation] = useState("");
+  const [accountDeleting, setAccountDeleting] = useState(false);
+  const [accountDeleteError, setAccountDeleteError] = useState("");
+  const [businessNameDraft, setBusinessNameDraft] = useState("");
+  const [businessNameSaving, setBusinessNameSaving] = useState(false);
+  const [businessNameSaved, setBusinessNameSaved] = useState(false);
+  const [businessNameError, setBusinessNameError] = useState("");
   const [productsServices, setProductsServices] = useState<any[]>([]);
   const [channelConnections, setChannelConnections] = useState<any[]>([]);
   const [channelEnvironment, setChannelEnvironment] = useState({ whatsappConfigured: false, phoneConfigured: false });
@@ -2251,20 +2271,35 @@ function Dashboard() {
   }, [dashboardDataLoaded, unreadVisitorMessages, notificationPreferences.chatActivity]);
 
   const applyDashboardData = (data: any, refreshChannelStatus = true) => {
+    const supportMode = data.accessMode === "support";
+    setStaffMode(supportMode);
+    setStaffTitle(supportMode ? String(data.staffTitle || "Customer support") : "");
     setWorkspace(data.workspace);
-    setConversations(data.conversations ?? []);
-    setUnreadVisitorMessages(data.unreadVisitorMessages ?? []);
-    setUnreadVisitorCount(data.unreadVisitorCount ?? 0);
-    setOrders(data.orders ?? []);
-    setKnowledgeList(data.knowledge ?? []);
+    setBusinessNameDraft(String(data.workspace?.name || ""));
+    setConversations(supportMode ? [] : data.conversations ?? []);
+    setUnreadVisitorMessages(supportMode ? [] : data.unreadVisitorMessages ?? []);
+    setUnreadVisitorCount(supportMode ? 0 : data.unreadVisitorCount ?? 0);
+    setOrders(supportMode ? [] : data.orders ?? []);
+    setKnowledgeList(supportMode ? [] : data.knowledge ?? []);
     setCustomers(data.customers ?? []);
-    setConnectedWebsites(data.websites ?? []);
+    setConnectedWebsites(supportMode ? [] : data.websites ?? []);
     setHumanHandoffs(data.handoffs ?? []);
     setAllNotifications(data.notifications ?? []);
-    setProductsServices(data.products ?? []);
-    setChannelConnections(data.channelConnections ?? []);
+    setProductsServices(supportMode ? [] : data.products ?? []);
+    setChannelConnections(supportMode ? [] : data.channelConnections ?? []);
+    if (supportMode) {
+      activeConversationIdRef.current = null;
+      setCurrentConversationId(null);
+      setPendingRestoreConversationId(null);
+      setMessages([]);
+      setWorkspaceAssets([]);
+      setWorkspaceAssetsLoaded(false);
+      setActiveTab("customers");
+      setChatActionMenuId(null);
+      setProfileMenuOpen(false);
+    }
 
-    if (refreshChannelStatus && data.workspace?.id) {
+    if (refreshChannelStatus && !supportMode && data.workspace?.id) {
       void callWidgetFunction({ action: "connection-status", workspaceId: data.workspace.id })
         .then((status) => setChannelEnvironment({
           whatsappConfigured: Boolean(status.whatsappConfigured),
@@ -2561,7 +2596,7 @@ function Dashboard() {
     convId: number,
     options: { activateWorkspace?: boolean; isRestore?: boolean } = {},
   ) => {
-    if (!token) return;
+    if (!token || staffMode) return;
     if (!options.isRestore) setPendingRestoreConversationId(null);
     chatViewVersionRef.current += 1;
     const conversationLoadVersion = chatViewVersionRef.current;
@@ -4472,34 +4507,50 @@ function Dashboard() {
     };
   }, [token, dashboardDataLoaded, workspace?.id, currentConversationId, isHumanHandoffConversation, activeConversation?.channel, activeTab, messages]);
 
-  const handleDeleteHumanRequest = async (requestId: number, visitorName: string) => {
-    if (!token || !Number.isSafeInteger(requestId) || requestId <= 0 || humanRequestDeletingId !== null) return;
-    const confirmed = window.confirm(
-      "Permanently delete the human assistance request from " + visitorName +
-      "? The request and its notification will be deleted permanently. The conversation history and messages will remain."
-    );
-    if (!confirmed) {
-      setHumanRequestMenuId(null);
-      return;
-    }
+  const handleDeleteHumanRequest = (
+    requestId: number | null,
+    visitorName: string,
+    notificationId: number | null = null,
+  ) => {
+    if (!token || humanRequestDeletingId !== null) return;
+    if (requestId !== null && (!Number.isSafeInteger(requestId) || requestId <= 0)) return;
+    if (notificationId !== null && (!Number.isSafeInteger(notificationId) || notificationId <= 0)) return;
+    if (requestId === null && notificationId === null) return;
+    setDeleteRequestError("");
+    setDeleteRequestTarget({ requestId, notificationId, visitorName });
+    setHumanRequestMenuId(null);
+  };
 
-    setHumanRequestDeletingId(requestId);
+  const confirmDeleteHumanRequest = async () => {
+    const target = deleteRequestTarget;
+    if (!token || !target || humanRequestDeletingId !== null) return;
+    const busyId = target.requestId ?? -target.notificationId!;
+    setHumanRequestDeletingId(busyId);
+    setDeleteRequestError("");
     try {
-      await deleteHumanRequest({ data: { token, requestId } });
-      const relatedNotificationIds = allNotifications
-        .filter((item) => Number(item.human_request_id) === requestId)
-        .map((item) => Number(item.id));
-      setHumanHandoffs((items) => items.filter((item) => Number(item.id) !== requestId));
-      setAllNotifications((items) => items.filter((item) => Number(item.human_request_id) !== requestId));
-      setSelectedHumanRequestNotificationId((current) =>
-        current !== null && relatedNotificationIds.includes(current) ? null : current
-      );
-      setHumanRequestMenuId((current) => current === requestId ? null : current);
+      if (target.requestId !== null) {
+        await deleteHumanRequest({ data: { token, requestId: target.requestId } });
+        const relatedNotificationIds = allNotifications
+          .filter((item) => Number(item.human_request_id) === target.requestId)
+          .map((item) => Number(item.id));
+        setHumanHandoffs((items) => items.filter((item) => Number(item.id) !== target.requestId));
+        setAllNotifications((items) => items.filter((item) => Number(item.human_request_id) !== target.requestId));
+        setSelectedHumanRequestNotificationId((current) =>
+          current !== null && relatedNotificationIds.includes(current) ? null : current
+        );
+        setHumanRequestMenuId((current) => current === target.requestId ? null : current);
+      } else if (target.notificationId !== null) {
+        await deleteWorkspaceNotification({ data: { token, notificationId: target.notificationId } });
+        setAllNotifications((items) => items.filter((item) => Number(item.id) !== target.notificationId));
+        setSelectedHumanRequestNotificationId((current) => current === target.notificationId ? null : current);
+        setHumanRequestMenuId(null);
+      }
+      setDeleteRequestTarget(null);
       loadData();
     } catch (cause) {
-      alert(cause instanceof Error ? cause.message : "Could not permanently delete this human request.");
+      setDeleteRequestError(cause instanceof Error ? cause.message : "Could not delete this request.");
     } finally {
-      setHumanRequestDeletingId((current) => current === requestId ? null : current);
+      setHumanRequestDeletingId(null);
     }
   };
 
