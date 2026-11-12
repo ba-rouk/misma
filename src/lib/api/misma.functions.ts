@@ -45,7 +45,32 @@ async function recordAudit(
 export const getMismaData = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId, isSupport, staffTitle } = await ensureWorkspace(data.token, undefined, true);
+    if (isSupport) {
+      const [workspaceResult, customersResult, handoffsResult, notificationsResult] = await Promise.all([
+        db.from("workspaces").select("id,name").eq("id", workspaceId).single(),
+        db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
+        db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at").eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
+      ]);
+      return {
+        workspace: check(workspaceResult.data, workspaceResult.error),
+        conversations: [],
+        orders: [],
+        knowledge: [],
+        customers: check(customersResult.data, customersResult.error),
+        assets: [],
+        unreadVisitorMessages: [],
+        unreadVisitorCount: 0,
+        websites: [],
+        handoffs: check(handoffsResult.data, handoffsResult.error),
+        notifications: check(notificationsResult.data, notificationsResult.error),
+        products: [],
+        channelConnections: [],
+        accessMode: "support",
+        staffTitle,
+      };
+    }
     const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
@@ -141,6 +166,8 @@ export const getMismaData = createServerFn({ method: "POST" })
     return {
       workspace, conversations, orders, knowledge, customers, assets: [],
       unreadVisitorMessages, unreadVisitorCount, websites, handoffs, notifications, products, channelConnections,
+      accessMode: "owner" as const,
+      staffTitle: null,
     };
   });
 
@@ -261,7 +288,27 @@ export const getWorkspaceAssets = createServerFn({ method: "POST" })
 export const getWorkspaceLiveUpdates = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId, isSupport, staffTitle } = await ensureWorkspace(data.token, undefined, true);
+    if (isSupport) {
+      const [handoffsResult, notificationsResult, customersResult] = await Promise.all([
+        db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,contacts(name,email,phone)")
+          .eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+        db.from("workspace_notifications").select("id,notification_type,title,body,conversation_id,contact_id,human_request_id,website_connection_id,is_read,created_at")
+          .eq("workspace_id", workspaceId).eq("notification_type", "human_request").order("created_at", { ascending: false }).limit(200),
+        db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction")
+          .eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
+      ]);
+      return {
+        websites: [],
+        handoffs: check(handoffsResult.data, handoffsResult.error),
+        notifications: check(notificationsResult.data, notificationsResult.error),
+        customers: check(customersResult.data, customersResult.error),
+        conversations: [],
+        channelConnections: [],
+        accessMode: "support" as const,
+        staffTitle,
+      };
+    }
     const [websitesResult, handoffsResult, notificationsResult, customersResult, conversationsResult, channelsResult] =
       await Promise.all([
         db.from("website_connections").select("id,name,website_url,domain,public_key,status,last_seen_at,last_scanned_at,created_at")
@@ -284,13 +331,15 @@ export const getWorkspaceLiveUpdates = createServerFn({ method: "POST" })
       customers: check(customersResult.data, customersResult.error),
       conversations: check(conversationsResult.data, conversationsResult.error),
       channelConnections: check(channelsResult.data, channelsResult.error),
+      accessMode: "owner" as const,
+      staffTitle: null,
     };
   });
 
 export const markHumanRequestNotificationRead = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth, notificationId: z.number().int().positive() }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId } = await ensureWorkspace(data.token, undefined, true);
     const { data: notification, error } = await db.from("workspace_notifications")
       .update({ is_read: true })
       .eq("id", data.notificationId)
@@ -302,10 +351,30 @@ export const markHumanRequestNotificationRead = createServerFn({ method: "POST" 
     return { ok: true, notificationId: Number(saved.id) };
   });
 
+
+
+export const deleteWorkspaceNotification = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, notificationId: z.number().int().positive() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token, undefined, true);
+    const { data: deleted, error } = await db.from("workspace_notifications")
+      .delete()
+      .eq("id", data.notificationId)
+      .eq("workspace_id", workspaceId)
+      .eq("notification_type", "human_request")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error("Could not delete this notification.");
+    if (!deleted) throw new Error("Notification not found.");
+    await recordAudit(db, workspaceId, "notification.deleted", String(data.notificationId), { notificationType: "human_request" });
+    return { ok: true, notificationId: Number(deleted.id) };
+  });
+
 export const getVisitorNotifications = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId, isSupport } = await ensureWorkspace(data.token, undefined, true);
+    if (isSupport) return { unreadVisitorMessages: [], unreadVisitorCount: 0 };
     const { data: conversations, error: conversationsError } = await db.from("conversations")
       .select("id,channel,latest_text")
       .eq("workspace_id", workspaceId)
@@ -438,6 +507,22 @@ export const takeoverConversation = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+
+
+export const saveWorkspaceName = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, name: z.string().trim().min(2).max(120) }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const name = data.name.trim();
+    const { data: workspace, error } = await db.from("workspaces")
+      .update({ name, updated_at: new Date().toISOString() })
+      .eq("id", workspaceId)
+      .select("id,name")
+      .single();
+    const saved = check(workspace, error);
+    await recordAudit(db, workspaceId, "workspace.name_updated", undefined, { name });
+    return { workspace: saved };
+  });
 export const saveWorkspaceProfile = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth, name: z.string().trim().min(2).max(120), location: z.string().trim().min(2).max(180), description: z.string().trim().min(2).max(2000), openingHours: z.string().trim().min(2).max(120), primaryLanguage: z.enum(["English", "Kinyarwanda", "French", "Swahili"]) }))
   .handler(async ({ data }) => {
@@ -831,7 +916,7 @@ export const updateHumanRequestStatus = createServerFn({ method: "POST" })
     status: z.enum(["pending", "handled"]),
   }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId } = await ensureWorkspace(data.token, undefined, true);
     const { data: request, error } = await db.from("human_requests")
       .update({
         status: data.status,
@@ -855,7 +940,7 @@ export const updateHumanRequestStatus = createServerFn({ method: "POST" })
 export const deleteHumanRequest = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth, requestId: z.number().int().positive() }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId } = await ensureWorkspace(data.token, undefined, true);
     const { data: request, error: requestError } = await db.from("human_requests")
       .select("id,conversation_id")
       .eq("id", data.requestId)
