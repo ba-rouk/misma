@@ -193,11 +193,7 @@ function EmailConfirmed() {
 
   if (pageState === "checking") {
     return (
-      <AuthFlowLayout
-        eyebrow="MISMA ACCOUNT"
-        title="Verifying your email."
-        description="Misma is checking the confirmation link before marking your email as verified."
-      >
+      <AuthFlowLayout title="Verifying email">
         <p className="misma-auth-flow-status" role="status" aria-live="polite">Please wait…</p>
       </AuthFlowLayout>
     );
@@ -205,11 +201,7 @@ function EmailConfirmed() {
 
   if (pageState === "confirmed") {
     return (
-      <AuthFlowLayout
-        eyebrow="EMAIL CONFIRMED"
-        title="Email confirmed."
-        description="Your email address is verified. You can now log in to Misma."
-      >
+      <AuthFlowLayout title="Email confirmed">
         <button className="misma-auth-flow-button" type="button" onClick={() => void goToLogin()} disabled={actionBusy}>
           {actionBusy ? "Signing out…" : "Continue to login"}
         </button>
@@ -219,29 +211,17 @@ function EmailConfirmed() {
 
   if (pageState === "neutral") {
     return (
-      <AuthFlowLayout
-        eyebrow="MISMA ACCOUNT"
-        title="Check your inbox."
-        description="When you create a Misma account, we send a confirmation email with a secure link. Open that link to verify your email address."
-      >
+      <AuthFlowLayout title="Check your inbox">
         <a className="misma-auth-flow-button" href="/login">Go to login</a>
       </AuthFlowLayout>
     );
   }
 
   return (
-    <AuthFlowLayout
-      eyebrow="EMAIL CONFIRMATION"
-      title="This confirmation link can't be used."
-      description="The link may have expired, already been used, or could not be verified."
-    >
+    <AuthFlowLayout title="Confirmation failed">
       <p className="misma-auth-flow-error" role="alert">
         {pageMessage || "Request a new confirmation email and open the newest link."}
       </p>
-      <p className="misma-auth-flow-hint">
-        Enter the address you used to sign up. We will send a new confirmation link when an unconfirmed account exists.
-      </p>
-
       <form className="misma-auth-flow-form" onSubmit={(event) => void resendConfirmation(event)}>
         <label className="misma-auth-flow-field" htmlFor="misma-confirm-email">
           Email address
