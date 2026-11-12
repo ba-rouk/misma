@@ -6677,7 +6677,7 @@ function Dashboard() {
                       return (
                         <div key={item.id} className="aichat-human-request-entry">
                           <div className="aichat-human-request-list-row">
-                            {requestId > 0 && (
+                            {Number(item.id) > 0 && (
                               <div className="aichat-human-request-list-menu">
                                 <button
                                   type="button"
@@ -6692,8 +6692,8 @@ function Dashboard() {
                                 </button>
                                 {humanRequestMenuId === requestId && (
                                   <div className="aichat-chat-context-menu" role="menu" aria-label={`Options for ${visitorName}`}>
-                                    <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(requestId, visitorName)}>
-                                      {humanRequestDeletingId === requestId ? "Deleting…" : "Delete request"}
+                                    <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(requestId > 0 ? requestId : null, visitorName, Number(item.id))}>
+                                      {humanRequestDeletingId === requestId ? "Deleting…" : requestId > 0 ? "Delete request" : "Delete notification"}
                                     </button>
                                   </div>
                                 )}
@@ -6737,6 +6737,40 @@ function Dashboard() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {deleteRequestTarget && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && humanRequestDeletingId === null) { setDeleteRequestTarget(null); setDeleteRequestError(""); } }}>
+            <section className="aichat-confirm-dialog aichat-request-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-request-title">
+              <h2 id="misma-delete-request-title">Delete request?</h2>
+              <p>{deleteRequestTarget.requestId !== null
+                ? "This removes the request and its notification. Chat history stays."
+                : "This notification will be permanently removed."}</p>
+              {deleteRequestError && <p className="aichat-request-delete-error" role="alert">{deleteRequestError}</p>}
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-request-confirm-button" disabled={humanRequestDeletingId !== null} onClick={() => { setDeleteRequestTarget(null); setDeleteRequestError(""); }}>Cancel</button>
+                <button type="button" className="aichat-request-confirm-button" disabled={humanRequestDeletingId !== null} onClick={() => void confirmDeleteHumanRequest()}>{humanRequestDeletingId !== null ? "…" : "OK"}</button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {accountDeleteOpen && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !accountDeleting) setAccountDeleteOpen(false); }}>
+            <section className="aichat-confirm-dialog aichat-account-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-account-title">
+              <h2 id="misma-delete-account-title">Delete account?</h2>
+              <p>This permanently deletes your Misma workspace, customer records, conversations, websites, settings and stored files.</p>
+              <label className="aichat-account-delete-confirm">
+                Type DELETE to confirm
+                <input className="aichat-input" value={accountDeleteConfirmation} onChange={(event) => setAccountDeleteConfirmation(event.target.value)} autoComplete="off" />
+              </label>
+              {accountDeleteError && <p className="aichat-request-delete-error" role="alert">{accountDeleteError}</p>}
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-request-confirm-button" disabled={accountDeleting} onClick={() => setAccountDeleteOpen(false)}>Cancel</button>
+                <button type="button" className="aichat-request-confirm-button" disabled={accountDeleting || accountDeleteConfirmation.trim() !== "DELETE"} onClick={() => void deleteOwnerAccount()}>{accountDeleting ? "Deleting…" : "OK"}</button>
+              </div>
+            </section>
           </div>
         )}
 
