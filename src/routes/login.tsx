@@ -209,8 +209,7 @@ function Login() {
     <main className="auth-page">
       <section className="login-promo">
         <a href="/" className="login-brand">
-          <MismaIcon size={32} className="login-brand-icon" />
-          <span>Misma</span>
+          <MismaIcon size={32} className="login-brand-icon" />Misma
         </a>
         <div className="login-orbit" aria-hidden="true">
           <span>✦</span>
