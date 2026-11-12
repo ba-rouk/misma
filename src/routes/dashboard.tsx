@@ -1627,6 +1627,7 @@ function Dashboard() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
+  const [staffTitleDraft, setStaffTitleDraft] = useState("");
   const [profileAvatarFile, setProfileAvatarFile] = useState<File | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -2997,6 +2998,128 @@ function Dashboard() {
       setProfileError(cause instanceof Error ? cause.message : "Could not save your profile.");
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const saveBusinessName = async () => {
+    const name = businessNameDraft.trim();
+    if (!token || businessNameSaving) return;
+    if (name.length < 2 || name.length > 120) {
+      setBusinessNameError("Enter a business name between 2 and 120 characters.");
+      return;
+    }
+    setBusinessNameSaving(true);
+    setBusinessNameError("");
+    setBusinessNameSaved(false);
+    try {
+      const result = await saveWorkspaceName({ data: { token, name } });
+      setWorkspace((current: any) => current ? { ...current, ...result.workspace } : current);
+      setBusinessNameDraft(result.workspace.name);
+      setBusinessNameSaved(true);
+      window.setTimeout(() => setBusinessNameSaved(false), 3000);
+    } catch (cause) {
+      setBusinessNameError(cause instanceof Error ? cause.message : "Could not update the business name.");
+    } finally {
+      setBusinessNameSaving(false);
+    }
+  };
+
+  const createSupportAccount = async () => {
+    if (!token || !workspace?.id || staffAccountBusy) return;
+    setStaffAccountError("");
+    setStaffAccountMessage("");
+    const name = staffNameDraft.trim();
+    const title = staffTitleDraft.trim();
+    const email = staffEmailDraft.trim().toLowerCase();
+    if (name.length < 2 || name.length > 80) {
+      setStaffAccountError("Enter a staff name between 2 and 80 characters.");
+      return;
+    }
+    if (title.length < 2 || title.length > 60) {
+      setStaffAccountError("Enter a role between 2 and 60 characters.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      setStaffAccountError("Enter a valid staff email address.");
+      return;
+    }
+    if (staffPasswordDraft.length < 8) {
+      setStaffAccountError("Use a password with at least 8 characters.");
+      return;
+    }
+
+    setStaffAccountBusy(true);
+    try {
+      const { error } = await getSupabaseClient().functions.invoke("misma-workspace-admin", {
+        body: {
+          action: "create-support-user",
+          workspaceId: workspace.id,
+          name,
+          title,
+          email,
+          password: staffPasswordDraft,
+        },
+      });
+      if (error) {
+        let message = error.message || "Could not create the staff account.";
+        const context = (error as { context?: unknown }).context;
+        if (context instanceof Response) {
+          try {
+            const body = await context.clone().json() as { error?: string };
+            if (body.error) message = body.error;
+          } catch {
+            // Use the Functions client's error text.
+          }
+        }
+        throw new Error(message);
+      }
+      setStaffNameDraft("");
+      setStaffTitleDraft("");
+      setStaffEmailDraft("");
+      setStaffPasswordDraft("");
+      setStaffAccountMessage("Staff account created. They can sign in with these credentials.");
+    } catch (cause) {
+      setStaffAccountError(cause instanceof Error ? cause.message : "Could not create the staff account.");
+    } finally {
+      setStaffAccountBusy(false);
+    }
+  };
+
+  const deleteOwnerAccount = async () => {
+    if (!token || !workspace?.id || accountDeleting || accountDeleteConfirmation.trim() !== "DELETE") return;
+    setAccountDeleting(true);
+    setAccountDeleteError("");
+    try {
+      const { error } = await getSupabaseClient().functions.invoke("misma-workspace-admin", {
+        body: { action: "delete-account", workspaceId: workspace.id, confirmation: "DELETE" },
+      });
+      if (error) {
+        let message = error.message || "Could not delete this account.";
+        const context = (error as { context?: unknown }).context;
+        if (context instanceof Response) {
+          try {
+            const body = await context.clone().json() as { error?: string };
+            if (body.error) message = body.error;
+          } catch {
+            // Use the Functions client's error text.
+          }
+        }
+        throw new Error(message);
+      }
+
+      setAccountDeleteOpen(false);
+      try {
+        ["misma_id_token", "misma_email", "misma_sidebar_open", "misma_dashboard_view_v1"].forEach((key) => sessionStorage.removeItem(key));
+        if (dashboardUserId) sessionStorage.removeItem("misma_dashboard_bootstrap_v1_" + dashboardUserId);
+        await getSupabaseClient().auth.signOut({ scope: "global" });
+      } catch {
+        // The account has already been removed. Clear the local app session regardless.
+      }
+      window.location.replace("/login");
+    } catch (cause) {
+      setAccountDeleteError(cause instanceof Error ? cause.message : "Could not delete this account.");
+    } finally {
+      setAccountDeleting(false);
     }
   };
 
