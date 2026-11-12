@@ -531,6 +531,108 @@ function WebsiteSocialSettings({
   );
 }
 
+
+function WhatsAppConnectionCard({
+  site,
+  token,
+  onSaved,
+}: {
+  site: any;
+  token: string;
+  onSaved: (website: any) => void;
+}) {
+  const [countryCode, setCountryCode] = useState(String(site.whatsapp_country_code || "250"));
+  const [phoneNumber, setPhoneNumber] = useState(String(site.whatsapp_number || ""));
+  const [defaultMessage, setDefaultMessage] = useState(String(site.whatsapp_message || "Hello! How can we help you today?"));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    setCountryCode(String(site.whatsapp_country_code || "250"));
+    setPhoneNumber(String(site.whatsapp_number || ""));
+    setDefaultMessage(String(site.whatsapp_message || "Hello! How can we help you today?"));
+  }, [site.id, site.whatsapp_country_code, site.whatsapp_number, site.whatsapp_message]);
+
+  const save = async () => {
+    setError("");
+    setStatus("");
+    const subscriberNumber = phoneNumber.replace(/\\D/g, "").replace(/^0+/, "");
+    const normalizedCountryCode = countryCode.replace(/\\D/g, "");
+    if (!subscriberNumber) {
+      setError("Enter a WhatsApp phone number.");
+      return;
+    }
+    const totalDigits = normalizedCountryCode.length + subscriberNumber.length;
+    if (!normalizedCountryCode || normalizedCountryCode.length > 4 || totalDigits < 7 || totalDigits > 15) {
+      setError("Enter a valid WhatsApp number with its country code.");
+      return;
+    }
+    const message = defaultMessage.trim();
+    if (!message) {
+      setError("Enter a default message.");
+      return;
+    }
+    if (!token || saving) return;
+
+    setSaving(true);
+    try {
+      const result = await saveWebsiteSocialLinks({
+        data: {
+          token,
+          websiteId: site.id,
+          instagramUrl: site.instagram_url || null,
+          gmailAddress: site.gmail_address || null,
+          whatsappCountryCode: normalizedCountryCode,
+          whatsappNumber: subscriberNumber,
+          whatsappMessage: message,
+        },
+      });
+      onSaved(result.website);
+      setStatus("Saved.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save WhatsApp settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="aichat-card aichat-whatsapp-connect-card">
+      <div className="aichat-panel-heading">
+        <h3>{site.name || site.domain || "Website"}</h3>
+        <span className="aichat-status-pill">{site.whatsapp_number ? "Added" : "Not added"}</span>
+      </div>
+      <div className="aichat-whatsapp-connect-fields">
+        <div className="aichat-whatsapp-number-row">
+          <label>
+            Country code
+            <select className="aichat-select" value={countryCode} onChange={(event) => setCountryCode(event.target.value)}>
+              {!WEBSITE_PHONE_COUNTRY_CODES.some((country) => country.code === countryCode) && <option value={countryCode}>+{countryCode}</option>}
+              {WEBSITE_PHONE_COUNTRY_CODES.map((country) => (
+                <option key={country.name} value={country.code}>{country.flag} {country.name} (+{country.code})</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Phone number
+            <input className="aichat-input" type="tel" inputMode="tel" autoComplete="tel-national" value={phoneNumber} placeholder="e.g. 788123456" onChange={(event) => setPhoneNumber(event.target.value)} />
+          </label>
+        </div>
+        <label className="aichat-whatsapp-default-message">
+          Default message
+          <textarea className="aichat-textarea" rows={3} maxLength={500} value={defaultMessage} placeholder="Hello! How can we help you today?" onChange={(event) => setDefaultMessage(event.target.value)} />
+        </label>
+      </div>
+      {error && <p className="aichat-social-error" role="alert">{error}</p>}
+      {status && <p className="aichat-social-success" role="status">{status}</p>}
+      <button type="button" className="aichat-whatsapp-connect-save" disabled={saving || !phoneNumber.trim() || !defaultMessage.trim()} onClick={() => void save()}>
+        {saving ? "Saving…" : "Save"}
+      </button>
+    </section>
+  );
+}
+
 type Message = {
   id: string;
   role: "customer" | "ai" | "human" | "system";
@@ -1423,7 +1525,7 @@ function Dashboard() {
     }
     setMobileMenuOpen(false);
   };
-  const [expandedNavGroups, setExpandedNavGroups] = useState<Record<string, boolean>>({ workspace: true, manage: false, build: false, connect: false });
+  const [expandedNavGroups, setExpandedNavGroups] = useState<Record<string, boolean>>({ workspace: false, manage: false, build: false, connect: false });
   const [greeting, setGreeting] = useState("Welcome back");
   const hasChosenGreetingRef = useRef(false);
 
@@ -1568,7 +1670,12 @@ function Dashboard() {
         const parsed = JSON.parse(savedNotifications) as Partial<typeof notificationPreferences>;
         setNotificationPreferences((current) => ({ ...current, ...parsed }));
       }
-      if (savedVoice && ["girl", "woman", "boy", "man"].includes(savedVoice)) setSelectedVoicePreset(savedVoice as MismaVoicePreset);
+      if (savedVoice === "girl" || savedVoice === "woman") setSelectedVoicePreset(savedVoice);
+      else if (savedVoice === "boy" || savedVoice === "man") {
+        setSelectedVoicePreset("woman");
+        localStorage.setItem("misma_voice_preset", "woman");
+        localStorage.removeItem("misma_voice_uri");
+      }
       if (savedAutoSpeak === "true") setAutoSpeakReplies(true);
     } catch {
       // Keep accessible defaults if browser preferences cannot be read.
@@ -4477,7 +4584,7 @@ function Dashboard() {
             type="button"
             className="aichat-newchat"
             onClick={handleNewChat}
-            data-tooltip="New chat"
+           
           >
             <span className="aichat-newchat-plus">
               <svg
@@ -4500,39 +4607,38 @@ function Dashboard() {
 
         {/* Main sidebar navigation */}
         <nav className="aichat-primary-nav" aria-label="Main menu">
-          <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => setExpandedNavGroups((v) => ({ ...v, workspace: !v.workspace }))} aria-expanded={Boolean(expandedNavGroups.workspace)} data-tooltip="Workspace">
+          <button type="button" className={`aichat-nav-btn${activeTab === "workspace" ? " active" : ""}`} onClick={() => setExpandedNavGroups((v) => ({ ...v, workspace: !v.workspace }))} aria-expanded={Boolean(expandedNavGroups.workspace)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="workspace" /></span><span className="aichat-nav-label">Workspace</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.workspace ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.workspace && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "website-statistics" ? " active" : ""}`} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "websites" ? " active" : ""}`} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{connectedWebsites.length}</span></button>
           </div>}
-          <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
+          <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="images" /></span><span className="aichat-nav-label">Images</span>
           </button>
-          <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }} data-tooltip="Library">
+          <button type="button" className={`aichat-nav-btn${activeTab === "library" ? " active" : ""}`} onClick={() => { setActiveTab("library"); setMobileMenuOpen(false); }}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="library" /></span><span className="aichat-nav-label">Library</span>
           </button>
-          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)} data-tooltip="Manage">
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, manage: !v.manage }))} aria-expanded={Boolean(expandedNavGroups.manage)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="manage" /></span><span className="aichat-nav-label">Manage</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.manage ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.manage && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadHumanRequestNotificationCount > 0 && <span>{unreadHumanRequestNotificationCount}</span>}</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)} data-tooltip="Build">
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="build" /></span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.build ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.build && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, connect: !v.connect }))} aria-expanded={Boolean(expandedNavGroups.connect)} data-tooltip="Connect">
+          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, connect: !v.connect }))} aria-expanded={Boolean(expandedNavGroups.connect)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Connect</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.connect ? "chevron-down" : "chevron-right"} /></span>
           </button>
           {expandedNavGroups.connect && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "phone" ? " active" : ""}`} onClick={() => { setActiveTab("phone"); setMobileMenuOpen(false); }}>Phone</button>
-            <button type="button" className={`aichat-nav-subbtn${activeTab === "website-connect" ? " active" : ""}`} onClick={() => { setActiveTab("website-connect"); setMobileMenuOpen(false); }}>Website</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "whatsapp" ? " active" : ""}`} onClick={() => { setActiveTab("whatsapp"); setMobileMenuOpen(false); }}>WhatsApp</button>
           </div>}
                 </nav>
@@ -5901,7 +6007,7 @@ function Dashboard() {
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-voice-choice">Read-aloud voice</label>
-                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option><option value="boy">Boy</option><option value="man">Man</option></select>
+                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option></select>
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
@@ -6303,29 +6409,29 @@ function Dashboard() {
           <div className="aichat-tab-view"><div className="aichat-tab-content"><div className="aichat-tab-header"><h2>Website connection</h2><p>Connect a published website or register an unpublished preview/staging URL before launch. Misma provides a general HTML script, so a live production site or CMS-specific plugin is not required.</p></div><div className="aichat-card"><h3>Install the general Misma script</h3><p>Register the exact domain or preview hostname, copy its generated script from Website connections, and paste it before the closing &lt;/body&gt; tag. The widget verifies the connection when that page first loads.</p><button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open Website connections</button></div></div></div>
         )}
         {activeTab === "whatsapp" && (
-          <div className="aichat-tab-view"><div className="aichat-tab-content">
-            <div className="aichat-tab-header"><h2>Connect WhatsApp</h2><p>Connect a Meta WhatsApp Business Cloud API phone number. Incoming messages and AI replies will appear in your Misma inbox.</p></div>
-            <div className="aichat-card">
-              <div className="aichat-panel-heading"><h3>WhatsApp Business Cloud API</h3><span className={`aichat-status-pill ${channelConnections.find((item) => item.channel === "whatsapp")?.status === "connected" ? "is-connected" : "is-pending"}`}>{channelConnections.find((item) => item.channel === "whatsapp")?.status || "Not configured"}</span></div>
-              <label>Meta Phone Number ID<input className="aichat-input" placeholder="Phone Number ID from WhatsApp Manager" value={whatsappPhoneNumberId || channelConnections.find((item) => item.channel === "whatsapp")?.external_id || ""} onChange={(event) => setWhatsappPhoneNumberId(event.target.value)} /></label>
-              <label>WhatsApp Business number (display only)<input className="aichat-input" placeholder="+250…" value={whatsappPhoneNumber} onChange={(event) => setWhatsappPhoneNumber(event.target.value)} /></label>
-              <div className="aichat-channel-setup">
-                <strong>1. Add these secrets in Supabase → Edge Functions → Secrets</strong>
-                <code>WHATSAPP_ACCESS_TOKEN</code><code>WHATSAPP_VERIFY_TOKEN</code><code>META_APP_SECRET</code>
-                <strong>2. Set the Meta webhook callback URL</strong>
-                <pre><code>{`${supabaseApiBase}/functions/v1/misma-widget?channel=whatsapp`}</code></pre>
-                <small>Use the same WHATSAPP_VERIFY_TOKEN value in Meta's webhook verification field. Subscribe the WhatsApp Business Account to the messages webhook field.</small>
-                <small>Keep access tokens and the Meta app secret in Supabase function secrets only. Never paste them into this dashboard or website code.</small>
+          <div className="aichat-tab-view">
+            <div className="aichat-tab-content">
+              <div className="aichat-tab-header">
+                <h2>WhatsApp</h2>
+                <p>Add a phone number and default message for each connected website.</p>
               </div>
-              {!channelEnvironment.whatsappConfigured && <p className="aichat-integration-warning">Meta webhook credentials are not detected in Supabase function secrets yet.</p>}
-              <div className="aichat-website-actions">
-                <button type="button" className="aichat-action-btn" disabled={channelBusy === "whatsapp" || !whatsappPhoneNumberId.trim()} onClick={() => void handleSaveChannel("whatsapp")}>{channelBusy === "whatsapp" ? "Saving…" : "Save WhatsApp number"}</button>
-                <button type="button" className="aichat-action-btn secondary" disabled={channelBusy === "whatsapp-test" || !channelEnvironment.whatsappConfigured} onClick={() => void handleTestChannel("whatsapp")}>{channelBusy === "whatsapp-test" ? "Verifying…" : "Verify connection"}</button>
-              </div>
+              {connectedWebsites.length === 0 ? (
+                <div className="aichat-card">
+                  <h3>No website connected</h3>
+                  <p>Connect a website first to add its WhatsApp contact details.</p>
+                  <button type="button" className="aichat-action-btn" onClick={() => setActiveTab("websites")}>Open websites</button>
+                </div>
+              ) : connectedWebsites.map((site) => (
+                <WhatsAppConnectionCard
+                  key={site.id}
+                  site={site}
+                  token={token || ""}
+                  onSaved={(updatedSite) => setConnectedWebsites((items) => items.map((item) => item.id === updatedSite.id ? updatedSite : item))}
+                />
+              ))}
             </div>
-          </div></div>
+          </div>
         )}
-
         {activeTab === "notifications" && (
           <div className="aichat-tab-view">
             <div className="aichat-tab-content">
