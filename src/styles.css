@@ -9215,3 +9215,106 @@ html, body, #app-root {
   opacity: .58;
   cursor: wait;
 }
+
+
+/* Landing navigation: keep only the brand and account actions on mobile. */
+@media (max-width: 800px) {
+  .misma-site .nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 64px;
+    padding: 0 5vw;
+  }
+  .misma-site .nav-links { display: none !important; }
+  .misma-site .nav-actions { display: flex !important; flex: none; gap: 7px; }
+  .misma-site .nav-login,
+  .misma-site .nav-cta { min-height: 36px; padding: 0 11px; font-size: 11px; }
+  .misma-site .brand { font-size: 18px; gap: 8px; }
+}
+
+/* Remove labels that floated beside expanded sidebar navigation items. */
+.aichat-side.is-collapsed [data-tooltip]:hover::after { display: none !important; }
+
+/* Enabled website registration is visually ready to submit. */
+.aichat-websites-tab .aichat-hub-form button[type="submit"]:not(:disabled) {
+  border: 1px solid #e2e6eb !important;
+  background: linear-gradient(110deg, #f3f5f7, #b9c3cf) !important;
+  color: #101820 !important;
+}
+.aichat-websites-tab .aichat-hub-form button[type="submit"]:not(:disabled):hover {
+  background: linear-gradient(110deg, #fff, #c8d0da) !important;
+}
+
+/* Connect > WhatsApp reuses Add channels-style fields and a white Save action. */
+.aichat-whatsapp-connect-fields { display: grid; gap: 15px; }
+.aichat-whatsapp-connect-card .aichat-panel-heading { margin-bottom: 16px; }
+.aichat-whatsapp-connect-card .aichat-panel-heading h3 { margin: 0; }
+.aichat-whatsapp-connect-card .aichat-whatsapp-number-row {
+  display: grid; grid-template-columns: minmax(125px,.8fr) minmax(0,1.2fr); gap: 12px;
+}
+.aichat-whatsapp-connect-card label {
+  display: grid; gap: 7px; color: #c8d0da;
+  font: 500 var(--text-sm)/1.4 var(--font-sans);
+}
+.aichat-whatsapp-connect-card input,
+.aichat-whatsapp-connect-card select,
+.aichat-whatsapp-connect-card textarea { box-sizing: border-box; }
+.aichat-whatsapp-default-message textarea { min-height: 86px; }
+.aichat-whatsapp-connect-save {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 42px; margin-top: 15px; padding: 0 20px;
+  border: 1px solid #e2e6eb; border-radius: 9px;
+  background: linear-gradient(110deg, #f3f5f7, #b9c3cf);
+  color: #101820; font: 700 var(--text-sm)/1.4 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-whatsapp-connect-save:hover:not(:disabled) { background: linear-gradient(110deg,#fff,#c8d0da); }
+.aichat-whatsapp-connect-save:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 520px) {
+  .aichat-whatsapp-connect-card .aichat-whatsapp-number-row { grid-template-columns: 1fr; }
+}
+
+/* Feedback section on the public Misma landing page. */
+.misma-site .misma-feedback {
+  display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr);
+  gap: clamp(28px,6vw,80px); align-items: start;
+  margin: 0; padding: clamp(42px,7vw,84px) 7vw;
+  border-top: 1px solid #20242a; background: #0d1014;
+}
+.misma-site .misma-feedback-heading .eyebrow { margin-bottom: 14px; }
+.misma-site .misma-feedback-heading h2 {
+  margin: 0; color: #f3f5f8;
+  font-size: clamp(26px,3.2vw,38px); line-height: 1.08; letter-spacing: -.045em;
+}
+.misma-feedback-form { display: grid; gap: 14px; max-width: 680px; }
+.misma-feedback-form label { display: grid; gap: 7px; color: #c6ccd5; font-size: 13px; font-weight: 550; }
+.misma-feedback-form input,
+.misma-feedback-form textarea {
+  width: 100%; box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid #303743; border-radius: 10px;
+  background: #171b22; color: #f3f5f8; font: 400 14px/1.5 var(--font-sans);
+  outline: none; resize: vertical;
+}
+.misma-feedback-form input { min-height: 46px; }
+.misma-feedback-form textarea { min-height: 110px; }
+.misma-feedback-form input:focus,
+.misma-feedback-form textarea:focus { border-color: #b9c3cf; box-shadow: 0 0 0 3px rgba(185,195,207,.11); }
+.misma-feedback-form input::placeholder,
+.misma-feedback-form textarea::placeholder { color: #778392; }
+.misma-feedback-send {
+  min-height: 44px; width: fit-content; min-width: 118px; padding: 0 22px;
+  border: 1px solid #e2e6eb; border-radius: 9px;
+  background: linear-gradient(110deg,#f3f5f7,#b9c3cf); color: #101820;
+  font: 700 13px/1.4 var(--font-sans); cursor: pointer;
+}
+.misma-feedback-send:hover:not(:disabled) { background: linear-gradient(110deg,#fff,#c8d0da); }
+.misma-feedback-send:disabled { opacity: .55; cursor: wait; }
+.misma-feedback-error,
+.misma-feedback-status { margin: 0; font-size: 13px; line-height: 1.5; }
+.misma-feedback-error { color: #f0a7a7; }
+.misma-feedback-status { color: #cbd5e1; }
+.misma-feedback-trap { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 720px) {
+  .misma-site .misma-feedback { grid-template-columns: 1fr; padding: 48px 6vw; gap: 24px; }
+}
