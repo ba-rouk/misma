@@ -8,7 +8,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 const RATE_LIMIT = new Map<string, { startedAt: number; count: number }>();
 
-function headersFor(origin: string): HeadersInit {
+function headersFor(origin: string): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
