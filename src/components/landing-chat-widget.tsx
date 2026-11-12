@@ -61,7 +61,7 @@ export function LandingChatWidget() {
     setError("");
     setBusy(true);
     try {
-      const response = await fetch(`${config.url.replace(/\\/$/, "")}/functions/v1/misma-chat`, {
+      const response = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: config.publishableKey },
         body: JSON.stringify({
