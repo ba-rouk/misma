@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "../../lib/supabase";
+import { AuthFlowLayout } from "../../components/auth-flow-layout";
 
 function safeDashboardDestination(value: string | null): string {
   if (!value || typeof window === "undefined") return "/dashboard";
@@ -66,21 +67,15 @@ function AuthCallback() {
   }, []);
 
   return (
-    <main className="auth-page">
-      <section className="login-panel">
-        <div className="login-form-wrap" role={error ? "alert" : "status"}>
-          <div className="login-eyebrow">MISMA ACCOUNT</div>
-          <h2>{error ? "Sign-in could not be completed." : "Securing your session..."}</h2>
-          {error && (
-            <>
-              <p className="login-subtitle">{error}</p>
-              <a className="login-submit" href="/login">
-                Return to login
-              </a>
-            </>
-          )}
-        </div>
-      </section>
-    </main>
+    <AuthFlowLayout title={error ? "Sign-in failed" : "Signing you in"}>
+      {error ? (
+        <>
+          <p className="misma-auth-flow-error" role="alert">{error}</p>
+          <a className="misma-auth-flow-button" href="/login">Back to login</a>
+        </>
+      ) : (
+        <p className="misma-auth-flow-status" role="status" aria-live="polite">Please wait…</p>
+      )}
+    </AuthFlowLayout>
   );
 }
