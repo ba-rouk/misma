@@ -557,7 +557,7 @@ function WhatsAppConnectionCard({
   const save = async () => {
     setError("");
     setStatus("");
-    const subscriberNumber = phoneNumber.replace(/\\D/g, "").replace(/^0+/, "");
+    const subscriberNumber = phoneNumber.replace(/\D/g, "").replace(/^0+/, "");
     const normalizedCountryCode = countryCode.replace(/\\D/g, "");
     if (!subscriberNumber) {
       setError("Enter a WhatsApp phone number.");
