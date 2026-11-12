@@ -63,39 +63,6 @@ type UnreadVisitorMessage = {
   conversationTitle: string;
 };
 
-type MismaAiSettings = {
-  assistantMode: "Sales & customer support" | "Customer support" | "Sales assistant";
-  responseTone: "Professional and friendly" | "Warm and conversational" | "Formal";
-  responseLength: "Concise" | "Balanced" | "Detailed";
-  languageMode: "Match visitor language" | "Business primary language" | "English";
-  autoReply: boolean;
-  useBusinessKnowledge: boolean;
-  avoidUnverifiedClaims: boolean;
-  askClarifyingQuestions: boolean;
-  qualifyLeads: boolean;
-  captureOrders: boolean;
-  respectBusinessHours: boolean;
-  humanHandoff: boolean;
-  welcomeGreeting: boolean;
-  protectSensitiveData: boolean;
-};
-
-const DEFAULT_MISMA_AI_SETTINGS: MismaAiSettings = {
-  assistantMode: "Sales & customer support",
-  responseTone: "Professional and friendly",
-  responseLength: "Balanced",
-  languageMode: "Match visitor language",
-  autoReply: true,
-  useBusinessKnowledge: true,
-  avoidUnverifiedClaims: true,
-  askClarifyingQuestions: true,
-  qualifyLeads: true,
-  captureOrders: true,
-  respectBusinessHours: true,
-  humanHandoff: true,
-  welcomeGreeting: true,
-  protectSensitiveData: true,
-};
 
 function getUserMessageTextColor(hex: string): string {
   const toLinear = (channel: string) => {
@@ -1649,32 +1616,7 @@ function Dashboard() {
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoicePreset, setSelectedVoicePreset] = useState<MismaVoicePreset>("woman");
   const [autoSpeakReplies, setAutoSpeakReplies] = useState(false);
-  const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("misma_ai_settings");
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<MismaAiSettings>;
-        setAiSettings({ ...DEFAULT_MISMA_AI_SETTINGS, ...parsed });
-      }
-    } catch {
-      // Keep the recommended defaults if saved preferences cannot be read.
-    } finally {
-      setSettingsLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!settingsLoaded) return;
-    try {
-      localStorage.setItem("misma_ai_settings", JSON.stringify(aiSettings));
-    } catch {
-      // The preferences remain usable for this session if browser storage is unavailable.
-    }
-  }, [aiSettings, settingsLoaded]);
-
+  const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
   useEffect(() => {
     try {
       const savedAccent = localStorage.getItem("misma_accent_color");
@@ -1740,10 +1682,6 @@ function Dashboard() {
     window.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", refreshVoices);
   }, []);
-
-  const updateAiSetting = <K extends keyof MismaAiSettings>(key: K, value: MismaAiSettings[K]) => {
-    setAiSettings((current) => ({ ...current, [key]: value }));
-  };
 
   const toggleChatActivityNotifications = async () => {
     const currentlyEnabled = notificationPreferences.chatActivity;
@@ -4511,7 +4449,7 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
-  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-general","label":"General","icon":"general"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
+  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
   const filteredSettingsNavItems = settingsNavItems.filter((item) =>
     !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
   );
@@ -4955,6 +4893,7 @@ function Dashboard() {
               <span className="aichat-user-info">
                 <b>{profileName}</b>
                 <small>{staffTitle || "Customer support"}</small>
+                <button type="button" className="aichat-staff-signout" onClick={() => void signOut()}>Sign out</button>
               </span>
             </div>
           ) : (
@@ -5012,7 +4951,7 @@ function Dashboard() {
           </button>
             </>
           )}
-        </div>>
+        </div>
       </aside>
 
       {/* ── Main Content Area ── */}
@@ -6130,33 +6069,7 @@ function Dashboard() {
                 </div>
                 {businessNameError && <p className="aichat-profile-error" role="alert">{businessNameError}</p>}
                 {businessNameSaved && <p className="aichat-settings-status" role="status">Business name updated.</p>}
-                <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
-                  Delete account
-                </button>
-                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
-                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
-                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
-                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
-              </section>
-              <div className="aichat-settings-divider-label" id="settings-general">General</div>
-              <div className="aichat-settings-intro">
-                <span className="aichat-settings-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg></span>
-                <span><strong>Recommended business assistant profile</strong><small>Recommended defaults for a helpful, accurate, and trustworthy assistant on business websites.</small></span>
-                <span className="aichat-settings-saved">{settingsLoaded ? "Saved on this device" : "Loading settings…"}</span>
-              </div>
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/></svg></span>
-                  <span><h3>Assistant profile</h3><p>Choose the job Misma should do and the way it should communicate.</p></span>
-                </div>
-                <div className="aichat-settings-select-grid">
-                  <div className="aichat-input-group"><label htmlFor="misma-assistant-mode">Primary role</label><select id="misma-assistant-mode" className="aichat-select" value={aiSettings.assistantMode} onChange={(event) => updateAiSetting("assistantMode", event.target.value as MismaAiSettings["assistantMode"])}><option>Sales &amp; customer support</option><option>Customer support</option><option>Sales assistant</option></select></div>
-                  <div className="aichat-input-group"><label htmlFor="misma-response-tone">Response tone</label><select id="misma-response-tone" className="aichat-select" value={aiSettings.responseTone} onChange={(event) => updateAiSetting("responseTone", event.target.value as MismaAiSettings["responseTone"])}><option>Professional and friendly</option><option>Warm and conversational</option><option>Formal</option></select></div>
-                  <div className="aichat-input-group"><label htmlFor="misma-response-length">Response length</label><select id="misma-response-length" className="aichat-select" value={aiSettings.responseLength} onChange={(event) => updateAiSetting("responseLength", event.target.value as MismaAiSettings["responseLength"])}><option>Concise</option><option>Balanced</option><option>Detailed</option></select></div>
-                  <div className="aichat-input-group"><label htmlFor="misma-language-mode">Reply language</label><select id="misma-language-mode" className="aichat-select" value={aiSettings.languageMode} onChange={(event) => updateAiSetting("languageMode", event.target.value as MismaAiSettings["languageMode"])}><option>Match visitor language</option><option>Business primary language</option><option>English</option></select></div>
-                </div>
-              </section>
-              <section className="aichat-card aichat-settings-card aichat-staff-access-card">
+<section className="aichat-card aichat-settings-card aichat-staff-access-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M17 7a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4.5 5" /></svg></span>
                   <span><h3>Team access</h3><p>Create a restricted account for customer requests.</p></span>
@@ -6186,34 +6099,13 @@ function Dashboard() {
                   </button>
                 </form>
               </section>
-
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2" fill="#11141a"/><circle cx="16" cy="12" r="2" fill="#11141a"/><circle cx="10" cy="19" r="2" fill="#11141a"/></svg></span>
-                  <span><h3>Knowledge and answer quality</h3><p>Keep customer answers accurate, consistent, and aligned with approved business information.</p></span>
-                </div>
-                <SettingsToggle title="Use business knowledge first" description="Prioritize approved FAQs, products, services, policies, and business information." checked={aiSettings.useBusinessKnowledge} onToggle={() => updateAiSetting("useBusinessKnowledge", !aiSettings.useBusinessKnowledge)} />
-                <SettingsToggle title="Avoid unverified promises" description="Do not invent prices, stock levels, delivery times, opening hours, or policy details." checked={aiSettings.avoidUnverifiedClaims} onToggle={() => updateAiSetting("avoidUnverifiedClaims", !aiSettings.avoidUnverifiedClaims)} />
-                <SettingsToggle title="Ask when details are missing" description="Ask a short clarifying question instead of guessing when a request is unclear." checked={aiSettings.askClarifyingQuestions} onToggle={() => updateAiSetting("askClarifyingQuestions", !aiSettings.askClarifyingQuestions)} />
-                <SettingsToggle title="Reply automatically" description="Let Misma answer incoming website questions using configured business knowledge." checked={aiSettings.autoReply} onToggle={() => updateAiSetting("autoReply", !aiSettings.autoReply)} />
-              </section>
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 4h18v13H3z"/><path d="M8 21h8M12 17v4M7 9h10M7 13h6"/></svg></span>
-                  <span><h3>Website and sales experience</h3><p>Help visitors discover your business, make decisions, and complete the next step.</p></span>
-                </div>
-                <SettingsToggle title="Show a welcome greeting" description="Start new website conversations with a brief, friendly introduction." checked={aiSettings.welcomeGreeting} onToggle={() => updateAiSetting("welcomeGreeting", !aiSettings.welcomeGreeting)} />
-                <SettingsToggle title="Qualify interested leads" description="Ask for relevant contact and requirement details when a visitor shows interest." checked={aiSettings.qualifyLeads} onToggle={() => updateAiSetting("qualifyLeads", !aiSettings.qualifyLeads)} />
-                <SettingsToggle title="Capture order details" description="Collect item, quantity, delivery, and contact details before confirming an order." checked={aiSettings.captureOrders} onToggle={() => updateAiSetting("captureOrders", !aiSettings.captureOrders)} />
-                <SettingsToggle title="Respect business hours" description="Use saved opening hours and never imply that the business is open when it is closed." checked={aiSettings.respectBusinessHours} onToggle={() => updateAiSetting("respectBusinessHours", !aiSettings.respectBusinessHours)} />
-              </section>
-              <section className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg></span>
-                  <span><h3>Customer care and privacy</h3><p>Protect customers and make it easy for your team to take over when needed.</p></span>
-                </div>
-                <SettingsToggle title="Offer human handoff" description="Route complaints, sensitive issues, and requests for a real person to your team." checked={aiSettings.humanHandoff} onToggle={() => updateAiSetting("humanHandoff", !aiSettings.humanHandoff)} />
-                <SettingsToggle title="Protect sensitive information" description="Never ask customers to share passwords, full payment card details, or private account credentials." checked={aiSettings.protectSensitiveData} onToggle={() => updateAiSetting("protectSensitiveData", !aiSettings.protectSensitiveData)} />
+                <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
+                  Delete account
+                </button>
+                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
+                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
+                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
+                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
               </section>
               <section id="settings-accent" className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
@@ -6262,8 +6154,43 @@ function Dashboard() {
                 <MicrophoneAccessPanel />
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
-                    <label htmlFor="misma-voice-choice">Read-aloud voice</label>
-                    <select id="misma-voice-choice" className="aichat-select" value={selectedVoicePreset} onChange={(event) => setSelectedVoicePreset(event.target.value as MismaVoicePreset)}><option value="girl">Girl</option><option value="woman">Woman</option></select>
+                    <label id="misma-voice-choice-label">Read-aloud voice</label>
+                    <div className="aichat-voice-picker" onKeyDown={(event) => { if (event.key === "Escape") setVoiceMenuOpen(false); }}>
+                      <button
+                        type="button"
+                        className="aichat-voice-picker-trigger"
+                        aria-haspopup="listbox"
+                        aria-expanded={voiceMenuOpen}
+                        aria-labelledby="misma-voice-choice-label"
+                        onClick={() => setVoiceMenuOpen((open) => !open)}
+                      >
+                        <span>{selectedVoicePreset === "girl" ? "Girl" : "Woman"}</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                      </button>
+                      {voiceMenuOpen && (
+                        <div className="aichat-voice-picker-menu" role="listbox" aria-labelledby="misma-voice-choice-label">
+                          {([
+                            { value: "girl", label: "Girl", detail: "Higher-pitched voice" },
+                            { value: "woman", label: "Woman", detail: "Natural adult voice" },
+                          ] as const).map((voice) => (
+                            <button
+                              key={voice.value}
+                              type="button"
+                              role="option"
+                              aria-selected={selectedVoicePreset === voice.value}
+                              className={`aichat-voice-picker-option${selectedVoicePreset === voice.value ? " is-selected" : ""}`}
+                              onClick={() => {
+                                setSelectedVoicePreset(voice.value);
+                                setVoiceMenuOpen(false);
+                              }}
+                            >
+                              <span><strong>{voice.label}</strong><small>{voice.detail}</small></span>
+                              {selectedVoicePreset === voice.value && <span className="aichat-voice-picker-check" aria-hidden="true">✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <button type="button" className="aichat-action-btn secondary" onClick={testSelectedVoice}>Preview voice</button>
                 </div>
@@ -6729,7 +6656,7 @@ function Dashboard() {
                                 </button>
                                 {humanRequestMenuId === requestId && (
                                   <div className="aichat-chat-context-menu" role="menu" aria-label={`Options for ${visitorName}`}>
-                                    <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(requestId > 0 ? requestId : null, visitorName, Number(item.id))}>
+                                    <button type="button" role="menuitem" className="is-danger" disabled={humanRequestDeletingId === requestId} onClick={() => void handleDeleteHumanRequest(request ? requestId : null, visitorName, Number(item.id))}>
                                       {humanRequestDeletingId === requestId ? "Deleting…" : requestId > 0 ? "Delete request" : "Delete notification"}
                                     </button>
                                   </div>
