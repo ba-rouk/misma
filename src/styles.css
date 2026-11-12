@@ -9481,3 +9481,106 @@ html, body, #app-root {
   .aichat-account-delete-dialog .aichat-confirm-actions { flex-direction: row; }
   .aichat-request-confirm-button { flex: 1; }
 }
+
+
+/* App-styled voice selector popup; avoid the device-native select menu. */
+.aichat-voice-picker {
+  position: relative;
+  width: 100%;
+}
+.aichat-voice-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #35465d;
+  border-radius: 9px;
+  background: #101a29;
+  color: #f4f7fb;
+  font: 500 13px/1.4 var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.aichat-voice-picker-trigger:hover,
+.aichat-voice-picker-trigger[aria-expanded="true"] {
+  border-color: #7899c4;
+  background: #15243a;
+}
+.aichat-voice-picker-trigger svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.aichat-voice-picker-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  z-index: 180;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #385274;
+  border-radius: 11px;
+  background: #101d30;
+  box-shadow: 0 15px 38px rgba(0,0,0,.52);
+}
+.aichat-voice-picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #eef4fc;
+  text-align: left;
+  cursor: pointer;
+}
+.aichat-voice-picker-option:hover,
+.aichat-voice-picker-option.is-selected {
+  border-color: rgba(139,174,222,.27);
+  background: #1a2b43;
+}
+.aichat-voice-picker-option > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+.aichat-voice-picker-option strong {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 650;
+}
+.aichat-voice-picker-option small {
+  color: #9eb1c9;
+  font-size: 10px;
+}
+.aichat-voice-picker-check {
+  color: #dce9fb;
+  font-size: 13px;
+  font-weight: 700;
+}
+.aichat-staff-signout {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin: 4px 0 0 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a8b5c8;
+  font: 500 11px/1.2 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-staff-signout:hover { color: #ffffff; }
