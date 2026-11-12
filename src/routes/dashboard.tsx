@@ -6082,6 +6082,20 @@ function Dashboard() {
                     {profileSaving ? "Saving…" : profileAvatarPreparing ? "Preparing photo…" : "Save changes"}
                   </button>
                 </div>
+                <div className="aichat-profile-edit-row">
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-business-name">Business name</label>
+                    <input id="misma-business-name" className="aichat-input" value={businessNameDraft} maxLength={120} onChange={(event) => setBusinessNameDraft(event.target.value)} placeholder="Your business name" />
+                  </div>
+                  <button type="button" className="aichat-action-btn" onClick={() => void saveBusinessName()} disabled={businessNameSaving}>
+                    {businessNameSaving ? "Saving…" : "Save business name"}
+                  </button>
+                </div>
+                {businessNameError && <p className="aichat-profile-error" role="alert">{businessNameError}</p>}
+                {businessNameSaved && <p className="aichat-settings-status" role="status">Business name updated.</p>}
+                <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
+                  Delete account
+                </button>
                 {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
                 {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
                 {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
@@ -6105,6 +6119,37 @@ function Dashboard() {
                   <div className="aichat-input-group"><label htmlFor="misma-language-mode">Reply language</label><select id="misma-language-mode" className="aichat-select" value={aiSettings.languageMode} onChange={(event) => updateAiSetting("languageMode", event.target.value as MismaAiSettings["languageMode"])}><option>Match visitor language</option><option>Business primary language</option><option>English</option></select></div>
                 </div>
               </section>
+              <section className="aichat-card aichat-settings-card aichat-staff-access-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M17 7a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4.5 5" /></svg></span>
+                  <span><h3>Team access</h3><p>Create a restricted account for customer requests.</p></span>
+                </div>
+                <form className="aichat-staff-access-form" onSubmit={(event) => { event.preventDefault(); void createSupportAccount(); }}>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-role">Role / title</label>
+                    <input id="misma-staff-role" className="aichat-input" maxLength={60} value={staffTitleDraft} onChange={(event) => setStaffTitleDraft(event.target.value)} placeholder="Customer support" required />
+                  </div>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-name">Name</label>
+                    <input id="misma-staff-name" className="aichat-input" maxLength={80} value={staffNameDraft} onChange={(event) => setStaffNameDraft(event.target.value)} placeholder="Staff name" autoComplete="name" required />
+                  </div>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-email">Email</label>
+                    <input id="misma-staff-email" className="aichat-input" type="email" maxLength={254} value={staffEmailDraft} onChange={(event) => setStaffEmailDraft(event.target.value)} placeholder="staff@example.com" autoComplete="email" required />
+                  </div>
+                  <div className="aichat-input-group">
+                    <label htmlFor="misma-staff-password">Password</label>
+                    <input id="misma-staff-password" className="aichat-input" type="password" minLength={8} maxLength={128} value={staffPasswordDraft} onChange={(event) => setStaffPasswordDraft(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" required />
+                  </div>
+                  <p className="aichat-settings-hint">Staff can view and manage Customers and Notifications only. They cannot open Recents, change settings, or edit business information.</p>
+                  {staffAccountError && <p className="aichat-profile-error" role="alert">{staffAccountError}</p>}
+                  {staffAccountMessage && <p className="aichat-settings-status" role="status">{staffAccountMessage}</p>}
+                  <button type="submit" className="aichat-action-btn" disabled={staffAccountBusy || !staffNameDraft.trim() || !staffEmailDraft.trim() || !staffPasswordDraft || !staffTitleDraft.trim()}>
+                    {staffAccountBusy ? "Creating…" : "Create staff account"}
+                  </button>
+                </form>
+              </section>
+
               <section className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2" fill="#11141a"/><circle cx="16" cy="12" r="2" fill="#11141a"/><circle cx="10" cy="19" r="2" fill="#11141a"/></svg></span>
