@@ -9159,7 +9159,7 @@ html, body, #app-root {
 
 /* Sidebar recent titles use the same compact type size as the main nav. */
 .aichat-chats-widget-item-text {
-  font-size: var(--text-button) !important;
+  font-size: 11px !important;
   font-weight: var(--weight-medium) !important;
 }
 
