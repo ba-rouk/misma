@@ -202,6 +202,8 @@ test("landing Get started opens the complete account creation form", async () =>
   const login = await read("../src/routes/login.tsx");
 
   assert.match(landing, /href="\/login\?mode=signup"/);
+  assert.match(landing, /href="\/login" className="nav-login"/);
+  assert.match(login, /const \[signup, setSignup\] = useState\(false\)/);
   assert.match(login, /name="username"|autoComplete="username"/);
   assert.match(login, /fullName/);
   assert.match(login, /confirmPassword/);
