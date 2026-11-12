@@ -1616,9 +1616,11 @@ test("email confirmation and recovery links land on public Misma routes and hand
   assert.match(reset, /auth\.getSession\(\)/);
   assert.match(reset, /sessionStorage/);
   assert.match(reset, /updateUser\(\{ password \}\)/);
-  assert.match(reset, /Password updated\./);
-  assert.match(confirmed, /Email confirmed\./);
-  assert.match(confirmed, /Your email address is verified\. You can now log in to Misma\./);
+  assert.match(reset, /setPageState\("updated"\)/);
+  assert.match(confirmed, /setPageState\("confirmed"\)/);
+  assert.match(layout, /src="\/misma-logo\.svg"/);
+  const callback = await read("../src/routes/auth/callback.tsx");
+  assert.match(callback, /AuthFlowLayout/);
   assert.match(confirmed, /auth\.resend/);
   assert.match(tokenConfirm, /verifyOtp\(\{[\s\S]*token_hash: params\.tokenHash/);
   assert.match(redirect, /url\.hash/);
