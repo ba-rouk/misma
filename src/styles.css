@@ -4866,51 +4866,56 @@ body:has(.aichat-main) {
 @keyframes misma-media-pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
 @media (max-width: 520px) { .aichat-media-skeleton { grid-template-columns: 1fr; } .aichat-media-skeleton-preview { min-height: 150px; } }
 
-/* Landing page guest chat. Its transcript is React memory only, never persisted. */
+/* Landing-page guest preview shares the embedded website widget's visual language. */
 .misma-guest-widget { position: fixed; right: 24px; bottom: 24px; z-index: 80; font-family: var(--font-sans); }
-.misma-guest-launcher { min-height: 54px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; background: #397be6; color: #fff; box-shadow: 0 12px 34px rgba(0,0,0,.35); font: 600 14px var(--font-sans); cursor: pointer; transition: transform .18s ease, filter .18s ease; }
+.misma-guest-launcher { min-height: 54px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; background: #080b10; color: #fff; box-shadow: 0 12px 34px rgba(0,0,0,.35); font: 600 14px var(--font-sans); cursor: pointer; transition: transform .18s ease, filter .18s ease; }
 .misma-guest-launcher:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .misma-guest-launcher.is-open { width: 48px; min-height: 48px; padding: 0; font-size: 24px; background: #1b2533; }
-.misma-guest-launcher-spark { font-size: 18px; }
-.misma-guest-panel { position: absolute; right: 0; bottom: 66px; width: min(390px, calc(100vw - 28px)); height: min(590px, calc(100dvh - 110px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(255,255,255,.13); border-radius: 20px; background: #0e141d; color: #f2f6fc; box-shadow: 0 24px 75px rgba(0,0,0,.55); }
-.misma-guest-header { display: flex; align-items: center; gap: 11px; padding: 15px 16px; border-bottom: 1px solid #263140; background: #131c28; }
-.misma-guest-brand-mark { width: 36px; height: 36px; display:grid; place-items:center; border-radius: 11px; background: #2d66bb; color:white; font-weight:800; }
-.misma-guest-heading { display:flex; flex-direction:column; gap:4px; min-width:0; }
-.misma-guest-heading strong { font-size: 14px; }
-.misma-guest-heading span { display:flex; align-items:center; gap:6px; color:#95a4b6; font-size:11px; }
-.misma-guest-heading i { width:6px; height:6px; border-radius:50%; background:#61ca91; }
-.misma-guest-close { margin-left:auto; width:32px; height:32px; border:0; border-radius:9px; background:transparent; color:#aab7c8; font-size:23px; cursor:pointer; }
-.misma-guest-close:hover { background:#263140; color:#fff; }
-.misma-guest-messages { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:13px; padding:18px 15px; }
-.misma-guest-welcome { margin:auto 0; display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
-.misma-guest-welcome-icon { width:38px; height:38px; display:grid; place-items:center; border:1px solid #3b5b83; border-radius:12px; background:#1c2d44; color:#a9ceff; }
-.misma-guest-welcome h3 { margin:0; font-size:21px; letter-spacing:-.03em; }
-.misma-guest-welcome p { margin:0; color:#9eacbd; font-size:13px; line-height:1.55; }
-.misma-guest-prompts { width:100%; display:flex; flex-direction:column; gap:7px; margin-top:8px; }
-.misma-guest-prompts button { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 11px; text-align:left; border:1px solid #2f3b4c; border-radius:11px; background:#141e2b; color:#dce6f3; font-size:12px; cursor:pointer; }
-.misma-guest-prompts button:hover { background:#202d3e; }
-.misma-guest-prompts span { color:#91baff; }
-.misma-guest-message { max-width:88%; display:flex; }
-.misma-guest-message.is-user { align-self:flex-end; }
-.misma-guest-message.is-ai { align-self:flex-start; }
-.misma-guest-message > div { padding:11px 13px; border-radius:15px; background:#192433; color:#e4ebf4; font-size:13px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
-.misma-guest-message.is-user > div { background:#2b5e9f; color:#fff; border-bottom-right-radius:5px; }
-.misma-guest-typing { display:flex; align-items:center; gap:5px; min-width:52px; }
-.misma-guest-typing i { width:6px; height:6px; border-radius:50%; background:#9db4d2; animation: misma-guest-dot 1s ease-in-out infinite; }
-.misma-guest-typing i:nth-child(2) { animation-delay:.15s; }
-.misma-guest-typing i:nth-child(3) { animation-delay:.3s; }
-@keyframes misma-guest-dot { 0%,60%,100% { transform:translateY(0); opacity:.45; } 30% { transform:translateY(-4px); opacity:1; } }
-.misma-guest-error { margin:0 14px 8px; color:#ffaaa5; font-size:12px; }
-.misma-guest-composer { margin:0 12px; padding:8px 9px 8px 13px; display:flex; align-items:flex-end; gap:9px; border:1px solid #354255; border-radius:16px; background:#151e2a; }
-.misma-guest-composer:focus-within { border-color:#789ccc; box-shadow:0 0 0 3px rgba(111,157,214,.1); }
-.misma-guest-composer textarea { flex:1; min-width:0; max-height:110px; resize:none; border:0; outline:0; background:transparent; color:#f5f7fb; font:13px/1.5 var(--font-sans); padding:5px 0; }
-.misma-guest-composer textarea::placeholder { color:#8492a4; }
-.misma-guest-composer button { flex:none; width:34px; height:34px; border:0; border-radius:50%; background:#eaf1fb; color:#141b25; font-size:20px; font-weight:700; cursor:pointer; }
-.misma-guest-composer button:disabled { opacity:.35; cursor:not-allowed; }
-.misma-guest-privacy { margin:8px 12px 12px; color:#78879a; font-size:10px; text-align:center; }
-@media (max-width:600px) { .misma-guest-widget { right:14px; bottom:14px; } .misma-guest-panel { right:-2px; bottom:62px; width:min(390px, calc(100vw - 28px)); height:min(590px, calc(100dvh - 92px)); } }
-@media (prefers-reduced-motion: reduce) { .aichat-media-skeleton-shimmer, .aichat-media-skeleton-orbit i, .misma-guest-typing i { animation:none; } }
-
+.misma-guest-panel { position: absolute; right: 0; bottom: 66px; width: min(380px, calc(100vw - 28px)); height: min(570px, calc(100dvh - 110px)); min-width: 270px; min-height: 350px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #dce3ec; border-radius: 19px; background: #fff; color: #182232; box-shadow: 0 18px 55px rgba(15,23,42,.25); }
+.misma-guest-header { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 12px; background: #111827; color: #fff; }
+.misma-guest-heading { flex: 1; min-width: 0; overflow: hidden; }
+.misma-guest-heading strong,.misma-guest-heading span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.misma-guest-heading strong { font-size: 14px; font-weight: 700; }
+.misma-guest-heading span { margin-top: 3px; color: #b6c1cf; font-size: 11px; }
+.misma-guest-gmail { box-sizing: border-box; width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; text-decoration: none; }
+.misma-guest-gmail:hover { background: #ffffff30; }
+.misma-guest-gmail svg { display: block; width: 27px; height: 27px; }
+.misma-guest-close { width: 34px; height: 34px; flex: none; border: 0; border-radius: 9px; background: #ffffff1c; color: #fff; font: 600 21px/1 system-ui; cursor: pointer; }
+.misma-guest-close:hover { background: #ffffff30; color: #fff; }
+.misma-guest-messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; padding: 13px; background: #f8fafc; overscroll-behavior: contain; }
+.misma-guest-welcome { width: 100%; margin: auto 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.misma-guest-welcome-icon { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #dce3ec; border-radius: 12px; background: #fff; color: #172033; }
+.misma-guest-welcome h3 { margin: 0; color: #172033; font-size: 19px; letter-spacing: -.02em; }
+.misma-guest-welcome p { margin: 0; color: #647286; font-size: 13px; line-height: 1.5; }
+.misma-guest-prompts { width: 100%; display: flex; flex-direction: column; gap: 7px; margin-top: 7px; }
+.misma-guest-prompts button { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 11px; text-align: left; border: 1px solid #e1e7ef; border-radius: 11px; background: #fff; color: #253246; font-size: 12px; cursor: pointer; }
+.misma-guest-prompts button:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.misma-guest-prompts span { color: #526b8b; }
+.misma-guest-message { max-width: 88%; display: flex; }
+.misma-guest-message.is-user { align-self: flex-end; }
+.misma-guest-message.is-ai { align-self: flex-start; }
+.misma-guest-message > div { padding: 10px 12px; border: 1px solid #e6ebf2; border-radius: 13px; background: #fff; color: #1a2635; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.misma-guest-message.is-user > div { border-color: #172033; background: #172033; color: #fff; }
+.misma-guest-typing { display: flex; align-items: center; gap: 5px; min-width: 52px; border: 0 !important; background: transparent !important; }
+.misma-guest-typing i { width: 6px; height: 6px; border-radius: 50%; background: #75849a; animation: misma-guest-dot 1s ease-in-out infinite; }
+.misma-guest-typing i:nth-child(2) { animation-delay: .15s; }
+.misma-guest-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes misma-guest-dot { 0%,60%,100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
+.misma-guest-error { margin: 0; padding: 6px 12px 0; color: #b42318; font-size: 11px; background: #fff; }
+.misma-guest-composer-wrap { flex: none; padding: 10px 10px 8px; border-top: 1px solid #e8edf3; background: #fff; }
+.misma-guest-composer { display: flex; align-items: flex-end; gap: 8px; margin: 0; padding: 7px 7px 7px 10px; min-width: 0; border: 1px solid #dce3ec; border-radius: 15px; background: #f7f9fc; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+.misma-guest-composer:focus-within { border-color: #a8b6c8; box-shadow: 0 0 0 3px rgba(100,116,139,.1); }
+.misma-guest-composer textarea { box-sizing: border-box; flex: 1; min-width: 0; min-height: 36px; max-height: 108px; resize: none; border: 0; outline: 0; padding: 8px 3px; background: transparent; color: #182232; font: 400 13px/1.45 var(--font-sans); }
+.misma-guest-composer textarea::placeholder { color: #8592a3; }
+.misma-guest-composer button { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border: 0; border-radius: 50%; background: #22c55e; color: #fff; cursor: pointer; padding: 0; }
+.misma-guest-composer button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.misma-guest-composer button:disabled { opacity: .5; cursor: not-allowed; }
+.misma-guest-privacy { margin: 7px 2px 0; color: #718096; font-size: 10px; text-align: center; }
+@media (max-width:600px) {
+  .misma-guest-widget { right: 14px; bottom: 14px; }
+  .misma-guest-panel { right: -2px; bottom: 62px; width: min(380px, calc(100vw - 28px)); height: min(570px, calc(100dvh - 92px)); }
+}
+@media (prefers-reduced-motion: reduce) { .misma-guest-typing i { animation: none; } }
 
 /* Logo-only landing launcher: same ink circle and white mark as the Misma brand. */
 .misma-guest-launcher { width: 64px; min-width: 64px; height: 64px; min-height: 64px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; background: #080b10; box-shadow: 0 12px 34px rgba(0,0,0,.38); }
@@ -8939,4 +8944,23 @@ html, body, #app-root {
 @media (prefers-reduced-motion: reduce) {
   .misma-auth-flow-button { transition: none; }
   .misma-auth-flow-button:hover:not(:disabled) { transform: none; }
+}
+
+/* Public landing-page footer includes a clear ownership notice. */
+.misma-site .misma-site-footer {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.misma-site .misma-site-footer small {
+  color: #718096;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .misma-site .misma-site-footer {
+    flex-direction: column;
+    justify-content: center;
+    padding: 26px 5vw;
+    text-align: center;
+  }
 }
