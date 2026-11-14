@@ -25,7 +25,7 @@ host.style.cssText="position:fixed;left:20px;bottom:20px;z-index:2147483647";
 var mobileWidgetViewport=window.matchMedia("(max-width:520px)");
 function positionWidgetHost(){
   host.style.bottom=mobileWidgetViewport.matches
-    ? "calc(34px + env(safe-area-inset-bottom, 0px))"
+    ? "calc(60px + env(safe-area-inset-bottom, 0px))"
     : "20px";
 }
 positionWidgetHost();
