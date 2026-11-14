@@ -710,25 +710,44 @@ try{
   cachedWidgetConfig=JSON.parse(sessionStorage.getItem(configCacheKey)||"null");
   if(cachedWidgetConfig&&cachedWidgetConfig.data)widgetInstance.applyConfig(cachedWidgetConfig.data);
 }catch(error){cachedWidgetConfig=null;}
-var configHeaders={"Content-Type":"application/json"};
-if(cachedWidgetConfig&&cachedWidgetConfig.etag)configHeaders["If-None-Match"]=cachedWidgetConfig.etag;
-fetch(api,{
-  method:"POST",
-  headers:configHeaders,
-  body:JSON.stringify({action:"widget-config",siteKey:key,pageUrl:location.href})
-}).then(function(response){
-  if(response.status===304&&cachedWidgetConfig&&cachedWidgetConfig.data)return {data:cachedWidgetConfig.data,etag:cachedWidgetConfig.etag};
-  return response.json().then(function(data){
-    if(!response.ok||data.error||data.connected===false)throw Error(data.error||"This widget key is inactive for this website.");
-    return {data:data,etag:response.headers.get("ETag")||null};
+var configRefreshInFlight=false;
+function refreshWidgetConfig(){
+  if(configRefreshInFlight)return;
+  configRefreshInFlight=true;
+  var configHeaders={"Content-Type":"application/json"};
+  if(cachedWidgetConfig&&cachedWidgetConfig.etag)configHeaders["If-None-Match"]=cachedWidgetConfig.etag;
+  return fetch(api,{
+    method:"POST",
+    headers:configHeaders,
+    cache:"no-store",
+    body:JSON.stringify({action:"widget-config",siteKey:key,pageUrl:location.href})
+  }).then(function(response){
+    if(response.status===304&&cachedWidgetConfig&&cachedWidgetConfig.data)return {data:cachedWidgetConfig.data,etag:cachedWidgetConfig.etag};
+    return response.json().then(function(data){
+      if(!response.ok||data.error||data.connected===false)throw Error(data.error||"This widget key is inactive for this website.");
+      return {data:data,etag:response.headers.get("ETag")||null};
+    });
+  }).then(function(result){
+    if(!result||!result.data)return;
+    cachedWidgetConfig=result;
+    widgetInstance.applyConfig(result.data);
+    try{sessionStorage.setItem(configCacheKey,JSON.stringify({data:result.data,etag:result.etag,at:Date.now()}));}catch(error){/* Config still applies for this page view. */}
+  }).catch(function(error){
+    if(!cachedWidgetConfig) {
+      console.warn("[Misma] Widget is disabled for this website.",error&&error.message?error.message:"");
+      widgetInstance.destroy();
+    } else {
+      console.warn("[Misma] Could not refresh widget configuration; keeping the last saved configuration.",error&&error.message?error.message:"");
+    }
+  }).finally(function(){
+    configRefreshInFlight=false;
   });
-}).then(function(result){
-  widgetInstance.applyConfig(result.data);
-  try{sessionStorage.setItem(configCacheKey,JSON.stringify({data:result.data,etag:result.etag,at:Date.now()}));}catch(error){/* Config still applies for this page view. */}
-}).catch(function(error){
-  if(!cachedWidgetConfig) {
-    console.warn("[Misma] Widget is disabled for this website.",error&&error.message?error.message:"");
-    widgetInstance.destroy();
-  }
-});
+}
+function refreshWidgetConfigWhenActive(){
+  if(document.visibilityState==="visible")void refreshWidgetConfig();
+}
+void refreshWidgetConfig();
+window.addEventListener("focus",refreshWidgetConfigWhenActive);
+window.addEventListener("pageshow",refreshWidgetConfigWhenActive);
+document.addEventListener("visibilitychange",refreshWidgetConfigWhenActive);
 })();
