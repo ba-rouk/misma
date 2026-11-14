@@ -1944,7 +1944,7 @@ Deno.serve(async (request: Request) => {
         await db.from("website_connections").update({
           status: "connected", last_seen_at: new Date().toISOString(),
         }).eq("id", site.id);
-        const themeEtag = '"misma-widget-config-' + safeString(site.theme_updated_at, 80) + '-' + safeString(site.updated_at, 80) + '"' + ';
+        const themeEtag = '"misma-widget-config-' + safeString(site.theme_updated_at, 80) + '-' + safeString(site.updated_at, 80) + '"';
         const cacheHeaders = { ...cors, "Cache-Control": "public, max-age=60, stale-while-revalidate=30", "ETag": themeEtag };
         if (request.headers.get("if-none-match") === themeEtag) return new Response(null, { status: 304, headers: cacheHeaders });
         const businessResult = await db.from("workspaces").select("name").eq("id", site.workspace_id).maybeSingle();
