@@ -198,3 +198,16 @@ test("website customization resolves the selected website workspace and does not
   assert.match(api, /ensureWebsiteWorkspace\(data\.token, data\.websiteId\)/);
   assert.match(api, /Widget theme saved, but its audit event could not be recorded/);
 });
+
+test("website extraction stays within configured provider token budgets", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(edge, /const clipped = inputText\.slice\(0, 14000\)/);
+  assert.match(edge, /maxOutputTokens: voice \? 180 : structuredOutput \? 3000 : 6000/);
+  assert.match(edge, /max_tokens: voice \? 180 : structuredOutput \? 3000 : 6000/);
+  assert.match(edge, /\.slice\(0, 14000\);/);
+});
+
+test("website scan deduplicates in-page anchor variants instead of crawling the same document repeatedly", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(edge, /url\.hash = ""/);
+});
