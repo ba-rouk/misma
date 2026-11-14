@@ -22,6 +22,14 @@ try{visitor=sessionStorage.getItem(store)||crypto.randomUUID();sessionStorage.se
 catch(error){visitor="v-"+Date.now()+"-"+Math.random().toString(36).slice(2);}
 var host=document.createElement("div");
 host.style.cssText="position:fixed;left:20px;bottom:20px;z-index:2147483647";
+var mobileWidgetViewport=window.matchMedia("(max-width:520px)");
+function positionWidgetHost(){
+  host.style.bottom=mobileWidgetViewport.matches
+    ? "calc(34px + env(safe-area-inset-bottom, 0px))"
+    : "20px";
+}
+positionWidgetHost();
+if(typeof mobileWidgetViewport.addEventListener==="function")mobileWidgetViewport.addEventListener("change",positionWidgetHost);
 document.body.appendChild(host);
 var root=host.attachShadow?host.attachShadow({mode:"open"}):host;
 root.innerHTML=[
@@ -121,6 +129,13 @@ function applyWidgetTheme(theme) {
 }
 function applyWebsiteSocialLinks(config) {
   if (!config || typeof config !== "object") return;
+  if(typeof config.business_name==="string"&&config.business_name.trim()){
+    $(".brand b").textContent=config.business_name.trim().slice(0,120);
+  }
+  if(typeof config.website_url==="string"&&/^https:\/\//i.test(config.website_url)){
+    $(".brand small").textContent=config.website_url.slice(0,180);
+    $(".brand").title=config.business_name ? config.business_name+" · "+config.website_url : config.website_url;
+  }
   applySocialLink($(".whatsapp-link"), config.whatsapp_url, "wa.me");
   applySocialLink($(".instagram-link"), config.instagram_url, "instagram.com");
   applySocialLink($(".gmail-link"), config.gmail_url, "mail.google.com");

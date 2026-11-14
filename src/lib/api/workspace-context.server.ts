@@ -1,5 +1,22 @@
 import { getSupabaseClientForToken } from "../supabase";
 
+
+export async function ensureWebsiteWorkspace(token: string, websiteConnectionId: string) {
+  const db = getSupabaseClientForToken(token);
+  const { data: userData, error: userError } = await db.auth.getUser(token);
+  if (userError || !userData.user) throw new Error("Your session expired. Please sign in again.");
+
+  const { data: website, error: websiteError } = await db
+    .from("website_connections")
+    .select("workspace_id")
+    .eq("id", websiteConnectionId)
+    .is("widget_deleted_at", null)
+    .maybeSingle();
+  if (websiteError || !website?.workspace_id) throw new Error("Connected website not found or you do not have access to it.");
+
+  return ensureWorkspace(token, String(website.workspace_id));
+}
+
 export async function ensureWorkspace(
   token: string,
   requestedWorkspaceId?: string,

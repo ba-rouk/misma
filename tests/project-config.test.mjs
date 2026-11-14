@@ -890,7 +890,7 @@ test("website widget speech talk provides the dashboard voice controls and spoke
   assert.match(widget, /class='voice-control voice-stop/);
   assert.match(widget, /class='voice-control voice-end/);
   assert.match(widget, /voice:speakReply===true/);
-  assert.match(edge, /async function answerCustomer\(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId\?: string, roomId\?: number\)/);
+  assert.match(edge, /async function answerCustomer\(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId\?: string, roomId\?: number, websiteInfo\?: AnyRecord\)/);
   assert.match(edge, /input\.voice === true/);
   assert.match(edge, /VOICE CONVERSATION/);
 });
@@ -1378,7 +1378,8 @@ test("website and dashboard Speech Talk use short replies with bounded fast prov
   const voice = await read("../src/lib/misma-voice.ts");
   const widgetRuntime = await read("../src/assets/misma-widget-runtime.js");
 
-  assert.match(widgetVoice, /voice \? \(voiceAttempt === 0 \? 6500 : 4500\) : 18000/);
+  assert.match(widgetVoice, /voice \? \(voiceAttempt === 0 \? 6500 : 4500\)/);
+  assert.match(widgetVoice, /scanSignal && !voice \? 12_000/);
   assert.match(widgetVoice, /max_tokens: voice \? 180 : 6000/);
   assert.match(widgetVoice, /providerAttempt >= 2/);
   assert.match(widgetVoice, /ideally under 25 words/);

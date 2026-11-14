@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { ensureWorkspace } from "./workspace-context.server";
+import { ensureWebsiteWorkspace, ensureWorkspace } from "./workspace-context.server";
 
 type WorkspaceAsset = {
   id: string;
@@ -1011,7 +1011,7 @@ const widgetThemeSchema = z.object({
 export const getWebsiteWidgetTheme = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth, websiteId: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const { db, user, workspaceId } = await ensureWorkspace(data.token);
+    const { db, user, workspaceId } = await ensureWebsiteWorkspace(data.token, data.websiteId);
     const owner = await db.from("workspaces").select("owner_id").eq("id", workspaceId).single();
     if (owner.error || owner.data?.owner_id !== user.id) throw new Error("Only the account owner can customize this website widget.");
     const site = await db.from("website_connections")
@@ -1024,7 +1024,7 @@ export const getWebsiteWidgetTheme = createServerFn({ method: "POST" })
 export const saveWebsiteWidgetTheme = createServerFn({ method: "POST" })
   .validator(z.object({ token: auth, websiteId: z.string().uuid(), theme: widgetThemeSchema }))
   .handler(async ({ data }) => {
-    const { db, user, workspaceId } = await ensureWorkspace(data.token);
+    const { db, user, workspaceId } = await ensureWebsiteWorkspace(data.token, data.websiteId);
     const owner = await db.from("workspaces").select("owner_id").eq("id", workspaceId).single();
     if (owner.error || owner.data?.owner_id !== user.id) throw new Error("Only the account owner can customize this website widget.");
     const theme = widgetThemeSchema.parse(data.theme);
@@ -1033,6 +1033,11 @@ export const saveWebsiteWidgetTheme = createServerFn({ method: "POST" })
       .eq("id", data.websiteId).eq("workspace_id", workspaceId).is("widget_deleted_at", null)
       .select("id,theme,theme_schema_version,theme_updated_at").single();
     const saved = check(result.data, result.error);
-    await recordAudit(db, workspaceId, "website.widget_theme_updated", data.websiteId);
+    try {
+      await recordAudit(db, workspaceId, "website.widget_theme_updated", data.websiteId);
+    } catch (auditError) {
+      // The theme row is already saved. An audit-log failure must not falsely report the save as failed.
+      console.warn("[Misma] Widget theme saved, but its audit event could not be recorded.", auditError);
+    }
     return { website: saved };
   });
