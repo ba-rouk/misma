@@ -211,3 +211,27 @@ test("website scan deduplicates in-page anchor variants instead of crawling the 
   const edge = await read("../supabase/functions/misma-widget/index.ts");
   assert.match(edge, /url\.hash = ""/);
 });
+
+test("website scanner accepts JavaScript, CSS and general textual response types", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(edge, /contentType\.startsWith\("text\/"\)/);
+  assert.match(edge, /const isJavaScript = \/\(\?:text\|application\)/);
+  assert.match(edge, /const isCss = \/text\\\/css\//);
+  assert.match(edge, /JavaScript asset/);
+  assert.match(edge, /CSS stylesheet/);
+  assert.match(edge, /raw\.replace\(\/\\s\+\/g, " "\)/);
+});
+
+test("legacy public-key widget lookup includes saved theme and theme timestamp", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(edge, /\.eq\("public_key", key\)[\s\S]{0,450}theme,theme_updated_at,updated_at/);
+  assert.match(edge, /theme: sanitizeWidgetTheme\(site\.theme\)/);
+  assert.match(edge, /misma-widget-config-/);
+});
+
+test("widget runtime applies live theme configuration and keeps the mobile launcher higher", async () => {
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(runtime, /function applyWidgetTheme\(theme\)/);
+  assert.match(runtime, /applyWidgetTheme\(config\.theme\)/);
+  assert.match(runtime, /calc\(60px \+ env\(safe-area-inset-bottom/);
+});
