@@ -171,3 +171,30 @@ test("saved-channel remove and save controls use the same charcoal surface as Sc
   );
   assert.match(styles, /\.aichat-websites-tab \.aichat-social-remove:hover,[\s\S]*?\.aichat-websites-tab \.aichat-social-save:hover[\s\S]*?background: #303743 !important/);
 });
+
+test("embedded widget positions higher on mobile and displays the connected business identity", async () => {
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(runtime, /mobileWidgetViewport=window\.matchMedia\("\(max-width:520px\)"\)/);
+  assert.match(runtime, /calc\(34px \+ env\(safe-area-inset-bottom/);
+  assert.match(runtime, /config\.business_name/);
+  assert.match(runtime, /config\.website_url/);
+});
+
+test("website widget answers can use saved scanned pages and connected-site identity without AI extraction", async () => {
+  const edge = await read("../supabase/functions/misma-widget/index.ts");
+  assert.match(edge, /from\("website_scan_pages"\)/);
+  assert.match(edge, /scannedWebsitePages/);
+  assert.match(edge, /website\.businessName/);
+  assert.match(edge, /website\.websiteUrl/);
+  assert.match(edge, /structured AI extraction was unavailable/);
+  assert.match(edge, /business_name: safeString\(businessResult\.data\?\.name/);
+});
+
+test("website customization resolves the selected website workspace and does not report audit-only failures as save failures", async () => {
+  const context = await read("../src/lib/api/workspace-context.server.ts");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  assert.match(context, /ensureWebsiteWorkspace/);
+  assert.match(context, /\.eq\("id", websiteConnectionId\)/);
+  assert.match(api, /ensureWebsiteWorkspace\(data\.token, data\.websiteId\)/);
+  assert.match(api, /Widget theme saved, but its audit event could not be recorded/);
+});
