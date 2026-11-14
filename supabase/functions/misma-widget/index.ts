@@ -796,6 +796,8 @@ function isSafeWebsiteUrl(value: string): URL | null {
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) return null;
     if (url.port && url.port !== "80" && url.port !== "443") return null;
     if (url.username || url.password) return null;
+    // URL fragments identify in-page anchors, not distinct documents; strip them so the crawler does not rescan the same page repeatedly.
+    url.hash = "";
     return url;
   } catch { return null; }
 }
