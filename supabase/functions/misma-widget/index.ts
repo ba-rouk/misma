@@ -609,7 +609,7 @@ async function allowedSite(db: Db, key: string, request: Request): Promise<AnyRe
   if (!result.error && !result.data?.length) {
     // Keep older installs working when they still embed the original public_key.
     result = await db.from("website_connections")
-      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,updated_at")
+      .select("id,workspace_id,name,website_url,domain,public_key,widget_public_key,status,last_scanned_at,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,theme,theme_updated_at,updated_at")
       .eq("public_key", key)
       .is("widget_deleted_at", null);
   }
@@ -1166,8 +1166,16 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       }
       if (!response.ok) { if (onSkip) await onSkip(parsed.href, "HTTP " + response.status); continue; }
       const contentType = (response.headers.get("content-type") || "").toLowerCase();
-      if (!/(text\/html|application\/xhtml\+xml|text\/plain|application\/json|application\/xml|text\/xml|application\/pdf)/.test(contentType) && !parsed.pathname.toLowerCase().endsWith(".pdf")) {
-        if (onSkip) await onSkip(parsed.href, "Unsupported content type: " + (contentType || "unknown"));
+      const pathname = parsed.pathname.toLowerCase();
+      const isPdf = contentType.includes("application/pdf") || pathname.endsWith(".pdf");
+      const isHtml = /text\/html|application\/xhtml\+xml/.test(contentType) || /\.(?:html?|xhtml)$/.test(pathname);
+      const isJavaScript = /(?:text|application)\/(?:x-)?(?:java|ecma)script/.test(contentType) || /\.(?:js|mjs|cjs)$/.test(pathname);
+      const isCss = /text\/css/.test(contentType) || pathname.endsWith(".css");
+      const isReadableText = contentType.startsWith("text/") ||
+        /application\/(?:json|ld\+json|manifest\+json|xml|javascript|x-javascript|ecmascript|xhtml\+xml|rtf)/.test(contentType) ||
+        /\.(?:html?|xhtml|txt|md|markdown|csv|tsv|json|jsonld|xml|rss|atom|ya?ml|toml|ini|conf|log|js|mjs|cjs|css|scss|sass|less|svg|rtf)$/.test(pathname);
+      if (!isPdf && !isReadableText && !isHtml && !isJavaScript && !isCss) {
+        if (onSkip) await onSkip(parsed.href, "Unsupported binary content type: " + (contentType || "unknown"));
         continue;
       }
       const declaredLength = Number(response.headers.get("content-length") || 0);
@@ -1179,14 +1187,20 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         if (onSkip) await onSkip(parsed.href, error instanceof Error ? error.message : "Page exceeds the 1.5 MB scan limit");
         continue;
       }
-      const isPdf = contentType.includes("application/pdf") || parsed.pathname.toLowerCase().endsWith(".pdf");
       const raw = isPdf ? "" : decodeWebsiteBytes(bytes, contentType);
       const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const title = titleMatch ? cleanHtml(titleMatch[1]).slice(0, 240) : (decodeURIComponent(parsed.pathname.split("/").pop() || parsed.pathname).slice(0, 240));
-      let text = isPdf ? await extractPdfText(bytes) : /text\/html|application\/xhtml\+xml/.test(contentType)
-        ? (cleanHtml(raw) + "\n" + extractEmbeddedData(raw)).slice(0, 18000)
-        : raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000);
-      const platform = isPdf ? "PDF document" : detectWebsitePlatform(raw, parsed.href, response.headers);
+      const pathName = decodeURIComponent(parsed.pathname.split("/").pop() || parsed.pathname);
+      const title = titleMatch ? cleanHtml(titleMatch[1]).slice(0, 240) : pathName.slice(0, 240);
+      let text = isPdf
+        ? await extractPdfText(bytes)
+        : isHtml
+          ? (cleanHtml(raw) + "\n" + extractEmbeddedData(raw)).slice(0, 18000)
+          : isJavaScript || isCss
+            ? raw.replace(/\\s*\\/\\/[#@] sourceMappingURL=.*$/gm, " ").replace(/\\s*\\/\\*[#@] sourceMappingURL=.*?\\*\\//gs, " ").replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000)
+            : /(?:xml|svg|html)/i.test(contentType) || /\\.svg$/.test(pathname)
+              ? raw.replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000)
+              : raw.replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000);
+      const platform = isPdf ? "PDF document" : isJavaScript ? "JavaScript asset" : isCss ? "CSS stylesheet" : detectWebsitePlatform(raw, parsed.href, response.headers);
       const themeSuggestions = isPdf ? {} : extractThemeSuggestions(raw);
       if (text.length < 120 && /text\/html|application\/xhtml\+xml/.test(contentType) && getEnv("BROWSERLESS_API_KEY")) {
         try {
