@@ -1745,3 +1745,20 @@ test("restricted support staff can only access customer and notification control
   assert.match(styles, /\.aichat-voice-picker-menu/);
   assert.match(styles, /\.aichat-request-confirm-button/);
 });
+
+test("dashboard chat activity notifications use ServiceWorkerRegistration.showNotification, never the Notification constructor", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /navigator\.serviceWorker\.register\("\/misma-push-sw\.js"/);
+  assert.match(dashboard, /registration\.showNotification\("New Misma chat message"/);
+  assert.doesNotMatch(dashboard, /new window\.Notification\(/);
+  assert.doesNotMatch(dashboard, /new Notification\(/);
+});
+
+test("dashboard always retains a sent user message if its optimistic row disappears during response", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /const persistedUser = res\.userMessage \|\|/);
+  assert.match(dashboard, /const temporaryIndex = next\.findIndex/);
+  assert.match(dashboard, /if \(temporaryIndex >= 0\)/);
+  assert.match(dashboard, /Reinsert the saved user message/);
+  assert.match(dashboard, /return alreadySaved \? prev : \[\.\.\.prev, reply\.message\]/);
+});
