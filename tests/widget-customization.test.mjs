@@ -238,3 +238,13 @@ test("widget runtime applies live theme configuration and keeps the mobile launc
   assert.match(runtime, /applyWidgetTheme\(config\.theme\)/);
   assert.match(runtime, /calc\(60px \+ env\(safe-area-inset-bottom/);
 });
+
+test("widget configuration refreshes saved themes when an existing website tab becomes active", async () => {
+  const runtime = await read("../src/assets/misma-widget-runtime.js");
+  assert.match(runtime, /function refreshWidgetConfig\(\)/);
+  assert.match(runtime, /cache:"no-store"/);
+  assert.match(runtime, /window\.addEventListener\("focus",refreshWidgetConfigWhenActive\)/);
+  assert.match(runtime, /window\.addEventListener\("pageshow",refreshWidgetConfigWhenActive\)/);
+  assert.match(runtime, /document\.addEventListener\("visibilitychange",refreshWidgetConfigWhenActive\)/);
+  assert.match(runtime, /configRefreshInFlight=false/);
+});
