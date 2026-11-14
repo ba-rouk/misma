@@ -1196,10 +1196,10 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
         : isHtml
           ? (cleanHtml(raw) + "\n" + extractEmbeddedData(raw)).slice(0, 18000)
           : isJavaScript || isCss
-            ? raw.replace(/\\s*\\/\\/[#@] sourceMappingURL=.*$/gm, " ").replace(/\\s*\\/\\*[#@] sourceMappingURL=.*?\\*\\//gs, " ").replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000)
-            : /(?:xml|svg|html)/i.test(contentType) || /\\.svg$/.test(pathname)
-              ? raw.replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000)
-              : raw.replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/g, " ").replace(/\\s+/g, " ").trim().slice(0, 18000);
+            ? raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000)
+            : /(?:xml|svg|html)/i.test(contentType) || /\.svg$/.test(pathname)
+              ? raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000)
+              : raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000);
       const platform = isPdf ? "PDF document" : isJavaScript ? "JavaScript asset" : isCss ? "CSS stylesheet" : detectWebsitePlatform(raw, parsed.href, response.headers);
       const themeSuggestions = isPdf ? {} : extractThemeSuggestions(raw);
       if (text.length < 120 && /text\/html|application\/xhtml\+xml/.test(contentType) && getEnv("BROWSERLESS_API_KEY")) {
