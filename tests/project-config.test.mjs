@@ -1380,7 +1380,7 @@ test("website and dashboard Speech Talk use short replies with bounded fast prov
 
   assert.match(widgetVoice, /voice \? \(voiceAttempt === 0 \? 6500 : 4500\)/);
   assert.match(widgetVoice, /scanSignal && !voice \? 12_000/);
-  assert.match(widgetVoice, /max_tokens: voice \? 180 : 6000/);
+  assert.match(widgetVoice, /max_tokens: voice \\? 180 : structuredOutput \\? 3000 : 6000/);
   assert.match(widgetVoice, /providerAttempt >= 2/);
   assert.match(widgetVoice, /ideally under 25 words/);
   assert.match(dashboardVoice, /voice \? \(providerIndex === 0 \? 6_500 : 4_500\) : undefined/);
