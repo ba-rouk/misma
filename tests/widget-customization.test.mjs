@@ -175,7 +175,7 @@ test("saved-channel remove and save controls use the same charcoal surface as Sc
 test("embedded widget positions higher on mobile and displays the connected business identity", async () => {
   const runtime = await read("../src/assets/misma-widget-runtime.js");
   assert.match(runtime, /mobileWidgetViewport=window\.matchMedia\("\(max-width:520px\)"\)/);
-  assert.match(runtime, /calc\(34px \+ env\(safe-area-inset-bottom/);
+  assert.match(runtime, /calc\(60px \+ env\(safe-area-inset-bottom/);
   assert.match(runtime, /config\.business_name/);
   assert.match(runtime, /config\.website_url/);
 });
@@ -224,7 +224,10 @@ test("website scanner accepts JavaScript, CSS and general textual response types
 
 test("legacy public-key widget lookup includes saved theme and theme timestamp", async () => {
   const edge = await read("../supabase/functions/misma-widget/index.ts");
-  assert.match(edge, /\.eq\("public_key", key\)[\s\S]{0,450}theme,theme_updated_at,updated_at/);
+  const legacyKeyIndex = edge.indexOf('.eq("public_key", key)');
+  const legacySelectIndex = edge.lastIndexOf('.select("', legacyKeyIndex);
+  assert.ok(legacyKeyIndex > 0 && legacySelectIndex > 0);
+  assert.match(edge.slice(legacySelectIndex, legacyKeyIndex), /theme,theme_updated_at,updated_at/);
   assert.match(edge, /theme: sanitizeWidgetTheme\(site\.theme\)/);
   assert.match(edge, /misma-widget-config-/);
 });
