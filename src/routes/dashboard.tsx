@@ -2258,15 +2258,21 @@ function Dashboard() {
     cursor.latestId = Math.max(cursor.latestId, latestId);
     if (!notificationPreferences.chatActivity || !newMessages.length || typeof window === "undefined" || !("Notification" in window) || window.Notification.permission !== "granted" || document.visibilityState === "visible") return;
     const latest = newMessages.reduce((current, item) => Number(item.id) > Number(current.id) ? item : current);
-    const notification = new window.Notification("New Misma chat message", {
-      body: (latest.conversationTitle ? latest.conversationTitle + ": " : "") + latest.text.slice(0, 140),
-      tag: "misma-visitor-message-" + latest.id,
-    });
-    notification.onclick = () => {
-      window.focus();
-      setActiveTab("notifications");
-      notification.close();
-    };
+    if (!("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/misma-push-sw.js", { scope: "/" })
+      .then(async (registration) => {
+        await navigator.serviceWorker.ready;
+        await registration.showNotification("New Misma chat message", {
+          body: (latest.conversationTitle ? latest.conversationTitle + ": " : "") + latest.text.slice(0, 140),
+          tag: "misma-visitor-message-" + latest.id,
+          icon: "/misma-logo.svg",
+          badge: "/misma-logo.svg",
+          data: { url: "/dashboard?tab=notifications" },
+        });
+      })
+      .catch((cause) => {
+        console.warn("[misma] Could not display the chat activity notification:", cause);
+      });
   }, [dashboardDataLoaded, unreadVisitorMessages, notificationPreferences.chatActivity]);
 
   const applyDashboardData = (data: any, refreshChannelStatus = true) => {
@@ -3649,7 +3655,12 @@ function Dashboard() {
         }, requestController.signal);
         if (!reply.message) throw new Error("The human reply was not saved.");
         if (!options.voice) {
-          setMessages((prev) => prev.map((item) => item.id === tempUserId ? reply.message : item));
+          setMessages((prev) => {
+            const alreadySaved = prev.some((item) => String(item.id) === String(reply.message.id));
+            const replaced = prev.some((item) => String(item.id) === String(tempUserId));
+            if (replaced) return prev.map((item) => String(item.id) === String(tempUserId) ? reply.message : item);
+            return alreadySaved ? prev : [...prev, reply.message];
+          });
         }
         setSelectedFiles([]);
         setThinkHarder(false);
@@ -3730,10 +3741,28 @@ function Dashboard() {
         setEditingOriginalText(null);
       } else {
         setMessages((prev) => {
-          const withPersistedUser = tempUserId && res.userMessage
-            ? prev.map((item) => item.id === tempUserId ? res.userMessage : item)
-            : prev;
-          return [...withPersistedUser, res.aiMessage];
+          const next = [...prev];
+          const temporaryIndex = next.findIndex((item) => String(item.id) === String(tempUserId));
+          const persistedUser = res.userMessage || {
+            id: tempUserId || "user-" + crypto.randomUUID(),
+            role: "human",
+            text: textToSend,
+            created_at: new Date().toISOString(),
+            attachments,
+          };
+          const persistedUserIndex = next.findIndex((item) => String(item.id) === String(persistedUser.id));
+          if (temporaryIndex >= 0) {
+            next[temporaryIndex] = persistedUser;
+          } else if (persistedUserIndex < 0) {
+            // A concurrent conversation refresh can remove the optimistic row.
+            // Reinsert the saved user message so the customer's prompt is never hidden
+            // merely because the temporary client row was no longer in state.
+            next.push(persistedUser);
+          }
+          if (!next.some((item) => String(item.id) === String(res.aiMessage.id))) {
+            next.push(res.aiMessage);
+          }
+          return next;
         });
         if (autoSpeakReplies && !options.signal) handleReadAloud(res.aiMessage);
       }
