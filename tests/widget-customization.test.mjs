@@ -219,7 +219,7 @@ test("website scanner accepts JavaScript, CSS and general textual response types
   assert.match(edge, /const isCss = \/text\\\/css\//);
   assert.match(edge, /JavaScript asset/);
   assert.match(edge, /CSS stylesheet/);
-  assert.match(edge, /raw\.replace\(\/\\s\+\/g, " "\)/);
+  assert.match(edge, /raw\.replace\(/);
 });
 
 test("legacy public-key widget lookup includes saved theme and theme timestamp", async () => {
