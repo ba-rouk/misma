@@ -1372,6 +1372,21 @@ test("website human handoff sends customer typing and new replies to the open bu
   assert.match(edge, /visitor_typing_until: null/);
 });
 
+test("active website chats show incoming visitor messages before the AI reply and display a thinking state", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const activityEffectStart = dashboard.indexOf("// Poll every open website conversation");
+  const activityEffectEnd = dashboard.indexOf("const handleDeleteHumanRequest", activityEffectStart);
+  assert.ok(activityEffectStart >= 0 && activityEffectEnd > activityEffectStart);
+  const activityEffect = dashboard.slice(activityEffectStart, activityEffectEnd);
+  assert.match(api, /\.in\("role", \["customer", "ai", "human"\]\)/);
+  assert.match(api, /role: message\.role as "customer" \| "ai" \| "human"/);
+  assert.doesNotMatch(activityEffect, /!isHumanHandoffConversation/);
+  assert.match(activityEffect, /const additions = activity\.messages;/);
+  assert.match(dashboard, /const isWebsiteAiThinking = Boolean/);
+  assert.match(dashboard, /\(\(isSending && !isHumanHandoffConversation\) \|\| isWebsiteAiThinking\) && \(/);
+});
+
 test("website and dashboard Speech Talk use short replies with bounded fast provider attempts", async () => {
   const widgetVoice = await read("../supabase/functions/misma-widget/index.ts");
   const dashboardVoice = await read("../supabase/functions/misma-chat/index.ts");

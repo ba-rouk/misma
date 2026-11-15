@@ -602,7 +602,7 @@ export const getConversationActivity = createServerFn({ method: "POST" })
       .select("id,role,text,created_at,attachments")
       .eq("conversation_id", data.conversationId)
       .eq("is_voice", false)
-      .in("role", ["customer", "human"])
+      .in("role", ["customer", "ai", "human"])
       .gt("id", data.afterMessageId)
       .order("id", { ascending: true })
       .limit(30);
@@ -616,7 +616,7 @@ export const getConversationActivity = createServerFn({ method: "POST" })
       },
       messages: (rows ?? []).map((message: any) => ({
         id: String(message.id),
-        role: message.role as "customer" | "human",
+        role: message.role as "customer" | "ai" | "human",
         text: String(message.text || ""),
         created_at: String(message.created_at || ""),
         attachments: Array.isArray(message.attachments) ? message.attachments : [],

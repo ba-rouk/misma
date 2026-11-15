@@ -4545,6 +4545,17 @@ function Dashboard() {
   const activeConversation = conversations.find(
     (item: any) => Number(item.id) === Number(currentConversationId),
   );
+  const latestConversationMessage = messages[messages.length - 1];
+  const latestConversationMessageTime = latestConversationMessage?.created_at
+    ? Date.parse(latestConversationMessage.created_at)
+    : 0;
+  const isWebsiteAiThinking = Boolean(
+    String(activeConversation?.channel || "").toLowerCase() === "website" &&
+    activeConversation?.status === "AI" &&
+    latestConversationMessage?.role === "customer" &&
+    Number.isFinite(latestConversationMessageTime) &&
+    Date.now() - latestConversationMessageTime < 180_000
+  );
   const isHumanHandoffConversation = Boolean(
     currentConversationId &&
     (
@@ -4558,11 +4569,11 @@ function Dashboard() {
     ? messages.filter((message) => message.role === "customer" || message.role === "human")
     : messages;
 
-  // Refresh only new messages and the short-lived visitor typing status while a
-  // human-handoff conversation is open. This avoids the former 30-second inbox delay.
+  // Poll every open website conversation, not only human handoffs. The widget
+  // persists the visitor's message before generating its AI response, so the
+  // dashboard must read that row while the assistant is still thinking.
   useEffect(() => {
     if (!token || !dashboardDataLoaded || !workspace?.id || !currentConversationId ||
-        !isHumanHandoffConversation ||
         String(activeConversation?.channel || "").toLowerCase() !== "website" ||
         activeTab !== "workspace") {
       setVisitorIsTyping(false);
@@ -4599,11 +4610,15 @@ function Dashboard() {
           Number.isFinite(typingUntil) &&
           typingUntil > Date.now(),
         );
+        setConversations((current) => current.map((conversation: any) =>
+          Number(conversation.id) === currentConversationId &&
+          conversation.status !== activity.conversation.status
+            ? { ...conversation, status: activity.conversation.status }
+            : conversation
+        ));
 
         if (activity.messages.length) {
-          const additions = activity.messages.filter((message) =>
-            message.role === "customer" || message.role === "human"
-          );
+          const additions = activity.messages;
           if (additions.length) {
             setMessages((current) => {
               const existingIds = new Set(current.map((message) => String(message.id)));
@@ -4617,6 +4632,7 @@ function Dashboard() {
                     ...conversation,
                     text: latest.text.slice(0, 200),
                     updated_at: latest.created_at,
+                    status: activity.conversation.status || conversation.status,
                   }
                 : conversation
             ));
@@ -4657,7 +4673,7 @@ function Dashboard() {
       window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [token, dashboardDataLoaded, workspace?.id, currentConversationId, isHumanHandoffConversation, activeConversation?.channel, activeTab, messages]);
+  }, [token, dashboardDataLoaded, workspace?.id, currentConversationId, activeConversation?.channel, activeTab, messages]);
 
   const handleDeleteHumanRequest = (
     requestId: number | null,
@@ -5319,7 +5335,7 @@ function Dashboard() {
               )}
 
               {/* AI Thinking State */}
-              {isSending && !isHumanHandoffConversation && (
+              {((isSending && !isHumanHandoffConversation) || isWebsiteAiThinking) && (
                 <div className="aichat-thinking-row" aria-live="polite">
                   <div className="aichat-thinking-icon">
                     <svg viewBox="0 0 100 100" width="14" height="14">
