@@ -769,6 +769,15 @@ export const createWebsiteConnection = createServerFn({ method: "POST" })
     const parsed = new URL(data.websiteUrl);
     if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use an HTTP or HTTPS website URL.");
     const websiteUrl = parsed.origin;
+    const activeWebsites = await db.from("website_connections").select("id")
+      .eq("workspace_id", workspaceId).is("widget_deleted_at", null).limit(5);
+    if (activeWebsites.error) {
+      throw new Error("Could not check your active website connections: " + activeWebsites.error.message);
+    }
+    if ((activeWebsites.data || []).length >= 5) {
+      throw new Error("Your Misma workspace can connect up to 5 active websites. Remove an existing website before adding another.");
+    }
+
     let widgetPublicKey: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
     if (data.sharedWidgetKey) {
       const existingWidget = await db.from("website_connections").select("id")
