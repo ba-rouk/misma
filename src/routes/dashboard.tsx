@@ -436,7 +436,7 @@ function WebsiteSocialSettings({
                 type="text"
                 placeholder="https://instagram.com/yourbusiness or @yourbusiness"
                 autoComplete="url"
-                readOnly={Boolean(site.instagram_url)}
+                
                 onChange={(event) => setDraft((current) => ({ ...current, instagramUrl: event.target.value }))}
               />
             </label>
@@ -461,7 +461,7 @@ function WebsiteSocialSettings({
                 autoComplete="email"
                 maxLength={254}
                 placeholder="business@gmail.com"
-                readOnly={Boolean(site.gmail_address)}
+                
                 onChange={(event) => setDraft((current) => ({ ...current, gmailAddress: event.target.value }))}
               />
             </label>
@@ -483,7 +483,7 @@ function WebsiteSocialSettings({
                 Country code
                 <select
                   value={draft.whatsappCountryCode}
-                  disabled={Boolean(site.whatsapp_number)}
+                  
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappCountryCode: event.target.value }))}
                 >
                   {!WEBSITE_PHONE_COUNTRY_CODES.some((country) => country.code === draft.whatsappCountryCode) && (
@@ -501,7 +501,7 @@ function WebsiteSocialSettings({
                   inputMode="tel"
                   autoComplete="tel-national"
                   value={draft.whatsappNumber}
-                  readOnly={Boolean(site.whatsapp_number)}
+                  
                   placeholder="e.g. 788123456"
                   onChange={(event) => setDraft((current) => ({ ...current, whatsappNumber: event.target.value }))}
                 />
@@ -512,7 +512,7 @@ function WebsiteSocialSettings({
               <textarea
                 rows={3}
                 value={draft.whatsappMessage}
-                readOnly={Boolean(site.whatsapp_number)}
+                
                 placeholder="Hello! How can we help you today?"
                 onChange={(event) => setDraft((current) => ({ ...current, whatsappMessage: event.target.value }))}
               />
@@ -6391,10 +6391,10 @@ function Dashboard() {
           <div className="aichat-tab-view aichat-websites-tab"><div className="aichat-tab-content">
             <div className="aichat-tab-header"><h2>Websites</h2><p>Connect a published website or register an unpublished draft, staging, or preview URL before launch.</p></div>
             <div className="aichat-card">
-              <h3>Register a website or preview URL</h3>
+              <div className="aichat-panel-heading"><h3>Register a website or preview URL</h3><span className="aichat-status-pill">{connectedWebsites.length}/5 websites</span></div>
               <form className="aichat-hub-form" onSubmit={async (event) => {
                 event.preventDefault();
-                if (!workspace?.id || !websiteDraftUrl.trim()) return;
+                if (!workspace?.id || !websiteDraftUrl.trim() || connectedWebsites.length >= 5) return;
                 let parsed: URL;
                 try { parsed = new URL(websiteDraftUrl.trim()); } catch { alert("Enter a valid website URL."); return; }
                 if (!["http:", "https:"].includes(parsed.protocol)) { alert("Use an HTTP or HTTPS website URL."); return; }
@@ -6414,8 +6414,9 @@ function Dashboard() {
               }}>
                 <label>Website or preview URL<input className="aichat-input" type="url" placeholder="https://preview.example.com" value={websiteDraftUrl} onChange={(event) => setWebsiteDraftUrl(event.target.value)} required /></label>
                 <label>Website name (optional)<input className="aichat-input" placeholder="My business website" value={websiteDraftName} onChange={(event) => setWebsiteDraftName(event.target.value)} /></label>
-                <p className="aichat-website-setup-note">You do not need to publish the website first. Register its final domain or a preview/staging URL, then copy the general script below. For local testing, use <code>http://localhost:PORT</code>.</p>
-                <button type="submit" className="aichat-action-btn secondary" disabled={!websiteDraftUrl.trim()}>Create connection &amp; get script</button>
+                <p className="aichat-website-setup-note">You can connect up to 5 websites per workspace. You do not need to publish the website first. Register its final domain or a preview/staging URL, then copy the general script below. For local testing, use <code>http://localhost:PORT</code>.</p>
+                {connectedWebsites.length >= 5 && <p className="aichat-integration-warning" role="status">Your 5-website limit has been reached. Remove a website connection before adding another.</p>}
+                <button type="submit" className="aichat-action-btn secondary" disabled={!websiteDraftUrl.trim() || connectedWebsites.length >= 5}>Create connection &amp; get script</button>
               </form>
             </div>
             <div className="aichat-card">

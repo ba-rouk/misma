@@ -1777,3 +1777,22 @@ test("dashboard always retains a sent user message if its optimistic row disappe
   assert.match(dashboard, /Reinsert the saved user message/);
   assert.match(dashboard, /return alreadySaved \? prev : \[\.\.\.prev, reply\.message\]/);
 });
+
+
+test("website connections enforce a five-site workspace limit and saved channel values remain editable", async () => {
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const migration = await read("../supabase/migrations/20261116120000_limit_five_website_connections.sql");
+
+  assert.match(api, /activeWebsiteCount[\s\S]*>= 5/);
+  assert.match(dashboard, /connectedWebsites\.length >= 5/);
+  assert.match(dashboard, /\{connectedWebsites\.length\}\/5 websites/);
+  const socialStart = dashboard.indexOf("function WebsiteSocialSettings");
+  const socialEnd = dashboard.indexOf("function WhatsAppConnectionCard", socialStart);
+  const socialSettings = dashboard.slice(socialStart, socialEnd);
+  assert.doesNotMatch(socialSettings, /readOnly=\{Boolean\(site\.(?:instagram_url|gmail_address|whatsapp_number)\)\}/);
+  assert.doesNotMatch(socialSettings, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.match(migration, /pg_advisory_xact_lock/);
+  assert.match(migration, /active_count >= 5/);
+  assert.match(migration, /widget_deleted_at is null/);
+});

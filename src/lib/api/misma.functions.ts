@@ -769,6 +769,14 @@ export const createWebsiteConnection = createServerFn({ method: "POST" })
     const parsed = new URL(data.websiteUrl);
     if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use an HTTP or HTTPS website URL.");
     const websiteUrl = parsed.origin;
+    const { count: activeWebsiteCount, error: countError } = await db.from("website_connections")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .is("widget_deleted_at", null);
+    if (countError) throw new Error("Could not check your website connection limit.");
+    if ((activeWebsiteCount ?? 0) >= 5) {
+      throw new Error("You can connect up to 5 websites per Misma workspace. Remove an existing website before adding another.");
+    }
     let widgetPublicKey: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
     if (data.sharedWidgetKey) {
       const existingWidget = await db.from("website_connections").select("id")
