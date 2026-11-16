@@ -1013,6 +1013,24 @@ test("embedded speech talk hides transcripts and uses female-first English speec
 });
 
 
+
+test("website connections enforce a five-active-website workspace limit in the UI, API, and database", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const migration = await read("../supabase/migrations/20261116093900_website_connection_limit_five.sql");
+  assert.match(dashboard, /connectedWebsites\.length >= 5/);
+  assert.match(dashboard, /connectedWebsites\.length\}\/5/);
+  assert.match(dashboard, /up to 5 active websites/);
+  assert.match(api, /\.is\("widget_deleted_at", null\)\.limit\(5\)/);
+  assert.match(api, /up to 5 active websites/);
+  assert.match(migration, /active_count integer not null default 0 check \(active_count between 0 and 5\)/);
+  assert.match(migration, /on conflict \(workspace_id\) do update/);
+  assert.match(migration, /before insert on public\.website_connections/);
+  assert.match(migration, /before update of widget_deleted_at, workspace_id/);
+  assert.match(migration, /before delete on public\.website_connections/);
+  assert.match(migration, /up to 5 active websites/);
+});
+
 test("website social links are owner-scoped and WhatsApp links are composed from stored parts", async () => {
   const api = await read("../src/lib/api/misma.functions.ts");
   const edge = await read("../supabase/functions/misma-widget/index.ts");
@@ -1598,19 +1616,23 @@ test("dashboard sent user and human-request message text is bright white through
 });
 
 
-test("saved website channels stay visible and cannot be replaced without removing them", async () => {
+test("saved website channels stay prefilled and editable whenever Add channels opens", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.match(dashboard, /if \(!open\) setDraft\(currentDraft\(\)\)/);
-  assert.match(dashboard, /value=\{draft\.instagramUrl\}/);
-  assert.match(dashboard, /readOnly=\{Boolean\(site\.instagram_url\)\}/);
-  assert.match(dashboard, /value=\{draft\.gmailAddress\}/);
-  assert.match(dashboard, /readOnly=\{Boolean\(site\.gmail_address\)\}/);
-  assert.match(dashboard, /value=\{draft\.whatsappNumber\}/);
-  assert.match(dashboard, /readOnly=\{Boolean\(site\.whatsapp_number\)\}/);
-  assert.match(dashboard, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
-  assert.match(dashboard, /Remove Instagram/);
-  assert.match(dashboard, /Remove Gmail/);
-  assert.match(dashboard, /Remove WhatsApp/);
+  const settingsStart = dashboard.indexOf("function WebsiteSocialSettings");
+  const settingsEnd = dashboard.indexOf("function WhatsAppConnectionCard", settingsStart);
+  const settings = dashboard.slice(settingsStart, settingsEnd);
+  assert.match(settings, /if \(!open\) setDraft\(currentDraft\(\)\)/);
+  assert.match(settings, /value=\{draft\.instagramUrl\}/);
+  assert.match(settings, /value=\{draft\.gmailAddress\}/);
+  assert.match(settings, /value=\{draft\.whatsappCountryCode\}/);
+  assert.match(settings, /value=\{draft\.whatsappNumber\}/);
+  assert.match(settings, /value=\{draft\.whatsappMessage\}/);
+  assert.doesNotMatch(settings, /readOnly=/);
+  assert.doesNotMatch(settings, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.match(settings, /Save changes/);
+  assert.match(settings, /Remove Instagram/);
+  assert.match(settings, /Remove Gmail/);
+  assert.match(settings, /Remove WhatsApp/);
 });
 
 test("website connection actions and Add channels use Scan website dark-grey styling", async () => {
