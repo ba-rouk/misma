@@ -1788,7 +1788,7 @@ test("website connections enforce a five-site workspace limit and saved channel 
   assert.match(dashboard, /connectedWebsites\.length >= 5/);
   assert.match(dashboard, /\{connectedWebsites\.length\}\/5 websites/);
   const socialStart = dashboard.indexOf("function WebsiteSocialSettings");
-  const socialEnd = dashboard.indexOf("\\n\\nfunction WhatsAppConnectionCard", socialStart);
+  const socialEnd = dashboard.indexOf("function WhatsAppConnectionCard", socialStart);
   const socialSettings = dashboard.slice(socialStart, socialEnd);
   assert.doesNotMatch(socialSettings, /readOnly=\{Boolean\(site\.(?:instagram_url|gmail_address|whatsapp_number)\)\}/);
   assert.doesNotMatch(socialSettings, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
