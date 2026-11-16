@@ -132,7 +132,7 @@ Agnes 3.0 Flash screens media prompts and supplied reference images before gener
 
 From **Dashboard → Connect → Website**, register the website's real domain or its preview/staging URL. You can create the connection and copy its general HTML script before publishing the site; publication is not required to issue the site key. Paste the generated snippet into each page before the closing `</body>` tag.
 
-The widget becomes verified when a page loads the script from the registered hostname. Use the exact hostname you registered (for example, a preview subdomain). HTTPS is required for hosted preview/staging pages; local development is supported on `http://localhost:PORT`. The site key is restricted to that registered hostname and should not be shared across unrelated websites. A website content scan still requires the page to be reachable by Misma's scanner; the chat widget can be installed and tested separately on a browser-accessible preview page.
+The widget becomes verified when a page loads the script from the registered hostname. Use the exact hostname you registered (for example, a preview subdomain). HTTPS is required for hosted preview/staging pages; local development is supported on `http://localhost:PORT`. The site key is restricted to that registered hostname and should not be shared across unrelated websites. Each workspace can register up to **five active website connections**; removing a connection frees a slot while preserving historical visitor conversations. A website content scan still requires the page to be reachable by Misma's scanner; the chat widget can be installed and tested separately on a browser-accessible preview page.
 
 
 ## Website widget customization and Core.01 rooms
