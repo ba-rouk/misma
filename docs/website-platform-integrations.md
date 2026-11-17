@@ -24,7 +24,7 @@ Suggested settings:
 - Setup URL: https://grlrrmebnthxguluybgb.supabase.co/functions/v1/misma-platform-integrations?mode=github-callback
 - Webhook URL: https://grlrrmebnthxguluybgb.supabase.co/functions/v1/misma-platform-integrations?mode=webhook
 - Webhook active: enabled
-- Webhook events: installation
+- Webhook events: installation, pull_request
 
 Repository permissions (least privilege for the current workflow):
 
@@ -84,4 +84,4 @@ Authenticated users can read only records belonging to their workspace. Writes a
 - Automatic deployment is delegated to GitHub auto-merge, which remains subject to repository rules and required checks.
 - If auto-merge is unavailable, the PR stays open and the customer receives the GitHub review link.
 - Only the widget script in a recognized HTML entrypoint is changed. No unrelated source files, secrets, or deployment configuration are modified.
-- Removing a GitHub App installation marks the provider connection disconnected through a signed webhook.
+- Removing a GitHub App installation marks the provider connection disconnected through a signed webhook. A merged pull-request webhook records the deployment as deployed; a separate live-site verification step is still required before marking it verified.
