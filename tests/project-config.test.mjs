@@ -1598,16 +1598,19 @@ test("dashboard sent user and human-request message text is bright white through
 });
 
 
-test("saved website channels stay visible and cannot be replaced without removing them", async () => {
+test("saved website channels remain editable and can be removed", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(dashboard, /if \(!open\) setDraft\(currentDraft\(\)\)/);
   assert.match(dashboard, /value=\{draft\.instagramUrl\}/);
-  assert.match(dashboard, /readOnly=\{Boolean\(site\.instagram_url\)\}/);
+  assert.match(dashboard, /instagramUrl: event\.target\.value/);
+  assert.doesNotMatch(dashboard, /readOnly=\{Boolean\(site\.instagram_url\)\}/);
   assert.match(dashboard, /value=\{draft\.gmailAddress\}/);
-  assert.match(dashboard, /readOnly=\{Boolean\(site\.gmail_address\)\}/);
+  assert.match(dashboard, /gmailAddress: event\.target\.value/);
+  assert.doesNotMatch(dashboard, /readOnly=\{Boolean\(site\.gmail_address\)\}/);
   assert.match(dashboard, /value=\{draft\.whatsappNumber\}/);
-  assert.match(dashboard, /readOnly=\{Boolean\(site\.whatsapp_number\)\}/);
-  assert.match(dashboard, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.match(dashboard, /whatsappNumber: event\.target\.value/);
+  assert.doesNotMatch(dashboard, /readOnly=\{Boolean\(site\.whatsapp_number\)\}/);
+  assert.doesNotMatch(dashboard, /disabled=\{Boolean\(site\.whatsapp_number\)\}/);
   assert.match(dashboard, /Remove Instagram/);
   assert.match(dashboard, /Remove Gmail/);
   assert.match(dashboard, /Remove WhatsApp/);
