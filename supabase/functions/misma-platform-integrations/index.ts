@@ -116,7 +116,7 @@ function clients(accessToken?: string) {
   const serviceKey = required("SUPABASE_SERVICE_ROLE_KEY");
   const admin = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const user = accessToken
-    ? createClient(SUPABASE_URL, required("SUPABASE_ANON_KEY"), {
+    ? createClient(SUPABASE_URL, Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || required("SUPABASE_ANON_KEY"), {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: "Bearer " + accessToken } },
     })
