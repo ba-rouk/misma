@@ -33,11 +33,27 @@ async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+function derLength(length: number): number[] {
+  if (length < 128) return [length];
+  const bytes: number[] = [];
+  let remaining = length;
+  while (remaining > 0) { bytes.unshift(remaining & 255); remaining >>>= 8; }
+  return [0x80 | bytes.length, ...bytes];
+}
+function pkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
+  const algorithm = new Uint8Array([0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]);
+  const version = new Uint8Array([0x02, 0x01, 0x00]);
+  const octet = new Uint8Array([0x04, ...derLength(pkcs1.length), ...pkcs1]);
+  const body = new Uint8Array([...version, ...algorithm, ...octet]);
+  return new Uint8Array([0x30, ...derLength(body.length), ...body]);
+}
 async function githubAppJwt() {
   const appId = required("GITHUB_APP_ID");
   const pem = required("GITHUB_PRIVATE_KEY").replace(/\\n/g, "\n");
-  const pkcs8 = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "");
-  const binary = Uint8Array.from(atob(pkcs8), (char) => char.charCodeAt(0));
+  const isPkcs1 = pem.includes("BEGIN RSA PRIVATE KEY");
+  const base64 = pem.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\\s/g, "");
+  const decoded = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  const binary = isPkcs1 ? pkcs1ToPkcs8(decoded) : decoded;
   const key = await crypto.subtle.importKey(
     "pkcs8", binary, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
   );
