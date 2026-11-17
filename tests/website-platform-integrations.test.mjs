@@ -23,7 +23,7 @@ test("GitHub installer uses one-time state, signed webhooks, and pull requests",
   assert.match(fn, /enablePullRequestAutoMerge/);
   assert.match(fn, /pulls/);
   assert.ok(fn.includes("public/index.html"));
-  assert.ok(!/SUPABASE_SERVICE_ROLE_KEY.*console\\.log/.test(fn));
+  assert.ok(!fn.includes("console.log(SUPABASE_SERVICE_ROLE_KEY"));
 });
 
 test("integration dashboard exposes the selected deployment mode and provider set", async () => {
@@ -31,4 +31,6 @@ test("integration dashboard exposes the selected deployment mode and provider se
   for (const provider of ["github", "vercel", "netlify", "render"]) assert.ok(route.includes(provider));
   assert.match(route, /Automatic deployment/);
   assert.match(route, /Let me review and publish manually/);
+  const dashboard = await read("src/routes/dashboard.tsx");
+  assert.match(dashboard, /window\.location\.assign\("\/dashboard\/integrations"\)/);
 });
