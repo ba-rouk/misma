@@ -11,3 +11,8 @@ verify_jwt = false
 
 [functions.misma-workspace-admin]
 verify_jwt = false
+
+# This endpoint handles signed GitHub setup callbacks and webhooks itself.
+# User actions are authenticated inside the function with the Supabase access token.
+[functions.misma-platform-integrations]
+verify_jwt = false
