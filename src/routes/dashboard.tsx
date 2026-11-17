@@ -4847,6 +4847,7 @@ function Dashboard() {
           {expandedNavGroups.workspace && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "website-statistics" ? " active" : ""}`} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "websites" ? " active" : ""}`} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{connectedWebsites.length}</span></button>
+            <button type="button" className="aichat-nav-subbtn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/integrations"); }}>Platform integrations</button>
           </div>}
           <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="images" /></span><span className="aichat-nav-label">Images</span>
