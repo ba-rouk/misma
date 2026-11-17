@@ -77,7 +77,10 @@ async function installationToken(installationId: number, repositoryId?: number) 
   return String(body.token || "");
 }
 function base64Utf8(value: string) {
-  return b64url(new TextEncoder().encode(value)).replace(/-/g, "+").replace(/_/g, "/");
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 function safeText(value: unknown, max = 160) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -303,13 +306,14 @@ async function main(request: Request) {
       let status = "awaiting_approval";
       if (deploymentMode === "automatic" && pr.node_id) {
         try {
-          await githubRequest("/graphql", token, {
+          const autoMerge = await githubRequest("/graphql", token, {
             method: "POST",
             body: JSON.stringify({
               query: "mutation($id:ID!){enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:SQUASH}){pullRequest{number}}}",
               variables: { id: pr.node_id },
             }),
           });
+          if (Array.isArray(autoMerge.errors) && autoMerge.errors.length) throw new Error("GitHub auto-merge is not enabled for this repository.");
           status = "auto_merge_enabled";
         } catch {
           // Auto-merge is unavailable unless repository settings and branch rules allow it.
