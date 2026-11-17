@@ -51,7 +51,7 @@ async function githubAppJwt() {
   const appId = required("GITHUB_APP_ID");
   const pem = required("GITHUB_PRIVATE_KEY").replace(/\\n/g, "\n");
   const isPkcs1 = pem.includes("BEGIN RSA PRIVATE KEY");
-  const base64 = pem.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\\s/g, "");
+  const base64 = pem.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\s/g, "");
   const decoded = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
   const binary = isPkcs1 ? pkcs1ToPkcs8(decoded) : decoded;
   const key = await crypto.subtle.importKey(
