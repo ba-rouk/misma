@@ -116,7 +116,6 @@ function WebsiteIntegrationsPage() {
     setRepositories([]);
     setWebsiteId("");
     setRepositoryId("");
-    setInstallResult(null);
     try {
       const [websiteResult, connectionResult] = await Promise.all([
         supabase.from("website_connections")
