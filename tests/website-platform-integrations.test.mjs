@@ -22,8 +22,8 @@ test("GitHub installer uses one-time state, signed webhooks, and pull requests",
   assert.match(fn, /x-hub-signature-256/i);
   assert.match(fn, /enablePullRequestAutoMerge/);
   assert.match(fn, /pulls/);
-  assert.match(fn, /public\\/index\\.html/);
-  assert.doesNotMatch(fn, /SUPABASE_SERVICE_ROLE_KEY[^\\n]*console\\.log/);
+  assert.ok(fn.includes("public/index.html"));
+  assert.ok(!/SUPABASE_SERVICE_ROLE_KEY.*console\\.log/.test(fn));
 });
 
 test("integration dashboard exposes the selected deployment mode and provider set", async () => {
