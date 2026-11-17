@@ -31,6 +31,10 @@ test("integration dashboard exposes the selected deployment mode and provider se
   for (const provider of ["github", "vercel", "netlify", "render"]) assert.ok(route.includes(provider));
   assert.match(route, /Automatic deployment/);
   assert.match(route, /Let me review and publish manually/);
+  assert.match(route, /workspace_members/);
+  assert.match(route, /workspaceOptions|workspaces/);
+  assert.match(route, /Choose a workspace/);
+  assert.doesNotMatch(route, /workspace_members[\\s\\S]{0,350}\\.maybeSingle\\(\\)/);
   const dashboard = await read("src/routes/dashboard.tsx");
   assert.match(dashboard, /window\.location\.assign\("\/dashboard\/integrations"\)/);
 });
