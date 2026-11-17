@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 
 type Website = { id: string; name: string; domain: string; website_url: string; status: string };
+type WorkspaceOption = { id: string; name: string };
 type Repo = { id: number; fullName: string; name: string; defaultBranch: string; htmlUrl: string; private: boolean };
 type PlatformConnection = { id: string; provider: string; external_account_name: string | null; status: string };
 type InstallResult = { installationId: string; status: string; pullRequestUrl: string; repositoryUrl: string; message: string };
@@ -23,6 +24,7 @@ function WebsiteIntegrationsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
   const [websites, setWebsites] = useState<Website[]>([]);
   const [connections, setConnections] = useState<PlatformConnection[]>([]);
   const [repositories, setRepositories] = useState<Repo[]>([]);
@@ -52,35 +54,106 @@ function WebsiteIntegrationsPage() {
         window.location.assign("/login");
         return;
       }
-      const userId = sessionData.session.user.id;
-      const { data: membership, error: membershipError } = await supabase.from("workspace_members")
-        .select("workspace_id").eq("user_id", userId).maybeSingle();
-      if (membershipError || !membership?.workspace_id) throw new Error("Could not find your Misma workspace.");
-      setWorkspaceId(membership.workspace_id);
 
+      const { data: memberships, error: membershipError } = await supabase.from("workspace_members")
+        .select("workspace_id,role")
+        .eq("user_id", sessionData.session.user.id)
+        .order("workspace_id", { ascending: true });
+      if (membershipError) throw new Error("Could not load your Misma workspace memberships.");
+
+      const manageableIds = Array.from(new Set((memberships || [])
+        .filter((membership: any) => ["owner", "admin"].includes(String(membership.role)))
+        .map((membership: any) => String(membership.workspace_id))
+        .filter(Boolean)));
+      if (!manageableIds.length) {
+        setWorkspaces([]);
+        setWorkspaceId("");
+        setWebsites([]);
+        setConnections([]);
+        throw new Error("No workspace is available to connect platforms. Ask a workspace owner or admin to grant you access.");
+      }
+
+      const { data: workspaceRows, error: workspaceError } = await supabase.from("workspaces")
+        .select("id,name")
+        .in("id", manageableIds)
+        .order("name", { ascending: true });
+      if (workspaceError) throw new Error("Could not load your workspace names.");
+
+      const options = (workspaceRows || []).map((workspace: any) => ({
+        id: String(workspace.id),
+        name: String(workspace.name || "Misma workspace"),
+      })).filter((workspace: WorkspaceOption) => manageableIds.includes(workspace.id));
+      if (!options.length) throw new Error("No manageable Misma workspace was found for this account.");
+
+      setWorkspaces(options);
+      let savedWorkspaceId = "";
+      try {
+        savedWorkspaceId = window.sessionStorage.getItem("misma_integrations_workspace") || "";
+      } catch {
+        // The workspace can still be selected when session storage is unavailable.
+      }
+      const selected = options.find((workspace) => workspace.id === savedWorkspaceId)
+        || (options.length === 1 ? options[0] : null);
+      setWorkspaceId(selected?.id || "");
+      if (!selected) {
+        setWebsites([]);
+        setConnections([]);
+        setNotice("Choose the workspace you want to connect to GitHub.");
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load integrations.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadWorkspaceData(activeWorkspaceId: string) {
+    if (!activeWorkspaceId || !workspaces.some((workspace) => workspace.id === activeWorkspaceId)) return;
+    setLoading(true);
+    setError("");
+    setWebsites([]);
+    setConnections([]);
+    setRepositories([]);
+    setWebsiteId("");
+    setRepositoryId("");
+    try {
       const [websiteResult, connectionResult] = await Promise.all([
         supabase.from("website_connections")
           .select("id,name,domain,website_url,status")
-          .eq("workspace_id", membership.workspace_id)
+          .eq("workspace_id", activeWorkspaceId)
           .is("widget_deleted_at", null)
           .order("created_at", { ascending: false }),
         supabase.from("platform_connections")
           .select("id,provider,external_account_name,status")
-          .eq("workspace_id", membership.workspace_id)
+          .eq("workspace_id", activeWorkspaceId)
           .order("created_at", { ascending: false }),
       ]);
       if (websiteResult.error) throw new Error("Could not load your connected websites.");
       if (connectionResult.error) throw new Error("Could not load your platform connections.");
       setWebsites((websiteResult.data || []) as Website[]);
       setConnections((connectionResult.data || []) as PlatformConnection[]);
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("github") === "connected") setNotice("GitHub is connected. Choose a repository and website to prepare the installation.");
-      if (params.get("github") === "state-expired") setError("The GitHub installation session expired. Please connect again.");
-      if (params.get("github") === "error") setError("GitHub installation was not completed. Please try again.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not load integrations.");
+      setError(cause instanceof Error ? cause.message : "Could not load this workspace's integrations.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function changeWorkspace(nextWorkspaceId: string) {
+    setWorkspaceId(nextWorkspaceId);
+    setWebsiteId("");
+    setRepositoryId("");
+    setRepositories([]);
+    setWebsites([]);
+    setConnections([]);
+    setInstallResult(null);
+    setError("");
+    setNotice("");
+    try {
+      if (nextWorkspaceId) window.sessionStorage.setItem("misma_integrations_workspace", nextWorkspaceId);
+      else window.sessionStorage.removeItem("misma_integrations_workspace");
+    } catch {
+      // Selection remains active for this page session even without storage.
     }
   }
 
@@ -121,7 +194,7 @@ function WebsiteIntegrationsPage() {
       });
       setInstallResult(result as InstallResult);
       setNotice(String(result.message || "Installation changes prepared."));
-      await load();
+      await loadWorkspaceData(workspaceId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not prepare the widget installation.");
     } finally {
@@ -130,6 +203,7 @@ function WebsiteIntegrationsPage() {
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => { if (workspaceId) void loadWorkspaceData(workspaceId); }, [workspaceId, workspaces]);
 
   return (
     <main style={{ minHeight: "100vh", background: "#f7f8fa", color: "#17202c", padding: "clamp(18px, 4vw, 48px)", fontFamily: "Inter, system-ui, sans-serif" }}>
@@ -144,7 +218,17 @@ function WebsiteIntegrationsPage() {
         {error && <div role="alert" style={{ padding: 14, borderRadius: 12, background: "#fff0f0", color: "#a12626", marginBottom: 16 }}>{error}</div>}
         {notice && <div role="status" style={{ padding: 14, borderRadius: 12, background: "#eaf8ef", color: "#17663a", marginBottom: 16 }}>{notice}</div>}
 
-        {loading ? <p>Loading your connected websites…</p> : <>
+        <section style={{ background: "#fff", border: "1px solid #e5e9ef", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+          <label style={fieldLabel}>Workspace
+            <select value={workspaceId} onChange={(event) => changeWorkspace(event.target.value)} style={fieldStyle} disabled={workspaces.length <= 1}>
+              <option value="">Choose a workspace</option>
+              {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+            </select>
+          </label>
+          {workspaces.length > 1 && <p style={{ color: "#667085", fontSize: 12, margin: "8px 0 0" }}>Choose which workspace owns the website connection and GitHub installation.</p>}
+        </section>
+
+        {loading ? <p>Loading your connected websites…</p> : !workspaceId ? <p>{workspaces.length ? "Choose a workspace to continue." : "No manageable workspace is available."}</p> : <>
           <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12 }}>
             {providers.map((provider) => {
               const connected = connections.some((item) => item.provider === provider.id && item.status === "connected");
