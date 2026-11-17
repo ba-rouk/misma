@@ -208,7 +208,7 @@ function WebsiteIntegrationsPage() {
   );
 }
 
-const primaryButton = { background: "#152238", color: "#fff", border: 0, borderRadius: 10, padding: "11px 15px", fontWeight: 650, cursor: "pointer" };
-const secondaryButton = { background: "#f1f4f7", color: "#263448", border: "1px solid #dce2e9", borderRadius: 10, padding: "11px 15px", fontWeight: 600, cursor: "pointer" };
-const fieldLabel = { display: "grid", gap: 7, color: "#3d4a5d", fontSize: 13, fontWeight: 650 };
+const primaryButton = { background: "#152238", color: "#fff", border: 0, borderRadius: 10, padding: "11px 15px", fontWeight: 650, cursor: "pointer" } as const;
+const secondaryButton = { background: "#f1f4f7", color: "#263448", border: "1px solid #dce2e9", borderRadius: 10, padding: "11px 15px", fontWeight: 600, cursor: "pointer" } as const;
+const fieldLabel = { display: "grid", gap: 7, color: "#3d4a5d", fontSize: 13, fontWeight: 650 } as const;
 const fieldStyle = { width: "100%", boxSizing: "border-box" as const, border: "1px solid #d9e0e8", borderRadius: 10, padding: "11px 12px", background: "#fff", color: "#17202c", font: "inherit" };
