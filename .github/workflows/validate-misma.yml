@@ -51,3 +51,6 @@ jobs:
 
       - name: Check public widget and channel Edge Function
         run: deno check supabase/functions/misma-widget/index.ts
+
+      - name: Check website platform integration Edge Function
+        run: deno check supabase/functions/misma-platform-integrations/index.ts
