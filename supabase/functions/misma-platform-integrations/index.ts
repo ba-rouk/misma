@@ -54,8 +54,11 @@ async function githubAppJwt() {
   const base64 = pem.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\s/g, "");
   const decoded = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
   const binary = isPkcs1 ? pkcs1ToPkcs8(decoded) : decoded;
+  // WebCrypto's Deno typings require an ArrayBuffer-backed BufferSource.
+  const keyData = new ArrayBuffer(binary.byteLength);
+  new Uint8Array(keyData).set(binary);
   const key = await crypto.subtle.importKey(
-    "pkcs8", binary, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
+    "pkcs8", keyData, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
   );
   const now = Math.floor(Date.now() / 1000);
   const header = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
