@@ -166,12 +166,36 @@ async function githubWebhook(request: Request) {
   const event = request.headers.get("x-github-event") || "";
   let payload: any = {};
   try { payload = JSON.parse(raw); } catch { return new Response("Invalid JSON", { status: 400 }); }
+  const { admin } = clients();
   if (event === "installation" && payload.action === "deleted") {
     const id = Number(payload.installation?.id);
     if (id) {
-      const { admin } = clients();
       await admin.from("platform_connections").update({ status: "disconnected", updated_at: new Date().toISOString() })
         .eq("provider", "github").eq("installation_id", id);
+    }
+  }
+  if (event === "pull_request" && payload.action === "closed" && payload.pull_request?.merged === true) {
+    const branchName = safeText(payload.pull_request?.head?.ref, 240);
+    const repository = safeText(payload.repository?.full_name, 240);
+    if (branchName && repository) {
+      const { data: installations } = await admin.from("website_installations")
+        .select("id,workspace_id,provider,metadata")
+        .eq("provider", "github").eq("branch_name", branchName)
+        .in("status", ["awaiting_approval", "auto_merge_enabled", "deploying"]);
+      for (const item of installations || []) {
+        const details = (item.metadata && typeof item.metadata === "object" ? item.metadata : {}) as Record<string, unknown>;
+        if (details.repository !== repository) continue;
+        await admin.from("website_installations").update({
+          status: "deployed",
+          deployed_at: new Date().toISOString(),
+          metadata: { ...details, merged: true, merge_commit_sha: payload.pull_request?.merge_commit_sha || null },
+        }).eq("id", item.id);
+        await admin.from("platform_installation_logs").insert({
+          workspace_id: item.workspace_id, installation_id: item.id, provider: "github", level: "info",
+          event: "github.widget_pr_merged",
+          details: { repository, branch: branchName, merge_commit_sha: payload.pull_request?.merge_commit_sha || null },
+        });
+      }
     }
   }
   return new Response("ok", { status: 200 });
