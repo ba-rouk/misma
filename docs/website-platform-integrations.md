@@ -138,9 +138,11 @@ For Vercel, register the redirect URL as:
 
 `https://grlrrmebnthxguluybgb.supabase.co/functions/v1/misma-platform-integrations?mode=vercel-callback`
 
-For Netlify, the planned authorization callback is:
+For Netlify's documented implicit-token handoff, the planned browser callback is:
 
-`https://grlrrmebnthxguluybgb.supabase.co/functions/v1/misma-platform-integrations?mode=netlify-callback`
+`https://misma.onrender.com/integrations/netlify/callback`
+
+Netlify returns the access token in the URL fragment, which browsers do not send to the server automatically. The callback page must read it once, immediately POST it over HTTPS with the one-time state to the authenticated Misma Edge Function, then erase the fragment with `history.replaceState`. It must not put the token in localStorage, sessionStorage, analytics, URLs sent to external services, or logs. If the integration later uses a supported authorization-code flow, the code exchange should happen server-side instead.
 
 Those callback handlers are part of the next provider-adapter phase; registering the OAuth applications now does not, by itself, make the Vercel or Netlify customer connection flow live.
 
