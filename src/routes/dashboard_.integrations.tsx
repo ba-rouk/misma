@@ -130,7 +130,17 @@ function WebsiteIntegrationsPage() {
       ]);
       if (websiteResult.error) throw new Error("Could not load your connected websites.");
       if (connectionResult.error) throw new Error("Could not load your platform connections.");
-      setWebsites((websiteResult.data || []) as Website[]);
+      const availableWebsites = (websiteResult.data || []) as Website[];
+      setWebsites(availableWebsites);
+      try {
+        const requestedWebsiteId = window.sessionStorage.getItem("misma_integrations_website") || "";
+        if (requestedWebsiteId && availableWebsites.some((website) => website.id === requestedWebsiteId)) {
+          setWebsiteId(requestedWebsiteId);
+          window.sessionStorage.removeItem("misma_integrations_website");
+        }
+      } catch {
+        // The website can be selected manually when session storage is unavailable.
+      }
       setConnections((connectionResult.data || []) as PlatformConnection[]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load this workspace's integrations.");
