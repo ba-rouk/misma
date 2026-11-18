@@ -2,11 +2,19 @@ begin;
 
 -- Provider credentials are encrypted in the Edge Function before reaching this table.
 -- No authenticated or anonymous client can read, write, or enumerate these rows.
+-- A composite unique key lets the vault enforce that a credential's workspace
+-- and provider always match the owning platform connection.
+create unique index if not exists platform_connections_id_workspace_provider_uidx
+  on public.platform_connections(id, workspace_id, provider);
+
 create table if not exists public.platform_credentials (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
-  platform_connection_id uuid not null unique references public.platform_connections(id) on delete cascade,
+  platform_connection_id uuid not null unique,
   provider text not null check (provider in ('vercel', 'netlify', 'render')),
+  constraint platform_credentials_connection_scope_fk
+    foreign key (platform_connection_id, workspace_id, provider)
+    references public.platform_connections(id, workspace_id, provider) on delete cascade,
   credential_kind text not null check (credential_kind in ('oauth_tokens', 'api_key')),
   secret_ciphertext text not null,
   secret_iv text not null,
