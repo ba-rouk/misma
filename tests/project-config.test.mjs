@@ -1799,3 +1799,20 @@ test("website connections enforce a five-site workspace limit and saved channel 
   assert.match(migration, /active_count >= 5/);
   assert.match(migration, /widget_deleted_at is null/);
 });
+
+test("website cards open GitHub integration with the clicked website preselected", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const integrations = await read("../src/routes/dashboard_.integrations.tsx");
+  const copyIndex = dashboard.indexOf("Copy script");
+  const scanIndex = dashboard.indexOf("Scan website", copyIndex);
+  const githubIndex = dashboard.indexOf("Connect with GitHub", scanIndex);
+  const deleteIndex = dashboard.indexOf("Delete connection", githubIndex);
+
+  assert.ok(copyIndex >= 0 && scanIndex > copyIndex, "Scan website follows Copy script");
+  assert.ok(githubIndex > scanIndex, "Connect with GitHub follows Scan website");
+  assert.ok(deleteIndex > githubIndex, "Delete connection follows Connect with GitHub");
+  assert.match(dashboard.slice(scanIndex, deleteIndex), /misma_integrations_website/);
+  assert.match(dashboard.slice(scanIndex, deleteIndex), /navigate\(\{ to: "\/dashboard\/integrations" \}\)/);
+  assert.match(integrations, /misma_integrations_website/);
+  assert.match(integrations, /setWebsiteId\(requestedWebsiteId\)/);
+});
