@@ -1,4 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  activeCredentialKeyVersion,
+  credentialAad,
+  credentialKeyForVersion,
+  encryptCredentialPayload,
+  normalizeCredentialPayload,
+} from "./credentials.ts";
 
 type Json = Record<string, unknown>;
 const APP_ORIGIN = "https://misma.onrender.com";
@@ -236,7 +243,133 @@ async function main(request: Request) {
     const action = safeText(body.action, 60);
     const workspaceId = safeText(body.workspaceId, 80);
     if (!/^[0-9a-f-]{36}$/i.test(workspaceId)) return json({ error: "Choose a valid workspace." }, 400, origin);
-    const { admin } = await authorize(request, workspaceId);
+    const { admin, userId } = await authorize(request, workspaceId);
+
+    // Credentials are accepted only from an authenticated workspace owner/admin.
+    // Plaintext values are encrypted in this function and never returned or logged.
+    if (action === "platform-credential-save") {
+      const providerValue = safeText(body.provider, 24);
+      if (!["vercel", "netlify", "render"].includes(providerValue)) {
+        return json({ error: "Choose Vercel, Netlify, or Render." }, 400, origin);
+      }
+      const provider = providerValue as "vercel" | "netlify" | "render";
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) {
+        return json({ error: "Choose a valid platform connection." }, 400, origin);
+      }
+      const { data: platformConnection, error: connectionLookupError } = await admin
+        .from("platform_connections")
+        .select("id,provider,status")
+        .eq("id", connectionId)
+        .eq("workspace_id", workspaceId)
+        .eq("provider", provider)
+        .eq("status", "connected")
+        .maybeSingle();
+      if (connectionLookupError || !platformConnection) {
+        throw new Error("That connected platform account is not available in this workspace.");
+      }
+
+      const normalized = normalizeCredentialPayload(provider, body.credentials);
+      const keyVersion = activeCredentialKeyVersion();
+      const associatedData = credentialAad(workspaceId, provider, connectionId, keyVersion);
+      const encrypted = await encryptCredentialPayload(
+        normalized.payload,
+        associatedData,
+        credentialKeyForVersion(keyVersion),
+      );
+      const now = new Date().toISOString();
+      const { error: saveError } = await admin.from("platform_credentials").upsert({
+        workspace_id: workspaceId,
+        platform_connection_id: connectionId,
+        provider,
+        credential_kind: normalized.kind,
+        secret_ciphertext: encrypted.ciphertext,
+        secret_iv: encrypted.iv,
+        key_version: keyVersion,
+        last_validated_at: null,
+        last_validation_status: "unverified",
+        created_by: userId,
+        updated_at: now,
+      }, { onConflict: "platform_connection_id" });
+      if (saveError) {
+        console.error("Misma could not persist an encrypted platform credential:", saveError.message);
+        throw new Error("Misma could not securely save this platform credential. Please try again.");
+      }
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId,
+        provider,
+        level: "info",
+        event: "platform.credential_saved",
+        details: { connection_id: connectionId, key_version: keyVersion, credential_kind: normalized.kind },
+      });
+      return json({ saved: true, provider, credentialStatus: "unverified" }, 200, origin);
+    }
+
+    if (action === "platform-credential-status") {
+      const providerValue = safeText(body.provider, 24);
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!["vercel", "netlify", "render"].includes(providerValue) || !/^[0-9a-f-]{36}$/i.test(connectionId)) {
+        return json({ error: "Choose a valid platform connection." }, 400, origin);
+      }
+      const { data: platformConnection, error: connectionLookupError } = await admin
+        .from("platform_connections")
+        .select("id,provider,status")
+        .eq("id", connectionId)
+        .eq("workspace_id", workspaceId)
+        .eq("provider", providerValue)
+        .maybeSingle();
+      if (connectionLookupError || !platformConnection) {
+        throw new Error("That platform connection is not available in this workspace.");
+      }
+      const { data: credential, error: credentialError } = await admin.from("platform_credentials")
+        .select("credential_kind,key_version,last_validation_status,last_validated_at,created_at,updated_at")
+        .eq("platform_connection_id", connectionId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+      if (credentialError) throw new Error("Could not read the platform credential status.");
+      return json({
+        provider: providerValue,
+        connected: platformConnection.status === "connected",
+        hasCredential: Boolean(credential),
+        credentialKind: credential?.credential_kind || null,
+        keyVersion: credential?.key_version || null,
+        credentialStatus: credential?.last_validation_status || "missing",
+        lastValidatedAt: credential?.last_validated_at || null,
+        updatedAt: credential?.updated_at || null,
+      }, 200, origin);
+    }
+
+    if (action === "platform-credential-remove") {
+      const providerValue = safeText(body.provider, 24);
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!["vercel", "netlify", "render"].includes(providerValue) || !/^[0-9a-f-]{36}$/i.test(connectionId)) {
+        return json({ error: "Choose a valid platform connection." }, 400, origin);
+      }
+      const { data: platformConnection, error: connectionLookupError } = await admin
+        .from("platform_connections")
+        .select("id")
+        .eq("id", connectionId)
+        .eq("workspace_id", workspaceId)
+        .eq("provider", providerValue)
+        .maybeSingle();
+      if (connectionLookupError || !platformConnection) {
+        throw new Error("That platform connection is not available in this workspace.");
+      }
+      const { error: deleteError } = await admin.from("platform_credentials")
+        .delete().eq("platform_connection_id", connectionId).eq("workspace_id", workspaceId);
+      if (deleteError) throw new Error("Could not remove the encrypted platform credential.");
+      await admin.from("platform_connections")
+        .update({ status: "disconnected", updated_at: new Date().toISOString() })
+        .eq("id", connectionId).eq("workspace_id", workspaceId);
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId,
+        provider: providerValue,
+        level: "info",
+        event: "platform.credential_removed",
+        details: { connection_id: connectionId },
+      });
+      return json({ removed: true, provider: providerValue }, 200, origin);
+    }
 
     if (action === "github-install-url") {
       const slug = required("GITHUB_APP_SLUG");
