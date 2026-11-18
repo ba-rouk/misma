@@ -9,8 +9,8 @@ const read = (path) => readFile(resolve(root.pathname, path), "utf8");
 test("platform integration migration is workspace-scoped and service-write-only", async () => {
   const sql = await read("supabase/migrations/20261117120000_website_platform_integrations.sql");
   for (const table of ["platform_connections", "platform_projects", "website_installations", "platform_installation_logs", "platform_oauth_states"]) {
-    assert.match(sql, new RegExp("create table if not exists public\." + table));
-    assert.match(sql, new RegExp("alter table public\." + table + " enable row level security"));
+    assert.match(sql, new RegExp("create table if not exists public\\." + table));
+    assert.match(sql, new RegExp("alter table public\\." + table + " enable row level security"));
   }
   assert.match(sql, /revoke all on public\.platform_oauth_states from anon, authenticated/i);
   assert.match(sql, /revoke insert, update, delete on public\.website_installations from anon, authenticated/i);
