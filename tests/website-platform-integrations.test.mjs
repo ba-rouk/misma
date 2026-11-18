@@ -38,3 +38,26 @@ test("integration dashboard exposes the selected deployment mode and provider se
   const dashboard = await read("src/routes/dashboard.tsx");
   assert.match(dashboard, /window\.location\.assign\("\/dashboard\/integrations"\)/);
 });
+
+
+test("platform credential vault encrypts secrets and denies browser table access", async () => {
+  const migration = await read("supabase/migrations/20261118110000_platform_credentials_encryption.sql");
+  assert.match(migration, /create table if not exists public\.platform_credentials/i);
+  assert.match(migration, /platform_credentials_connection_scope_fk/);
+  assert.match(migration, /foreign key \(platform_connection_id, workspace_id, provider\)/i);
+  assert.match(migration, /alter table public\.platform_credentials enable row level security/i);
+  assert.match(migration, /revoke all on public\.platform_credentials from public, anon, authenticated/i);
+  assert.match(migration, /grant all on public\.platform_credentials to service_role/i);
+
+  const helper = await read("supabase/functions/misma-platform-integrations/credentials.ts");
+  assert.match(helper, /AES-GCM/);
+  assert.match(helper, /crypto\.getRandomValues/);
+  assert.match(helper, /additionalData/);
+  assert.match(helper, /PLATFORM_CREDENTIAL_ENCRYPTION_KEY_V/);
+
+  const edgeFunction = await read("supabase/functions/misma-platform-integrations/index.ts");
+  assert.match(edgeFunction, /platform-credential-save/);
+  assert.match(edgeFunction, /platform-credential-status/);
+  assert.match(edgeFunction, /platform-credential-remove/);
+  assert.match(edgeFunction, /Only workspace owners and admins/);
+});
