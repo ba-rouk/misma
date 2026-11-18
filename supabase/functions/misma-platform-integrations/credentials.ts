@@ -19,6 +19,12 @@ function fromBase64(value: string): Uint8Array {
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
 }
 
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 export function decodeCredentialKey(value: string): Uint8Array {
   let bytes: Uint8Array;
   try {
@@ -68,11 +74,11 @@ export async function encryptCredentialPayload(
 ): Promise<EncryptedCredential> {
   if (keyBytes.byteLength !== 32) throw new Error("AES-256-GCM requires a 32-byte key.");
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+  const key = await crypto.subtle.importKey("raw", asArrayBuffer(keyBytes), { name: "AES-GCM" }, false, ["encrypt"]);
   const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv, additionalData: encoder.encode(additionalData), tagLength: 128 },
+    { name: "AES-GCM", iv: asArrayBuffer(iv), additionalData: asArrayBuffer(encoder.encode(additionalData)), tagLength: 128 },
     key,
-    encoder.encode(JSON.stringify(payload)),
+    asArrayBuffer(encoder.encode(JSON.stringify(payload))),
   );
   return { ciphertext: toBase64(new Uint8Array(encrypted)), iv: toBase64(iv) };
 }
@@ -85,11 +91,11 @@ export async function decryptCredentialPayload(
   if (keyBytes.byteLength !== 32) throw new Error("AES-256-GCM requires a 32-byte key.");
   const iv = fromBase64(encrypted.iv);
   if (iv.byteLength !== 12) throw new Error("Invalid platform credential nonce.");
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const key = await crypto.subtle.importKey("raw", asArrayBuffer(keyBytes), { name: "AES-GCM" }, false, ["decrypt"]);
   const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv, additionalData: encoder.encode(additionalData), tagLength: 128 },
+    { name: "AES-GCM", iv: asArrayBuffer(iv), additionalData: asArrayBuffer(encoder.encode(additionalData)), tagLength: 128 },
     key,
-    fromBase64(encrypted.ciphertext),
+    asArrayBuffer(fromBase64(encrypted.ciphertext)),
   );
   const value: unknown = JSON.parse(decoder.decode(plaintext));
   if (!value || typeof value !== "object" || Array.isArray(value)) {
