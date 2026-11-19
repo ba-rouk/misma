@@ -9762,6 +9762,7 @@ body:has(.misma-vercel-callback-page) {
   cursor: not-allowed;
 }
 .misma-integrations-workspace label,
+.misma-integrations-page label,
 .misma-vercel-callback-page label {
   display: grid;
   gap: 7px;
