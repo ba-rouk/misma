@@ -505,11 +505,10 @@ async function main(request: Request) {
           last_validated_at: new Date().toISOString(),
           last_validation_status: "valid",
         }).eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
-      } catch (cause) {
-        discoveryError = cause instanceof Error ? cause.message.slice(0, 240) : "Project discovery needs to be retried.";
+      } catch {
+        discoveryError = "Vercel connected successfully, but project discovery failed. Use Refresh Vercel projects to retry.";
         await admin.from("platform_credentials").update({ last_validation_status: "error" })
           .eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
-        console.error("Vercel project discovery failed after credential storage:", discoveryError);
       }
       await admin.from("platform_installation_logs").insert({
         workspace_id: workspaceId, provider: "vercel", level: "info",
