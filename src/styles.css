@@ -9584,3 +9584,286 @@ html, body, #app-root {
   cursor: pointer;
 }
 .aichat-staff-signout:hover { color: #ffffff; }
+
+
+/* Platform integrations — use the same dark shell and typography as the Misma dashboard. */
+.aichat.misma-integrations-page,
+.aichat.misma-vercel-callback-page {
+  display: block !important;
+  width: 100%;
+  min-height: 100dvh;
+  height: auto;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: clamp(16px, 4vw, 44px) !important;
+  background: #090a0c !important;
+  color: #ececf1 !important;
+  font-family: var(--font-sans) !important;
+}
+body:has(.misma-integrations-page),
+body:has(.misma-vercel-callback-page) {
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background: #090a0c;
+  color: #ececf1;
+  font-family: var(--font-sans);
+}
+.misma-integrations-content {
+  width: min(100%, 1040px);
+  margin: 0 auto;
+}
+.misma-integrations-back {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  color: #a5b1c0 !important;
+  font-size: 14px;
+  text-decoration: none;
+}
+.misma-integrations-back:hover { color: #ffffff !important; }
+.misma-integrations-header {
+  margin: 26px 0 24px;
+}
+.misma-integrations-page h1,
+.misma-vercel-callback-page h1,
+.misma-integrations-page h2,
+.misma-vercel-callback-page h2 {
+  color: #f4f7fb !important;
+  font-family: var(--font-serif) !important;
+  font-weight: 400 !important;
+  letter-spacing: -.025em !important;
+}
+.misma-integrations-page h1,
+.misma-vercel-callback-page h1 {
+  margin: 8px 0 12px;
+  font-size: clamp(30px, 5vw, 40px) !important;
+  line-height: 1.12;
+}
+.misma-integrations-page h2,
+.misma-vercel-callback-page h2 {
+  margin: 0 0 8px;
+  font-size: 22px !important;
+}
+.misma-integrations-eyebrow {
+  margin: 0 0 10px !important;
+  color: #4ade80 !important;
+  font: 700 11px/1.4 var(--font-sans) !important;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.misma-integrations-intro {
+  max-width: 720px;
+  margin: 0 !important;
+  color: #a5b1c0 !important;
+  font-size: 14px !important;
+  line-height: 1.65 !important;
+}
+.misma-integrations-message {
+  padding: 13px 14px;
+  margin: 0 0 14px;
+  border: 1px solid #303947;
+  border-radius: 12px;
+  font: 400 14px/1.55 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.misma-integrations-message.is-error {
+  border-color: rgba(248, 113, 113, .35);
+  background: rgba(127, 29, 29, .22);
+  color: #fecaca;
+}
+.misma-integrations-message.is-notice {
+  border-color: rgba(74, 222, 128, .22);
+  background: rgba(22, 101, 52, .16);
+  color: #bbf7d0;
+}
+.misma-integrations-workspace,
+.misma-integrations-provider-card,
+.misma-integrations-detail-card,
+.misma-integrations-permissions {
+  min-width: 0;
+  padding: 18px;
+  margin: 0 0 14px;
+  border: 1px solid #242b35 !important;
+  border-radius: 15px;
+  background: #11141a !important;
+  color: #ececf1 !important;
+}
+.misma-integrations-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.misma-integrations-provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 18px;
+  background: linear-gradient(155deg, #121720, #101319) !important;
+}
+.misma-integrations-provider-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.misma-integrations-provider-heading strong {
+  color: #f4f7fb !important;
+  font: 500 16px/1.35 var(--font-sans) !important;
+}
+.misma-integrations-status {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid #303947;
+  border-radius: 999px;
+  background: #191f28;
+  color: #a5b1c0;
+  font: 500 11px/1.4 var(--font-sans);
+}
+.misma-integrations-status.is-connected {
+  border-color: rgba(74, 222, 128, .3);
+  background: rgba(22, 101, 52, .18);
+  color: #86efac;
+}
+.misma-integrations-provider-description {
+  flex: 1;
+  margin: 0 !important;
+  color: #9ca9b8 !important;
+  font: 400 13px/1.6 var(--font-sans) !important;
+}
+.misma-integrations-help {
+  margin: 8px 0 0 !important;
+  color: #8f9bab !important;
+  font: 400 13px/1.6 var(--font-sans) !important;
+}
+.misma-integrations-primary-button,
+.misma-integrations-secondary-button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border: 1px solid #303743 !important;
+  border-radius: 10px;
+  background: #21262d !important;
+  color: #f4f7fb !important;
+  font: 500 14px/1.4 var(--font-sans) !important;
+  cursor: pointer;
+}
+.misma-integrations-primary-button:hover,
+.misma-integrations-secondary-button:hover {
+  border-color: #465263 !important;
+  background: #303743 !important;
+}
+.misma-integrations-primary-button:disabled,
+.misma-integrations-secondary-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.misma-integrations-workspace label,
+.misma-vercel-callback-page label {
+  display: grid;
+  gap: 7px;
+  color: #c4cfdd !important;
+  font: 500 13px/1.4 var(--font-sans) !important;
+}
+.misma-integrations-workspace select,
+.misma-integrations-page select,
+.misma-vercel-callback-page select,
+.misma-vercel-callback-page input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #354154 !important;
+  border-radius: 10px;
+  background: #0d141e !important;
+  color: #f4f7fb !important;
+  font: 400 16px/1.4 var(--font-sans) !important;
+}
+.misma-integrations-detail-card,
+.misma-integrations-permissions {
+  margin-top: 16px;
+}
+.misma-integrations-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.misma-integrations-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.misma-integrations-permissions h2 { font-size: 18px !important; }
+.misma-vercel-callback-card {
+  width: min(100%, 760px);
+  margin: 18px auto;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid #2b3542;
+  border-radius: 18px;
+  background: linear-gradient(155deg, rgba(21,29,40,.98), rgba(13,18,26,.98));
+  box-shadow: 0 24px 70px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.035);
+  color: #ececf1;
+}
+.misma-vercel-callback-card > label { margin: 18px 0; }
+.misma-vercel-callback-card > p { color: #a5b1c0 !important; }
+.misma-vercel-callback-card button {
+  margin-top: 10px;
+}
+.misma-vercel-callback-card button,
+.misma-vercel-callback-card button[style] {
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid #303743 !important;
+  border-radius: 10px;
+  background: #21262d !important;
+  color: #f4f7fb !important;
+  font: 500 14px/1.4 var(--font-sans) !important;
+}
+.misma-vercel-callback-card button:hover {
+  background: #303743 !important;
+  border-color: #465263 !important;
+}
+.misma-vercel-callback-card button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.misma-vercel-callback-card select {
+  appearance: auto;
+}
+@media (max-width: 640px) {
+  .aichat.misma-integrations-page,
+  .aichat.misma-vercel-callback-page {
+    padding: 14px 12px calc(22px + env(safe-area-inset-bottom)) !important;
+  }
+  .misma-integrations-header { margin: 20px 0 18px; }
+  .misma-integrations-page h1,
+  .misma-vercel-callback-page h1 {
+    font-size: 30px !important;
+    line-height: 1.12;
+  }
+  .misma-integrations-page h2,
+  .misma-vercel-callback-page h2 { font-size: 20px !important; }
+  .misma-integrations-workspace,
+  .misma-integrations-provider-card,
+  .misma-integrations-detail-card,
+  .misma-integrations-permissions { padding: 14px; }
+  .misma-integrations-provider-grid { grid-template-columns: minmax(0, 1fr); }
+  .misma-integrations-provider-description { min-height: 0; }
+  .misma-integrations-field-grid { grid-template-columns: minmax(0, 1fr); }
+  .misma-integrations-actions { flex-direction: column; }
+  .misma-integrations-actions > button,
+  .misma-integrations-provider-card > button,
+  .misma-integrations-detail-card > button,
+  .misma-vercel-callback-card > button {
+    width: 100%;
+  }
+  .misma-integrations-status { font-size: 10px; }
+  .misma-vercel-callback-card {
+    margin: 10px auto;
+    padding: 18px 15px;
+    border-radius: 15px;
+  }
+}
