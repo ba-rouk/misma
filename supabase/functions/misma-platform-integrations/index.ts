@@ -442,12 +442,6 @@ async function main(request: Request) {
       }
       const accessToken = String(tokenBody.access_token);
       const effectiveTeamId = safeText(tokenBody.team_id || teamId, 180);
-      const projectsPath = effectiveTeamId
-        ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(effectiveTeamId)
-        : "/v9/projects?limit=100";
-      const projectResponse = await vercelRequest(projectsPath, accessToken);
-      const projectItems = Array.isArray(projectResponse.projects) ? projectResponse.projects : [];
-      const normalizedProjects = projectItems.map(vercelProjectShape).filter(Boolean);
       const accountLabel = effectiveTeamId ? "Vercel team " + effectiveTeamId : "Vercel account";
       const { data: connection, error: connectionError } = await admin.from("platform_connections").upsert({
         workspace_id: workspaceId,
@@ -455,7 +449,6 @@ async function main(request: Request) {
         external_account_id: configurationId,
         external_account_name: accountLabel,
         status: "connected",
-        scopes: ["project:read", "team:read"],
         metadata: { configuration_id: configurationId, team_id: effectiveTeamId || null, source: "marketplace" },
         updated_at: new Date().toISOString(),
       }, { onConflict: "workspace_id,provider,external_account_id" }).select("id").single();
@@ -484,6 +477,19 @@ async function main(request: Request) {
         console.error("Vercel credential vault write failed:", credentialError.message);
         throw new Error("Vercel was authorized, but Misma could not securely save the connection. Please reconnect.");
       }
+
+      // Persist the encrypted Marketplace token immediately after a successful one-time code exchange.
+      // Project discovery can then be retried without asking Vercel to reuse the consumed code.
+      const projectsPath = effectiveTeamId
+        ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(effectiveTeamId)
+        : "/v9/projects?limit=100";
+      const projectResponse = await vercelRequest(projectsPath, accessToken);
+      const projectItems = Array.isArray(projectResponse.projects) ? projectResponse.projects : [];
+      const normalizedProjects = projectItems.map(vercelProjectShape).filter(Boolean);
+      await admin.from("platform_credentials").update({
+        last_validated_at: new Date().toISOString(),
+        last_validation_status: "valid",
+      }).eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
 
       const savedProjects = [];
       for (const project of normalizedProjects) {
