@@ -10,7 +10,7 @@ The dashboard route is /dashboard/integrations.
 - Automatic mode asks GitHub to enable pull-request auto-merge. GitHub only merges when the repository permits it and its protection/check requirements are satisfied. If GitHub refuses auto-merge, the pull request remains available for manual review.
 - Manual mode leaves the pull request open for the customer to review and merge.
 - The first code adapter supports root index.html and public/index.html. Framework-specific entrypoints (for example Next.js App Router, Astro, SvelteKit, or server-rendered templates) need dedicated adapters; Misma must not guess and modify arbitrary files.
-- Vercel, Netlify, and Render have database provider/project records and dashboard cards, but their OAuth/API adapters are not active yet. They require provider application registration and separate server-side credentials before customers can connect them.
+- Vercel Marketplace authorization, server-side code exchange, encrypted credential storage, workspace-scoped project discovery, and project-to-website association are implemented. Netlify and Render still have database records and dashboard cards but their customer authorization/API adapters are not active yet.
 
 ## Create the Misma GitHub App
 
@@ -144,13 +144,13 @@ For Netlify's documented implicit-token handoff, the planned browser callback is
 
 Netlify returns the access token in the URL fragment, which browsers do not send to the server automatically. The callback page must read it once, immediately POST it over HTTPS with the one-time state to the authenticated Misma Edge Function, then erase the fragment with `history.replaceState`. It must not put the token in localStorage, sessionStorage, analytics, URLs sent to external services, or logs. If the integration later uses a supported authorization-code flow, the code exchange should happen server-side instead.
 
-Those callback handlers are part of the next provider-adapter phase; registering the OAuth applications now does not, by itself, make the Vercel or Netlify customer connection flow live.
+Vercel callback flow: Vercel redirects the browser to the Misma callback with its one-time `code`, `configurationId`, `teamId`, and `next` parameters. The page removes the code from the address bar, requires a signed-in Misma workspace owner/admin, and sends the code to the authenticated Edge Function. The Edge Function exchanges the code at `https://api.vercel.com/v2/oauth/access_token`, fetches the projects for the returned team (when present), encrypts the resulting Marketplace access token with the shared AES-256-GCM vault, and saves project metadata under the selected Misma workspace. The access token is never returned to the browser, stored in `platform_connections.metadata`, or logged. The page then lets the user associate discovered projects with active Misma websites in that same workspace. This association records a project relationship; it does not itself modify website source code or trigger a deployment. After linking, Misma redirects to Vercel's validated `next` URL.
 
 Render API keys are created from the customer's Render Dashboard → Account Settings → API Keys. Render only displays the full key at creation. Customers must keep it private; where Render offers fine-grained/scoped API key permissions, select the minimum permissions needed for listing the intended service and initiating deployments. Render API requests use the key as a bearer token. See the [Render API setup guide](https://render.com/docs/api).
 
 ### Secret handling rules
 
-- The Vercel and Netlify client secrets stay in Supabase Edge Function secrets. Customer OAuth access/refresh tokens go into the encrypted vault.
+- The Vercel and Netlify client secrets stay in Supabase Edge Function secrets. Vercel Marketplace access tokens and any future customer OAuth tokens go into the encrypted vault.
 - A customer's Render API key goes into the encrypted vault, not into environment variables shared by all Misma customers.
 - Never return a secret in a status response, store it in `metadata`, put it in a URL, or include it in an error/log message.
 - Never ask a customer to send a provider secret to Misma support chat.
