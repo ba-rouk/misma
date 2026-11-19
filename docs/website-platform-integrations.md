@@ -134,9 +134,11 @@ These are Misma's application credentials. Create each application under the Mis
 | Netlify | `NETLIFY_CLIENT_ID`, `NETLIFY_CLIENT_SECRET` | Netlify avatar → User settings → Applications → OAuth applications → register a new application. Netlify provides a client ID and secret. A public integration must use OAuth2 rather than asking every customer to paste a personal access token. |
 | Render | No global Misma client ID/secret | Each customer authorizes their own Render account with a Render API key. The customer provides it during the Render connection flow; Misma encrypts it in `platform_credentials`. Never use one personal Render API key for all customers. |
 
-For Vercel, register the redirect URL as:
+For Vercel Marketplace, register this exact Redirect URL in the integration's External Integration Settings:
 
-`https://grlrrmebnthxguluybgb.supabase.co/functions/v1/misma-platform-integrations?mode=vercel-callback`
+`https://misma.onrender.com/integrations/vercel/callback`
+
+Set the `VERCEL_INTEGRATION_SLUG` Supabase Edge Function secret to the integration's URL slug (the segment after `/integrations/` in its Vercel Marketplace URL). The dashboard uses it to open the Marketplace installation flow. Keep `VERCEL_CLIENT_ID` and `VERCEL_CLIENT_SECRET` in Supabase Edge Function secrets.
 
 For Netlify's documented implicit-token handoff, the planned browser callback is:
 
