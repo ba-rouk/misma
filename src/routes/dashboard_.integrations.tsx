@@ -17,6 +17,24 @@ const providers = [
   { id: "render", name: "Render", description: "Discover services and trigger deployments after approved source changes." },
 ];
 
+async function invokeErrorMessage(invokeError: unknown, fallback: string) {
+  const error = invokeError as { message?: unknown; context?: unknown } | null;
+  const context = error?.context as { clone?: () => { json?: () => Promise<unknown> } } | undefined;
+  if (context && typeof context.clone === "function") {
+    try {
+      const response = context.clone();
+      if (typeof response.json === "function") {
+        const payload = await response.json() as { error?: unknown; message?: unknown };
+        if (typeof payload?.error === "string" && payload.error.trim()) return payload.error;
+        if (typeof payload?.message === "string" && payload.message.trim()) return payload.message;
+      }
+    } catch {
+      // Keep the SDK message when the Edge Function did not return JSON.
+    }
+  }
+  return typeof error?.message === "string" && error.message.trim() ? error.message : fallback;
+}
+
 function WebsiteIntegrationsPage() {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [loading, setLoading] = useState(true);
@@ -41,7 +59,7 @@ function WebsiteIntegrationsPage() {
     const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
       body: { action, workspaceId, ...extra },
     });
-    if (invokeError) throw new Error(invokeError.message || "Could not contact Misma's integration service.");
+    if (invokeError) throw new Error(await invokeErrorMessage(invokeError, "Could not contact Misma's integration service."));
     if (data?.error) throw new Error(String(data.error));
     return data;
   }
@@ -222,50 +240,50 @@ function WebsiteIntegrationsPage() {
   useEffect(() => { if (workspaceId) void loadWorkspaceData(workspaceId); }, [workspaceId, workspaces]);
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f7f8fa", color: "#17202c", padding: "clamp(18px, 4vw, 48px)", fontFamily: "Inter, system-ui, sans-serif" }}>
-      <div style={{ maxWidth: 1040, margin: "0 auto" }}>
-        <a href="/dashboard" style={{ color: "#586477", textDecoration: "none", fontSize: 14 }}>← Back to Misma dashboard</a>
-        <header style={{ margin: "28px 0 24px" }}>
-          <p style={{ color: "#667085", fontSize: 12, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase" }}>Misma · Website integrations</p>
-          <h1 style={{ fontSize: "clamp(28px, 4vw, 40px)", letterSpacing: "-.04em", margin: "8px 0" }}>Connect your website platform</h1>
-          <p style={{ color: "#667085", maxWidth: 720, lineHeight: 1.65, margin: 0 }}>Connect the platform that stores or deploys your website code. Misma can prepare the widget installation, open a review request, and use automatic deployment only when you authorize it.</p>
+    <main className="aichat misma-integrations-page">
+      <div className="misma-integrations-content">
+        <a href="/dashboard" className="misma-integrations-back">← Back to Misma dashboard</a>
+        <header className="misma-integrations-header">
+          <p className="misma-integrations-eyebrow">Misma · Website integrations</p>
+          <h1>Connect your website platform</h1>
+          <p className="misma-integrations-intro">Connect the platform that stores or deploys your website code. Misma can prepare the widget installation, open a review request, and use automatic deployment only when you authorize it.</p>
         </header>
 
-        {error && <div role="alert" style={{ padding: 14, borderRadius: 12, background: "#fff0f0", color: "#a12626", marginBottom: 16 }}>{error}</div>}
-        {notice && <div role="status" style={{ padding: 14, borderRadius: 12, background: "#eaf8ef", color: "#17663a", marginBottom: 16 }}>{notice}</div>}
+        {error && <div role="alert" className="misma-integrations-message is-error">{error}</div>}
+        {notice && <div role="status" className="misma-integrations-message is-notice">{notice}</div>}
 
-        <section style={{ background: "#fff", border: "1px solid #e5e9ef", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+        <section className="misma-integrations-workspace">
           <label style={fieldLabel}>Workspace
             <select value={workspaceId} onChange={(event) => changeWorkspace(event.target.value)} style={fieldStyle} disabled={workspaces.length <= 1}>
               <option value="">Choose a workspace</option>
               {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
             </select>
           </label>
-          {workspaces.length > 1 && <p style={{ color: "#667085", fontSize: 12, margin: "8px 0 0" }}>Choose which workspace owns the website connection and GitHub installation.</p>}
+          {workspaces.length > 1 && <p className="misma-integrations-help">Choose which workspace owns the website connection and GitHub installation.</p>}
         </section>
 
-        {loading ? <p>Loading your connected websites…</p> : !workspaceId ? <p>{workspaces.length ? "Choose a workspace to continue." : "No manageable workspace is available."}</p> : <>
-          <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12 }}>
+        {loading ? <p className="misma-integrations-help">Loading your connected websites…</p> : !workspaceId ? <p className="misma-integrations-help">{workspaces.length ? "Choose a workspace to continue." : "No manageable workspace is available."}</p> : <>
+          <section className="misma-integrations-provider-grid">
             {providers.map((provider) => {
               const connected = connections.some((item) => item.provider === provider.id && item.status === "connected");
-              return <article key={provider.id} style={{ background: "#fff", border: "1px solid #e5e9ef", borderRadius: 16, padding: 18 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                  <strong style={{ fontSize: 16 }}>{provider.name}</strong>
-                  <span style={{ fontSize: 11, color: connected ? "#167344" : "#7a8492", background: connected ? "#eaf8ef" : "#f0f2f5", borderRadius: 20, padding: "5px 9px" }}>{connected ? "Connected" : provider.id === "github" ? "Available first" : provider.id === "vercel" ? "Available" : "Coming next"}</span>
+              return <article key={provider.id} className="misma-integrations-provider-card">
+                <div className="misma-integrations-provider-heading">
+                  <strong>{provider.name}</strong>
+                  <span className={`misma-integrations-status${connected ? " is-connected" : ""}`}>{connected ? "Connected" : provider.id === "github" ? "Available first" : provider.id === "vercel" ? "Available" : "Coming next"}</span>
                 </div>
-                <p style={{ color: "#667085", fontSize: 13, lineHeight: 1.55, minHeight: 60 }}>{provider.description}</p>
+                <p className="misma-integrations-provider-description">{provider.description}</p>
                 {provider.id === "github" && (connected
-                  ? <button type="button" onClick={() => void loadRepositories()} disabled={busy} style={primaryButton}>{busy ? "Loading…" : "Choose repository"}</button>
-                  : <button type="button" onClick={() => void connectGithub()} disabled={busy} style={primaryButton}>{busy ? "Connecting…" : "Connect GitHub"}</button>)}
-                {provider.id === "vercel" && <button type="button" onClick={() => void connectVercel()} disabled={busy} style={primaryButton}>{busy ? "Opening Vercel…" : vercelConnection ? "Manage Vercel projects" : "Connect Vercel"}</button>}
+                  ? <button type="button" onClick={() => void loadRepositories()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Loading…" : "Choose repository"}</button>
+                  : <button type="button" onClick={() => void connectGithub()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Connecting…" : "Connect GitHub"}</button>)}
+                {provider.id === "vercel" && <button type="button" onClick={() => void connectVercel()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Opening Vercel…" : vercelConnection ? "Manage Vercel projects" : "Connect Vercel"}</button>}
               </article>;
             })}
           </section>
 
-          {githubConnection && <section style={{ background: "#fff", border: "1px solid #e5e9ef", borderRadius: 16, padding: 20, marginTop: 18 }}>
-            <h2 style={{ margin: "0 0 6px", fontSize: 20 }}>Prepare widget installation</h2>
-            <p style={{ color: "#667085", fontSize: 13, marginTop: 0 }}>Connected GitHub account: {githubConnection.external_account_name || "GitHub account"}. Misma currently edits standard HTML entrypoints named <code>index.html</code> or <code>public/index.html</code>; other frameworks will need a guided adapter.</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+          {githubConnection && <section className="misma-integrations-detail-card">
+            <h2>Prepare widget installation</h2>
+            <p className="misma-integrations-provider-description">Connected GitHub account: {githubConnection.external_account_name || "GitHub account"}. Misma currently edits standard HTML entrypoints named <code>index.html</code> or <code>public/index.html</code>; other frameworks will need a guided adapter.</p>
+            <div className="misma-integrations-field-grid">
               <label style={fieldLabel}>Misma website
                 <select value={websiteId} onChange={(event) => setWebsiteId(event.target.value)} style={fieldStyle}>
                   <option value="">Choose a connected website</option>
@@ -285,23 +303,23 @@ function WebsiteIntegrationsPage() {
                 </select>
               </label>
             </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-              <button type="button" onClick={() => void loadRepositories()} disabled={busy} style={secondaryButton}>Refresh repositories</button>
-              <button type="button" onClick={() => void prepareInstallation()} disabled={busy || !repositories.length} style={primaryButton}>{busy ? "Preparing…" : "Prepare Misma installation"}</button>
+            <div className="misma-integrations-actions">
+              <button type="button" onClick={() => void loadRepositories()} disabled={busy} className="misma-integrations-secondary-button">Refresh repositories</button>
+              <button type="button" onClick={() => void prepareInstallation()} disabled={busy || !repositories.length} className="misma-integrations-primary-button">{busy ? "Preparing…" : "Prepare Misma installation"}</button>
             </div>
           </section>}
 
-          {installResult && <section style={{ background: "#fff", border: "1px solid #dce5ee", borderRadius: 16, padding: 20, marginTop: 18 }}>
+          {installResult && <section className="misma-integrations-detail-card">
             <h2 style={{ marginTop: 0 }}>Installation changes prepared</h2>
             <p>{installResult.message}</p>
-            <p style={{ color: "#667085", fontSize: 13 }}>Status: <strong>{installResult.status.replaceAll("_", " ")}</strong></p>
+            <p className="misma-integrations-help">Status: <strong>{installResult.status.replaceAll("_", " ")}</strong></p>
             <p><a href={installResult.pullRequestUrl} target="_blank" rel="noreferrer" style={{ color: "#145bb8" }}>Open GitHub pull request</a></p>
             <p><a href={installResult.repositoryUrl} target="_blank" rel="noreferrer" style={{ color: "#145bb8" }}>Open repository dashboard</a></p>
           </section>}
 
-          <section style={{ marginTop: 18, padding: 18, borderRadius: 16, background: "#fff", border: "1px solid #e5e9ef" }}>
-            <h2 style={{ fontSize: 17, margin: "0 0 8px" }}>Deployment permissions</h2>
-            <p style={{ color: "#667085", fontSize: 13, lineHeight: 1.6, margin: 0 }}>Manual mode creates a separate branch and pull request for your review. Automatic mode asks GitHub to enable auto-merge; GitHub still enforces the repository's branch protection and required checks. If auto-merge is unavailable, Misma leaves the pull request for you to review and merge. Misma does not push directly to your production branch.</p>
+          <section className="misma-integrations-permissions">
+            <h2>Deployment permissions</h2>
+            <p className="misma-integrations-help">Manual mode creates a separate branch and pull request for your review. Automatic mode asks GitHub to enable auto-merge; GitHub still enforces the repository's branch protection and required checks. If auto-merge is unavailable, Misma leaves the pull request for you to review and merge. Misma does not push directly to your production branch.</p>
           </section>
         </>}
       </div>

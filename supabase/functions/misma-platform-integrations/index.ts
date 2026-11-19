@@ -593,7 +593,14 @@ async function main(request: Request) {
     }
 
     if (action === "github-install-url") {
-      const slug = required("GITHUB_APP_SLUG");
+      // Resolve the installation slug from the authenticated GitHub App itself.
+      // This removes a duplicate configuration value that could drift from GITHUB_APP_ID.
+      const appJwt = await githubAppJwt();
+      const appDetails = await githubRequest("/app", appJwt);
+      const slug = safeText(appDetails.slug, 100);
+      if (!/^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/i.test(slug)) {
+        throw new Error("GitHub could not identify the configured Misma App. Check GITHUB_APP_ID and GITHUB_PRIVATE_KEY.");
+      }
       const state = crypto.randomUUID() + "." + crypto.randomUUID();
       const { error } = await admin.from("platform_oauth_states").insert({
         workspace_id: workspaceId, user_id: (await admin.auth.getUser(bearer(request))).data.user?.id,

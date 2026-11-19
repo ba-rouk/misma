@@ -19,6 +19,24 @@ export const Route = createFileRoute("/integrations/vercel/callback")({
   component: VercelMarketplaceCallback,
 });
 
+async function invokeErrorMessage(invokeError: unknown, fallback: string) {
+  const error = invokeError as { message?: unknown; context?: unknown } | null;
+  const context = error?.context as { clone?: () => { json?: () => Promise<unknown> } } | undefined;
+  if (context && typeof context.clone === "function") {
+    try {
+      const response = context.clone();
+      if (typeof response.json === "function") {
+        const payload = await response.json() as { error?: unknown; message?: unknown };
+        if (typeof payload?.error === "string" && payload.error.trim()) return payload.error;
+        if (typeof payload?.message === "string" && payload.message.trim()) return payload.message;
+      }
+    } catch {
+      // Preserve the SDK message if the function did not return JSON.
+    }
+  }
+  return typeof error?.message === "string" && error.message.trim() ? error.message : fallback;
+}
+
 function VercelMarketplaceCallback() {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [callback, setCallback] = useState<{ code: string; configurationId: string; teamId: string; next: string }>({
@@ -111,7 +129,7 @@ function VercelMarketplaceCallback() {
           teamId: callback.teamId,
         },
       });
-      if (invokeError) throw new Error(invokeError.message || "Could not complete Vercel authorization.");
+      if (invokeError) throw new Error(await invokeErrorMessage(invokeError, "Could not complete Vercel authorization."));
       if (data?.error) throw new Error(String(data.error));
       setCallback((current) => ({ ...current, code: "" }));
       setPlatformConnectionId(String(data?.platformConnectionId || ""));
@@ -136,7 +154,7 @@ function VercelMarketplaceCallback() {
       const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
         body: { action: "vercel-refresh-projects", workspaceId, platformConnectionId },
       });
-      if (invokeError) throw new Error(invokeError.message || "Could not refresh Vercel projects.");
+      if (invokeError) throw new Error(await invokeErrorMessage(invokeError, "Could not refresh Vercel projects."));
       if (data?.error) throw new Error(String(data.error));
       const nextProjects = Array.isArray(data?.projects) ? data.projects as VercelProject[] : [];
       setProjects(nextProjects);
@@ -160,7 +178,7 @@ function VercelMarketplaceCallback() {
       const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
         body: { action: "vercel-link-project", workspaceId, platformProjectId: projectId, websiteConnectionId: websiteId },
       });
-      if (invokeError) throw new Error(invokeError.message || "Could not link the project.");
+      if (invokeError) throw new Error(await invokeErrorMessage(invokeError, "Could not link the project."));
       if (data?.error) throw new Error(String(data.error));
       setLinked(true);
       setNotice(data?.alreadyLinked ? "This project was already linked to that website." : "Vercel project linked to your Misma website.");
@@ -187,15 +205,15 @@ function VercelMarketplaceCallback() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f7f8fa", color: "#17202c", padding: "clamp(18px, 4vw, 48px)", fontFamily: "Inter, system-ui, sans-serif" }}>
-      <div style={{ maxWidth: 760, margin: "36px auto", background: "#fff", border: "1px solid #e5e9ef", borderRadius: 18, padding: "clamp(20px, 4vw, 32px)" }}>
-        <a href="/dashboard/integrations" style={{ color: "#586477", textDecoration: "none", fontSize: 14 }}>← Back to integrations</a>
-        <p style={{ color: "#667085", fontSize: 12, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", marginTop: 28 }}>Misma · Vercel Marketplace</p>
-        <h1 style={{ fontSize: 30, letterSpacing: "-.04em", margin: "8px 0" }}>Connect Vercel to Misma</h1>
-        <p style={{ color: "#667085", lineHeight: 1.65 }}>Misma exchanges the one-time Marketplace authorization code on its server, stores the resulting access token encrypted, and returns only project details to this page.</p>
+    <main className="aichat misma-vercel-callback-page">
+      <div className="misma-vercel-callback-card">
+        <a href="/dashboard/integrations" className="misma-integrations-back">← Back to integrations</a>
+        <p className="misma-integrations-eyebrow">Misma · Vercel Marketplace</p>
+        <h1>Connect Vercel to Misma</h1>
+        <p className="misma-integrations-intro">Misma exchanges the one-time Marketplace authorization code on its server, stores the resulting access token encrypted, and returns only project details to this page.</p>
 
-        {error && <div role="alert" style={{ padding: 13, borderRadius: 10, background: "#fff0f0", color: "#a12626", margin: "16px 0" }}>{error}</div>}
-        {notice && <div role="status" style={{ padding: 13, borderRadius: 10, background: "#f0f5fb", color: "#34445a", margin: "16px 0" }}>{notice}</div>}
+        {error && <div role="alert" className="misma-integrations-message is-error">{error}</div>}
+        {notice && <div role="status" className="misma-integrations-message is-notice">{notice}</div>}
 
         {!connected && <>
           <label style={fieldLabel}>Misma workspace

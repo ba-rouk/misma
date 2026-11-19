@@ -41,8 +41,8 @@ The GitHub App setup callback is not an OAuth user callback. The one-time state 
 Set these in the Misma Supabase project's Edge Function secrets. Do not add them to the browser bundle, Git repository, or customer-facing widget script.
 
 - GITHUB_APP_ID: numeric GitHub App ID
-- GITHUB_APP_SLUG: GitHub App URL slug
 - GITHUB_PRIVATE_KEY: downloaded GitHub App private key PEM
+- The app slug is read from GitHub's authenticated App endpoint, so a separate GITHUB_APP_SLUG secret is not required.
 - GITHUB_WEBHOOK_SECRET: webhook secret configured in the GitHub App
 
 The function also uses the Supabase runtime values SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY. Never expose the service-role key.
@@ -129,14 +129,16 @@ These are Misma's application credentials. Create each application under the Mis
 
 | Provider | Credential | Where to create it |
 | --- | --- | --- |
-| GitHub | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` | Already covered by the Misma GitHub App setup above |
+| GitHub | `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` | Already covered by the Misma GitHub App setup above; the app slug is discovered from the authenticated App API response |
 | Vercel | `VERCEL_CLIENT_ID`, `VERCEL_CLIENT_SECRET` | Vercel Dashboard → select the Misma team/account → Integrations → Integrations Console → Create. Configure the Redirect URL and requested API scopes. The integration credentials are shown in its settings. |
 | Netlify | `NETLIFY_CLIENT_ID`, `NETLIFY_CLIENT_SECRET` | Netlify avatar → User settings → Applications → OAuth applications → register a new application. Netlify provides a client ID and secret. A public integration must use OAuth2 rather than asking every customer to paste a personal access token. |
 | Render | No global Misma client ID/secret | Each customer authorizes their own Render account with a Render API key. The customer provides it during the Render connection flow; Misma encrypts it in `platform_credentials`. Never use one personal Render API key for all customers. |
 
-For Vercel Marketplace, register this exact Redirect URL in the integration's External Integration Settings:
+For Vercel Marketplace, register this exact **Redirect URL** in the integration's External Integration Settings:
 
 `https://misma.onrender.com/integrations/vercel/callback`
+
+Do **not** set the Redirect URL to the Supabase Edge Function URL. The Misma callback is a hosted application page; pointing Vercel at `/functions/v1/misma-platform-integrations?mode=vercel-callback` returns HTTP 405 and also causes the server-side code exchange `redirect_uri` to mismatch the URL configured with Vercel.
 
 Set the `VERCEL_INTEGRATION_SLUG` Supabase Edge Function secret to the integration's URL slug (the segment after `/integrations/` in its Vercel Marketplace URL). The dashboard uses it to open the Marketplace installation flow. Keep `VERCEL_CLIENT_ID` and `VERCEL_CLIENT_SECRET` in Supabase Edge Function secrets.
 
@@ -176,3 +178,11 @@ This gives broad language coverage without promising that Misma can safely rewri
 ## Rollout status
 
 The encrypted database schema and the server-side vault operations are being introduced before the Vercel, Netlify, and Render adapters. The provider OAuth callbacks, customer-facing connect screens, token validation, project discovery, deployment actions, and framework-specific source adapters are not yet enabled by this credential-vault change.
+
+
+## Integration connection troubleshooting
+
+- If the dashboard shows a generic "Edge Function returned a non-2xx status code", read the matching `misma-platform-integrations` Edge Function logs. The dashboard displays the JSON error returned by the function when available.
+- GitHub's installation URL slug is derived from the GitHub App's authenticated `/app` response. Only the GitHub App ID and private key are required to create that URL.
+- Vercel's `VERCEL_INTEGRATION_SLUG` is the Marketplace URL segment used by `https://vercel.com/integrations/:slug/new`. Keep it in Supabase Edge Function secrets.
+- After changing the Vercel Redirect URL, start a fresh connection from Misma. Old authorization codes cannot be reused; the Vercel code is one-use and must be exchanged with the exact Redirect URL configured for the integration.
