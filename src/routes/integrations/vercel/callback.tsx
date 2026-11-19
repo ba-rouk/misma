@@ -29,6 +29,7 @@ function VercelMarketplaceCallback() {
   const [websites, setWebsites] = useState<Website[]>([]);
   const [projects, setProjects] = useState<VercelProject[]>([]);
   const [projectId, setProjectId] = useState("");
+  const [platformConnectionId, setPlatformConnectionId] = useState("");
   const [websiteId, setWebsiteId] = useState("");
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -113,13 +114,36 @@ function VercelMarketplaceCallback() {
       if (invokeError) throw new Error(invokeError.message || "Could not complete Vercel authorization.");
       if (data?.error) throw new Error(String(data.error));
       setCallback((current) => ({ ...current, code: "" }));
+      setPlatformConnectionId(String(data?.platformConnectionId || ""));
       setProjects(Array.isArray(data?.projects) ? data.projects as VercelProject[] : []);
       setProjectId(data?.projects?.[0]?.id || "");
       setConnected(true);
       await loadWebsites(workspaceId);
-      setNotice("Vercel is connected securely. Select a discovered project and a Misma website to link them.");
+      setNotice(data?.discoveryError ? "Vercel is connected and its token is stored securely, but project discovery needs a retry: " + String(data.discoveryError) : "Vercel is connected securely. Select a discovered project and a Misma website to link them.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not complete Vercel connection.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
+  async function refreshProjects() {
+    if (!platformConnectionId) return;
+    setBusy(true); setError(""); setNotice("Refreshing projects from Vercel…");
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
+        body: { action: "vercel-refresh-projects", workspaceId, platformConnectionId },
+      });
+      if (invokeError) throw new Error(invokeError.message || "Could not refresh Vercel projects.");
+      if (data?.error) throw new Error(String(data.error));
+      const nextProjects = Array.isArray(data?.projects) ? data.projects as VercelProject[] : [];
+      setProjects(nextProjects);
+      setProjectId(nextProjects[0]?.id || "");
+      setNotice("Vercel project list refreshed.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not refresh Vercel projects.");
       setNotice("");
     } finally {
       setBusy(false);
@@ -198,7 +222,7 @@ function VercelMarketplaceCallback() {
                 {websites.map((website) => <option key={website.id} value={website.id}>{website.name || website.domain} · {website.domain}</option>)}
               </select>
             </label>
-            {!projects.length && <p style={{ color: "#667085", fontSize: 13 }}>No Vercel projects were returned for this account/team. Check the Marketplace integration's project read permissions, then reconnect.</p>}
+            {!projects.length && <div><p style={{ color: "#667085", fontSize: 13 }}>No Vercel projects are currently listed. Retry discovery without repeating the one-time authorization.</p><button type="button" onClick={() => void refreshProjects()} disabled={busy} style={secondaryButton}>{busy ? "Refreshing…" : "Refresh Vercel projects"}</button></div>}
             {!websites.length && <p style={{ color: "#667085", fontSize: 13 }}>This workspace has no active websites yet. Add a website in Misma, then return to link a project.</p>}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button type="button" onClick={() => void linkProject()} disabled={busy || !projectId || !websiteId} style={primaryButton}>{busy ? "Saving…" : "Link project to website"}</button>
