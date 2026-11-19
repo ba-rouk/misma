@@ -202,7 +202,7 @@ function VercelMarketplaceCallback() {
             {!websites.length && <p style={{ color: "#667085", fontSize: 13 }}>This workspace has no active websites yet. Add a website in Misma, then return to link a project.</p>}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button type="button" onClick={() => void linkProject()} disabled={busy || !projectId || !websiteId} style={primaryButton}>{busy ? "Saving…" : "Link project to website"}</button>
-              <button type="button" onClick={finish} disabled={busy || (!linked && websites.length > 0)} style={secondaryButton}>Finish</button>
+              <button type="button" onClick={finish} disabled={busy || (!linked && projects.length > 0 && websites.length > 0)} style={secondaryButton}>Finish</button>
             </div>
           </div>
         </>}
