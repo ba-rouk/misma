@@ -480,36 +480,43 @@ async function main(request: Request) {
 
       // Persist the encrypted Marketplace token immediately after a successful one-time code exchange.
       // Project discovery can then be retried without asking Vercel to reuse the consumed code.
-      const projectsPath = effectiveTeamId
-        ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(effectiveTeamId)
-        : "/v9/projects?limit=100";
-      const projectResponse = await vercelRequest(projectsPath, accessToken);
-      const projectItems = Array.isArray(projectResponse.projects) ? projectResponse.projects : [];
-      const normalizedProjects = projectItems.map(vercelProjectShape).filter(Boolean);
-      await admin.from("platform_credentials").update({
-        last_validated_at: new Date().toISOString(),
-        last_validation_status: "valid",
-      }).eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
-
-      const savedProjects = [];
-      for (const project of normalizedProjects) {
-        const { data: savedProject, error: projectError } = await admin.from("platform_projects").upsert({
-          workspace_id: workspaceId,
-          platform_connection_id: connection.id,
-          provider: "vercel",
-          ...project,
-          last_synced_at: new Date().toISOString(),
-        }, { onConflict: "workspace_id,provider,external_project_id" })
-          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
-        if (projectError || !savedProject) throw new Error("Vercel connected, but Misma could not save the discovered project list.");
-        savedProjects.push(savedProject);
+      let savedProjects: any[] = [];
+      let discoveryError = "";
+      try {
+        const projectsPath = effectiveTeamId
+          ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(effectiveTeamId)
+          : "/v9/projects?limit=100";
+        const projectResponse = await vercelRequest(projectsPath, accessToken);
+        const projectItems = Array.isArray(projectResponse.projects) ? projectResponse.projects : [];
+        const normalizedProjects = projectItems.map(vercelProjectShape).filter(Boolean);
+        for (const project of normalizedProjects) {
+          const { data: savedProject, error: projectError } = await admin.from("platform_projects").upsert({
+            workspace_id: workspaceId,
+            platform_connection_id: connection.id,
+            provider: "vercel",
+            ...project,
+            last_synced_at: new Date().toISOString(),
+          }, { onConflict: "workspace_id,provider,external_project_id" })
+            .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+          if (projectError || !savedProject) throw new Error("Misma could not save the discovered Vercel projects.");
+          savedProjects.push(savedProject);
+        }
+        await admin.from("platform_credentials").update({
+          last_validated_at: new Date().toISOString(),
+          last_validation_status: "valid",
+        }).eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
+      } catch (cause) {
+        discoveryError = cause instanceof Error ? cause.message.slice(0, 240) : "Project discovery needs to be retried.";
+        await admin.from("platform_credentials").update({ last_validation_status: "error" })
+          .eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
+        console.error("Vercel project discovery failed after credential storage:", discoveryError);
       }
       await admin.from("platform_installation_logs").insert({
         workspace_id: workspaceId, provider: "vercel", level: "info",
         event: "vercel.marketplace_connected",
         details: { configuration_id: configurationId, team_id: effectiveTeamId || null, projects_discovered: savedProjects.length },
       });
-      return json({ connected: true, platformConnectionId: connection.id, accountName: accountLabel, projects: savedProjects }, 200, origin);
+      return json({ connected: true, platformConnectionId: connection.id, accountName: accountLabel, projects: savedProjects, discoveryError: discoveryError || null }, 200, origin);
     }
 
     if (action === "vercel-refresh-projects") {
