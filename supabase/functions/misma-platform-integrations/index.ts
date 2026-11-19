@@ -468,8 +468,8 @@ async function main(request: Request) {
         secret_ciphertext: encrypted.ciphertext,
         secret_iv: encrypted.iv,
         key_version: keyVersion,
-        last_validated_at: new Date().toISOString(),
-        last_validation_status: "valid",
+        last_validated_at: null,
+        last_validation_status: "unverified",
         created_by: userId,
         updated_at: new Date().toISOString(),
       }, { onConflict: "platform_connection_id" });
