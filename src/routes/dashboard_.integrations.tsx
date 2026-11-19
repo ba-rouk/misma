@@ -12,7 +12,7 @@ export const Route = createFileRoute("/dashboard/integrations")({ component: Web
 
 const providers = [
   { id: "github", name: "GitHub", description: "Connect repositories and prepare a focused Misma installation pull request." },
-  { id: "vercel", name: "Vercel", description: "Discover projects and deployments linked to your repositories." },
+  { id: "vercel", name: "Vercel", description: "Connect your Vercel account, discover projects, and associate them with Misma websites." },
   { id: "netlify", name: "Netlify", description: "Discover sites and publish changes through connected Git repositories." },
   { id: "render", name: "Render", description: "Discover services and trigger deployments after approved source changes." },
 ];
@@ -251,7 +251,7 @@ function WebsiteIntegrationsPage() {
               return <article key={provider.id} style={{ background: "#fff", border: "1px solid #e5e9ef", borderRadius: 16, padding: 18 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                   <strong style={{ fontSize: 16 }}>{provider.name}</strong>
-                  <span style={{ fontSize: 11, color: connected ? "#167344" : "#7a8492", background: connected ? "#eaf8ef" : "#f0f2f5", borderRadius: 20, padding: "5px 9px" }}>{connected ? "Connected" : provider.id === "github" ? "Available first" : "Coming next"}</span>
+                  <span style={{ fontSize: 11, color: connected ? "#167344" : "#7a8492", background: connected ? "#eaf8ef" : "#f0f2f5", borderRadius: 20, padding: "5px 9px" }}>{connected ? "Connected" : provider.id === "github" ? "Available first" : provider.id === "vercel" ? "Available" : "Coming next"}</span>
                 </div>
                 <p style={{ color: "#667085", fontSize: 13, lineHeight: 1.55, minHeight: 60 }}>{provider.description}</p>
                 {provider.id === "github" && (connected
