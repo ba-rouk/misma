@@ -34,6 +34,7 @@ function WebsiteIntegrationsPage() {
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
 
   const githubConnection = connections.find((connection) => connection.provider === "github" && connection.status === "connected");
+  const vercelConnection = connections.find((connection) => connection.provider === "vercel" && connection.status === "connected");
   const selectedRepo = repositories.find((repo) => String(repo.id) === repositoryId);
 
   async function invoke(action: string, extra: Record<string, unknown> = {}) {
@@ -169,6 +170,21 @@ function WebsiteIntegrationsPage() {
     }
   }
 
+
+  async function connectVercel() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await invoke("vercel-install-url");
+      if (!result?.installUrl || typeof result.installUrl !== "string" || !result.installUrl.startsWith("https://vercel.com/integrations/")) {
+        throw new Error("Misma did not return a valid Vercel Marketplace installation link.");
+      }
+      window.location.assign(result.installUrl);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not start the Vercel connection.");
+      setBusy(false);
+    }
+  }
+
   async function loadRepositories() {
     setBusy(true); setError("");
     try {
@@ -241,6 +257,7 @@ function WebsiteIntegrationsPage() {
                 {provider.id === "github" && (connected
                   ? <button type="button" onClick={() => void loadRepositories()} disabled={busy} style={primaryButton}>{busy ? "Loading…" : "Choose repository"}</button>
                   : <button type="button" onClick={() => void connectGithub()} disabled={busy} style={primaryButton}>{busy ? "Connecting…" : "Connect GitHub"}</button>)}
+                {provider.id === "vercel" && <button type="button" onClick={() => void connectVercel()} disabled={busy} style={primaryButton}>{busy ? "Opening Vercel…" : vercelConnection ? "Manage Vercel projects" : "Connect Vercel"}</button>}
               </article>;
             })}
           </section>
