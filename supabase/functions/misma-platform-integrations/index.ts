@@ -4,6 +4,7 @@ import {
   credentialAad,
   credentialKeyForVersion,
   encryptCredentialPayload,
+  decryptCredentialPayload,
   normalizeCredentialPayload,
 } from "./credentials.ts";
 
@@ -110,6 +111,43 @@ function base64Utf8(value: string) {
 }
 function safeText(value: unknown, max = 160) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+async function vercelRequest(path: string, token: string) {
+  const response = await fetch("https://api.vercel.com" + path, {
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+  });
+  const raw = await response.text();
+  let body: any = {};
+  try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
+  if (!response.ok) {
+    const message = typeof body.error?.message === "string" ? body.error.message : "Vercel API request failed.";
+    throw new Error("Vercel request failed (" + response.status + "): " + message.slice(0, 240));
+  }
+  return body;
+}
+function vercelProjectShape(project: any) {
+  const id = safeText(project.id, 180);
+  const name = safeText(project.name, 180);
+  if (!id || !name) return null;
+  const git = project.link && typeof project.link === "object" ? project.link : {};
+  const repo = safeText(git.repo, 220);
+  const gitType = safeText(git.type, 40);
+  return {
+    external_project_id: id,
+    name,
+    full_name: repo || name,
+    repository_url: repo && gitType === "github" ? "https://github.com/" + repo : null,
+    dashboard_url: "https://vercel.com/dashboard",
+    default_branch: safeText(git.productionBranch, 120) || null,
+    metadata: {
+      framework: safeText(project.framework, 80) || null,
+      git_provider: gitType || null,
+      git_repository: repo || null,
+      node_version: safeText(project.nodeVersion, 40) || null,
+      latest_deployment: project.latestDeployments?.[0]?.url ? safeText(project.latestDeployments[0].url, 300) : null,
+    },
+  };
 }
 async function verifyWebhook(raw: string, signature: string) {
   const secret = required("GITHUB_WEBHOOK_SECRET");
@@ -369,6 +407,189 @@ async function main(request: Request) {
         details: { connection_id: connectionId },
       });
       return json({ removed: true, provider: providerValue }, 200, origin);
+    }
+
+
+    if (action === "vercel-install-url") {
+      const slug = required("VERCEL_INTEGRATION_SLUG").replace(/^\/+|\/+$/g, "");
+      if (!/^[a-z0-9][a-z0-9-]{1,100}$/i.test(slug)) throw new Error("VERCEL_INTEGRATION_SLUG is not configured correctly.");
+      return json({ installUrl: "https://vercel.com/integrations/" + encodeURIComponent(slug) + "/new" }, 200, origin);
+    }
+
+    if (action === "vercel-complete-installation") {
+      const code = safeText(body.code, 4096);
+      const configurationId = safeText(body.configurationId, 180);
+      const teamId = safeText(body.teamId, 180);
+      if (!code || !/^icfg_[A-Za-z0-9_-]+$/.test(configurationId)) {
+        return json({ error: "Vercel did not return a valid Marketplace authorization response. Start the connection again." }, 400, origin);
+      }
+      const form = new URLSearchParams({
+        client_id: required("VERCEL_CLIENT_ID"),
+        client_secret: required("VERCEL_CLIENT_SECRET"),
+        code,
+        redirect_uri: APP_ORIGIN + "/integrations/vercel/callback",
+      });
+      const exchange = await fetch("https://api.vercel.com/v2/oauth/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: form.toString(),
+      });
+      const exchangeRaw = await exchange.text();
+      let tokenBody: any = {};
+      try { tokenBody = exchangeRaw ? JSON.parse(exchangeRaw) : {}; } catch { tokenBody = {}; }
+      if (!exchange.ok || typeof tokenBody.access_token !== "string" || !tokenBody.access_token) {
+        throw new Error("Vercel could not complete the Marketplace authorization. Return to Vercel and connect again.");
+      }
+      const accessToken = String(tokenBody.access_token);
+      const effectiveTeamId = safeText(tokenBody.team_id || teamId, 180);
+      const accountLabel = effectiveTeamId ? "Vercel team " + effectiveTeamId : "Vercel account";
+      const { data: connection, error: connectionError } = await admin.from("platform_connections").upsert({
+        workspace_id: workspaceId,
+        provider: "vercel",
+        external_account_id: configurationId,
+        external_account_name: accountLabel,
+        status: "connected",
+        metadata: { configuration_id: configurationId, team_id: effectiveTeamId || null, source: "marketplace" },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "workspace_id,provider,external_account_id" }).select("id").single();
+      if (connectionError || !connection) throw new Error("Vercel was authorized, but Misma could not save the workspace connection.");
+
+      const keyVersion = activeCredentialKeyVersion();
+      const encrypted = await encryptCredentialPayload(
+        { accessToken },
+        credentialAad(workspaceId, "vercel", connection.id, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const { error: credentialError } = await admin.from("platform_credentials").upsert({
+        workspace_id: workspaceId,
+        platform_connection_id: connection.id,
+        provider: "vercel",
+        credential_kind: "oauth_tokens",
+        secret_ciphertext: encrypted.ciphertext,
+        secret_iv: encrypted.iv,
+        key_version: keyVersion,
+        last_validated_at: null,
+        last_validation_status: "unverified",
+        created_by: userId,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "platform_connection_id" });
+      if (credentialError) {
+        console.error("Vercel credential vault write failed:", credentialError.message);
+        throw new Error("Vercel was authorized, but Misma could not securely save the connection. Please reconnect.");
+      }
+
+      // Persist the encrypted Marketplace token immediately after a successful one-time code exchange.
+      // Project discovery can then be retried without asking Vercel to reuse the consumed code.
+      let savedProjects: any[] = [];
+      let discoveryError = "";
+      try {
+        const projectsPath = effectiveTeamId
+          ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(effectiveTeamId)
+          : "/v9/projects?limit=100";
+        const projectResponse = await vercelRequest(projectsPath, accessToken);
+        const projectItems = Array.isArray(projectResponse.projects) ? projectResponse.projects : [];
+        const normalizedProjects = projectItems.map(vercelProjectShape).filter(Boolean);
+        for (const project of normalizedProjects) {
+          const { data: savedProject, error: projectError } = await admin.from("platform_projects").upsert({
+            workspace_id: workspaceId,
+            platform_connection_id: connection.id,
+            provider: "vercel",
+            ...project,
+            last_synced_at: new Date().toISOString(),
+          }, { onConflict: "workspace_id,provider,external_project_id" })
+            .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+          if (projectError || !savedProject) throw new Error("Misma could not save the discovered Vercel projects.");
+          savedProjects.push(savedProject);
+        }
+        await admin.from("platform_credentials").update({
+          last_validated_at: new Date().toISOString(),
+          last_validation_status: "valid",
+        }).eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
+      } catch {
+        discoveryError = "Vercel connected successfully, but project discovery failed. Use Refresh Vercel projects to retry.";
+        await admin.from("platform_credentials").update({ last_validation_status: "error" })
+          .eq("platform_connection_id", connection.id).eq("workspace_id", workspaceId);
+      }
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, provider: "vercel", level: "info",
+        event: "vercel.marketplace_connected",
+        details: { configuration_id: configurationId, team_id: effectiveTeamId || null, projects_discovered: savedProjects.length },
+      });
+      return json({ connected: true, platformConnectionId: connection.id, accountName: accountLabel, projects: savedProjects, discoveryError: discoveryError || null }, 200, origin);
+    }
+
+    if (action === "vercel-refresh-projects") {
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) return json({ error: "Choose a valid Vercel connection." }, 400, origin);
+      const { data: connection, error: connectionError } = await admin.from("platform_connections")
+        .select("id,metadata").eq("id", connectionId).eq("workspace_id", workspaceId)
+        .eq("provider", "vercel").eq("status", "connected").maybeSingle();
+      if (connectionError || !connection) throw new Error("That Vercel connection is not available in this workspace.");
+      const { data: credential, error: credentialError } = await admin.from("platform_credentials")
+        .select("secret_ciphertext,secret_iv,key_version").eq("platform_connection_id", connectionId)
+        .eq("workspace_id", workspaceId).eq("provider", "vercel").maybeSingle();
+      if (credentialError || !credential) throw new Error("Reconnect Vercel because its encrypted credential is missing.");
+      const keyVersion = Number(credential.key_version);
+      const token = await decryptCredentialPayload(
+        { ciphertext: credential.secret_ciphertext, iv: credential.secret_iv },
+        credentialAad(workspaceId, "vercel", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const teamId = safeText((connection.metadata as Record<string, unknown>)?.team_id, 180);
+      const path = teamId ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(teamId) : "/v9/projects?limit=100";
+      const result = await vercelRequest(path, token.accessToken);
+      const items = Array.isArray(result.projects) ? result.projects : [];
+      const projects = [];
+      for (const item of items) {
+        const shaped = vercelProjectShape(item);
+        if (!shaped) continue;
+        const { data: saved, error } = await admin.from("platform_projects").upsert({
+          workspace_id: workspaceId, platform_connection_id: connectionId, provider: "vercel",
+          ...shaped, last_synced_at: new Date().toISOString(),
+        }, { onConflict: "workspace_id,provider,external_project_id" })
+          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+        if (error || !saved) throw new Error("Could not save the refreshed Vercel project list.");
+        projects.push(saved);
+      }
+      return json({ projects }, 200, origin);
+    }
+
+    if (action === "vercel-link-project") {
+      const projectId = safeText(body.platformProjectId, 80);
+      const websiteConnectionId = safeText(body.websiteConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(projectId) || !/^[0-9a-f-]{36}$/i.test(websiteConnectionId)) {
+        return json({ error: "Choose a Vercel project and a Misma website." }, 400, origin);
+      }
+      const [{ data: project, error: projectError }, { data: website, error: websiteError }] = await Promise.all([
+        admin.from("platform_projects").select("id,platform_connection_id,name,dashboard_url")
+          .eq("id", projectId).eq("workspace_id", workspaceId).eq("provider", "vercel").maybeSingle(),
+        admin.from("website_connections").select("id,name,domain")
+          .eq("id", websiteConnectionId).eq("workspace_id", workspaceId).is("widget_deleted_at", null).maybeSingle(),
+      ]);
+      if (projectError || !project) throw new Error("That Vercel project is not available in this workspace.");
+      if (websiteError || !website) throw new Error("That Misma website is not available in this workspace.");
+      const { data: existing } = await admin.from("website_installations").select("id")
+        .eq("workspace_id", workspaceId).eq("website_connection_id", websiteConnectionId)
+        .eq("platform_project_id", projectId).eq("provider", "vercel")
+        .neq("status", "removed").limit(1).maybeSingle();
+      if (existing) return json({ linked: true, alreadyLinked: true, installationId: existing.id }, 200, origin);
+      const { data: installation, error: installError } = await admin.from("website_installations").insert({
+        workspace_id: workspaceId,
+        website_connection_id: websiteConnectionId,
+        platform_project_id: projectId,
+        provider: "vercel",
+        deployment_mode: "manual",
+        status: "prepared",
+        dashboard_url: project.dashboard_url || "https://vercel.com/dashboard",
+        metadata: { project_name: project.name, website_domain: website.domain, link_type: "workspace_project_association" },
+      }).select("id").single();
+      if (installError || !installation) throw new Error("Could not link this Vercel project to the Misma website.");
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, installation_id: installation.id, provider: "vercel", level: "info",
+        event: "vercel.project_linked",
+        details: { project_id: projectId, project_name: project.name, website_domain: website.domain },
+      });
+      return json({ linked: true, installationId: installation.id }, 200, origin);
     }
 
     if (action === "github-install-url") {

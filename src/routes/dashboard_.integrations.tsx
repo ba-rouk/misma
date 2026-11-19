@@ -12,7 +12,7 @@ export const Route = createFileRoute("/dashboard/integrations")({ component: Web
 
 const providers = [
   { id: "github", name: "GitHub", description: "Connect repositories and prepare a focused Misma installation pull request." },
-  { id: "vercel", name: "Vercel", description: "Discover projects and deployments linked to your repositories." },
+  { id: "vercel", name: "Vercel", description: "Connect your Vercel account, discover projects, and associate them with Misma websites." },
   { id: "netlify", name: "Netlify", description: "Discover sites and publish changes through connected Git repositories." },
   { id: "render", name: "Render", description: "Discover services and trigger deployments after approved source changes." },
 ];
@@ -34,6 +34,7 @@ function WebsiteIntegrationsPage() {
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
 
   const githubConnection = connections.find((connection) => connection.provider === "github" && connection.status === "connected");
+  const vercelConnection = connections.find((connection) => connection.provider === "vercel" && connection.status === "connected");
   const selectedRepo = repositories.find((repo) => String(repo.id) === repositoryId);
 
   async function invoke(action: string, extra: Record<string, unknown> = {}) {
@@ -169,6 +170,21 @@ function WebsiteIntegrationsPage() {
     }
   }
 
+
+  async function connectVercel() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await invoke("vercel-install-url");
+      if (!result?.installUrl || typeof result.installUrl !== "string" || !result.installUrl.startsWith("https://vercel.com/integrations/")) {
+        throw new Error("Misma did not return a valid Vercel Marketplace installation link.");
+      }
+      window.location.assign(result.installUrl);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not start the Vercel connection.");
+      setBusy(false);
+    }
+  }
+
   async function loadRepositories() {
     setBusy(true); setError("");
     try {
@@ -235,12 +251,13 @@ function WebsiteIntegrationsPage() {
               return <article key={provider.id} style={{ background: "#fff", border: "1px solid #e5e9ef", borderRadius: 16, padding: 18 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                   <strong style={{ fontSize: 16 }}>{provider.name}</strong>
-                  <span style={{ fontSize: 11, color: connected ? "#167344" : "#7a8492", background: connected ? "#eaf8ef" : "#f0f2f5", borderRadius: 20, padding: "5px 9px" }}>{connected ? "Connected" : provider.id === "github" ? "Available first" : "Coming next"}</span>
+                  <span style={{ fontSize: 11, color: connected ? "#167344" : "#7a8492", background: connected ? "#eaf8ef" : "#f0f2f5", borderRadius: 20, padding: "5px 9px" }}>{connected ? "Connected" : provider.id === "github" ? "Available first" : provider.id === "vercel" ? "Available" : "Coming next"}</span>
                 </div>
                 <p style={{ color: "#667085", fontSize: 13, lineHeight: 1.55, minHeight: 60 }}>{provider.description}</p>
                 {provider.id === "github" && (connected
                   ? <button type="button" onClick={() => void loadRepositories()} disabled={busy} style={primaryButton}>{busy ? "Loading…" : "Choose repository"}</button>
                   : <button type="button" onClick={() => void connectGithub()} disabled={busy} style={primaryButton}>{busy ? "Connecting…" : "Connect GitHub"}</button>)}
+                {provider.id === "vercel" && <button type="button" onClick={() => void connectVercel()} disabled={busy} style={primaryButton}>{busy ? "Opening Vercel…" : vercelConnection ? "Manage Vercel projects" : "Connect Vercel"}</button>}
               </article>;
             })}
           </section>
