@@ -20,7 +20,10 @@ test("plugin marketplace has a workspace-scoped searchable directory and separat
   assert.match(page, /github-install-url/);
   assert.match(page, /vercel-install-url/);
   assert.match(page, /render-connect/);
+  assert.match(page, /render-refresh-projects/);
+  assert.match(page, /render-link-project/);
   assert.match(page, /misma-plugin-credential-field/);
+  assert.match(page, /misma-plugin-render-config/);
   assert.doesNotMatch(page, /\/dashboard\/integrations\?provider=/);
   assert.doesNotMatch(page, /Back to Misma/);
 });
