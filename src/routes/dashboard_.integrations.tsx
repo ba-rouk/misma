@@ -200,9 +200,16 @@ function WebsiteIntegrationsPage() {
       setDiagnostics(result.checks as IntegrationDiagnostics);
       const githubOk = result.checks.github.status === "verified";
       const vercelOk = result.checks.vercel.status === "configured";
-      setNotice(githubOk && vercelOk
-        ? "Both platform configurations are present. GitHub credentials were verified against GitHub; Vercel is ready for a fresh Marketplace authorization."
-        : "Configuration check finished. Review the provider results below and correct only the settings marked with an error.");
+      const failedChecks = [
+        !githubOk ? "GitHub: " + result.checks.github.message : "",
+        !vercelOk ? "Vercel: " + result.checks.vercel.message : "",
+      ].filter(Boolean);
+      if (failedChecks.length) {
+        setError(failedChecks.join(" · "));
+        setNotice("Verification completed. The message above identifies the provider settings that need attention. The other provider can still be connected independently.");
+      } else {
+        setNotice("GitHub credentials are verified and Vercel settings are present. Connect either provider independently to this workspace.");
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not verify the saved integration settings.");
     } finally {
@@ -280,7 +287,7 @@ function WebsiteIntegrationsPage() {
         <header className="misma-integrations-header">
           <p className="misma-integrations-eyebrow">Misma · Website integrations</p>
           <h1>Connect your website platform</h1>
-          <p className="misma-integrations-intro">Connect the platform that stores or deploys your website code. Misma can prepare the widget installation, open a review request, and use automatic deployment only when you authorize it.</p>
+          <p className="misma-integrations-intro">Connect GitHub and Vercel independently, in either order. Both connections belong to the workspace selected below; neither provider requires the other. Misma can prepare website changes and use automatic deployment only when you authorize it.</p>
         </header>
 
         {error && <div role="alert" className="misma-integrations-message is-error">{error}</div>}
@@ -347,13 +354,13 @@ function WebsiteIntegrationsPage() {
               return <article key={provider.id} className="misma-integrations-provider-card">
                 <div className="misma-integrations-provider-heading">
                   <strong>{provider.name}</strong>
-                  <span className={`misma-integrations-status${connected ? " is-connected" : ""}`}>{connected ? "Connected" : provider.id === "github" ? "Available first" : provider.id === "vercel" ? "Available" : "Coming next"}</span>
+                  <span className={`misma-integrations-status${connected ? " is-connected" : ""}`}>{connected ? "Connected" : provider.id === "github" || provider.id === "vercel" ? "Not connected" : "Coming later"}</span>
                 </div>
                 <p className="misma-integrations-provider-description">{provider.description}</p>
                 {provider.id === "github" && (connected
                   ? <button type="button" onClick={() => void loadRepositories()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Loading…" : "Choose repository"}</button>
-                  : <button type="button" onClick={() => void connectGithub()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Connecting…" : "Connect GitHub"}</button>)}
-                {provider.id === "vercel" && <button type="button" onClick={() => void connectVercel()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Opening Vercel…" : vercelConnection ? "Manage Vercel projects" : "Connect Vercel"}</button>}
+                  : <button type="button" onClick={() => void connectGithub()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Opening GitHub…" : "Connect GitHub"}</button>)}
+                {provider.id === "vercel" && <button type="button" onClick={() => void connectVercel()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Opening Vercel…" : vercelConnection ? "Reconnect Vercel" : "Connect Vercel"}</button>}
               </article>;
             })}
           </section>
