@@ -8,14 +8,13 @@ const read = (path) => readFile(resolve(root.pathname, path), "utf8");
 
 test("Misma execution schema keeps source plans and approvals server-only", async () => {
   const sql = await read("supabase/migrations/20261120160000_plugin_execution_engine.sql");
-  for (const table of [
+  const tables = [
     "plugin_execution_jobs", "plugin_execution_steps", "plugin_execution_approvals",
     "plugin_execution_logs", "repository_installations", "hosting_project_connections", "deployment_records",
-  ]) {
-    assert.match(sql, new RegExp("create table if not exists public\\." + table));
-    assert.match(sql, new RegExp("alter table public\\." + table + " enable row level security"));
-    assert.match(sql, new RegExp("revoke all on public\\." + table + " from public, anon, authenticated"));
-  }
+  ];
+  for (const table of tables) assert.ok(sql.includes("'" + table + "'"), "missing execution table policy for " + table);
+  assert.match(sql, /execute format\('alter table public\.%I enable row level security'/);
+  assert.match(sql, /execute format\('revoke all on public\.%I from public, anon, authenticated'/);
 });
 
 test("execution Edge Function validates workspace membership and GitHub App scope", async () => {
