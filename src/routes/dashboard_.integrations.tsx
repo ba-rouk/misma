@@ -235,8 +235,8 @@ function WebsiteIntegrationsPage() {
       }
       const checks = {
         ...result.checks,
-        runtime: healthResult.runtime,
-        projectRef: healthResult.projectRef,
+        runtime: healthResult?.runtime ?? result.checks.runtime,
+        projectRef: healthResult?.projectRef ?? result.checks.projectRef,
       } as IntegrationDiagnostics;
       setDiagnostics(checks);
 
