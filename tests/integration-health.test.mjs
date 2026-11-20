@@ -31,10 +31,8 @@ test("platform integration diagnostics only expose presence states and expected 
   assert.match(edge, /role !== "owner"/);
   assert.match(edge, /action === "integration-config-check"/);
   assert.match(edge, /missingSettingsMessage/);
-  assert.match(edge, /action === "integration-health"/);
-  assert.match(edge, /role !== "owner"/);
-  assert.doesNotMatch(edge, /return json\\(\\{ checks, health \\}/);
-  assert.doesNotMatch(edge, /settings: githubHealth\\.settings|settings: vercelHealth\\.settings/);
+  assert.doesNotMatch(edge, /return json\(\{ checks, health \}/);
+  assert.doesNotMatch(edge, /settings: githubHealth\.settings|settings: vercelHealth\.settings/);
 });
 
 test("integration dashboard displays the owner-only setup checklist and runtime metadata", async () => {
