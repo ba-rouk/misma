@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { loadSharedBusinessKnowledge } from "../_shared/business-knowledge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1677,18 +1678,8 @@ Deno.serve(async (request) => {
     const liveSearchPromise = shouldSearchWeb(message)
       ? searchLiveWeb(message, voice)
       : Promise.resolve(null);
-    const [workspaceResult, knowledgeResult, orderResult, contactResult, core01LessonsResult, liveSearch] = await Promise.all([
-      db.from("workspaces")
-        .select("name,location,description,opening_hours,primary_language")
-        .eq("id", workspaceId)
-        .single(),
-      db.from("knowledge_entries")
-        .select("question,answer")
-        .eq("workspace_id", workspaceId)
-        .is("website_connection_id", null)
-        .eq("approved", true)
-        .order("id", { ascending: false })
-        .limit(voice ? 8 : 20),
+    const [brainContext, orderResult, contactResult, liveSearch] = await Promise.all([
+      loadSharedBusinessKnowledge(db, { workspaceId, mode: "owner", voice }),
       db.from("orders")
         .select("item,total_rwf,status,created_at")
         .eq("workspace_id", workspaceId)
@@ -1697,20 +1688,9 @@ Deno.serve(async (request) => {
       db.from("contacts")
         .select("id", { count: voice ? "estimated" : "exact", head: true })
         .eq("workspace_id", workspaceId),
-      db.from("core_01_lessons")
-        .select("room_key,lesson,confidence")
-        .eq("workspace_id", workspaceId)
-        .neq("room_key", "website")
-        .eq("status", "approved")
-        .order("confidence", { ascending: false })
-        .order("updated_at", { ascending: false })
-        .limit(voice ? 6 : 12),
       liveSearchPromise,
     ]);
-    if (workspaceResult.error || !workspaceResult.data) {
-      throw new Error("Could not load workspace profile.");
-    }
-    if (knowledgeResult.error || orderResult.error || contactResult.error || core01LessonsResult.error) {
+    if (orderResult.error || contactResult.error) {
       throw new Error("Could not load workspace context.");
     }
 
@@ -1832,7 +1812,7 @@ Deno.serve(async (request) => {
       }
     }
 
-    const workspace = workspaceResult.data;
+    const workspace = brainContext.workspace;
     const businessContext = {
       workspace: {
         name: workspace.name,
@@ -1841,10 +1821,14 @@ Deno.serve(async (request) => {
         openingHours: workspace.opening_hours,
         primaryLanguage: workspace.primary_language,
       },
-      approvedKnowledge: (knowledgeResult.data ?? []).map(({ question, answer }) => ({
-        question: question.slice(0, 500),
-        answer: answer.slice(0, 1_500),
+      websites: brainContext.websites.map((site: JsonRecord) => ({
+        name: site.name,
+        domain: site.domain,
+        websiteUrl: site.website_url,
       })),
+      approvedKnowledge: brainContext.approvedKnowledge,
+      pendingKnowledgeForOwnerReview: brainContext.pendingKnowledge,
+      productsAndServices: brainContext.products,
       recentOrders: (orderResult.data ?? []).map((order) => ({
         item: order.item,
         totalRwf: Number(order.total_rwf) || 0,
@@ -1852,11 +1836,7 @@ Deno.serve(async (request) => {
         createdAt: order.created_at,
       })),
       contactCount: contactResult.count ?? 0,
-      core01ValidatedLessons: (core01LessonsResult.data ?? []).map(({ room_key, lesson, confidence }) => ({
-        room: room_key,
-        lesson: lesson.slice(0, 2_000),
-        confidence: Number(confidence) || 0,
-      })),
+      core01ValidatedLessons: brainContext.core01,
       orderContextNote: "Recent orders are limited to the five latest records and are not an all-time total.",
     };
     if (prepared.transcribedAudio) {
@@ -1940,6 +1920,7 @@ Deno.serve(async (request) => {
       "When the meaning is unclear, say so briefly and ask one specific clarifying question instead of replying with an unrelated greeting. " +
 
       "CORE.01 KNOWLEDGE MODEL: Use core01ValidatedLessons as workspace-confirmed lessons from prior helpful interactions. " +
+      "SHARED BUSINESS BRAIN: approvedKnowledge and core01ValidatedLessons are shared with the customer assistant only after approval and only within their labelled website or shared workspace scope. Keep websiteName, websiteDomain and roomName attached to every fact; never combine facts from different websites. pendingKnowledgeForOwnerReview is owner-only draft material and is not customer-approved truth. Explain that it needs review; never imply customers can see it. " +
       "Apply a lesson only when it matches the user's current topic; newer approved knowledge entries and current workspace records take precedence. " +
       "Do not treat unreviewed conversation experiences as verified facts. " +
       "USE OF CONTEXT: Use the supplied workspace context and conversation history for business-specific questions about this workspace, " +

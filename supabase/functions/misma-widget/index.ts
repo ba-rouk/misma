@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4.4.3";
 import { getDomain } from "npm:tldts@6.1.86";
 import webpush from "npm:web-push@3.6.7";
+import { loadSharedBusinessKnowledge } from "../_shared/business-knowledge.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -470,37 +471,14 @@ function normalizeAssistantText(input: string): string {
 }
 
 async function loadBusinessContext(db: Db, workspaceId: string, voice = false, websiteConnectionId?: string, roomId?: number, websiteInfo?: AnyRecord) {
-  let knowledgeQuery = db.from("knowledge_entries").select("question,answer").eq("workspace_id", workspaceId).eq("approved", true);
-  if (websiteConnectionId) knowledgeQuery = knowledgeQuery.or("website_connection_id.is.null,website_connection_id.eq." + websiteConnectionId);
-  let lessonsQuery = db.from("core_01_lessons").select("room_key,lesson").eq("workspace_id", workspaceId).eq("status", "approved");
-  if (roomId && Number.isSafeInteger(roomId)) lessonsQuery = lessonsQuery.eq("room_id", roomId);
-  const [workspace, knowledge, products, lessons, scannedPages] = await Promise.all([
-    db.from("workspaces").select("name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-    knowledgeQuery.order("id", { ascending: false }).limit(voice ? 8 : 30),
-    db.from("products_services").select("item_type,name,description,price_text").eq("workspace_id", workspaceId).eq("active", true).limit(voice ? 15 : 50),
-    lessonsQuery.order("confidence", { ascending: false }).limit(voice ? 6 : 12),
-    websiteConnectionId
-      ? db.from("website_scan_pages").select("canonical_url,title,content_text").eq("website_id", websiteConnectionId).order("scanned_at", { ascending: false }).limit(voice ? 3 : 8)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  if (workspace.error) throw new Error("Could not load the business profile.");
-  const pageContext = (scannedPages.data || []).map((page: AnyRecord) => ({
-    title: safeString(page.title, 240),
-    url: safeString(page.canonical_url, 1200),
-    content: safeString(page.content_text, voice ? 1200 : 2600),
-  }));
-  return {
-    workspace: workspace.data,
-    website: websiteInfo ? {
-      businessName: safeString(workspace.data?.name, 120) || safeString(websiteInfo.name, 120),
-      websiteUrl: safeString(websiteInfo.website_url, 180),
-      websiteDomain: safeString(websiteInfo.domain, 180),
-    } : null,
-    scannedWebsitePages: pageContext,
-    knowledge: knowledge.data || [],
-    products: products.data || [],
-    core01: lessons.data || [],
-  };
+  return await loadSharedBusinessKnowledge(db, {
+    workspaceId,
+    mode: "customer",
+    websiteConnectionId,
+    voice,
+    websiteInfo,
+    fallbackRoomId: roomId,
+  });
 }
 async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId?: string, roomId?: number, websiteInfo?: AnyRecord): Promise<string> {
   const liveSearchPromise = shouldSearchWeb(message) ? searchLiveWeb(message, voice) : Promise.resolve(null);
@@ -1332,7 +1310,7 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
       workspace_id: workspaceId,
       question,
       answer,
-      approved: true,
+      approved: false,
       source_type: sourceType,
       source_ref: normalizedSourceRef,
       website_connection_id: websiteConnectionId,
@@ -1348,7 +1326,7 @@ async function persistExtracted(db: Db, workspaceId: string, sourceType: string,
     : { error: null };
   if (knowledgeInsertResult.error) throw new Error("Could not save refreshed website knowledge.");
   const knowledgeUpdateResults = await Promise.all(knowledgeUpdates.map((item) =>
-    db.from("knowledge_entries").update({ answer: item.answer })
+    db.from("knowledge_entries").update({ answer: item.answer, approved: false })
       .eq("id", item.id).eq("workspace_id", workspaceId)
   ));
   const knowledgeUpdateError = knowledgeUpdateResults.find((result) => result.error)?.error;
