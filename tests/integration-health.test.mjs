@@ -50,5 +50,5 @@ test("GitHub App JWT failures identify a missing or mismatched registered public
   assert.match(edge, /Integration must generate a public key/);
   assert.match(edge, /same GitHub App/);
   assert.match(edge, /GITHUB_PRIVATE_KEY/);
-  assert.doesNotMatch(edge, /console\\.log\\([^)]*pem/i);
+  assert.doesNotMatch(edge, /console\.log\([^)]*pem/i);
 });
