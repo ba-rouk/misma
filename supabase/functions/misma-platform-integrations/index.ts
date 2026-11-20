@@ -665,7 +665,23 @@ async function main(request: Request) {
       await renderRequest("/v1/services?limit=1", apiKey);
       const fingerprint = await sha256(apiKey);
       const externalAccountId = "render-api-" + fingerprint.slice(0, 24);
+      const { data: existingConnection, error: lookupError } = await admin.from("platform_connections")
+        .select("id").eq("workspace_id", workspaceId).eq("provider", "render")
+        .eq("external_account_id", externalAccountId).maybeSingle();
+      if (lookupError) throw new Error("Could not check the existing Render connection.");
+
+      // Validate the encryption key and encrypt before creating/updating the connection,
+      // so a missing vault key cannot leave a misleading half-connected account.
+      const connectionId = String(existingConnection?.id || crypto.randomUUID());
+      const normalized = normalizeCredentialPayload("render", { apiKey });
+      const keyVersion = activeCredentialKeyVersion();
+      const encrypted = await encryptCredentialPayload(
+        normalized.payload,
+        credentialAad(workspaceId, "render", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
       const { data: connection, error: connectionError } = await admin.from("platform_connections").upsert({
+        id: connectionId,
         workspace_id: workspaceId,
         provider: "render",
         external_account_id: externalAccountId,
@@ -676,13 +692,6 @@ async function main(request: Request) {
       }, { onConflict: "workspace_id,provider,external_account_id" }).select("id").single();
       if (connectionError || !connection) throw new Error("Render was authorized, but Misma could not save the connection.");
 
-      const normalized = normalizeCredentialPayload("render", { apiKey });
-      const keyVersion = activeCredentialKeyVersion();
-      const encrypted = await encryptCredentialPayload(
-        normalized.payload,
-        credentialAad(workspaceId, "render", connection.id, keyVersion),
-        credentialKeyForVersion(keyVersion),
-      );
       const { error: credentialError } = await admin.from("platform_credentials").upsert({
         workspace_id: workspaceId,
         platform_connection_id: connection.id,
