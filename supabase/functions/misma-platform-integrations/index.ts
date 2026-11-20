@@ -57,7 +57,11 @@ function pkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
 }
 async function githubAppJwt() {
   const appId = required("GITHUB_APP_ID");
+  if (!/^\d+$/.test(appId)) throw new Error("GITHUB_APP_ID must be the numeric GitHub App ID.");
   const pem = required("GITHUB_PRIVATE_KEY").replace(/\\n/g, "\n");
+  if (!/-----BEGIN (?:RSA )?PRIVATE KEY-----/.test(pem) || !/-----END (?:RSA )?PRIVATE KEY-----/.test(pem)) {
+    throw new Error("GITHUB_PRIVATE_KEY must contain a complete PEM private key, including its BEGIN and END lines.");
+  }
   const isPkcs1 = pem.includes("BEGIN RSA PRIVATE KEY");
   const base64 = pem.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\s/g, "");
   const decoded = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
@@ -409,6 +413,61 @@ async function main(request: Request) {
       return json({ removed: true, provider: providerValue }, 200, origin);
     }
 
+
+    if (action === "integration-config-check") {
+      // Report configuration state without returning secret values. The GitHub
+      // check performs a signed App API request, proving the App ID and PEM key
+      // belong together and are usable by this deployed Edge Function.
+      const checks: Json = {};
+      try {
+        const appId = required("GITHUB_APP_ID");
+        if (!/^\d+$/.test(appId)) {
+          throw new Error("GITHUB_APP_ID must be the numeric App ID shown on the GitHub App General page.");
+        }
+        const privateKey = required("GITHUB_PRIVATE_KEY").replace(/\\n/g, "\n");
+        if (!/-----BEGIN (?:RSA )?PRIVATE KEY-----/.test(privateKey) ||
+            !/-----END (?:RSA )?PRIVATE KEY-----/.test(privateKey)) {
+          throw new Error("GITHUB_PRIVATE_KEY must contain the complete PEM private key, including its BEGIN and END lines.");
+        }
+        const app = await githubRequest("/app", await githubAppJwt());
+        const returnedAppId = String(app.id || "");
+        if (!returnedAppId || returnedAppId !== appId) {
+          throw new Error("GitHub authenticated the request, but the returned App ID does not match GITHUB_APP_ID.");
+        }
+        checks.github = {
+          status: "verified",
+          appId: returnedAppId,
+          appName: safeText(app.name, 120) || "GitHub App",
+          appSlug: safeText(app.slug, 120),
+          webhookSecretConfigured: Boolean(Deno.env.get("GITHUB_WEBHOOK_SECRET")?.trim()),
+          message: "GitHub accepted the App ID and private key.",
+        };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "GitHub App configuration could not be verified.";
+        checks.github = { status: "error", message: message.slice(0, 240) };
+      }
+
+      try {
+        const slug = required("VERCEL_INTEGRATION_SLUG").replace(/^\/+|\/+$/g, "");
+        if (!/^[a-z0-9][a-z0-9-]{1,100}$/i.test(slug)) {
+          throw new Error("VERCEL_INTEGRATION_SLUG must be the Vercel Marketplace URL slug, for example: misma.");
+        }
+        required("VERCEL_CLIENT_ID");
+        required("VERCEL_CLIENT_SECRET");
+        checks.vercel = {
+          status: "configured",
+          slug,
+          clientIdConfigured: true,
+          clientSecretConfigured: true,
+          callbackUrl: APP_ORIGIN + "/integrations/vercel/callback",
+          message: "Vercel slug and OAuth client credentials are present. The Marketplace callback still needs a fresh authorization test.",
+        };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "Vercel configuration could not be checked.";
+        checks.vercel = { status: "error", message: message.slice(0, 240) };
+      }
+      return json({ checks }, 200, origin);
+    }
 
     if (action === "vercel-install-url") {
       const slug = required("VERCEL_INTEGRATION_SLUG").replace(/^\/+|\/+$/g, "");
