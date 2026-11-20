@@ -469,7 +469,14 @@ async function main(request: Request) {
             : "GitHub accepted the App ID and private key; the webhook secret is present.",
         };
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : "GitHub App configuration could not be verified.";
+        const causeMessage = cause instanceof Error ? cause.message : "GitHub App configuration could not be verified.";
+        const missingMessage = githubHealth.missingSettings.length
+          ? missingSettingsMessage("GitHub", githubHealth.missingSettings, health.projectRef)
+          : "";
+        const message = [causeMessage, missingMessage]
+          .filter(Boolean)
+          .filter((value, index, all) => all.indexOf(value) === index)
+          .join(" ");
         console.warn("Misma integration configuration check failed:", JSON.stringify({
           provider: "github",
           runtime: health.runtime,
