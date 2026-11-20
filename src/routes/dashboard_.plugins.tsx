@@ -68,6 +68,7 @@ function PluginsPage() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [renderApiKey, setRenderApiKey] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -77,9 +78,9 @@ function PluginsPage() {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) throw new Error("Sign in to manage plugins.");
         const { data: memberships, error: membershipError } = await supabase
-          .from("workspace_members").select("workspace_id").eq("user_id", user.id);
+          .from("workspace_members").select("workspace_id,role").eq("user_id", user.id);
         if (membershipError) throw membershipError;
-        const ids = [...new Set((memberships || []).map((row) => String(row.workspace_id)))];
+        const ids = [...new Set((memberships || []).filter((row) => ["owner", "admin"].includes(String(row.role))).map((row) => String(row.workspace_id)))];
         let options: Workspace[] = [];
         if (ids.length) {
           const { data, error: workspaceError } = await supabase.from("workspaces")
@@ -168,13 +169,51 @@ function PluginsPage() {
     }
   }
 
-  function openConfiguration(plugin: Provider) {
-    if (!workspaceId) {
-      setError("Choose a Misma workspace first.");
+  async function connectPlugin(plugin: Provider) {
+    if (!workspaceId || busy) {
+      if (!workspaceId) setError("Choose a Misma workspace first.");
       return;
     }
-    window.sessionStorage.setItem("misma_integrations_workspace", workspaceId);
-    window.location.assign("/dashboard/integrations?provider=" + encodeURIComponent(plugin));
+    setBusy(plugin);
+    setError("");
+    setNotice("");
+    try {
+      if (plugin === "github" || plugin === "vercel") {
+        const action = plugin === "github" ? "github-install-url" : "vercel-install-url";
+        const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
+          body: { action, workspaceId },
+        });
+        if (invokeError) throw new Error(invokeError.message || "Could not start the " + plugin + " connection.");
+        if (data?.error) throw new Error(String(data.error));
+        const installUrl = typeof data?.installUrl === "string" ? data.installUrl : "";
+        const validUrl = plugin === "github"
+          ? installUrl.startsWith("https://github.com/")
+          : installUrl.startsWith("https://vercel.com/integrations/");
+        if (!validUrl) throw new Error("Misma did not return a valid " + plugin + " authorization link.");
+        window.location.assign(installUrl);
+        return;
+      }
+
+      if (plugin === "render") {
+        if (!renderApiKey.trim()) throw new Error("Enter your Render API key.");
+        const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
+          body: { action: "render-connect", workspaceId, apiKey: renderApiKey.trim() },
+        });
+        if (invokeError) throw new Error(invokeError.message || "Could not connect Render.");
+        if (data?.error) throw new Error(String(data.error));
+        setRenderApiKey("");
+        const { data: refreshed, error: refreshError } = await supabase.from("platform_connections")
+          .select("id,provider,external_account_name,status,updated_at")
+          .eq("workspace_id", workspaceId).order("updated_at", { ascending: false });
+        if (refreshError) throw refreshError;
+        setConnections((refreshed || []) as Connection[]);
+        setNotice(String(data?.message || "Render is connected to this Misma workspace."));
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect this plugin.");
+    } finally {
+      setBusy("");
+    }
   }
 
   const selectedPlugin = plugins.find((plugin) => plugin.id === selected) || null;
@@ -183,7 +222,7 @@ function PluginsPage() {
   return (
     <main className="misma-marketplace-page">
       <div className="misma-marketplace-shell">
-        <a className="misma-marketplace-back" href="/dashboard">← Back to Misma</a>
+        
         <header className="misma-marketplace-header">
           <div>
             <span className="misma-marketplace-eyebrow">Misma ecosystem</span>
@@ -277,14 +316,22 @@ function PluginsPage() {
             <h3>Permissions and scope</h3>
             <ul>{selectedPlugin.permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul>
             <p>Access is limited to the selected Misma workspace and the connected account's granted permissions. GitHub changes and production deployments must follow the approval flow.</p>
+            <p className="misma-plugin-storage-note">Misma validates provider access on the server and stores supported credentials encrypted in Supabase. Provider secrets are not stored in this browser.</p>
           </div>
-          {selectedPlugin.availability === "coming" ? <div className="misma-plugin-coming-note">Netlify account authorization and build actions are not enabled yet. Your existing connections are not affected.</div> : selectedConnection
+          {selectedPlugin.availability === "coming" ? <div className="misma-plugin-coming-note">Netlify authorization and build actions are not enabled yet.</div> : selectedConnection
             ? <div className="misma-plugin-connected-state"><span className="misma-plugin-status is-connected">Connected</span><strong>{selectedConnection.external_account_name || selectedPlugin.name + " account"}</strong><small>Connected to the selected workspace.</small></div>
             : <div className="misma-plugin-coming-note">This plugin is not connected to the selected workspace.</div>}
+          {selectedPlugin.id === "render" && !selectedConnection && selectedPlugin.availability !== "coming" && (
+            <label className="misma-plugin-credential-field">
+              <span>Render API key</span>
+              <input type="password" autoComplete="off" value={renderApiKey} onChange={(event) => setRenderApiKey(event.target.value)} placeholder="Paste your Render API key" />
+              <small>The key is sent to Misma's Supabase Edge Function for validation and encrypted storage.</small>
+            </label>
+          )}
+          {error && <p className="misma-plugin-modal-feedback is-error" role="alert">{error}</p>}
+          {notice && <p className="misma-plugin-modal-feedback" role="status">{notice}</p>}
           <div className="misma-plugin-modal-actions">
-            {selectedPlugin.availability !== "coming" && (selectedConnection
-              ? <button type="button" className="misma-plugin-primary" onClick={() => openConfiguration(selectedPlugin.id)}>Configure workspace</button>
-              : <button type="button" className="misma-plugin-primary" onClick={() => openConfiguration(selectedPlugin.id)}>Connect {selectedPlugin.name}</button>)}
+            {selectedPlugin.availability !== "coming" && !selectedConnection && <button type="button" className="misma-plugin-primary" disabled={busy === selectedPlugin.id || (selectedPlugin.id === "render" && !renderApiKey.trim())} onClick={() => void connectPlugin(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Connecting…" : selectedPlugin.id === "github" ? "Continue to GitHub" : selectedPlugin.id === "vercel" ? "Continue to Vercel" : "Connect Render"}</button>}
             {selectedConnection && <button type="button" className="misma-plugin-danger" disabled={busy === selectedPlugin.id} onClick={() => void disconnect(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Disconnecting…" : "Disconnect"}</button>}
           </div>
         </section>
