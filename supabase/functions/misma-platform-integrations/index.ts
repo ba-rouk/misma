@@ -380,6 +380,39 @@ async function main(request: Request) {
     if (!/^[0-9a-f-]{36}$/i.test(workspaceId)) return json({ error: "Choose a valid workspace." }, 400, origin);
     const { admin, userId, role } = await authorize(request, workspaceId);
 
+    if (action === "platform-disconnect") {
+      const provider = safeText(body.provider, 24);
+      if (!["github", "vercel", "render", "netlify"].includes(provider)) {
+        return json({ error: "Choose a supported plugin to disconnect." }, 400, origin);
+      }
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) {
+        return json({ error: "Choose a valid plugin connection." }, 400, origin);
+      }
+      const { data: connection, error: lookupError } = await admin.from("platform_connections")
+        .select("id,provider,status").eq("id", connectionId).eq("workspace_id", workspaceId)
+        .eq("provider", provider).maybeSingle();
+      if (lookupError || !connection) return json({ error: "That plugin connection is not available in this workspace." }, 404, origin);
+      const { error: credentialDeleteError } = await admin.from("platform_credentials")
+        .delete().eq("platform_connection_id", connectionId).eq("workspace_id", workspaceId);
+      if (credentialDeleteError) throw new Error("Could not safely remove the stored platform credential.");
+      const { error: updateError } = await admin.from("platform_connections")
+        .update({ status: "disconnected", updated_at: new Date().toISOString() })
+        .eq("id", connectionId).eq("workspace_id", workspaceId).eq("provider", provider);
+      if (updateError) throw new Error("Could not update this plugin connection.");
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, provider, level: "info",
+        event: "platform.disconnected", details: { connection_id: connectionId, actor_user_id: userId, actor_role: role },
+      });
+      return json({
+        disconnected: true,
+        provider,
+        note: provider === "github"
+          ? "Misma has disconnected this GitHub installation from the workspace. To revoke the GitHub App installation itself, also remove Misma from GitHub Settings → Applications → Installed GitHub Apps."
+          : "The encrypted platform credential was removed from Misma.",
+      }, 200, origin);
+    }
+
     // Credentials are accepted only from an authenticated workspace owner/admin.
     // Plaintext values are encrypted in this function and never returned or logged.
     if (action === "platform-credential-save") {
