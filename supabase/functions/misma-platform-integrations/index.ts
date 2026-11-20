@@ -433,7 +433,7 @@ async function main(request: Request) {
         const criticalGithubMissing = ["GITHUB_APP_ID", "GITHUB_PRIVATE_KEY"]
           .filter((name) => githubHealth.settings[name] !== "present");
         if (criticalGithubMissing.length) {
-          throw new Error(missingSettingsMessage("GitHub", criticalGithubMissing, health.projectRef));
+          throw new Error(missingSettingsMessage("GitHub", githubHealth.missingSettings, health.projectRef));
         }
 
         const appId = required("GITHUB_APP_ID");
@@ -461,7 +461,7 @@ async function main(request: Request) {
           runtime: health.runtime,
           projectRef: health.projectRef,
           message: webhookMissing
-            ? "GitHub App ID and private key are verified. Webhook delivery still needs GITHUB_WEBHOOK_SECRET in Supabase Edge Function secrets."
+            ? "GitHub App ID and private key are verified. " + missingSettingsMessage("GitHub webhook delivery", githubHealth.missingSettings, health.projectRef)
             : "GitHub accepted the App ID and private key; the webhook secret is present.",
         };
       } catch (cause) {
