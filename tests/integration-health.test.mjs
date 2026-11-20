@@ -28,6 +28,7 @@ test("platform integration diagnostics only expose presence states and expected 
   assert.match(health, /projectRef: projectRefFromRuntime\(\)/);
   assert.match(edge, /action === "integration-health"/);
   assert.match(edge, /await authorize\(request, workspaceId\)/);
+  assert.match(edge, /role !== "owner"/);
   assert.match(edge, /action === "integration-config-check"/);
   assert.match(edge, /missingSettingsMessage/);
 });
