@@ -357,3 +357,10 @@ button, input, textarea, select { font-size: inherit; }
   border-color: #4d8dff;
   box-shadow: 0 0 0 3px rgba(77,141,255,.14);
 }
+
+.misma-plugin-mark.is-render,
+.misma-plugin-mark.is-netlify {
+  border-color: rgba(77,141,255,.24);
+  background: linear-gradient(145deg, rgba(77,141,255,.18), rgba(77,141,255,.045));
+  color: #b8d0ff;
+}
