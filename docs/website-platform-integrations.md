@@ -192,7 +192,7 @@ This gives broad language coverage without promising that Misma can safely rewri
 
 ## Rollout status
 
-The encrypted database schema and the server-side vault operations are being introduced before the Vercel, Netlify, and Render adapters. The provider OAuth callbacks, customer-facing connect screens, token validation, project discovery, deployment actions, and framework-specific source adapters are not yet enabled by this credential-vault change.
+The GitHub App and Vercel Marketplace flows are active. Vercel project discovery uses pagination and the callback requires an explicit project choice unless an exact website-name/domain match is found. Render account authorization, encrypted API-key storage, paginated service discovery, and project-to-website association are also active. Netlify's customer authorization/API adapter and direct provider deploy triggers remain future work.
 
 
 ## Integration connection troubleshooting
