@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 
@@ -18,7 +18,12 @@ type PlatformProject = {
   metadata: Record<string, unknown> | null;
 };
 
-export const Route = createFileRoute("/dashboard/integrations")({ component: WebsiteIntegrationsPage });
+export const Route = createFileRoute("/dashboard/integrations")({
+  beforeLoad: () => {
+    throw redirect({ to: "/dashboard/plugins" });
+  },
+  component: WebsiteIntegrationsPage,
+});
 
 const providers = [
   { id: "github", name: "GitHub", description: "Connect repositories and prepare a focused Misma installation pull request." },
@@ -364,7 +369,7 @@ function WebsiteIntegrationsPage() {
   return (
     <main className="aichat misma-integrations-page">
       <div className="misma-integrations-content">
-        <a href="/dashboard" className="misma-integrations-back">← Back to Misma dashboard</a>
+        
         <header className="misma-integrations-header">
           <p className="misma-integrations-eyebrow">Misma · Website integrations</p>
           <h1>Connect your website platform</h1>
