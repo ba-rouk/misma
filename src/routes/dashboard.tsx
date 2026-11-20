@@ -19,7 +19,6 @@ import {
   deleteConversation,
   setConversationGroup,
   addKnowledge,
-  reviewKnowledge,
   deleteKnowledge,
   updateOrderStatus,
   saveWorkspaceProfile,
@@ -1589,8 +1588,6 @@ function Dashboard() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
-  const [pendingKnowledgeList, setPendingKnowledgeList] = useState<any[]>([]);
-  const [knowledgeReviewBusyId, setKnowledgeReviewBusyId] = useState<number | null>(null);
   const [customers, setCustomers] = useState<any[]>([]);
   const [connectedWebsites, setConnectedWebsites] = useState<any[]>([]);
   const [humanHandoffs, setHumanHandoffs] = useState<any[]>([]);
@@ -2318,7 +2315,6 @@ function Dashboard() {
     setUnreadVisitorCount(supportMode ? 0 : data.unreadVisitorCount ?? 0);
     setOrders(supportMode ? [] : data.orders ?? []);
     setKnowledgeList(supportMode ? [] : data.knowledge ?? []);
-    setPendingKnowledgeList(supportMode ? [] : data.pendingKnowledge ?? []);
     setCustomers(data.customers ?? []);
     setConnectedWebsites(supportMode ? [] : data.websites ?? []);
     setHumanHandoffs(data.handoffs ?? []);
@@ -4508,7 +4504,7 @@ function Dashboard() {
     try {
       const content = await file.text();
       const result = await callWidgetFunction({ action: "extract-knowledge", workspaceId: workspace.id, fileName: file.name, content, websiteId: knowledgeWebsiteId || null });
-      alert(`Knowledge extraction complete. ${result.knowledgeSaved || 0} FAQ suggestions are awaiting approval; ${result.productSuggestions || 0} product/service suggestions remain inactive until you approve them.`);
+      alert(`Knowledge extraction complete. Saved ${result.knowledgeSaved || 0} FAQs and ${result.productSuggestions || 0} product/service suggestions for review.`);
       loadData();
     } catch (cause) {
       alert(cause instanceof Error ? cause.message : "Could not extract knowledge from this file.");
@@ -4535,22 +4531,6 @@ function Dashboard() {
       );
     } finally {
       setSavingKnowledge(false);
-    }
-  };
-
-  const handleReviewKnowledge = async (id: number, decision: "approve" | "reject") => {
-    if (!token || knowledgeReviewBusyId !== null) return;
-    setKnowledgeReviewBusyId(id);
-    try {
-      await reviewKnowledge({ data: { token, id, decision } });
-      setPendingKnowledgeList((current) => current.filter((item) => Number(item.id) !== id));
-      if (decision === "approve") {
-        await loadData();
-      }
-    } catch (cause) {
-      alert(cause instanceof Error ? cause.message : "Could not review this knowledge item.");
-    } finally {
-      setKnowledgeReviewBusyId(null);
     }
   };
 
@@ -5870,36 +5850,6 @@ function Dashboard() {
                   <button type="button" className="aichat-action-btn secondary" disabled={knowledgeUploadBusy} onClick={() => knowledgeFileInputRef.current?.click()}>{knowledgeUploadBusy ? "Extracting…" : "Upload knowledge file"}</button>
                 </div>
               </div>
-
-              {pendingKnowledgeList.length > 0 && (
-                <div className="aichat-card">
-                  <h3>Needs your approval ({pendingKnowledgeList.length})</h3>
-                  <p>Website scans and imported documents can suggest answers, but they are not used by customer-facing Misma until an owner or admin approves them.</p>
-                  <div className="aichat-table-wrap">
-                    <table className="aichat-table">
-                      <thead><tr><th>Suggested question</th><th>Suggested answer</th><th>Source</th><th style={{ textAlign: "right" }}>Review</th></tr></thead>
-                      <tbody>
-                        {pendingKnowledgeList.map((item) => {
-                          const sourceWebsite = connectedWebsites.find((site) => String(site.id) === String(item.website_connection_id));
-                          const sourceLabel = sourceWebsite ? (sourceWebsite.name || sourceWebsite.domain) : (item.source_type === "file_upload" ? "Imported file" : item.source_type || "Business source");
-                          const busy = knowledgeReviewBusyId === Number(item.id);
-                          return (
-                            <tr key={item.id}>
-                              <td style={{ fontWeight: 600 }}>{item.question}</td>
-                              <td>{item.answer}</td>
-                              <td>{sourceLabel}</td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                <button type="button" disabled={busy} onClick={() => void handleReviewKnowledge(Number(item.id), "approve")}>{busy ? "Saving…" : "Approve"}</button>
-                                <button type="button" disabled={busy} style={{ color: "#ff7b72", marginLeft: 8 }} onClick={() => void handleReviewKnowledge(Number(item.id), "reject")}>Reject</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
 
               {/* Approved Knowledge Library Table */}
               <div className="aichat-card">

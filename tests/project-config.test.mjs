@@ -1811,8 +1811,9 @@ test("owner and customer assistants share one isolated, approval-gated business 
   assert.match(widget, /loadSharedBusinessKnowledge/);
   assert.match(chat, /loadSharedBusinessKnowledge/);
   assert.match(shared, /mode: KnowledgeMode/);
-  assert.match(shared, /mode: "customer"/);
-  assert.match(shared, /mode: "owner"/);
+  assert.match(shared, /input\.mode === "customer"/);
+  assert.match(widget, /mode: "customer"/);
+  assert.match(chat, /mode: "owner"/);
   assert.match(shared, /website_connection_id/);
   assert.match(shared, /CUSTOMER_SHARED_ROOM_KEYS/);
   assert.match(shared, /\.eq\("website_id", websiteConnectionId\)/);
