@@ -82,7 +82,7 @@ export async function loadSharedBusinessKnowledge(
   const websiteById = new Map<string, AnyRecord>(websites.map((site: AnyRecord) => [String(site.id), site]));
 
   if (!isCustomer) {
-    const [knowledgeResult, lessonsResult, productsResult] = await Promise.all([
+    const [knowledgeResult, lessonsResult, productsResult, pagesResult] = await Promise.all([
       db.from("knowledge_entries")
         .select("id,question,answer,approved,source_type,source_ref,website_connection_id,room_id")
         .eq("workspace_id", workspaceId)
