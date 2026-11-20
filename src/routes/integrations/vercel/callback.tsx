@@ -45,11 +45,12 @@ function exactWebsiteProjectMatch(projects: VercelProject[], website?: Website) 
   if (!website) return null;
   const domain = website.domain.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
   const candidates = new Set([website.name, website.domain, domain, domain.split(".")[0]].map(normalizeProjectLabel).filter(Boolean));
-  return projects.find((project) => {
+  const matches = projects.filter((project) => {
     const values = [project.name, project.full_name || "", (project.full_name || "").split("/").pop() || ""]
       .map(normalizeProjectLabel).filter(Boolean);
     return values.some((value) => candidates.has(value));
-  }) || null;
+  });
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function VercelMarketplaceCallback() {
