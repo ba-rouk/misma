@@ -61,3 +61,36 @@ test("platform credential vault encrypts secrets and denies browser table access
   assert.match(edgeFunction, /platform-credential-remove/);
   assert.match(edgeFunction, /Only workspace owners and admins/);
 });
+
+
+test("Render services are fetched through the encrypted customer credential vault and cursor pagination", async () => {
+  const edge = await read("supabase/functions/misma-platform-integrations/index.ts");
+  const dashboard = await read("src/routes/dashboard_.integrations.tsx");
+  assert.match(edge, /action === "render-connect"/);
+  assert.match(edge, /action === "render-refresh-projects"/);
+  assert.match(edge, /action === "render-link-project"/);
+  assert.match(edge, /listRenderServices/);
+  assert.match(edge, /\/v1\/services\?/);
+  assert.match(edge, /params\.set\("cursor", cursor\)/);
+  assert.match(edge, /encryptCredentialPayload/);
+  assert.match(edge, /decryptCredentialPayload/);
+  assert.match(edge, /credentialAad\(workspaceId, "render"/);
+  assert.match(edge, /Render rejected this API key/);
+  assert.match(dashboard, /render-connect/);
+  assert.match(dashboard, /render-refresh-projects/);
+  assert.match(dashboard, /render-link-project/);
+  assert.match(dashboard, /exactWebsiteProjectMatch/);
+  assert.match(dashboard, /complete accessible service list is shown instead/);
+});
+
+test("Vercel project picker lists all pages and never silently picks the first project", async () => {
+  const edge = await read("supabase/functions/misma-platform-integrations/index.ts");
+  const callback = await read("src/routes/integrations/vercel/callback.tsx");
+  assert.match(edge, /async function listVercelProjects/);
+  assert.match(edge, /result\.pagination\?\.next/);
+  assert.match(edge, /params\.set\("from", from\)/);
+  assert.match(callback, /setProjectId\(data\?\.projects\?\.\[0\]\?\.id/);
+  assert.doesNotMatch(callback, /setProjectId\(data\?\.projects\?\.\[0\]\?\.id/);
+  assert.match(callback, /No Vercel project is associated with this website/);
+  assert.match(callback, /The full project list is shown instead/);
+});
