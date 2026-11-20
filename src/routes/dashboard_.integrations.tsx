@@ -7,6 +7,20 @@ type WorkspaceOption = { id: string; name: string };
 type Repo = { id: number; fullName: string; name: string; defaultBranch: string; htmlUrl: string; private: boolean };
 type PlatformConnection = { id: string; provider: string; external_account_name: string | null; status: string };
 type InstallResult = { installationId: string; status: string; pullRequestUrl: string; repositoryUrl: string; message: string };
+type SettingPresence = "present" | "missing" | "empty";
+type ProviderHealth = {
+  settings: Record<string, SettingPresence>;
+  missingSettings: string[];
+  emptySettings: string[];
+};
+type IntegrationHealth = {
+  runtime: string;
+  functionName: string;
+  projectRef: string | null;
+  secretsLocation: string;
+  providers: { github: ProviderHealth; vercel: ProviderHealth };
+  sharedCredentialVault: { settings: Record<string, SettingPresence>; missingSettings: string[]; note: string };
+};
 type SetupCheck = {
   status: "verified" | "configured" | "error";
   message: string;
@@ -18,8 +32,12 @@ type SetupCheck = {
   clientIdConfigured?: boolean;
   clientSecretConfigured?: boolean;
   callbackUrl?: string;
+  settings?: Record<string, SettingPresence>;
+  missingSettings?: string[];
+  runtime?: string;
+  projectRef?: string | null;
 };
-type IntegrationDiagnostics = { github: SetupCheck; vercel: SetupCheck };
+type IntegrationDiagnostics = { github: SetupCheck; vercel: SetupCheck; runtime?: string; projectRef?: string | null };
 
 export const Route = createFileRoute("/dashboard/integrations")({ component: WebsiteIntegrationsPage });
 
@@ -64,6 +82,7 @@ function WebsiteIntegrationsPage() {
   const [deploymentMode, setDeploymentMode] = useState<"automatic" | "manual">("manual");
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
   const [diagnostics, setDiagnostics] = useState<IntegrationDiagnostics | null>(null);
+  const [health, setHealth] = useState<IntegrationHealth | null>(null);
 
   const githubConnection = connections.find((connection) => connection.provider === "github" && connection.status === "connected");
   const vercelConnection = connections.find((connection) => connection.provider === "vercel" && connection.status === "connected");
@@ -191,24 +210,36 @@ function WebsiteIntegrationsPage() {
   }
 
   async function verifyIntegrationSetup() {
-    setBusy(true); setError(""); setNotice(""); setDiagnostics(null);
+    setBusy(true); setError(""); setNotice(""); setDiagnostics(null); setHealth(null);
     try {
+      const healthResult = await invoke("integration-health") as IntegrationHealth;
+      if (!healthResult?.providers?.github || !healthResult?.providers?.vercel) {
+        throw new Error("Misma returned an incomplete integration health report.");
+      }
+      setHealth(healthResult);
+
       const result = await invoke("integration-config-check");
       if (!result?.checks?.github || !result?.checks?.vercel) {
         throw new Error("Misma returned an incomplete integration configuration check.");
       }
-      setDiagnostics(result.checks as IntegrationDiagnostics);
-      const githubOk = result.checks.github.status === "verified";
-      const vercelOk = result.checks.vercel.status === "configured";
+      const checks = {
+        ...result.checks,
+        runtime: healthResult.runtime,
+        projectRef: healthResult.projectRef,
+      } as IntegrationDiagnostics;
+      setDiagnostics(checks);
+
       const failedChecks = [
-        !githubOk ? "GitHub: " + result.checks.github.message : "",
-        !vercelOk ? "Vercel: " + result.checks.vercel.message : "",
+        (checks.github.status !== "verified" || (checks.github.missingSettings?.length || 0) > 0)
+          ? "GitHub: " + checks.github.message : "",
+        (checks.vercel.status !== "configured" || (checks.vercel.missingSettings?.length || 0) > 0)
+          ? "Vercel: " + checks.vercel.message : "",
       ].filter(Boolean);
       if (failedChecks.length) {
         setError(failedChecks.join(" · "));
-        setNotice("Verification completed. The message above identifies the provider settings that need attention. The other provider can still be connected independently.");
+        setNotice("Verification ran in the Supabase Edge Function. The checklist shows every setting that is missing or empty; GitHub and Vercel can still be connected independently when their own requirements are satisfied.");
       } else {
-        setNotice("GitHub credentials are verified and Vercel settings are present. Connect either provider independently to this workspace.");
+        setNotice("GitHub credentials are verified and Vercel settings are present in the Supabase Edge Function runtime. Connect either provider independently to this workspace.");
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not verify the saved integration settings.");
@@ -302,6 +333,52 @@ function WebsiteIntegrationsPage() {
           </label>
           {workspaces.length > 1 && <p className="misma-integrations-help">Choose which workspace owns the website connection and GitHub installation.</p>}
         </section>
+
+        {health && <section className="misma-integrations-detail-card" aria-labelledby="integration-health-heading">
+          <div className="misma-integrations-actions" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div>
+              <h2 id="integration-health-heading" style={{ margin: 0 }}>Setup checklist</h2>
+              <p className="misma-integrations-help" style={{ marginBottom: 0 }}>
+                Runtime: <strong>{health.runtime}</strong> · Function: <code>{health.functionName}</code> · Project ref: <code>{health.projectRef || "not detected"}</code>
+              </p>
+            </div>
+          </div>
+          <p className="misma-integrations-help">
+            Set missing or empty values in {health.secretsLocation}. This check reads the running function environment, not Database Vault or Render environment variables.
+          </p>
+          <div className="misma-integrations-provider-grid">
+            {(["github", "vercel"] as const).map((provider) => {
+              const providerHealth = health.providers[provider];
+              const labels: Record<string, string> = {
+                GITHUB_APP_ID: "GitHub App ID",
+                GITHUB_PRIVATE_KEY: "GitHub App private key (PEM)",
+                GITHUB_WEBHOOK_SECRET: "GitHub webhook secret",
+                VERCEL_INTEGRATION_SLUG: "Vercel Marketplace slug",
+                VERCEL_CLIENT_ID: "Vercel OAuth client ID",
+                VERCEL_CLIENT_SECRET: "Vercel OAuth client secret",
+              };
+              return <article key={provider} className="misma-integrations-provider-card">
+                <div className="misma-integrations-provider-heading">
+                  <strong>{provider === "github" ? "GitHub" : "Vercel"} settings</strong>
+                  <span className={"misma-integrations-status" + (providerHealth.missingSettings.length === 0 ? " is-connected" : "")}>
+                    {providerHealth.missingSettings.length === 0 ? "All present" : "Needs attention"}
+                  </span>
+                </div>
+                <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, display: "grid", gap: 9 }}>
+                  {Object.entries(providerHealth.settings).map(([name, status]) => <li key={name} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13, overflowWrap: "anywhere" }}>
+                    <span aria-hidden="true" style={{ color: status === "present" ? "#16a34a" : "#dc2626", fontWeight: 800, minWidth: 16 }}>
+                      {status === "present" ? "✓" : "✕"}
+                    </span>
+                    <span><strong>{labels[name] || name}</strong> <code>{name}</code> <span style={{ color: status === "present" ? "#16a34a" : "#dc2626" }}>({status})</span></span>
+                  </li>)}
+                </ul>
+              </article>;
+            })}
+          </div>
+          {Object.values(health.sharedCredentialVault.settings).some((status) => status !== "present") && <p className="misma-integrations-help">
+            Shared credential vault: {health.sharedCredentialVault.missingSettings.join(", ")} is missing or empty. This key is required when storing encrypted customer platform tokens, but it is separate from the GitHub App and Vercel configuration checks.
+          </p>}
+        </section>}
 
         {workspaceId && <section className="misma-integrations-detail-card" aria-labelledby="integration-config-heading">
           <div className="misma-integrations-actions" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
