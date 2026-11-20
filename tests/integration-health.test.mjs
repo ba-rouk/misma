@@ -35,12 +35,20 @@ test("platform integration diagnostics only expose presence states and expected 
   assert.doesNotMatch(edge, /settings: githubHealth\.settings|settings: vercelHealth\.settings/);
 });
 
-test("integration dashboard displays the owner-only setup checklist and runtime metadata", async () => {
+test("integration dashboard hides server setup diagnostics from workspace users", async () => {
   const page = await read("../src/routes/dashboard_.integrations.tsx");
-  assert.match(page, /invoke\("integration-health"\)/);
-  assert.match(page, /Setup checklist/);
-  assert.match(page, /Supabase Edge Function/);
-  assert.match(page, /present/);
-  assert.match(page, /missing/);
-  assert.match(page, /empty/);
+  assert.doesNotMatch(page, /Setup checklist/);
+  assert.doesNotMatch(page, /Verify settings/);
+  assert.doesNotMatch(page, /integration-health/);
+  assert.doesNotMatch(page, /integration-config-check/);
+  assert.match(page, /Connect Render/);
+  assert.match(page, /No Render service matched this website/);
+});
+
+test("GitHub App JWT failures identify a missing or mismatched registered public key without exposing PEM", async () => {
+  const edge = await read("../supabase/functions/misma-platform-integrations/index.ts");
+  assert.match(edge, /Integration must generate a public key/);
+  assert.match(edge, /same GitHub App/);
+  assert.match(edge, /GITHUB_PRIVATE_KEY/);
+  assert.doesNotMatch(edge, /console\.log\([^)]*pem/i);
 });

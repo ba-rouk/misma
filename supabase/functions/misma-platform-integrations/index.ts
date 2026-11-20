@@ -95,6 +95,14 @@ async function githubRequest(path: string, token: string, init: RequestInit = {}
   try { body = text ? JSON.parse(text) : {}; } catch { body = { message: text.slice(0, 500) }; }
   if (!response.ok) {
     const message = typeof body.message === "string" ? body.message : "GitHub API request failed.";
+    if (response.status === 401 && /Integration must generate a public key/i.test(message)) {
+      throw new Error(
+        "GitHub rejected the Misma App JWT because this App has no matching registered public key. " +
+        "Open GitHub Developer settings → GitHub Apps → the same Misma App whose numeric App ID is GITHUB_APP_ID → Edit → Credentials → Private keys. " +
+        "Generate a new private key and replace GITHUB_PRIVATE_KEY with the complete downloaded PEM. " +
+        "The App ID and private key must belong to the same GitHub App; do not use its OAuth Client ID."
+      );
+    }
     throw new Error(`GitHub request failed (${response.status}): ${message}`);
   }
   return body;
@@ -152,6 +160,91 @@ function vercelProjectShape(project: any) {
       latest_deployment: project.latestDeployments?.[0]?.url ? safeText(project.latestDeployments[0].url, 300) : null,
     },
   };
+}
+
+async function listVercelProjects(token: string, teamId: string) {
+  const projects: any[] = [];
+  const seenCursors = new Set<string>();
+  let from = "";
+  for (let page = 0; page < 100; page++) {
+    const params = new URLSearchParams({ limit: "100" });
+    if (teamId) params.set("teamId", teamId);
+    if (from) params.set("from", from);
+    const result = await vercelRequest("/v9/projects?" + params.toString(), token);
+    const items = Array.isArray(result.projects) ? result.projects : [];
+    projects.push(...items);
+    const nextValue = result.pagination?.next;
+    const next = typeof nextValue === "string" || typeof nextValue === "number" ? String(nextValue) : "";
+    if (!next || !items.length || seenCursors.has(next)) break;
+    seenCursors.add(next);
+    from = next;
+  }
+  return projects.map(vercelProjectShape).filter(Boolean);
+}
+
+async function renderRequest(path: string, token: string, init: RequestInit = {}) {
+  const response = await fetch("https://api.render.com" + path, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+      ...(init.headers || {}),
+    },
+  });
+  const raw = await response.text();
+  let body: any = {};
+  try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("Render rejected this API key or it does not have permission to read services. Create a Render API key with service read access and reconnect.");
+    }
+    const message = typeof body.message === "string" ? body.message : "Render API request failed.";
+    throw new Error("Render request failed (" + response.status + "): " + message.slice(0, 220));
+  }
+  return body;
+}
+
+function renderServiceShape(entry: any) {
+  const service = entry?.service && typeof entry.service === "object" ? entry.service : entry;
+  const id = safeText(service?.id, 180);
+  const name = safeText(service?.name, 180);
+  if (!id || !name) return null;
+  const repo = safeText(service.repo, 260);
+  const serviceType = safeText(service.type, 60);
+  return {
+    external_project_id: id,
+    name,
+    full_name: repo || name,
+    repository_url: repo || null,
+    dashboard_url: safeText(service.dashboardUrl, 300) || "https://dashboard.render.com",
+    default_branch: safeText(service.branch, 120) || null,
+    metadata: {
+      service_type: serviceType || null,
+      suspended: safeText(service.suspended, 40) || null,
+      region: safeText(service.region, 60) || null,
+      runtime: safeText(service.env || service.serviceDetails?.runtime, 80) || null,
+      url: safeText(service.serviceDetails?.url, 300) || null,
+    },
+  };
+}
+
+async function listRenderServices(token: string) {
+  const services: any[] = [];
+  const seenCursors = new Set<string>();
+  let cursor = "";
+  for (let page = 0; page < 100; page++) {
+    const params = new URLSearchParams({ limit: "100" });
+    if (cursor) params.set("cursor", cursor);
+    const result = await renderRequest("/v1/services?" + params.toString(), token);
+    const items = Array.isArray(result) ? result : Array.isArray(result.services) ? result.services : [];
+    services.push(...items);
+    const last = items.length ? safeText(items[items.length - 1]?.cursor, 500) : "";
+    if (!last || seenCursors.has(last)) break;
+    seenCursors.add(last);
+    cursor = last;
+  }
+  return services.map(renderServiceShape).filter(Boolean);
 }
 async function verifyWebhook(raw: string, signature: string) {
   const secret = required("GITHUB_WEBHOOK_SECRET");
@@ -565,7 +658,22 @@ async function main(request: Request) {
       const accessToken = String(tokenBody.access_token);
       const effectiveTeamId = safeText(tokenBody.team_id || teamId, 180);
       const accountLabel = effectiveTeamId ? "Vercel team " + effectiveTeamId : "Vercel account";
+
+      // Check for an existing configuration and encrypt before saving the connection.
+      // This prevents a missing vault key from leaving a half-connected Vercel account.
+      const { data: existingConnection, error: lookupError } = await admin.from("platform_connections")
+        .select("id").eq("workspace_id", workspaceId).eq("provider", "vercel")
+        .eq("external_account_id", configurationId).maybeSingle();
+      if (lookupError) throw new Error("Could not check the existing Vercel connection.");
+      const connectionId = String(existingConnection?.id || crypto.randomUUID());
+      const keyVersion = activeCredentialKeyVersion();
+      const encrypted = await encryptCredentialPayload(
+        { accessToken },
+        credentialAad(workspaceId, "vercel", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
       const { data: connection, error: connectionError } = await admin.from("platform_connections").upsert({
+        id: connectionId,
         workspace_id: workspaceId,
         provider: "vercel",
         external_account_id: configurationId,
@@ -576,12 +684,6 @@ async function main(request: Request) {
       }, { onConflict: "workspace_id,provider,external_account_id" }).select("id").single();
       if (connectionError || !connection) throw new Error("Vercel was authorized, but Misma could not save the workspace connection.");
 
-      const keyVersion = activeCredentialKeyVersion();
-      const encrypted = await encryptCredentialPayload(
-        { accessToken },
-        credentialAad(workspaceId, "vercel", connection.id, keyVersion),
-        credentialKeyForVersion(keyVersion),
-      );
       const { error: credentialError } = await admin.from("platform_credentials").upsert({
         workspace_id: workspaceId,
         platform_connection_id: connection.id,
@@ -605,12 +707,7 @@ async function main(request: Request) {
       let savedProjects: any[] = [];
       let discoveryError = "";
       try {
-        const projectsPath = effectiveTeamId
-          ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(effectiveTeamId)
-          : "/v9/projects?limit=100";
-        const projectResponse = await vercelRequest(projectsPath, accessToken);
-        const projectItems = Array.isArray(projectResponse.projects) ? projectResponse.projects : [];
-        const normalizedProjects = projectItems.map(vercelProjectShape).filter(Boolean);
+        const normalizedProjects = await listVercelProjects(accessToken, effectiveTeamId);
         for (const project of normalizedProjects) {
           const { data: savedProject, error: projectError } = await admin.from("platform_projects").upsert({
             workspace_id: workspaceId,
@@ -658,13 +755,9 @@ async function main(request: Request) {
         credentialKeyForVersion(keyVersion),
       );
       const teamId = safeText((connection.metadata as Record<string, unknown>)?.team_id, 180);
-      const path = teamId ? "/v9/projects?limit=100&teamId=" + encodeURIComponent(teamId) : "/v9/projects?limit=100";
-      const result = await vercelRequest(path, token.accessToken);
-      const items = Array.isArray(result.projects) ? result.projects : [];
+      const items = await listVercelProjects(token.accessToken, teamId);
       const projects = [];
-      for (const item of items) {
-        const shaped = vercelProjectShape(item);
-        if (!shaped) continue;
+      for (const shaped of items) {
         const { data: saved, error } = await admin.from("platform_projects").upsert({
           workspace_id: workspaceId, platform_connection_id: connectionId, provider: "vercel",
           ...shaped, last_synced_at: new Date().toISOString(),
@@ -710,6 +803,146 @@ async function main(request: Request) {
         workspace_id: workspaceId, installation_id: installation.id, provider: "vercel", level: "info",
         event: "vercel.project_linked",
         details: { project_id: projectId, project_name: project.name, website_domain: website.domain },
+      });
+      return json({ linked: true, installationId: installation.id }, 200, origin);
+    }
+
+    if (action === "render-connect") {
+      const apiKey = safeText(body.apiKey, 4096);
+      if (!apiKey) return json({ error: "Enter your Render API key." }, 400, origin);
+      // Validate the customer-owned key before persisting it.
+      await renderRequest("/v1/services?limit=1", apiKey);
+      const fingerprint = await sha256(apiKey);
+      const externalAccountId = "render-api-" + fingerprint.slice(0, 24);
+      const { data: existingConnection, error: lookupError } = await admin.from("platform_connections")
+        .select("id").eq("workspace_id", workspaceId).eq("provider", "render")
+        .eq("external_account_id", externalAccountId).maybeSingle();
+      if (lookupError) throw new Error("Could not check the existing Render connection.");
+
+      // Encrypt before saving the connection, avoiding a misleading half-connected account
+      // if the shared credential vault key has not been configured.
+      const connectionId = String(existingConnection?.id || crypto.randomUUID());
+      const normalized = normalizeCredentialPayload("render", { apiKey });
+      const keyVersion = activeCredentialKeyVersion();
+      const encrypted = await encryptCredentialPayload(
+        normalized.payload,
+        credentialAad(workspaceId, "render", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const { data: connection, error: connectionError } = await admin.from("platform_connections").upsert({
+        id: connectionId,
+        workspace_id: workspaceId,
+        provider: "render",
+        external_account_id: externalAccountId,
+        external_account_name: "Render account",
+        status: "connected",
+        metadata: { source: "customer_api_key" },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "workspace_id,provider,external_account_id" }).select("id").single();
+      if (connectionError || !connection) throw new Error("Render was authorized, but Misma could not save the connection.");
+
+      const { error: credentialError } = await admin.from("platform_credentials").upsert({
+        workspace_id: workspaceId,
+        platform_connection_id: connection.id,
+        provider: "render",
+        credential_kind: "api_key",
+        secret_ciphertext: encrypted.ciphertext,
+        secret_iv: encrypted.iv,
+        key_version: keyVersion,
+        last_validated_at: new Date().toISOString(),
+        last_validation_status: "valid",
+        created_by: userId,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "platform_connection_id" });
+      if (credentialError) throw new Error("Render was authorized, but Misma could not securely save the API key.");
+
+      const services = await listRenderServices(apiKey);
+      const projects = [];
+      for (const project of services) {
+        const { data: saved, error } = await admin.from("platform_projects").upsert({
+          workspace_id: workspaceId, platform_connection_id: connection.id, provider: "render",
+          ...project, last_synced_at: new Date().toISOString(),
+        }, { onConflict: "workspace_id,provider,external_project_id" })
+          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+        if (error || !saved) throw new Error("Render connected, but Misma could not save the discovered services.");
+        projects.push(saved);
+      }
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, provider: "render", level: "info",
+        event: "render.account_connected", details: { services_discovered: projects.length },
+      });
+      return json({
+        connected: true, platformConnectionId: connection.id, accountName: "Render account", projects,
+        message: projects.length
+          ? "Render is connected. Choose the service that should be associated with your Misma website."
+          : "Render is connected, but this account has no accessible services. Check the Render workspace and API key permissions.",
+      }, 200, origin);
+    }
+
+    if (action === "render-refresh-projects") {
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) return json({ error: "Choose a valid Render connection." }, 400, origin);
+      const { data: connection, error: connectionError } = await admin.from("platform_connections")
+        .select("id").eq("id", connectionId).eq("workspace_id", workspaceId)
+        .eq("provider", "render").eq("status", "connected").maybeSingle();
+      if (connectionError || !connection) throw new Error("That Render connection is not available in this workspace.");
+      const { data: credential, error: credentialError } = await admin.from("platform_credentials")
+        .select("secret_ciphertext,secret_iv,key_version").eq("platform_connection_id", connectionId)
+        .eq("workspace_id", workspaceId).eq("provider", "render").maybeSingle();
+      if (credentialError || !credential) throw new Error("Reconnect Render because its encrypted API key is missing.");
+      const keyVersion = Number(credential.key_version);
+      const saved = await decryptCredentialPayload(
+        { ciphertext: credential.secret_ciphertext, iv: credential.secret_iv },
+        credentialAad(workspaceId, "render", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const services = await listRenderServices(saved.apiKey);
+      const projects = [];
+      for (const project of services) {
+        const { data: item, error } = await admin.from("platform_projects").upsert({
+          workspace_id: workspaceId, platform_connection_id: connectionId, provider: "render",
+          ...project, last_synced_at: new Date().toISOString(),
+        }, { onConflict: "workspace_id,provider,external_project_id" })
+          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+        if (error || !item) throw new Error("Could not save the refreshed Render service list.");
+        projects.push(item);
+      }
+      await admin.from("platform_credentials").update({
+        last_validated_at: new Date().toISOString(), last_validation_status: "valid",
+      }).eq("platform_connection_id", connectionId).eq("workspace_id", workspaceId);
+      return json({ projects }, 200, origin);
+    }
+
+    if (action === "render-link-project") {
+      const projectId = safeText(body.platformProjectId, 80);
+      const websiteConnectionId = safeText(body.websiteConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(projectId) || !/^[0-9a-f-]{36}$/i.test(websiteConnectionId)) {
+        return json({ error: "Choose a Render service and a Misma website." }, 400, origin);
+      }
+      const [{ data: project, error: projectError }, { data: website, error: websiteError }] = await Promise.all([
+        admin.from("platform_projects").select("id,name,dashboard_url")
+          .eq("id", projectId).eq("workspace_id", workspaceId).eq("provider", "render").maybeSingle(),
+        admin.from("website_connections").select("id,name,domain")
+          .eq("id", websiteConnectionId).eq("workspace_id", workspaceId).is("widget_deleted_at", null).maybeSingle(),
+      ]);
+      if (projectError || !project) throw new Error("That Render service is not available in this workspace.");
+      if (websiteError || !website) throw new Error("That Misma website is not available in this workspace.");
+      const { data: existing } = await admin.from("website_installations").select("id")
+        .eq("workspace_id", workspaceId).eq("website_connection_id", websiteConnectionId)
+        .eq("platform_project_id", projectId).eq("provider", "render")
+        .neq("status", "removed").limit(1).maybeSingle();
+      if (existing) return json({ linked: true, alreadyLinked: true, installationId: existing.id }, 200, origin);
+      const { data: installation, error: installError } = await admin.from("website_installations").insert({
+        workspace_id: workspaceId, website_connection_id: websiteConnectionId, platform_project_id: projectId,
+        provider: "render", deployment_mode: "manual", status: "prepared",
+        dashboard_url: project.dashboard_url || "https://dashboard.render.com",
+        metadata: { project_name: project.name, website_domain: website.domain, link_type: "workspace_service_association" },
+      }).select("id").single();
+      if (installError || !installation) throw new Error("Could not link this Render service to the Misma website.");
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, installation_id: installation.id, provider: "render", level: "info",
+        event: "render.service_linked",
+        details: { service_id: projectId, service_name: project.name, website_domain: website.domain },
       });
       return json({ linked: true, installationId: installation.id }, 200, origin);
     }
