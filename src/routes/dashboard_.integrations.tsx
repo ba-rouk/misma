@@ -7,6 +7,19 @@ type WorkspaceOption = { id: string; name: string };
 type Repo = { id: number; fullName: string; name: string; defaultBranch: string; htmlUrl: string; private: boolean };
 type PlatformConnection = { id: string; provider: string; external_account_name: string | null; status: string };
 type InstallResult = { installationId: string; status: string; pullRequestUrl: string; repositoryUrl: string; message: string };
+type SetupCheck = {
+  status: "verified" | "configured" | "error";
+  message: string;
+  appId?: string;
+  appName?: string;
+  appSlug?: string;
+  webhookSecretConfigured?: boolean;
+  slug?: string;
+  clientIdConfigured?: boolean;
+  clientSecretConfigured?: boolean;
+  callbackUrl?: string;
+};
+type IntegrationDiagnostics = { github: SetupCheck; vercel: SetupCheck };
 
 export const Route = createFileRoute("/dashboard/integrations")({ component: WebsiteIntegrationsPage });
 
@@ -50,6 +63,7 @@ function WebsiteIntegrationsPage() {
   const [repositoryId, setRepositoryId] = useState("");
   const [deploymentMode, setDeploymentMode] = useState<"automatic" | "manual">("manual");
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
+  const [diagnostics, setDiagnostics] = useState<IntegrationDiagnostics | null>(null);
 
   const githubConnection = connections.find((connection) => connection.provider === "github" && connection.status === "connected");
   const vercelConnection = connections.find((connection) => connection.provider === "vercel" && connection.status === "connected");
@@ -176,6 +190,26 @@ function WebsiteIntegrationsPage() {
     }
   }
 
+  async function verifyIntegrationSetup() {
+    setBusy(true); setError(""); setNotice(""); setDiagnostics(null);
+    try {
+      const result = await invoke("integration-config-check");
+      if (!result?.checks?.github || !result?.checks?.vercel) {
+        throw new Error("Misma returned an incomplete integration configuration check.");
+      }
+      setDiagnostics(result.checks as IntegrationDiagnostics);
+      const githubOk = result.checks.github.status === "verified";
+      const vercelOk = result.checks.vercel.status === "configured";
+      setNotice(githubOk && vercelOk
+        ? "Both platform configurations are present. GitHub credentials were verified against GitHub; Vercel is ready for a fresh Marketplace authorization."
+        : "Configuration check finished. Review the provider results below and correct only the settings marked with an error.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not verify the saved integration settings.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function connectGithub() {
     setBusy(true); setError(""); setNotice("");
     try {
@@ -261,6 +295,50 @@ function WebsiteIntegrationsPage() {
           </label>
           {workspaces.length > 1 && <p className="misma-integrations-help">Choose which workspace owns the website connection and GitHub installation.</p>}
         </section>
+
+        {workspaceId && <section className="misma-integrations-detail-card" aria-labelledby="integration-config-heading">
+          <div className="misma-integrations-actions" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div>
+              <h2 id="integration-config-heading" style={{ margin: 0 }}>Verify saved platform settings</h2>
+              <p className="misma-integrations-help" style={{ marginBottom: 0 }}>Misma checks the GitHub App credentials with GitHub and confirms the Vercel settings are present. Secret values are never shown.</p>
+            </div>
+            <button type="button" onClick={() => void verifyIntegrationSetup()} disabled={busy} className="misma-integrations-secondary-button">
+              {busy ? "Checking…" : "Verify settings"}
+            </button>
+          </div>
+          {diagnostics && <div className="misma-integrations-provider-grid" style={{ marginTop: 16 }}>
+            <article className="misma-integrations-provider-card">
+              <div className="misma-integrations-provider-heading">
+                <strong>GitHub App</strong>
+                <span className={"misma-integrations-status" + (diagnostics.github.status === "verified" ? " is-connected" : "")}>
+                  {diagnostics.github.status === "verified" ? "Verified" : "Needs attention"}
+                </span>
+              </div>
+              <p className="misma-integrations-provider-description">{diagnostics.github.message}</p>
+              {diagnostics.github.status === "verified" && <p className="misma-integrations-help">
+                {diagnostics.github.appName} · @{diagnostics.github.appSlug} · App ID {diagnostics.github.appId}
+              </p>}
+              {diagnostics.github.status === "verified" && !diagnostics.github.webhookSecretConfigured && <p className="misma-integrations-help">
+                Webhook secret is not configured. Initial installation works, but GitHub webhook events need GITHUB_WEBHOOK_SECRET.
+              </p>}
+            </article>
+            <article className="misma-integrations-provider-card">
+              <div className="misma-integrations-provider-heading">
+                <strong>Vercel</strong>
+                <span className={"misma-integrations-status" + (diagnostics.vercel.status === "configured" ? " is-connected" : "")}>
+                  {diagnostics.vercel.status === "configured" ? "Configured" : "Needs attention"}
+                </span>
+              </div>
+              <p className="misma-integrations-provider-description">{diagnostics.vercel.message}</p>
+              {diagnostics.vercel.status === "configured" && <p className="misma-integrations-help">
+                Slug: {diagnostics.vercel.slug} · OAuth client ID and secret detected.
+              </p>}
+              {diagnostics.vercel.status === "configured" && <p className="misma-integrations-help">
+                Required Redirect URL: <code>{diagnostics.vercel.callbackUrl}</code>
+              </p>}
+            </article>
+          </div>}
+        </section>}
 
         {loading ? <p className="misma-integrations-help">Loading your connected websites…</p> : !workspaceId ? <p className="misma-integrations-help">{workspaces.length ? "Choose a workspace to continue." : "No manageable workspace is available."}</p> : <>
           <section className="misma-integrations-provider-grid">
