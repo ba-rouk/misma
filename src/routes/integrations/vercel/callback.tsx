@@ -234,13 +234,13 @@ function VercelMarketplaceCallback() {
         }
       } catch { /* Fall back to the Misma integrations page. */ }
     }
-    window.location.assign("/dashboard/integrations?vercel=connected");
+    window.location.assign("/dashboard/plugins");
   }
 
   return (
     <main className="aichat misma-vercel-callback-page">
       <div className="misma-vercel-callback-card">
-        <a href="/dashboard/integrations" className="misma-integrations-back">← Back to integrations</a>
+        <a href="/dashboard/plugins" className="misma-integrations-back">← Back to plugins</a>
         <p className="misma-integrations-eyebrow">Misma · Vercel Marketplace</p>
         <h1>Connect Vercel to Misma</h1>
         <p className="misma-integrations-intro">Misma exchanges the one-time Marketplace authorization code on its server, stores the resulting access token encrypted, and returns only project details to this page.</p>
