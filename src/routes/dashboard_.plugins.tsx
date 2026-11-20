@@ -34,37 +34,53 @@ const plugins: Array<{
   purpose: string;
   permissions: string[];
   availability: "available" | "coming";
-  icon: string;
 }> = [
   {
     id: "github", name: "GitHub", publisher: "Misma", category: "Developer",
     description: "Connect repositories and let Misma understand and prepare focused code changes.",
     purpose: "Code & Repository Management",
     permissions: ["Read repositories available to your GitHub App installation.", "Inspect repository structure and supported website entry points.", "Create a dedicated branch and prepare a pull request for widget changes.", "Merge changes only through an explicitly approved workflow."],
-    availability: "available", icon: "GH",
+    availability: "available",
   },
   {
     id: "vercel", name: "Vercel", publisher: "Vercel", category: "Hosting",
     description: "Discover projects, associate the correct project with a Misma website, and monitor deployments.",
     purpose: "Deployment & Hosting",
     permissions: ["Read projects accessible to the connected account.", "Associate a selected project with a Misma workspace website.", "Trigger or monitor supported deployments after an approved repository change."],
-    availability: "available", icon: "▲",
+    availability: "available",
   },
   {
     id: "render", name: "Render", publisher: "Render", category: "Hosting",
     description: "Connect a Render account, find web services and static sites, and manage deploy targets.",
     purpose: "Deployment & Hosting",
     permissions: ["Validate your customer-owned Render API key.", "Discover services and static sites exposed by that key.", "Associate the chosen service with a Misma website and monitor deployment status."],
-    availability: "available", icon: "R",
+    availability: "available",
   },
   {
     id: "netlify", name: "Netlify", publisher: "Netlify", category: "Hosting",
     description: "Prepare to connect sites and publishing workflows through your Netlify account.",
     purpose: "Deployment & Hosting",
     permissions: ["Planned: discover authorized Netlify sites and build configuration.", "Planned: trigger and monitor builds for the selected site."],
-    availability: "coming", icon: "N",
+    availability: "coming",
   },
 ];
+
+function ProviderLogo({ provider }: { provider: Provider }) {
+  const labels: Record<Provider, string> = {
+    github: "GitHub", vercel: "Vercel", render: "Render", netlify: "Netlify",
+  };
+  const paths: Record<Provider, string> = {
+    github: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
+    vercel: "m12 1.608 12 20.784H0Z",
+    netlify: "m9.793 12.405 10.299 3.13c.347.106.561.053.775-.161l2.943-2.916a.616.616 0 0 0 0-.91l-2.943-2.915c-.214-.214-.428-.268-.776-.161l-10.298 3.13c-.428.133-.428.668 0 .802m-1.846 1.391L7.92 19.36c0 .562.107.855.374 1.123l3.29 3.316c.268.268.589.268.83 0l2.835-2.835c.268-.267.268-.562 0-.83l-6.607-6.606c-.294-.295-.695-.134-.695.267m0-3.585c-.027.402.401.562.696.268l6.607-6.607c.267-.268.267-.589 0-.83L12.415.18c-.24-.24-.562-.24-.83 0l-3.29 3.317c-.267.267-.374.481-.374.83zm-4.092 5.03c-.268.268-.562.268-.83 0L.19 12.405c-.267-.24-.267-.562 0-.83L3.025 8.74c.268-.267.562-.267.83 0l2.835 2.835c.267.268.267.589 0 .83z",
+    render: "M18.263.007c-3.121-.147-5.744 2.109-6.192 5.082-.018.138-.045.272-.067.405-.696 3.703-3.936 6.507-7.827 6.507-1.388 0-2.691-.356-3.825-.979a.2024.2024 0 0 0-.302.178V24H12v-8.999c0-1.656 1.338-3 2.987-3h2.988c3.382 0 6.103-2.817 5.97-6.244-.12-3.084-2.61-5.603-5.682-5.75",
+  };
+  return (
+    <span className={"misma-plugin-mark is-" + provider} role="img" aria-label={labels[provider] + " logo"}>
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={paths[provider]} /></svg>
+    </span>
+  );
+}
 
 function PluginsPage() {
   const supabase = getSupabaseClient();
@@ -322,12 +338,24 @@ function PluginsPage() {
   return (
     <main className="misma-marketplace-page">
       <div className="misma-marketplace-shell">
-        
         <header className="misma-marketplace-header">
-          <div>
-            <span className="misma-marketplace-eyebrow">Misma ecosystem</span>
-            <h1>Plugins</h1>
-            <p>Connect plugins to let Misma work across your tools and deploy your websites.</p>
+          <div className="misma-marketplace-title-group">
+            <button
+              type="button"
+              className="misma-marketplace-back-button"
+              aria-label="Go to previous page"
+              title="Go back"
+              onClick={() => {
+                if (window.history.length > 1) window.history.back();
+                else window.location.assign("/dashboard");
+              }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+            </button>
+            <div>
+              <h1>Plugins</h1>
+              <p>Connect plugins to let Misma work across your tools and deploy your websites.</p>
+            </div>
           </div>
           <label className="misma-marketplace-workspace">
             <span>Workspace</span>
@@ -369,7 +397,7 @@ function PluginsPage() {
               {[...installedByProvider.entries()].map(([provider, connection]) => {
                 const plugin = plugins.find((item) => item.id === provider)!;
                 return <button type="button" className="misma-installed-chip" key={connection.id} onClick={() => setSelected(provider)}>
-                  <span className={"misma-plugin-mark is-" + provider}>{plugin.icon}</span>
+                  <ProviderLogo provider={provider} />
                   <span><strong>{plugin.name}</strong><small>{connection.external_account_name || "Connected"}</small></span>
                   <i aria-label="Connected" />
                 </button>;
@@ -387,7 +415,7 @@ function PluginsPage() {
               const connection = installedByProvider.get(plugin.id);
               return <article className="misma-plugin-card" key={plugin.id}>
                 <button type="button" className="misma-plugin-card-main" onClick={() => setSelected(plugin.id)} aria-label={"View " + plugin.name + " details"}>
-                  <span className={"misma-plugin-mark is-" + plugin.id}>{plugin.icon}</span>
+                  <ProviderLogo provider={plugin.id} />
                   <span className="misma-plugin-card-meta"><strong>{plugin.name}</strong><small>{plugin.publisher} · {plugin.category}</small></span>
                   <span className={"misma-plugin-status" + (connection ? " is-connected" : plugin.availability === "coming" ? " is-coming" : "")}>{connection ? "Installed" : plugin.availability === "coming" ? "Coming soon" : "Available"}</span>
                 </button>
@@ -408,7 +436,7 @@ function PluginsPage() {
         <section className="misma-plugin-modal" role="dialog" aria-modal="true" aria-labelledby="misma-plugin-modal-title">
           <button type="button" className="misma-plugin-modal-close" aria-label="Close details" onClick={() => setSelected(null)}>×</button>
           <div className="misma-plugin-modal-heading">
-            <span className={"misma-plugin-mark is-" + selectedPlugin.id}>{selectedPlugin.icon}</span>
+            <ProviderLogo provider={selectedPlugin.id} />
             <div><span className="misma-marketplace-eyebrow">{selectedPlugin.publisher} · Verified publisher</span><h2 id="misma-plugin-modal-title">{selectedPlugin.name}</h2><p>{selectedPlugin.purpose}</p></div>
           </div>
           <p className="misma-plugin-modal-description">{selectedPlugin.description}</p>
