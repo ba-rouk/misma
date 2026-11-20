@@ -432,7 +432,7 @@ function WebsiteIntegrationsPage() {
                   </select>
                 </label>
               </div>
-              {renderWebsiteId && !matchingRenderProject && <p className="misma-integrations-help" role="status">No Render service matched this website by name or domain. Misma is showing the available services so you can choose the correct deployment target.</p>}
+              {renderWebsiteId && !matchingRenderProject && !renderProjectId && <p className="misma-integrations-help" role="status">No Render service matched this website by name or domain. Misma is showing the available services so you can choose the correct deployment target.</p>}
               {renderProjectSearch.trim() && !filteredRenderProjects.length && <p className="misma-integrations-help" role="status">No service matched “{renderProjectSearch}”. The complete accessible service list is shown instead.</p>}
               {!renderProjects.length && <p className="misma-integrations-help">No Render services are available for this API key yet. Refresh the list or check that the API key can read services in the correct Render workspace.</p>}
               <div className="misma-integrations-actions">
