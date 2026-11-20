@@ -408,7 +408,7 @@ function WebsiteIntegrationsPage() {
               <div className="misma-integrations-provider-heading">
                 <strong>GitHub App</strong>
                 <span className={"misma-integrations-status" + (diagnostics.github.status === "verified" ? " is-connected" : "")}>
-                  {diagnostics.github.status === "verified" ? "Verified" : "Needs attention"}
+                  {diagnostics.github.status === "verified" && (diagnostics.github.missingSettings?.length || 0) === 0 ? "Verified" : "Needs attention"}
                 </span>
               </div>
               <p className="misma-integrations-provider-description">{diagnostics.github.message}</p>
