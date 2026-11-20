@@ -220,6 +220,12 @@ function WebsiteIntegrationsPage() {
     setWebsites([]);
     setConnections([]);
     setInstallResult(null);
+    setRenderApiKey("");
+    setRenderProjects([]);
+    setRenderProjectId("");
+    setRenderWebsiteId("");
+    setRenderProjectSearch("");
+    setRenderConnectionId("");
     setError("");
     setNotice("");
     try {
