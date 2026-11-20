@@ -3718,17 +3718,49 @@ function Dashboard() {
         setSelectedFiles([]);
         selectedComposerFilesRef.current = [];
       }
-      const res = await postChatAction({
-        action: "chat",
-        message: textToSend,
-        conversationId: sendConversationId,
-        workspaceId: workspace?.id,
-        attachments,
-        ...(isRetry && filesToSend.length ? { retryExistingMessage: true } : {}),
-        thinkHarder,
-        ...(options.voice ? { voice: true } : {}),
-        ...(editId ? { editMessageId: Number(editId) } : {}),
-      }, requestController.signal);
+      let res: Record<string, any> | null = null;
+      // Offer text-only turns to the execution router first. Ordinary chat returns
+      // handled:false and follows the existing provider route; pending executions
+      // can continue even if the GitHub plugin toggle is subsequently disabled.
+      if (!options.voice && !editId && !filesToSend.length && !isRetry && workspace?.id) {
+        const config = getSupabaseConfig();
+        if (!config) throw new Error("Supabase is not configured. Add the Misma project URL and publishable key.");
+        const executionResponse = await fetch(`${config.url.replace(/\/$/, "")}/functions/v1/misma-execution`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: config.publishableKey,
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            message: textToSend,
+            conversationId: sendConversationId,
+            workspaceId: workspace.id,
+            activePlugins: chatEnabledPlugins,
+          }),
+          signal: requestController.signal,
+        });
+        const executionResult = await executionResponse.json().catch(() => ({})) as Record<string, any>;
+        if (!executionResponse.ok) {
+          throw new Error(typeof executionResult.error === "string"
+            ? executionResult.error
+            : "Misma could not process the execution request.");
+        }
+        if (executionResult.handled === true) res = executionResult;
+      }
+      if (!res) {
+        res = await postChatAction({
+          action: "chat",
+          message: textToSend,
+          conversationId: sendConversationId,
+          workspaceId: workspace?.id,
+          attachments,
+          ...(isRetry && filesToSend.length ? { retryExistingMessage: true } : {}),
+          thinkHarder,
+          ...(options.voice ? { voice: true } : {}),
+          ...(editId ? { editMessageId: Number(editId) } : {}),
+        }, requestController.signal);
+      }
       if (options.voice) {
         const voiceReply = typeof res.voiceReply === "string" ? res.voiceReply.trim() : "";
         if (!voiceReply) throw new Error("Misma could not prepare a spoken reply.");

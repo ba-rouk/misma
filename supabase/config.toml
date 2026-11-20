@@ -16,3 +16,6 @@ verify_jwt = false
 # User actions are authenticated inside the function with the Supabase access token.
 [functions.misma-platform-integrations]
 verify_jwt = false
+
+[functions.misma-execution]
+verify_jwt = true

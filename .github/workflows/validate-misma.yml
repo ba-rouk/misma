@@ -49,6 +49,9 @@ jobs:
       - name: Check Supabase chat Edge Function
         run: deno check supabase/functions/misma-chat/index.ts
 
+      - name: Check Misma execution Edge Function
+        run: deno check supabase/functions/misma-execution/index.ts
+
       - name: Check public widget and channel Edge Function
         run: deno check supabase/functions/misma-widget/index.ts
 
