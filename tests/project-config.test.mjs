@@ -1799,3 +1799,44 @@ test("website connections enforce a five-site workspace limit and saved channel 
   assert.match(migration, /active_count >= 5/);
   assert.match(migration, /widget_deleted_at is null/);
 });
+
+
+test("owner and customer assistants share one isolated, approval-gated business knowledge engine", async () => {
+  const shared = await read("../supabase/functions/_shared/business-knowledge.ts");
+  const widget = await read("../supabase/functions/misma-widget/index.ts");
+  const chat = await read("../supabase/functions/misma-chat/index.ts");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+
+  assert.match(widget, /loadSharedBusinessKnowledge/);
+  assert.match(chat, /loadSharedBusinessKnowledge/);
+  assert.match(shared, /mode: KnowledgeMode/);
+  assert.match(shared, /input\.mode === "customer"/);
+  assert.match(widget, /mode: "customer"/);
+  assert.match(chat, /mode: "owner"/);
+  assert.match(shared, /website_connection_id/);
+  assert.match(shared, /CUSTOMER_SHARED_ROOM_KEYS/);
+  assert.match(shared, /\.eq\("website_id", websiteConnectionId\)/);
+  assert.match(shared, /websiteConnectionId: String\(page\.website_id/);
+  assert.match(chat, /websiteContent: brainContext\.scannedWebsitePages/);
+  assert.match(shared, /\.eq\("workspace_id", workspaceId\)/);
+  assert.match(shared, /\.eq\("approved", true\)/);
+  assert.match(shared, /\.in\("room_id", allowedRoomIds\)/);
+  assert.doesNotMatch(shared, /\.from\("orders"\)|\.from\("contacts"\)/);
+  assert.match(chat, /pendingKnowledgeForOwnerReview/);
+  assert.match(chat, /never combine facts from different websites/);
+  assert.match(api, /pendingKnowledge/);
+  assert.match(api, /export const reviewKnowledge/);
+  assert.match(api, /Only workspace owners and admins can review customer-facing knowledge/);
+  assert.match(dashboard, /Needs your approval/);
+  assert.match(dashboard, /handleReviewKnowledge/);
+  assert.match(dashboard, /reviewKnowledge/);
+});
+
+test("new and changed AI-extracted knowledge stays unpublished until owner approval", async () => {
+  const widget = await read("../supabase/functions/misma-widget/index.ts");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  assert.match(widget, /approved: false,\s*source_type: sourceType/);
+  assert.match(widget, /update\(\{ answer: item\.answer, approved: false \}\)/);
+  assert.match(api, /\.eq\("approved", false\)/);
+});

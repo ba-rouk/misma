@@ -58,6 +58,7 @@ export const getMismaData = createServerFn({ method: "POST" })
         conversations: [],
         orders: [],
         knowledge: [],
+        pendingKnowledge: [],
         customers: check(customersResult.data, customersResult.error),
         assets: [],
         unreadVisitorMessages: [],
@@ -71,12 +72,13 @@ export const getMismaData = createServerFn({ method: "POST" })
         staffTitle,
       };
     }
-    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
+    const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, pendingKnowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
         db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("knowledge_entries").select("id,question,answer,source_type,source_ref,website_connection_id,room_id").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
+        db.from("knowledge_entries").select("id,question,answer,source_type,source_ref,website_connection_id,room_id,created_at").eq("workspace_id", workspaceId).eq("approved", false).order("id", { ascending: false }),
         db.from("contacts").select("id,name,email,phone,source,orders_count,lifetime_value_rwf,last_interaction").eq("workspace_id", workspaceId).order("last_interaction", { ascending: false }),
         db.from("website_connections").select("id,name,website_url,domain,public_key,widget_public_key,core_room_id,theme,theme_schema_version,theme_updated_at,theme_suggestions,detected_platform,instagram_url,whatsapp_country_code,whatsapp_number,whatsapp_message,gmail_address,widget_deleted_at,status,last_seen_at,last_scanned_at,created_at").eq("workspace_id", workspaceId).is("widget_deleted_at", null).order("created_at", { ascending: false }),
         db.from("human_requests").select("id,conversation_id,contact_id,visitor_name,visitor_email,visitor_phone,reason,status,created_at,handled_at,conversations(channel,latest_text,updated_at),contacts(name,email,phone)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -162,9 +164,10 @@ export const getMismaData = createServerFn({ method: "POST" })
       customer: Array.isArray(o.contacts) ? o.contacts[0]?.name || "Customer" : o.contacts?.name || "Customer",
     }));
     const knowledge = check(knowledgeResult.data, knowledgeResult.error);
+    const pendingKnowledge = check(pendingKnowledgeResult.data, pendingKnowledgeResult.error);
     const customers = check(customersResult.data, customersResult.error);
     return {
-      workspace, conversations, orders, knowledge, customers, assets: [],
+      workspace, conversations, orders, knowledge, pendingKnowledge, customers, assets: [],
       unreadVisitorMessages, unreadVisitorCount, websites, handoffs, notifications, products, channelConnections,
       accessMode: "owner" as const,
       staffTitle: null,
@@ -477,6 +480,33 @@ export const addKnowledge = createServerFn({ method: "POST" })
       question: data.question, websiteConnectionId: data.websiteConnectionId || null,
     });
     return saved;
+  });
+
+export const reviewKnowledge = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, id: z.number().int().positive(), decision: z.enum(["approve", "reject"]) }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId, user, isSupport } = await ensureWorkspace(data.token, undefined, true);
+    if (isSupport) throw new Error("Customer-support accounts cannot approve or reject business knowledge.");
+    const { data: membership, error: membershipError } = await db.from("workspace_members")
+      .select("role").eq("workspace_id", workspaceId).eq("user_id", user.id).maybeSingle();
+    if (membershipError || !membership || !["owner", "admin"].includes(String(membership.role))) {
+      throw new Error("Only workspace owners and admins can review customer-facing knowledge.");
+    }
+    if (data.decision === "approve") {
+      const { data: saved, error } = await db.from("knowledge_entries")
+        .update({ approved: true })
+        .eq("id", data.id).eq("workspace_id", workspaceId).eq("approved", false)
+        .select("id,question,answer,approved").maybeSingle();
+      if (error || !saved) throw new Error("This knowledge item is no longer pending review.");
+      await recordAudit(db, workspaceId, "knowledge.approved", String(data.id));
+      return { ok: true, decision: "approve", knowledge: saved };
+    }
+    const { data: deleted, error } = await db.from("knowledge_entries")
+      .delete().eq("id", data.id).eq("workspace_id", workspaceId).eq("approved", false)
+      .select("id").maybeSingle();
+    if (error || !deleted) throw new Error("This knowledge item is no longer pending review.");
+    await recordAudit(db, workspaceId, "knowledge.rejected", String(data.id));
+    return { ok: true, decision: "reject" };
   });
 
 export const deleteKnowledge = createServerFn({ method: "POST" })
