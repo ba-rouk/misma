@@ -24,7 +24,7 @@ const providers = [
   { id: "github", name: "GitHub", description: "Connect repositories and prepare a focused Misma installation pull request." },
   { id: "vercel", name: "Vercel", description: "Connect your Vercel account, discover projects, and associate them with Misma websites." },
   { id: "netlify", name: "Netlify", description: "Discover sites and publish changes through connected Git repositories." },
-  { id: "render", name: "Render", description: "Discover services and trigger deployments after approved source changes." },
+  { id: "render", name: "Render", description: "Connect your Render account, discover services, and choose the service that belongs to each website." },
 ];
 
 async function invokeErrorMessage(invokeError: unknown, fallback: string) {
