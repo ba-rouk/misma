@@ -37,6 +37,21 @@ async function invokeErrorMessage(invokeError: unknown, fallback: string) {
   return typeof error?.message === "string" && error.message.trim() ? error.message : fallback;
 }
 
+function normalizeProjectLabel(value: string) {
+  return value.toLowerCase().trim().replace(/^www\\./, "").replace(/[^a-z0-9]/g, "");
+}
+
+function exactWebsiteProjectMatch(projects: VercelProject[], website?: Website) {
+  if (!website) return null;
+  const domain = website.domain.toLowerCase().replace(/^https?:\\/\\//, "").replace(/^www\\./, "").split("/")[0];
+  const candidates = new Set([website.name, website.domain, domain, domain.split(".")[0]].map(normalizeProjectLabel).filter(Boolean));
+  return projects.find((project) => {
+    const values = [project.name, project.full_name || "", (project.full_name || "").split("/").pop() || ""]
+      .map(normalizeProjectLabel).filter(Boolean);
+    return values.some((value) => candidates.has(value));
+  }) || null;
+}
+
 function VercelMarketplaceCallback() {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [callback, setCallback] = useState<{ code: string; configurationId: string; teamId: string; next: string }>({
@@ -47,6 +62,7 @@ function VercelMarketplaceCallback() {
   const [websites, setWebsites] = useState<Website[]>([]);
   const [projects, setProjects] = useState<VercelProject[]>([]);
   const [projectId, setProjectId] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
   const [platformConnectionId, setPlatformConnectionId] = useState("");
   const [websiteId, setWebsiteId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -54,6 +70,22 @@ function VercelMarketplaceCallback() {
   const [linked, setLinked] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("Checking your Misma session…");
+
+  const selectedWebsite = websites.find((website) => website.id === websiteId);
+  const matchingProject = exactWebsiteProjectMatch(projects, selectedWebsite);
+  const filteredProjects = projects.filter((project) =>
+    (project.name + " " + (project.full_name || "")).toLowerCase().includes(projectSearch.toLowerCase().trim())
+  );
+  const visibleProjects = filteredProjects.length ? filteredProjects : projects;
+
+  useEffect(() => {
+    if (!websiteId) return;
+    const match = exactWebsiteProjectMatch(projects, websites.find((website) => website.id === websiteId));
+    setProjectId(match?.id || "");
+    setNotice(match
+      ? "Matched this website to the Vercel project " + match.name + ". You can change the project selection."
+      : "No Vercel project is associated with this website name or domain. All available Vercel projects are shown below—choose the correct one.");
+  }, [websiteId, websites, projects]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -134,7 +166,7 @@ function VercelMarketplaceCallback() {
       setCallback((current) => ({ ...current, code: "" }));
       setPlatformConnectionId(String(data?.platformConnectionId || ""));
       setProjects(Array.isArray(data?.projects) ? data.projects as VercelProject[] : []);
-      setProjectId(data?.projects?.[0]?.id || "");
+      setProjectId("");
       setConnected(true);
       await loadWebsites(workspaceId);
       setNotice(data?.discoveryError ? "Vercel is connected and its token is stored securely, but project discovery needs a retry: " + String(data.discoveryError) : "Vercel is connected securely. Select a discovered project and a Misma website to link them.");
@@ -158,7 +190,7 @@ function VercelMarketplaceCallback() {
       if (data?.error) throw new Error(String(data.error));
       const nextProjects = Array.isArray(data?.projects) ? data.projects as VercelProject[] : [];
       setProjects(nextProjects);
-      setProjectId(nextProjects[0]?.id || "");
+      setProjectId("");
       setNotice("Vercel project list refreshed.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not refresh Vercel projects.");
@@ -228,18 +260,23 @@ function VercelMarketplaceCallback() {
 
         {connected && <>
           <div style={{ display: "grid", gap: 14, marginTop: 20 }}>
-            <label style={fieldLabel}>Vercel project
-              <select value={projectId} onChange={(event) => setProjectId(event.target.value)} style={fieldStyle}>
-                <option value="">Choose a Vercel project</option>
-                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}{project.full_name && project.full_name !== project.name ? " · " + project.full_name : ""}</option>)}
-              </select>
-            </label>
             <label style={fieldLabel}>Misma website
               <select value={websiteId} onChange={(event) => setWebsiteId(event.target.value)} style={fieldStyle}>
                 <option value="">Choose a connected Misma website</option>
                 {websites.map((website) => <option key={website.id} value={website.id}>{website.name || website.domain} · {website.domain}</option>)}
               </select>
             </label>
+            <label style={fieldLabel}>Search Vercel projects
+              <input value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="Search by project or repository name" style={fieldStyle} />
+            </label>
+            <label style={fieldLabel}>Vercel project / deployment target
+              <select value={projectId} onChange={(event) => setProjectId(event.target.value)} style={fieldStyle}>
+                <option value="">Choose a Vercel project</option>
+                {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}{project.full_name && project.full_name !== project.name ? " · " + project.full_name : ""}</option>)}
+              </select>
+            </label>
+            {websiteId && !matchingProject && <p style={{ color: "#9a5b00", fontSize: 13 }} role="status">No Vercel project matches this website name or domain. All projects accessible to this Vercel integration are listed so you can choose the correct project.</p>}
+            {projectSearch.trim() && !filteredProjects.length && <p style={{ color: "#667085", fontSize: 13 }} role="status">No project matched “{projectSearch}”. The full project list is shown instead.</p>}
             {!projects.length && <div><p style={{ color: "#667085", fontSize: 13 }}>No Vercel projects are currently listed. Retry discovery without repeating the one-time authorization.</p><button type="button" onClick={() => void refreshProjects()} disabled={busy} style={secondaryButton}>{busy ? "Refreshing…" : "Refresh Vercel projects"}</button></div>}
             {!websites.length && <p style={{ color: "#667085", fontSize: 13 }}>This workspace has no active websites yet. Add a website in Misma, then return to link a project.</p>}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
