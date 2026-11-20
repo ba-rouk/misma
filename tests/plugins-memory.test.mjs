@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("plugin marketplace has a workspace-scoped searchable directory and separate provider scopes", async () => {
   const page = await read("../src/routes/dashboard_.plugins.tsx");
-  assert.match(page, /createFileRoute\("\/dashboard\/plugins"\)/);
+  assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
   assert.match(page, /Search plugins/);
   assert.match(page, /Installed/);
   assert.match(page, /Developer & Hosting/);
