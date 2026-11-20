@@ -36,8 +36,14 @@ function providerHealth(provider: ProviderName): ProviderHealth {
 export function getIntegrationSettingsHealth() {
   const github = providerHealth("github");
   const vercel = providerHealth("vercel");
+  const configuredVersion = Deno.env.get("PLATFORM_CREDENTIAL_ACTIVE_KEY_VERSION")?.trim() || "1";
+  const parsedVersion = Number(configuredVersion);
+  const activeVersion = Number.isSafeInteger(parsedVersion) && parsedVersion > 0 && parsedVersion <= 32767
+    ? parsedVersion
+    : 1;
+  const vaultKeyName = `PLATFORM_CREDENTIAL_ENCRYPTION_KEY_V${activeVersion}`;
   const vaultSettings = {
-    PLATFORM_CREDENTIAL_ENCRYPTION_KEY_V1: settingPresence("PLATFORM_CREDENTIAL_ENCRYPTION_KEY_V1"),
+    [vaultKeyName]: settingPresence(vaultKeyName),
   };
 
   return {
