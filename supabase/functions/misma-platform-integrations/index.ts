@@ -460,7 +460,6 @@ async function main(request: Request) {
           appName: safeText(app.name, 120) || "GitHub App",
           appSlug: safeText(app.slug, 120),
           webhookSecretConfigured: !webhookMissing,
-          settings: githubHealth.settings,
           missingSettings: githubHealth.missingSettings,
           runtime: health.runtime,
           projectRef: health.projectRef,
@@ -486,7 +485,6 @@ async function main(request: Request) {
         checks.github = {
           status: "error",
           message: message.slice(0, 500),
-          settings: githubHealth.settings,
           missingSettings: githubHealth.missingSettings,
           runtime: health.runtime,
           projectRef: health.projectRef,
@@ -509,7 +507,6 @@ async function main(request: Request) {
           slug,
           clientIdConfigured: true,
           clientSecretConfigured: true,
-          settings: vercelHealth.settings,
           missingSettings: vercelHealth.missingSettings,
           runtime: health.runtime,
           projectRef: health.projectRef,
@@ -527,13 +524,12 @@ async function main(request: Request) {
         checks.vercel = {
           status: "error",
           message: message.slice(0, 500),
-          settings: vercelHealth.settings,
           missingSettings: vercelHealth.missingSettings,
           runtime: health.runtime,
           projectRef: health.projectRef,
         };
       }
-      return json({ checks, health }, 200, origin);
+      return json({ checks }, 200, origin);
     }
 
     if (action === "vercel-install-url") {
