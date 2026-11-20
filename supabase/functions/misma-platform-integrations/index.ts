@@ -1,4 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requiredIntegrationSetting, missingSettingsMessage } from "./config.ts";
+import { getIntegrationSettingsHealth } from "./health.ts";
 import {
   activeCredentialKeyVersion,
   credentialAad,
@@ -27,9 +29,7 @@ function json(body: Json, status = 200, origin = APP_ORIGIN) {
   });
 }
 function required(name: string) {
-  const value = Deno.env.get(name)?.trim();
-  if (!value) throw new Error(`Server integration setting ${name} is not configured.`);
-  return value;
+  return requiredIntegrationSetting(name);
 }
 function b64url(value: string | Uint8Array) {
   const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
@@ -189,7 +189,7 @@ async function authorize(request: Request, workspaceId: string) {
   if (error || !member || !["owner", "admin"].includes(member.role)) {
     throw new Error("Only workspace owners and admins can connect hosting platforms.");
   }
-  return { admin, userId: auth.user.id };
+  return { admin, userId: auth.user.id, role: member.role };
 }
 async function githubCallback(request: Request) {
   const url = new URL(request.url);
@@ -285,7 +285,7 @@ async function main(request: Request) {
     const action = safeText(body.action, 60);
     const workspaceId = safeText(body.workspaceId, 80);
     if (!/^[0-9a-f-]{36}$/i.test(workspaceId)) return json({ error: "Choose a valid workspace." }, 400, origin);
-    const { admin, userId } = await authorize(request, workspaceId);
+    const { admin, userId, role } = await authorize(request, workspaceId);
 
     // Credentials are accepted only from an authenticated workspace owner/admin.
     // Plaintext values are encrypted in this function and never returned or logged.
@@ -414,41 +414,90 @@ async function main(request: Request) {
     }
 
 
+    if (action === "integration-health") {
+      // The base request is authenticated and authorized for this workspace;
+      // the detailed runtime configuration report is restricted to its owner.
+      if (role !== "owner") {
+        return json({ error: "Only workspace owners can inspect server integration configuration." }, 403, origin);
+      }
+      // This returns setting names and presence states only, never values.
+      return json(getIntegrationSettingsHealth() as unknown as Json, 200, origin);
+    }
+
     if (action === "integration-config-check") {
-      // Report configuration state without returning secret values. The GitHub
-      // check performs a signed App API request, proving the App ID and PEM key
-      // belong together and are usable by this deployed Edge Function.
-      const checks: Json = {};
+      const health = getIntegrationSettingsHealth();
+      const checks: Json = {
+        runtime: health.runtime,
+        functionName: health.functionName,
+        projectRef: health.projectRef,
+      };
+
+      const githubHealth = health.providers.github;
       try {
+        const criticalGithubMissing = ["GITHUB_APP_ID", "GITHUB_PRIVATE_KEY"]
+          .filter((name) => githubHealth.settings[name] !== "present");
+        if (criticalGithubMissing.length) {
+          throw new Error(missingSettingsMessage("GitHub", githubHealth.missingSettings, health.projectRef));
+        }
+
         const appId = required("GITHUB_APP_ID");
         if (!/^\d+$/.test(appId)) {
           throw new Error("GITHUB_APP_ID must be the numeric App ID shown on the GitHub App General page.");
         }
-        const privateKey = required("GITHUB_PRIVATE_KEY").replace(/\\n/g, "\n");
-        if (!/-----BEGIN (?:RSA )?PRIVATE KEY-----/.test(privateKey) ||
-            !/-----END (?:RSA )?PRIVATE KEY-----/.test(privateKey)) {
-          throw new Error("GITHUB_PRIVATE_KEY must contain the complete PEM private key, including its BEGIN and END lines.");
-        }
+
+        // githubAppJwt() trims the value and safely converts literal \\n sequences
+        // to PEM line breaks before parsing. No PEM material is returned or logged.
         const app = await githubRequest("/app", await githubAppJwt());
         const returnedAppId = String(app.id || "");
         if (!returnedAppId || returnedAppId !== appId) {
           throw new Error("GitHub authenticated the request, but the returned App ID does not match GITHUB_APP_ID.");
         }
+
+        const webhookMissing = githubHealth.missingSettings.includes("GITHUB_WEBHOOK_SECRET");
         checks.github = {
           status: "verified",
           appId: returnedAppId,
           appName: safeText(app.name, 120) || "GitHub App",
           appSlug: safeText(app.slug, 120),
-          webhookSecretConfigured: Boolean(Deno.env.get("GITHUB_WEBHOOK_SECRET")?.trim()),
-          message: "GitHub accepted the App ID and private key.",
+          webhookSecretConfigured: !webhookMissing,
+          settings: githubHealth.settings,
+          missingSettings: githubHealth.missingSettings,
+          runtime: health.runtime,
+          projectRef: health.projectRef,
+          message: webhookMissing
+            ? "GitHub App ID and private key are verified. " + missingSettingsMessage("GitHub webhook delivery", githubHealth.missingSettings, health.projectRef)
+            : "GitHub accepted the App ID and private key; the webhook secret is present.",
         };
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : "GitHub App configuration could not be verified.";
-        console.warn("Misma integration configuration check failed:", JSON.stringify({ provider: "github", message: message.slice(0, 240) }));
-        checks.github = { status: "error", message: message.slice(0, 240) };
+        const causeMessage = cause instanceof Error ? cause.message : "GitHub App configuration could not be verified.";
+        const missingMessage = githubHealth.missingSettings.length
+          ? missingSettingsMessage("GitHub", githubHealth.missingSettings, health.projectRef)
+          : "";
+        const message = [causeMessage, missingMessage]
+          .filter(Boolean)
+          .filter((value, index, all) => all.indexOf(value) === index)
+          .join(" ");
+        console.warn("Misma integration configuration check failed:", JSON.stringify({
+          provider: "github",
+          runtime: health.runtime,
+          projectRef: health.projectRef,
+          message: message.slice(0, 240),
+        }));
+        checks.github = {
+          status: "error",
+          message: message.slice(0, 500),
+          settings: githubHealth.settings,
+          missingSettings: githubHealth.missingSettings,
+          runtime: health.runtime,
+          projectRef: health.projectRef,
+        };
       }
 
+      const vercelHealth = health.providers.vercel;
       try {
+        if (vercelHealth.missingSettings.length) {
+          throw new Error(missingSettingsMessage("Vercel", vercelHealth.missingSettings, health.projectRef));
+        }
         const slug = required("VERCEL_INTEGRATION_SLUG").replace(/^\/+|\/+$/g, "");
         if (!/^[a-z0-9][a-z0-9-]{1,100}$/i.test(slug)) {
           throw new Error("VERCEL_INTEGRATION_SLUG must be the Vercel Marketplace URL slug, for example: misma.");
@@ -460,15 +509,31 @@ async function main(request: Request) {
           slug,
           clientIdConfigured: true,
           clientSecretConfigured: true,
+          settings: vercelHealth.settings,
+          missingSettings: vercelHealth.missingSettings,
+          runtime: health.runtime,
+          projectRef: health.projectRef,
           callbackUrl: APP_ORIGIN + "/integrations/vercel/callback",
-          message: "Vercel slug and OAuth client credentials are present. The Marketplace callback still needs a fresh authorization test.",
+          message: "Vercel Marketplace slug and OAuth client credentials are present. A fresh Marketplace authorization is still needed to validate the live OAuth exchange.",
         };
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "Vercel configuration could not be checked.";
-        console.warn("Misma integration configuration check failed:", JSON.stringify({ provider: "vercel", message: message.slice(0, 240) }));
-        checks.vercel = { status: "error", message: message.slice(0, 240) };
+        console.warn("Misma integration configuration check failed:", JSON.stringify({
+          provider: "vercel",
+          runtime: health.runtime,
+          projectRef: health.projectRef,
+          message: message.slice(0, 500),
+        }));
+        checks.vercel = {
+          status: "error",
+          message: message.slice(0, 500),
+          settings: vercelHealth.settings,
+          missingSettings: vercelHealth.missingSettings,
+          runtime: health.runtime,
+          projectRef: health.projectRef,
+        };
       }
-      return json({ checks }, 200, origin);
+      return json({ checks, health }, 200, origin);
     }
 
     if (action === "vercel-install-url") {

@@ -47,6 +47,19 @@ Set these in the Misma Supabase project's Edge Function secrets. Do not add them
 
 The function also uses the Supabase runtime values SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY. Never expose the service-role key.
 
+## Runtime configuration diagnostics
+
+The integrations dashboard invokes the `misma-platform-integrations` Supabase Edge Function directly through `supabase.functions.invoke`. The `integration-health` and `integration-config-check` actions are authenticated and require an owner/admin membership in the selected workspace. They read the running Edge Function environment with `Deno.env.get`; they do not read Database Vault or Render environment variables.
+
+The health report returns only expected setting names and one of `present`, `missing`, or `empty`. It does not return or log credential values. The project reference is derived from the function's runtime `SUPABASE_URL`. For this deployment it should be `grlrrmebnthxguluybgb`.
+
+Expected provider settings:
+
+- GitHub: `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`.
+- Vercel: `VERCEL_INTEGRATION_SLUG`, `VERCEL_CLIENT_ID`, and `VERCEL_CLIENT_SECRET`.
+
+`GITHUB_APP_SLUG` is optional; the current implementation derives the slug from GitHub's authenticated `/app` endpoint. The shared credential-vault key `PLATFORM_CREDENTIAL_ENCRYPTION_KEY_V1` is separate and is used when saving encrypted customer platform credentials.
+
 ## Callback and webhook behavior
 
 The Edge Function has verify_jwt = false because GitHub's setup callback and webhook cannot provide a Misma user JWT. These public entry points are protected separately:
@@ -72,7 +85,7 @@ Authenticated users can read only records belonging to their workspace. Writes a
 
 1. Apply 20261117120000_website_platform_integrations.sql to the Misma Supabase project.
 2. Deploy the misma-platform-integrations Edge Function.
-3. Set the four GitHub App secrets above.
+3. Set `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET` in Supabase Edge Function secrets.
 4. Register the Setup URL, Webhook URL, permissions, and installation event in the GitHub App.
 5. Deploy the Misma application containing /dashboard/integrations.
 6. Test using a non-production repository first. Verify manual PR mode before testing auto-merge with branch protection enabled.
