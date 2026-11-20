@@ -24,6 +24,15 @@ test("plugin marketplace has a workspace-scoped searchable directory and separat
   assert.match(page, /render-link-project/);
   assert.match(page, /misma-plugin-credential-field/);
   assert.match(page, /misma-plugin-render-config/);
+  assert.match(page, /misma-marketplace-back-button/);
+  assert.match(page, /window\.history\.back\(\)/);
+  assert.match(page, /function ProviderLogo/);
+  assert.match(page, /aria-label=\{labels\[provider\] \+ " logo"\}/);
+  assert.match(page, /github: "M12/);
+  assert.match(page, /vercel: "m12/);
+  assert.match(page, /netlify: "m9\.793/);
+  assert.match(page, /render: "M18\.263/);
+  assert.doesNotMatch(page, /Misma ecosystem/);
   assert.doesNotMatch(page, /\/dashboard\/integrations\?provider=/);
   assert.doesNotMatch(page, /Back to Misma/);
 });
@@ -89,4 +98,7 @@ test("global Misma design tokens and typography are applied after the base style
   assert.match(css, /\.aichat-chats-widget-item[\s\S]*min-height:42px/);
   assert.match(css, /\.misma-marketplace-page[\s\S]*#07111d/);
   assert.match(css, /\.misma-plugin-primary[\s\S]*#326fe6/);
+  assert.match(css, /\.misma-marketplace-back-button/);
+  assert.match(css, /\.misma-plugin-mark svg/);
+  assert.match(css, /\.misma-plugin-modal \{[\s\S]*background: #07111d/);
 });
