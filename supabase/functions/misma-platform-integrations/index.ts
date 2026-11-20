@@ -189,7 +189,7 @@ async function authorize(request: Request, workspaceId: string) {
   if (error || !member || !["owner", "admin"].includes(member.role)) {
     throw new Error("Only workspace owners and admins can connect hosting platforms.");
   }
-  return { admin, userId: auth.user.id };
+  return { admin, userId: auth.user.id, role: member.role };
 }
 async function githubCallback(request: Request) {
   const url = new URL(request.url);
@@ -285,7 +285,7 @@ async function main(request: Request) {
     const action = safeText(body.action, 60);
     const workspaceId = safeText(body.workspaceId, 80);
     if (!/^[0-9a-f-]{36}$/i.test(workspaceId)) return json({ error: "Choose a valid workspace." }, 400, origin);
-    const { admin, userId } = await authorize(request, workspaceId);
+    const { admin, userId, role } = await authorize(request, workspaceId);
 
     // Credentials are accepted only from an authenticated workspace owner/admin.
     // Plaintext values are encrypted in this function and never returned or logged.
@@ -415,8 +415,12 @@ async function main(request: Request) {
 
 
     if (action === "integration-health") {
-      // This action is owner/admin-only because authorize() ran above.
-      // It returns setting names and presence states only, never values.
+      // The base request is authenticated and authorized for this workspace;
+      // the detailed runtime configuration report is restricted to its owner.
+      if (role !== "owner") {
+        return json({ error: "Only workspace owners can inspect server integration configuration." }, 403, origin);
+      }
+      // This returns setting names and presence states only, never values.
       return json(getIntegrationSettingsHealth() as unknown as Json, 200, origin);
     }
 
