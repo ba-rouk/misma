@@ -199,6 +199,8 @@ function WebsiteIntegrationsPage() {
     setWebsites([]);
     setConnections([]);
     setInstallResult(null);
+    setDiagnostics(null);
+    setHealth(null);
     setError("");
     setNotice("");
     try {
