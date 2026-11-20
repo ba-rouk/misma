@@ -275,7 +275,7 @@ function VercelMarketplaceCallback() {
                 {visibleProjects.map((project) => <option key={project.id} value={project.id}>{project.name}{project.full_name && project.full_name !== project.name ? " · " + project.full_name : ""}</option>)}
               </select>
             </label>
-            {websiteId && !matchingProject && <p style={{ color: "#9a5b00", fontSize: 13 }} role="status">No Vercel project matches this website name or domain. All projects accessible to this Vercel integration are listed so you can choose the correct project.</p>}
+            {websiteId && !matchingProject && !projectId && <p style={{ color: "#9a5b00", fontSize: 13 }} role="status">No Vercel project matches this website name or domain. All projects accessible to this Vercel integration are listed so you can choose the correct project.</p>}
             {projectSearch.trim() && !filteredProjects.length && <p style={{ color: "#667085", fontSize: 13 }} role="status">No project matched “{projectSearch}”. The full project list is shown instead.</p>}
             {!projects.length && <div><p style={{ color: "#667085", fontSize: 13 }}>No Vercel projects are currently listed. Retry discovery without repeating the one-time authorization.</p><button type="button" onClick={() => void refreshProjects()} disabled={busy} style={secondaryButton}>{busy ? "Refreshing…" : "Refresh Vercel projects"}</button></div>}
             {!websites.length && <p style={{ color: "#667085", fontSize: 13 }}>This workspace has no active websites yet. Add a website in Misma, then return to link a project.</p>}
