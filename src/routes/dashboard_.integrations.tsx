@@ -214,11 +214,20 @@ function WebsiteIntegrationsPage() {
   async function verifyIntegrationSetup() {
     setBusy(true); setError(""); setNotice(""); setDiagnostics(null); setHealth(null);
     try {
-      const healthResult = await invoke("integration-health") as IntegrationHealth;
-      if (!healthResult?.providers?.github || !healthResult?.providers?.vercel) {
-        throw new Error("Misma returned an incomplete integration health report.");
+      let healthResult: IntegrationHealth | null = null;
+      try {
+        const candidate = await invoke("integration-health") as IntegrationHealth;
+        if (!candidate?.providers?.github || !candidate?.providers?.vercel) {
+          throw new Error("Misma returned an incomplete integration health report.");
+        }
+        healthResult = candidate;
+        setHealth(candidate);
+      } catch (healthCause) {
+        const message = healthCause instanceof Error ? healthCause.message : "Could not read the integration health report.";
+        // Admins may run Verify, but only a workspace owner can inspect the
+        // per-setting environment checklist.
+        if (!message.includes("Only workspace owners can inspect")) throw healthCause;
       }
-      setHealth(healthResult);
 
       const result = await invoke("integration-config-check");
       if (!result?.checks?.github || !result?.checks?.vercel) {
@@ -241,7 +250,9 @@ function WebsiteIntegrationsPage() {
         setError(failedChecks.join(" · "));
         setNotice("Verification ran in the Supabase Edge Function. The checklist shows every setting that is missing or empty; GitHub and Vercel can still be connected independently when their own requirements are satisfied.");
       } else {
-        setNotice("GitHub credentials are verified and Vercel settings are present in the Supabase Edge Function runtime. Connect either provider independently to this workspace.");
+        setNotice(healthResult
+          ? "GitHub credentials are verified and Vercel settings are present in the Supabase Edge Function runtime. Connect either provider independently to this workspace."
+          : "Provider verification completed. The detailed setup checklist is visible only to the workspace owner.");
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not verify the saved integration settings.");
