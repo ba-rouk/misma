@@ -437,7 +437,7 @@ async function main(request: Request) {
         }
 
         const appId = required("GITHUB_APP_ID");
-        if (!/^\\d+$/.test(appId)) {
+        if (!/^\d+$/.test(appId)) {
           throw new Error("GITHUB_APP_ID must be the numeric App ID shown on the GitHub App General page.");
         }
 
@@ -487,7 +487,7 @@ async function main(request: Request) {
         if (vercelHealth.missingSettings.length) {
           throw new Error(missingSettingsMessage("Vercel", vercelHealth.missingSettings, health.projectRef));
         }
-        const slug = required("VERCEL_INTEGRATION_SLUG").replace(/^\\/+|\\/+$/g, "");
+        const slug = required("VERCEL_INTEGRATION_SLUG").replace(/^\/+|\/+$/g, "");
         if (!/^[a-z0-9][a-z0-9-]{1,100}$/i.test(slug)) {
           throw new Error("VERCEL_INTEGRATION_SLUG must be the Vercel Marketplace URL slug, for example: misma.");
         }
