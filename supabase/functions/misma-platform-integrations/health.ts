@@ -31,7 +31,8 @@ function providerHealth(provider: ProviderName): ProviderHealth {
 /**
  * Read-only environment diagnostics. Only setting names and presence states
  * are returned; no credential value, prefix, suffix, or content is exposed.
- * This function is called only after the request's workspace owner/admin check.
+ * The calling action has already authenticated the user and verified owner/admin membership;
+ * the handler then enforces the stricter owner-only role gate before calling this helper.
  */
 export function getIntegrationSettingsHealth() {
   const github = providerHealth("github");
