@@ -485,7 +485,6 @@ async function main(request: Request) {
         checks.github = {
           status: "error",
           message: message.slice(0, 500),
-          settings: githubHealth.settings,
           missingSettings: githubHealth.missingSettings,
           runtime: health.runtime,
           projectRef: health.projectRef,
@@ -525,7 +524,6 @@ async function main(request: Request) {
         checks.vercel = {
           status: "error",
           message: message.slice(0, 500),
-          settings: vercelHealth.settings,
           missingSettings: vercelHealth.missingSettings,
           runtime: health.runtime,
           projectRef: health.projectRef,
