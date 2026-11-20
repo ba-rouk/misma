@@ -23,7 +23,7 @@ test("execution Edge Function validates workspace membership and GitHub App scop
   assert.match(fn, /workspace_members/);
   assert.match(fn, /\["owner", "admin"\]/);
   assert.match(fn, /platform_connections/);
-  assert.match(fn, /installationToken\(installationId, repoId\)/);
+  assert.match(fn, /installationToken(installationId, repo.id)/);
   assert.match(fn, /repository_id: repoId/);
 });
 
