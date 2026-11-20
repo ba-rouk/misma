@@ -10,7 +10,9 @@ The dashboard route is /dashboard/integrations.
 - Automatic mode asks GitHub to enable pull-request auto-merge. GitHub only merges when the repository permits it and its protection/check requirements are satisfied. If GitHub refuses auto-merge, the pull request remains available for manual review.
 - Manual mode leaves the pull request open for the customer to review and merge.
 - The first code adapter supports root index.html and public/index.html. Framework-specific entrypoints (for example Next.js App Router, Astro, SvelteKit, or server-rendered templates) need dedicated adapters; Misma must not guess and modify arbitrary files.
-- Vercel Marketplace authorization, server-side code exchange, encrypted credential storage, workspace-scoped project discovery, and project-to-website association are implemented. Netlify and Render still have database records and dashboard cards but their customer authorization/API adapters are not active yet.
+- Vercel Marketplace authorization, server-side code exchange, encrypted credential storage, complete paginated project discovery, and project-to-website association are implemented.
+- Render customer API-key authorization, encrypted credential storage, complete paginated service discovery, and service-to-website association are implemented. Each customer supplies their own Render API key; Misma does not use a shared operator key.
+- Netlify still has database records and a dashboard card, but its customer authorization/API adapter is not active yet.
 
 ## Create the Misma GitHub App
 
@@ -199,3 +201,12 @@ The encrypted database schema and the server-side vault operations are being int
 - GitHub's installation URL slug is derived from the GitHub App's authenticated `/app` response. Only the GitHub App ID and private key are required to create that URL.
 - Vercel's `VERCEL_INTEGRATION_SLUG` is the Marketplace URL segment used by `https://vercel.com/integrations/:slug/new`. Keep it in Supabase Edge Function secrets.
 - After changing the Vercel Redirect URL, start a fresh connection from Misma. Old authorization codes cannot be reused; the Vercel code is one-use and must be exchanged with the exact Redirect URL configured for the integration.
+
+
+## Render account connection and service selection
+
+Each customer creates a Render API key in Render Dashboard → Account Settings → API Keys, selects the intended workspace, and grants at least read access to services. The customer pastes that key into the Render connection form in Misma. The Edge Function validates the key, encrypts it with the shared AES-256-GCM vault, and never returns it to the browser or stores it in project metadata.
+
+Misma fetches all visible services from `GET https://api.render.com/v1/services` using cursor pagination (up to 100 services per request) and stores only non-secret service metadata in `platform_projects`. Refresh repeats the complete paginated discovery. The user selects the Misma website and Render service. An exact normalized name/domain match may be suggested; when no match exists, Misma warns the user and displays all services the API key can access for explicit selection. The association is workspace-scoped and does not initiate a deploy.
+
+When the shared credential key is not configured, Misma does not create a half-connected Render account record. Set `PLATFORM_CREDENTIAL_ENCRYPTION_KEY_V1` in Supabase Edge Function secrets before connecting a platform that needs encrypted customer credentials.
