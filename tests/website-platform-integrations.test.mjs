@@ -89,8 +89,8 @@ test("Vercel project picker lists all pages and never silently picks the first p
   assert.match(edge, /async function listVercelProjects/);
   assert.match(edge, /result\.pagination\?\.next/);
   assert.match(edge, /params\.set\("from", from\)/);
-  assert.match(callback, /setProjectId\(data\?\.projects\?\.\[0\]\?\.id/);
   assert.doesNotMatch(callback, /setProjectId\(data\?\.projects\?\.\[0\]\?\.id/);
+  assert.match(callback, /setProjectId\(""/);
   assert.match(callback, /No Vercel project is associated with this website/);
   assert.match(callback, /The full project list is shown instead/);
 });
