@@ -7,37 +7,16 @@ type WorkspaceOption = { id: string; name: string };
 type Repo = { id: number; fullName: string; name: string; defaultBranch: string; htmlUrl: string; private: boolean };
 type PlatformConnection = { id: string; provider: string; external_account_name: string | null; status: string };
 type InstallResult = { installationId: string; status: string; pullRequestUrl: string; repositoryUrl: string; message: string };
-type SettingPresence = "present" | "missing" | "empty";
-type ProviderHealth = {
-  settings: Record<string, SettingPresence>;
-  missingSettings: string[];
-  emptySettings: string[];
+type PlatformProject = {
+  id: string;
+  platform_connection_id: string;
+  name: string;
+  full_name: string | null;
+  repository_url: string | null;
+  dashboard_url: string | null;
+  default_branch: string | null;
+  metadata: Record<string, unknown> | null;
 };
-type IntegrationHealth = {
-  runtime: string;
-  functionName: string;
-  projectRef: string | null;
-  secretsLocation: string;
-  providers: { github: ProviderHealth; vercel: ProviderHealth };
-  sharedCredentialVault: { settings: Record<string, SettingPresence>; missingSettings: string[]; note: string };
-};
-type SetupCheck = {
-  status: "verified" | "configured" | "error";
-  message: string;
-  appId?: string;
-  appName?: string;
-  appSlug?: string;
-  webhookSecretConfigured?: boolean;
-  slug?: string;
-  clientIdConfigured?: boolean;
-  clientSecretConfigured?: boolean;
-  callbackUrl?: string;
-  settings?: Record<string, SettingPresence>;
-  missingSettings?: string[];
-  runtime?: string;
-  projectRef?: string | null;
-};
-type IntegrationDiagnostics = { github: SetupCheck; vercel: SetupCheck; runtime?: string; projectRef?: string | null };
 
 export const Route = createFileRoute("/dashboard/integrations")({ component: WebsiteIntegrationsPage });
 
@@ -66,6 +45,22 @@ async function invokeErrorMessage(invokeError: unknown, fallback: string) {
   return typeof error?.message === "string" && error.message.trim() ? error.message : fallback;
 }
 
+function normalizeProjectLabel(value: string) {
+  return value.toLowerCase().trim().replace(/^www\\./, "").replace(/[^a-z0-9]/g, "");
+}
+
+function exactWebsiteProjectMatch(projects: PlatformProject[], website?: Website) {
+  if (!website) return null;
+  const domain = website.domain.toLowerCase().replace(/^https?:\\/\\//, "").replace(/^www\\./, "").split("/")[0];
+  const domainBase = domain.split(".")[0];
+  const candidates = new Set([website.name, website.domain, domain, domainBase].map(normalizeProjectLabel).filter(Boolean));
+  return projects.find((project) => {
+    const values = [project.name, project.full_name || "", (project.full_name || "").split("/").pop() || ""]
+      .map(normalizeProjectLabel).filter(Boolean);
+    return values.some((value) => candidates.has(value));
+  }) || null;
+}
+
 function WebsiteIntegrationsPage() {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [loading, setLoading] = useState(true);
@@ -81,12 +76,24 @@ function WebsiteIntegrationsPage() {
   const [repositoryId, setRepositoryId] = useState("");
   const [deploymentMode, setDeploymentMode] = useState<"automatic" | "manual">("manual");
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
-  const [diagnostics, setDiagnostics] = useState<IntegrationDiagnostics | null>(null);
-  const [health, setHealth] = useState<IntegrationHealth | null>(null);
+  const [renderApiKey, setRenderApiKey] = useState("");
+  const [renderProjects, setRenderProjects] = useState<PlatformProject[]>([]);
+  const [renderProjectId, setRenderProjectId] = useState("");
+  const [renderWebsiteId, setRenderWebsiteId] = useState("");
+  const [renderProjectSearch, setRenderProjectSearch] = useState("");
+  const [renderConnectionId, setRenderConnectionId] = useState("");
 
   const githubConnection = connections.find((connection) => connection.provider === "github" && connection.status === "connected");
   const vercelConnection = connections.find((connection) => connection.provider === "vercel" && connection.status === "connected");
+  const renderConnection = connections.find((connection) => connection.provider === "render" && connection.status === "connected");
   const selectedRepo = repositories.find((repo) => String(repo.id) === repositoryId);
+  const selectedRenderProject = renderProjects.find((project) => project.id === renderProjectId);
+  const selectedRenderWebsite = websites.find((website) => website.id === renderWebsiteId);
+  const matchingRenderProject = exactWebsiteProjectMatch(renderProjects, selectedRenderWebsite);
+  const filteredRenderProjects = renderProjects.filter((project) =>
+    (project.name + " " + (project.full_name || "")).toLowerCase().includes(renderProjectSearch.toLowerCase().trim())
+  );
+  const visibleRenderProjects = filteredRenderProjects.length ? filteredRenderProjects : renderProjects;
 
   async function invoke(action: string, extra: Record<string, unknown> = {}) {
     const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
@@ -169,7 +176,7 @@ function WebsiteIntegrationsPage() {
     setWebsiteId("");
     setRepositoryId("");
     try {
-      const [websiteResult, connectionResult] = await Promise.all([
+      const [websiteResult, connectionResult, renderProjectResult] = await Promise.all([
         supabase.from("website_connections")
           .select("id,name,domain,website_url,status")
           .eq("workspace_id", activeWorkspaceId)
@@ -179,11 +186,25 @@ function WebsiteIntegrationsPage() {
           .select("id,provider,external_account_name,status")
           .eq("workspace_id", activeWorkspaceId)
           .order("created_at", { ascending: false }),
+        supabase.from("platform_projects")
+          .select("id,platform_connection_id,name,full_name,repository_url,dashboard_url,default_branch,metadata")
+          .eq("workspace_id", activeWorkspaceId).eq("provider", "render")
+          .order("name", { ascending: true }),
       ]);
       if (websiteResult.error) throw new Error("Could not load your connected websites.");
       if (connectionResult.error) throw new Error("Could not load your platform connections.");
+      if (renderProjectResult.error) throw new Error("Could not load your Render services.");
+      const nextConnections = (connectionResult.data || []) as PlatformConnection[];
+      const currentRenderConnection = nextConnections.find((connection) => connection.provider === "render" && connection.status === "connected");
+      const nextRenderProjects = (renderProjectResult.data || []) as PlatformProject[];
       setWebsites((websiteResult.data || []) as Website[]);
-      setConnections((connectionResult.data || []) as PlatformConnection[]);
+      setConnections(nextConnections);
+      setRenderConnectionId(currentRenderConnection?.id || "");
+      setRenderProjects(currentRenderConnection
+        ? nextRenderProjects.filter((project) => project.platform_connection_id === currentRenderConnection.id)
+        : []);
+      setRenderProjectId("");
+      setRenderWebsiteId("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load this workspace's integrations.");
     } finally {
@@ -199,8 +220,6 @@ function WebsiteIntegrationsPage() {
     setWebsites([]);
     setConnections([]);
     setInstallResult(null);
-    setDiagnostics(null);
-    setHealth(null);
     setError("");
     setNotice("");
     try {
@@ -208,56 +227,6 @@ function WebsiteIntegrationsPage() {
       else window.sessionStorage.removeItem("misma_integrations_workspace");
     } catch {
       // Selection remains active for this page session even without storage.
-    }
-  }
-
-  async function verifyIntegrationSetup() {
-    setBusy(true); setError(""); setNotice(""); setDiagnostics(null); setHealth(null);
-    try {
-      let healthResult: IntegrationHealth | null = null;
-      try {
-        const candidate = await invoke("integration-health") as IntegrationHealth;
-        if (!candidate?.providers?.github || !candidate?.providers?.vercel) {
-          throw new Error("Misma returned an incomplete integration health report.");
-        }
-        healthResult = candidate;
-        setHealth(candidate);
-      } catch (healthCause) {
-        const message = healthCause instanceof Error ? healthCause.message : "Could not read the integration health report.";
-        // Admins may run Verify, but only a workspace owner can inspect the
-        // per-setting environment checklist.
-        if (!message.includes("Only workspace owners can inspect")) throw healthCause;
-      }
-
-      const result = await invoke("integration-config-check");
-      if (!result?.checks?.github || !result?.checks?.vercel) {
-        throw new Error("Misma returned an incomplete integration configuration check.");
-      }
-      const checks = {
-        ...result.checks,
-        runtime: healthResult?.runtime ?? result.checks.runtime,
-        projectRef: healthResult?.projectRef ?? result.checks.projectRef,
-      } as IntegrationDiagnostics;
-      setDiagnostics(checks);
-
-      const failedChecks = [
-        (checks.github.status !== "verified" || (checks.github.missingSettings?.length || 0) > 0)
-          ? "GitHub: " + checks.github.message : "",
-        (checks.vercel.status !== "configured" || (checks.vercel.missingSettings?.length || 0) > 0)
-          ? "Vercel: " + checks.vercel.message : "",
-      ].filter(Boolean);
-      if (failedChecks.length) {
-        setError(failedChecks.join(" · "));
-        setNotice("Verification ran in the Supabase Edge Function. The checklist shows every setting that is missing or empty; GitHub and Vercel can still be connected independently when their own requirements are satisfied.");
-      } else {
-        setNotice(healthResult
-          ? "GitHub credentials are verified and Vercel settings are present in the Supabase Edge Function runtime. Connect either provider independently to this workspace."
-          : "Provider verification completed. The detailed setup checklist is visible only to the workspace owner.");
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not verify the saved integration settings.");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -321,6 +290,67 @@ function WebsiteIntegrationsPage() {
     }
   }
 
+  async function connectRender() {
+    if (!renderApiKey.trim()) { setError("Enter your Render API key."); return; }
+    setBusy(true); setError(""); setNotice("Validating your Render API key and loading all services…");
+    try {
+      const result = await invoke("render-connect", { apiKey: renderApiKey.trim() });
+      setRenderApiKey("");
+      setRenderConnectionId(String(result.platformConnectionId || ""));
+      setRenderProjects(Array.isArray(result.projects) ? result.projects as PlatformProject[] : []);
+      setRenderProjectId("");
+      await loadWorkspaceData(workspaceId);
+      setNotice(String(result.message || "Render is connected. Choose a service and Misma website."));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect Render.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshRenderProjects() {
+    const connectionId = renderConnectionId || renderConnection?.id;
+    if (!connectionId) return;
+    setBusy(true); setError(""); setNotice("Refreshing all Render services…");
+    try {
+      const result = await invoke("render-refresh-projects", { platformConnectionId: connectionId });
+      const nextProjects = Array.isArray(result.projects) ? result.projects as PlatformProject[] : [];
+      setRenderProjects(nextProjects);
+      setRenderProjectId("");
+      setNotice(nextProjects.length
+        ? "Render services refreshed. Choose the service to associate with your website."
+        : "No services were found in this Render account. Check the selected Render workspace and API key access.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not refresh Render services.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function linkRenderProject() {
+    if (!renderProjectId || !renderWebsiteId) {
+      setError("Choose a Render service and a Misma website.");
+      return;
+    }
+    setBusy(true); setError(""); setNotice("Associating the selected Render service with your website…");
+    try {
+      const result = await invoke("render-link-project", {
+        platformProjectId: renderProjectId,
+        websiteConnectionId: renderWebsiteId,
+      });
+      setNotice(result?.alreadyLinked
+        ? "This Render service is already associated with that website."
+        : "Render service associated with your Misma website as its deployment target.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not associate the Render service.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => { void load(); }, []);
   useEffect(() => { if (workspaceId) void loadWorkspaceData(workspaceId); }, [workspaceId, workspaces]);
 
@@ -331,7 +361,7 @@ function WebsiteIntegrationsPage() {
         <header className="misma-integrations-header">
           <p className="misma-integrations-eyebrow">Misma · Website integrations</p>
           <h1>Connect your website platform</h1>
-          <p className="misma-integrations-intro">Connect GitHub and Vercel independently, in either order. Both connections belong to the workspace selected below; neither provider requires the other. Misma can prepare website changes and use automatic deployment only when you authorize it.</p>
+          <p className="misma-integrations-intro">Connect GitHub, Vercel, and Render independently. Choose the exact repository or hosting project that belongs to each Misma website; when a name does not match, Misma shows the available projects for you to select.</p>
         </header>
 
         {error && <div role="alert" className="misma-integrations-message is-error">{error}</div>}
@@ -347,96 +377,6 @@ function WebsiteIntegrationsPage() {
           {workspaces.length > 1 && <p className="misma-integrations-help">Choose which workspace owns the website connection and GitHub installation.</p>}
         </section>
 
-        {health && <section className="misma-integrations-detail-card" aria-labelledby="integration-health-heading">
-          <div className="misma-integrations-actions" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-            <div>
-              <h2 id="integration-health-heading" style={{ margin: 0 }}>Setup checklist</h2>
-              <p className="misma-integrations-help" style={{ marginBottom: 0 }}>
-                Runtime: <strong>{health.runtime}</strong> · Function: <code>{health.functionName}</code> · Project ref: <code>{health.projectRef || "not detected"}</code>
-              </p>
-            </div>
-          </div>
-          <p className="misma-integrations-help">
-            Set missing or empty values in {health.secretsLocation}. This check reads the running function environment, not Database Vault or Render environment variables.
-          </p>
-          <div className="misma-integrations-provider-grid">
-            {(["github", "vercel"] as const).map((provider) => {
-              const providerHealth = health.providers[provider];
-              const labels: Record<string, string> = {
-                GITHUB_APP_ID: "GitHub App ID",
-                GITHUB_PRIVATE_KEY: "GitHub App private key (PEM)",
-                GITHUB_WEBHOOK_SECRET: "GitHub webhook secret",
-                VERCEL_INTEGRATION_SLUG: "Vercel Marketplace slug",
-                VERCEL_CLIENT_ID: "Vercel OAuth client ID",
-                VERCEL_CLIENT_SECRET: "Vercel OAuth client secret",
-              };
-              return <article key={provider} className="misma-integrations-provider-card">
-                <div className="misma-integrations-provider-heading">
-                  <strong>{provider === "github" ? "GitHub" : "Vercel"} settings</strong>
-                  <span className={"misma-integrations-status" + (providerHealth.missingSettings.length === 0 ? " is-connected" : "")}>
-                    {providerHealth.missingSettings.length === 0 ? "All present" : "Needs attention"}
-                  </span>
-                </div>
-                <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, display: "grid", gap: 9 }}>
-                  {Object.entries(providerHealth.settings).map(([name, status]) => <li key={name} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13, overflowWrap: "anywhere" }}>
-                    <span aria-hidden="true" style={{ color: status === "present" ? "#16a34a" : "#dc2626", fontWeight: 800, minWidth: 16 }}>
-                      {status === "present" ? "✓" : "✕"}
-                    </span>
-                    <span><strong>{labels[name] || name}</strong> <code>{name}</code> <span style={{ color: status === "present" ? "#16a34a" : "#dc2626" }}>({status})</span></span>
-                  </li>)}
-                </ul>
-              </article>;
-            })}
-          </div>
-          {Object.values(health.sharedCredentialVault.settings).some((status) => status !== "present") && <p className="misma-integrations-help">
-            Shared credential vault: {health.sharedCredentialVault.missingSettings.join(", ")} is missing or empty. This key is required when storing encrypted customer platform tokens, but it is separate from the GitHub App and Vercel configuration checks.
-          </p>}
-        </section>}
-
-        {workspaceId && <section className="misma-integrations-detail-card" aria-labelledby="integration-config-heading">
-          <div className="misma-integrations-actions" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-            <div>
-              <h2 id="integration-config-heading" style={{ margin: 0 }}>Verify saved platform settings</h2>
-              <p className="misma-integrations-help" style={{ marginBottom: 0 }}>Misma checks the GitHub App credentials with GitHub and confirms the Vercel settings are present. Secret values are never shown.</p>
-            </div>
-            <button type="button" onClick={() => void verifyIntegrationSetup()} disabled={busy} className="misma-integrations-secondary-button">
-              {busy ? "Checking…" : "Verify settings"}
-            </button>
-          </div>
-          {diagnostics && <div className="misma-integrations-provider-grid" style={{ marginTop: 16 }}>
-            <article className="misma-integrations-provider-card">
-              <div className="misma-integrations-provider-heading">
-                <strong>GitHub App</strong>
-                <span className={"misma-integrations-status" + (diagnostics.github.status === "verified" ? " is-connected" : "")}>
-                  {diagnostics.github.status === "verified" && (diagnostics.github.missingSettings?.length || 0) === 0 ? "Verified" : "Needs attention"}
-                </span>
-              </div>
-              <p className="misma-integrations-provider-description">{diagnostics.github.message}</p>
-              {diagnostics.github.status === "verified" && <p className="misma-integrations-help">
-                {diagnostics.github.appName} · @{diagnostics.github.appSlug} · App ID {diagnostics.github.appId}
-              </p>}
-              {diagnostics.github.status === "verified" && !diagnostics.github.webhookSecretConfigured && <p className="misma-integrations-help">
-                Webhook secret is not configured. Initial installation works, but GitHub webhook events need GITHUB_WEBHOOK_SECRET.
-              </p>}
-            </article>
-            <article className="misma-integrations-provider-card">
-              <div className="misma-integrations-provider-heading">
-                <strong>Vercel</strong>
-                <span className={"misma-integrations-status" + (diagnostics.vercel.status === "configured" ? " is-connected" : "")}>
-                  {diagnostics.vercel.status === "configured" ? "Configured" : "Needs attention"}
-                </span>
-              </div>
-              <p className="misma-integrations-provider-description">{diagnostics.vercel.message}</p>
-              {diagnostics.vercel.status === "configured" && <p className="misma-integrations-help">
-                Slug: {diagnostics.vercel.slug} · OAuth client ID and secret detected.
-              </p>}
-              {diagnostics.vercel.status === "configured" && <p className="misma-integrations-help">
-                Required Redirect URL: <code>{diagnostics.vercel.callbackUrl}</code>
-              </p>}
-            </article>
-          </div>}
-        </section>}
-
         {loading ? <p className="misma-integrations-help">Loading your connected websites…</p> : !workspaceId ? <p className="misma-integrations-help">{workspaces.length ? "Choose a workspace to continue." : "No manageable workspace is available."}</p> : <>
           <section className="misma-integrations-provider-grid">
             {providers.map((provider) => {
@@ -444,15 +384,63 @@ function WebsiteIntegrationsPage() {
               return <article key={provider.id} className="misma-integrations-provider-card">
                 <div className="misma-integrations-provider-heading">
                   <strong>{provider.name}</strong>
-                  <span className={`misma-integrations-status${connected ? " is-connected" : ""}`}>{connected ? "Connected" : provider.id === "github" || provider.id === "vercel" ? "Not connected" : "Coming later"}</span>
+                  <span className={`misma-integrations-status${connected ? " is-connected" : ""}`}>{connected ? "Connected" : provider.id === "netlify" ? "Coming later" : "Not connected"}</span>
                 </div>
                 <p className="misma-integrations-provider-description">{provider.description}</p>
                 {provider.id === "github" && (connected
                   ? <button type="button" onClick={() => void loadRepositories()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Loading…" : "Choose repository"}</button>
                   : <button type="button" onClick={() => void connectGithub()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Opening GitHub…" : "Connect GitHub"}</button>)}
                 {provider.id === "vercel" && <button type="button" onClick={() => void connectVercel()} disabled={busy} className="misma-integrations-primary-button">{busy ? "Opening Vercel…" : vercelConnection ? "Reconnect Vercel" : "Connect Vercel"}</button>}
+                {provider.id === "render" && !renderConnection && <span className="misma-integrations-help">Connect with your own Render API key below.</span>}
               </article>;
             })}
+          </section>
+
+          <section className="misma-integrations-detail-card" aria-labelledby="render-project-heading">
+            <h2 id="render-project-heading">Render services</h2>
+            {!renderConnection ? <>
+              <p className="misma-integrations-provider-description">Connect your own Render account. Misma validates the key, encrypts it in Supabase, and lists the services that key can access. Your API key is never shown again or shared with other workspaces.</p>
+              <label style={fieldLabel}>Render API key
+                <input type="password" autoComplete="off" value={renderApiKey} onChange={(event) => setRenderApiKey(event.target.value)} placeholder="Paste your Render API key" style={fieldStyle} />
+              </label>
+              <button type="button" onClick={() => void connectRender()} disabled={busy || !renderApiKey.trim()} className="misma-integrations-primary-button">{busy ? "Connecting…" : "Connect Render"}</button>
+            </> : <>
+              <p className="misma-integrations-provider-description">Connected to {renderConnection.external_account_name || "your Render account"}. Search your available services or view the full list, then associate the correct service with a Misma website.</p>
+              <div className="misma-integrations-field-grid">
+                <label style={fieldLabel}>Misma website
+                  <select value={renderWebsiteId} onChange={(event) => {
+                    const nextId = event.target.value;
+                    setRenderWebsiteId(nextId);
+                    const website = websites.find((item) => item.id === nextId);
+                    const match = exactWebsiteProjectMatch(renderProjects, website);
+                    setRenderProjectId(match?.id || "");
+                    setNotice(match
+                      ? "Matched the website to the Render service " + match.name + ". You can change the selection below."
+                      : nextId ? "No Render service is associated with that website name or domain. All accessible Render services are listed below—choose the correct one." : "");
+                  }} style={fieldStyle}>
+                    <option value="">Choose a connected Misma website</option>
+                    {websites.map((website) => <option key={website.id} value={website.id}>{website.name || website.domain} · {website.domain}</option>)}
+                  </select>
+                </label>
+                <label style={fieldLabel}>Search Render services
+                  <input value={renderProjectSearch} onChange={(event) => setRenderProjectSearch(event.target.value)} placeholder="Search by service or repository name" style={fieldStyle} />
+                </label>
+                <label style={fieldLabel}>Render service / project
+                  <select value={renderProjectId} onChange={(event) => setRenderProjectId(event.target.value)} style={fieldStyle}>
+                    <option value="">Choose a Render service</option>
+                    {visibleRenderProjects.map((project) => <option key={project.id} value={project.id}>{project.name}{project.full_name && project.full_name !== project.name ? " · " + project.full_name : ""}</option>)}
+                  </select>
+                </label>
+              </div>
+              {renderWebsiteId && !matchingRenderProject && <p className="misma-integrations-help" role="status">No Render service matched this website by name or domain. Misma is showing the available services so you can choose the correct deployment target.</p>}
+              {renderProjectSearch.trim() && !filteredRenderProjects.length && <p className="misma-integrations-help" role="status">No service matched “{renderProjectSearch}”. The complete accessible service list is shown instead.</p>}
+              {!renderProjects.length && <p className="misma-integrations-help">No Render services are available for this API key yet. Refresh the list or check that the API key can read services in the correct Render workspace.</p>}
+              <div className="misma-integrations-actions">
+                <button type="button" onClick={() => void refreshRenderProjects()} disabled={busy} className="misma-integrations-secondary-button">Refresh services</button>
+                <button type="button" onClick={() => void linkRenderProject()} disabled={busy || !renderProjectId || !renderWebsiteId} className="misma-integrations-primary-button">{busy ? "Saving…" : "Use selected service"}</button>
+              </div>
+              {selectedRenderProject && <p className="misma-integrations-help">Selected: <strong>{selectedRenderProject.name}</strong>. This associates the service with the website as its deployment target; it does not trigger a production deploy by itself.</p>}
+            </>}
           </section>
 
           {githubConnection && <section className="misma-integrations-detail-card">
