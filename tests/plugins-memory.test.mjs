@@ -16,6 +16,13 @@ test("plugin marketplace has a workspace-scoped searchable directory and separat
   assert.match(page, /Permissions and scope/);
   assert.match(page, /workspace_id/);
   assert.match(page, /Coming soon/);
+  assert.match(page, /async function connectPlugin/);
+  assert.match(page, /github-install-url/);
+  assert.match(page, /vercel-install-url/);
+  assert.match(page, /render-connect/);
+  assert.match(page, /misma-plugin-credential-field/);
+  assert.doesNotMatch(page, /\/dashboard\/integrations\?provider=/);
+  assert.doesNotMatch(page, /Back to Misma/);
 });
 
 test("Misma Brain is an account-level RLS table with owner-only CRUD policies", async () => {
@@ -77,4 +84,6 @@ test("global Misma design tokens and typography are applied after the base style
   assert.match(css, /backdrop-filter:\s*var\(--misma-glass-blur\)/);
   assert.match(css, /body \{ font-size: 18px/);
   assert.match(css, /\.aichat-chats-widget-item[\s\S]*min-height:42px/);
+  assert.match(css, /\.misma-marketplace-page[\s\S]*#07111d/);
+  assert.match(css, /\.misma-plugin-primary[\s\S]*#326fe6/);
 });
