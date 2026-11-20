@@ -304,3 +304,56 @@ button, input, textarea, select { font-size: inherit; }
   .misma-marketplace-page { background-color: #07111d; }
   .misma-plugin-modal-backdrop { padding: 12px; }
 }
+
+
+.misma-plugin-render-config {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 15px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  background: rgba(7,17,29,.55);
+}
+.misma-plugin-render-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.misma-plugin-render-heading h3 {
+  margin: 0 0 3px;
+  color: #edf4fb;
+  font-size: 14px;
+}
+.misma-plugin-render-heading p,
+.misma-plugin-render-hint {
+  margin: 0;
+  color: #91a1b4;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.misma-plugin-render-heading button {
+  flex: none;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,.04);
+  color: #c5d8ff;
+  font-size: 11px;
+}
+.misma-plugin-credential-field select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 10px;
+  outline: none;
+  background: #091725;
+  color: #f4f7fb;
+  font: inherit;
+}
+.misma-plugin-credential-field select:focus {
+  border-color: #4d8dff;
+  box-shadow: 0 0 0 3px rgba(77,141,255,.14);
+}
