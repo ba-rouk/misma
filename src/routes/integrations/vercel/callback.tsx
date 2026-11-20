@@ -38,12 +38,12 @@ async function invokeErrorMessage(invokeError: unknown, fallback: string) {
 }
 
 function normalizeProjectLabel(value: string) {
-  return value.toLowerCase().trim().replace(/^www\\./, "").replace(/[^a-z0-9]/g, "");
+  return value.toLowerCase().trim().replace(/^www\./, "").replace(/[^a-z0-9]/g, "");
 }
 
 function exactWebsiteProjectMatch(projects: VercelProject[], website?: Website) {
   if (!website) return null;
-  const domain = website.domain.toLowerCase().replace(/^https?:\\/\\//, "").replace(/^www\\./, "").split("/")[0];
+  const domain = website.domain.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
   const candidates = new Set([website.name, website.domain, domain, domain.split(".")[0]].map(normalizeProjectLabel).filter(Boolean));
   return projects.find((project) => {
     const values = [project.name, project.full_name || "", (project.full_name || "").split("/").pop() || ""]
