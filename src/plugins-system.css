@@ -160,3 +160,147 @@ button, input, textarea, select { font-size: inherit; }
 @media (max-width:760px) {
   .aichat-chats-widget-item { min-height:44px !important; padding:10px 12px !important; }
 }
+
+
+/* Plugin directory: align the surface with Misma's navy dashboard theme. */
+.misma-marketplace-page {
+  background:
+    radial-gradient(900px 560px at 96% -14%, rgba(77,141,255,.13), transparent 64%),
+    radial-gradient(720px 480px at -14% 34%, rgba(51,87,139,.14), transparent 70%),
+    #07111d;
+  color: #edf4fb;
+}
+.misma-marketplace-back { display: none !important; }
+.misma-marketplace-eyebrow { color: #9bbcff; }
+.misma-marketplace-header h1 { color: #f4f7fb; }
+.misma-marketplace-header p,
+.misma-marketplace-section-heading p,
+.misma-marketplace-section-heading > span { color: #91a1b4; }
+.misma-marketplace-workspace,
+.misma-marketplace-workspace select {
+  color: #c5d2e1;
+}
+.misma-marketplace-workspace select,
+.misma-marketplace-search,
+.misma-marketplace-filters button,
+.misma-installed-chip {
+  border-color: rgba(255,255,255,.1);
+  background: rgba(13,26,41,.82);
+}
+.misma-marketplace-search { box-shadow: 0 12px 32px rgba(0,0,0,.2); }
+.misma-marketplace-search input { color: #f4f7fb; }
+.misma-marketplace-filters button { color: #b5c2d1; }
+.misma-marketplace-filters button:hover { border-color: rgba(77,141,255,.42); color: #fff; }
+.misma-marketplace-filters button.is-active {
+  border-color: rgba(77,141,255,.55);
+  background: rgba(77,141,255,.15);
+  color: #d6e4ff;
+}
+.misma-installed-chip { color: #f4f7fb; }
+.misma-installed-chip small { color: #91a1b4; }
+.misma-installed-chip i {
+  background: #4d8dff;
+  box-shadow: 0 0 12px rgba(77,141,255,.45);
+}
+.misma-plugin-card {
+  border-color: rgba(255,255,255,.1);
+  background: linear-gradient(145deg, rgba(13,26,41,.96), rgba(9,21,35,.9));
+  box-shadow: 0 18px 45px rgba(0,0,0,.2);
+}
+.misma-plugin-card-meta small,
+.misma-plugin-card-footer > span { color: #91a1b4; }
+.misma-plugin-status.is-connected {
+  border-color: rgba(77,141,255,.38);
+  background: rgba(77,141,255,.13);
+  color: #c5d8ff;
+}
+.misma-plugin-card-footer button,
+.misma-marketplace-filters button.is-active:hover { color: #a9c7ff; }
+.misma-marketplace-empty,
+.misma-marketplace-skeleton {
+  border-color: rgba(255,255,255,.13);
+  background: rgba(13,26,41,.6);
+  color: #9aacc0;
+}
+.misma-marketplace-feedback.is-success {
+  border-color: rgba(77,141,255,.35);
+  background: rgba(77,141,255,.1);
+  color: #c4d7fb;
+}
+.misma-plugin-modal {
+  border-color: rgba(255,255,255,.12);
+  background: rgba(11,24,39,.97);
+  color: #f4f7fb;
+}
+.misma-plugin-modal-heading p,
+.misma-plugin-connected-state small { color: #91a1b4; }
+.misma-plugin-connected-state {
+  border-color: rgba(77,141,255,.3);
+  background: rgba(77,141,255,.09);
+}
+.misma-plugin-permissions {
+  border-color: rgba(255,255,255,.1);
+  background: rgba(255,255,255,.035);
+}
+.misma-plugin-permissions ul { color: #bdcada; }
+.misma-plugin-permissions li::marker { color: #8fb4ff; }
+.misma-plugin-permissions > p,
+.misma-plugin-storage-note { color: #91a1b4; }
+.misma-plugin-primary {
+  color: #fff;
+  background: #326fe6;
+  border-color: #4d8dff;
+}
+.misma-plugin-primary:hover { background: #4d8dff; }
+.misma-plugin-modal-feedback {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(77,141,255,.28);
+  border-radius: 10px;
+  background: rgba(77,141,255,.08);
+  color: #c4d7fb;
+  font-size: 12px;
+}
+.misma-plugin-modal-feedback.is-error {
+  border-color: rgba(248,113,113,.28);
+  background: rgba(248,113,113,.08);
+  color: #ffb0b0;
+}
+.misma-plugin-credential-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  color: #d5dfeb;
+  font-size: 13px;
+  font-weight: 600;
+}
+.misma-plugin-credential-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 10px;
+  outline: none;
+  background: #091725;
+  color: #f4f7fb;
+  font: inherit;
+}
+.misma-plugin-credential-field input:focus {
+  border-color: #4d8dff;
+  box-shadow: 0 0 0 3px rgba(77,141,255,.14);
+}
+.misma-plugin-credential-field small {
+  color: #91a1b4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.misma-plugin-coming-note {
+  border-color: rgba(145,161,180,.2);
+  background: rgba(145,161,180,.07);
+  color: #b9c6d4;
+}
+@media (max-width:760px) {
+  .misma-marketplace-page { background-color: #07111d; }
+  .misma-plugin-modal-backdrop { padding: 12px; }
+}
