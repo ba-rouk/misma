@@ -1817,6 +1817,8 @@ test("owner and customer assistants share one isolated, approval-gated business 
   assert.match(shared, /website_connection_id/);
   assert.match(shared, /CUSTOMER_SHARED_ROOM_KEYS/);
   assert.match(shared, /\.eq\("website_id", websiteConnectionId\)/);
+  assert.match(shared, /websiteConnectionId: String\(page\.website_id/);
+  assert.match(chat, /websiteContent: brainContext\.scannedWebsitePages/);
   assert.match(shared, /\.eq\("workspace_id", workspaceId\)/);
   assert.match(shared, /\.eq\("approved", true\)/);
   assert.match(shared, /\.in\("room_id", allowedRoomIds\)/);

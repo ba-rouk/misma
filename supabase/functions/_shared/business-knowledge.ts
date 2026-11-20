@@ -100,10 +100,16 @@ export async function loadSharedBusinessKnowledge(
         .eq("workspace_id", workspaceId)
         .order("updated_at", { ascending: false })
         .limit(300),
+      db.from("website_scan_pages")
+        .select("website_id,canonical_url,title,content_text,scanned_at")
+        .eq("workspace_id", workspaceId)
+        .order("scanned_at", { ascending: false })
+        .limit(40),
     ]);
     const allKnowledge = requireQuery(knowledgeResult, "business knowledge");
     const lessons = requireQuery(lessonsResult, "approved Core.01 lessons");
     const products = requireQuery(productsResult, "products and services");
+    const scannedPages = requireQuery(pagesResult, "scanned website content");
     const enrichLesson = (lesson: AnyRecord) => {
       const room = lesson.room_id ? roomById.get(Number(lesson.room_id)) : null;
       const site = room?.website_connection_id ? websiteById.get(String(room.website_connection_id)) : null;
@@ -133,7 +139,18 @@ export async function loadSharedBusinessKnowledge(
         active: row.active === true,
         createdFrom: String(row.created_from || "manual"),
       })),
-      scannedWebsitePages: [],
+      scannedWebsitePages: scannedPages.map((page: AnyRecord) => {
+        const site = websiteById.get(String(page.website_id));
+        return {
+          websiteConnectionId: String(page.website_id || ""),
+          websiteName: String(site?.name || site?.domain || "Connected website"),
+          websiteDomain: String(site?.domain || ""),
+          title: String(page.title || "").slice(0, 240),
+          url: String(page.canonical_url || "").slice(0, 1200),
+          content: String(page.content_text || "").slice(0, 2000),
+          scannedAt: page.scanned_at || null,
+        };
+      }),
     };
   }
 

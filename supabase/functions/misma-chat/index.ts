@@ -1828,6 +1828,7 @@ Deno.serve(async (request) => {
       })),
       approvedKnowledge: brainContext.approvedKnowledge,
       pendingKnowledgeForOwnerReview: brainContext.pendingKnowledge,
+      websiteContent: brainContext.scannedWebsitePages,
       productsAndServices: brainContext.products,
       recentOrders: (orderResult.data ?? []).map((order) => ({
         item: order.item,
@@ -1920,7 +1921,7 @@ Deno.serve(async (request) => {
       "When the meaning is unclear, say so briefly and ask one specific clarifying question instead of replying with an unrelated greeting. " +
 
       "CORE.01 KNOWLEDGE MODEL: Use core01ValidatedLessons as workspace-confirmed lessons from prior helpful interactions. " +
-      "SHARED BUSINESS BRAIN: approvedKnowledge and core01ValidatedLessons are shared with the customer assistant only after approval and only within their labelled website or shared workspace scope. Keep websiteName, websiteDomain and roomName attached to every fact; never combine facts from different websites. pendingKnowledgeForOwnerReview is owner-only draft material and is not customer-approved truth. Explain that it needs review; never imply customers can see it. " +
+      "SHARED BUSINESS BRAIN: approvedKnowledge and core01ValidatedLessons are shared with the customer assistant only after approval and only within their labelled website or shared workspace scope. Keep websiteName, websiteDomain and roomName attached to every fact; never combine facts from different websites. Use websiteContent only for the exact website/domain it labels. pendingKnowledgeForOwnerReview is owner-only draft material and is not customer-approved truth. Explain that it needs review; never imply customers can see it. In productsAndServices, active=false means a draft suggestion that must not be described as available for sale or published. " +
       "Apply a lesson only when it matches the user's current topic; newer approved knowledge entries and current workspace records take precedence. " +
       "Do not treat unreviewed conversation experiences as verified facts. " +
       "USE OF CONTEXT: Use the supplied workspace context and conversation history for business-specific questions about this workspace, " +
