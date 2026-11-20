@@ -444,6 +444,7 @@ async function main(request: Request) {
         };
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "GitHub App configuration could not be verified.";
+        console.warn("Misma integration configuration check failed:", JSON.stringify({ provider: "github", message: message.slice(0, 240) }));
         checks.github = { status: "error", message: message.slice(0, 240) };
       }
 
@@ -464,6 +465,7 @@ async function main(request: Request) {
         };
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "Vercel configuration could not be checked.";
+        console.warn("Misma integration configuration check failed:", JSON.stringify({ provider: "vercel", message: message.slice(0, 240) }));
         checks.vercel = { status: "error", message: message.slice(0, 240) };
       }
       return json({ checks }, 200, origin);
