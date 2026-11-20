@@ -807,6 +807,146 @@ async function main(request: Request) {
       return json({ linked: true, installationId: installation.id }, 200, origin);
     }
 
+    if (action === "render-connect") {
+      const apiKey = safeText(body.apiKey, 4096);
+      if (!apiKey) return json({ error: "Enter your Render API key." }, 400, origin);
+      // Validate the customer-owned key before persisting it.
+      await renderRequest("/v1/services?limit=1", apiKey);
+      const fingerprint = await sha256(apiKey);
+      const externalAccountId = "render-api-" + fingerprint.slice(0, 24);
+      const { data: existingConnection, error: lookupError } = await admin.from("platform_connections")
+        .select("id").eq("workspace_id", workspaceId).eq("provider", "render")
+        .eq("external_account_id", externalAccountId).maybeSingle();
+      if (lookupError) throw new Error("Could not check the existing Render connection.");
+
+      // Encrypt before saving the connection, avoiding a misleading half-connected account
+      // if the shared credential vault key has not been configured.
+      const connectionId = String(existingConnection?.id || crypto.randomUUID());
+      const normalized = normalizeCredentialPayload("render", { apiKey });
+      const keyVersion = activeCredentialKeyVersion();
+      const encrypted = await encryptCredentialPayload(
+        normalized.payload,
+        credentialAad(workspaceId, "render", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const { data: connection, error: connectionError } = await admin.from("platform_connections").upsert({
+        id: connectionId,
+        workspace_id: workspaceId,
+        provider: "render",
+        external_account_id: externalAccountId,
+        external_account_name: "Render account",
+        status: "connected",
+        metadata: { source: "customer_api_key" },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "workspace_id,provider,external_account_id" }).select("id").single();
+      if (connectionError || !connection) throw new Error("Render was authorized, but Misma could not save the connection.");
+
+      const { error: credentialError } = await admin.from("platform_credentials").upsert({
+        workspace_id: workspaceId,
+        platform_connection_id: connection.id,
+        provider: "render",
+        credential_kind: "api_key",
+        secret_ciphertext: encrypted.ciphertext,
+        secret_iv: encrypted.iv,
+        key_version: keyVersion,
+        last_validated_at: new Date().toISOString(),
+        last_validation_status: "valid",
+        created_by: userId,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "platform_connection_id" });
+      if (credentialError) throw new Error("Render was authorized, but Misma could not securely save the API key.");
+
+      const services = await listRenderServices(apiKey);
+      const projects = [];
+      for (const project of services) {
+        const { data: saved, error } = await admin.from("platform_projects").upsert({
+          workspace_id: workspaceId, platform_connection_id: connection.id, provider: "render",
+          ...project, last_synced_at: new Date().toISOString(),
+        }, { onConflict: "workspace_id,provider,external_project_id" })
+          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+        if (error || !saved) throw new Error("Render connected, but Misma could not save the discovered services.");
+        projects.push(saved);
+      }
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, provider: "render", level: "info",
+        event: "render.account_connected", details: { services_discovered: projects.length },
+      });
+      return json({
+        connected: true, platformConnectionId: connection.id, accountName: "Render account", projects,
+        message: projects.length
+          ? "Render is connected. Choose the service that should be associated with your Misma website."
+          : "Render is connected, but this account has no accessible services. Check the Render workspace and API key permissions.",
+      }, 200, origin);
+    }
+
+    if (action === "render-refresh-projects") {
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) return json({ error: "Choose a valid Render connection." }, 400, origin);
+      const { data: connection, error: connectionError } = await admin.from("platform_connections")
+        .select("id").eq("id", connectionId).eq("workspace_id", workspaceId)
+        .eq("provider", "render").eq("status", "connected").maybeSingle();
+      if (connectionError || !connection) throw new Error("That Render connection is not available in this workspace.");
+      const { data: credential, error: credentialError } = await admin.from("platform_credentials")
+        .select("secret_ciphertext,secret_iv,key_version").eq("platform_connection_id", connectionId)
+        .eq("workspace_id", workspaceId).eq("provider", "render").maybeSingle();
+      if (credentialError || !credential) throw new Error("Reconnect Render because its encrypted API key is missing.");
+      const keyVersion = Number(credential.key_version);
+      const saved = await decryptCredentialPayload(
+        { ciphertext: credential.secret_ciphertext, iv: credential.secret_iv },
+        credentialAad(workspaceId, "render", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const services = await listRenderServices(saved.apiKey);
+      const projects = [];
+      for (const project of services) {
+        const { data: item, error } = await admin.from("platform_projects").upsert({
+          workspace_id: workspaceId, platform_connection_id: connectionId, provider: "render",
+          ...project, last_synced_at: new Date().toISOString(),
+        }, { onConflict: "workspace_id,provider,external_project_id" })
+          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+        if (error || !item) throw new Error("Could not save the refreshed Render service list.");
+        projects.push(item);
+      }
+      await admin.from("platform_credentials").update({
+        last_validated_at: new Date().toISOString(), last_validation_status: "valid",
+      }).eq("platform_connection_id", connectionId).eq("workspace_id", workspaceId);
+      return json({ projects }, 200, origin);
+    }
+
+    if (action === "render-link-project") {
+      const projectId = safeText(body.platformProjectId, 80);
+      const websiteConnectionId = safeText(body.websiteConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(projectId) || !/^[0-9a-f-]{36}$/i.test(websiteConnectionId)) {
+        return json({ error: "Choose a Render service and a Misma website." }, 400, origin);
+      }
+      const [{ data: project, error: projectError }, { data: website, error: websiteError }] = await Promise.all([
+        admin.from("platform_projects").select("id,name,dashboard_url")
+          .eq("id", projectId).eq("workspace_id", workspaceId).eq("provider", "render").maybeSingle(),
+        admin.from("website_connections").select("id,name,domain")
+          .eq("id", websiteConnectionId).eq("workspace_id", workspaceId).is("widget_deleted_at", null).maybeSingle(),
+      ]);
+      if (projectError || !project) throw new Error("That Render service is not available in this workspace.");
+      if (websiteError || !website) throw new Error("That Misma website is not available in this workspace.");
+      const { data: existing } = await admin.from("website_installations").select("id")
+        .eq("workspace_id", workspaceId).eq("website_connection_id", websiteConnectionId)
+        .eq("platform_project_id", projectId).eq("provider", "render")
+        .neq("status", "removed").limit(1).maybeSingle();
+      if (existing) return json({ linked: true, alreadyLinked: true, installationId: existing.id }, 200, origin);
+      const { data: installation, error: installError } = await admin.from("website_installations").insert({
+        workspace_id: workspaceId, website_connection_id: websiteConnectionId, platform_project_id: projectId,
+        provider: "render", deployment_mode: "manual", status: "prepared",
+        dashboard_url: project.dashboard_url || "https://dashboard.render.com",
+        metadata: { project_name: project.name, website_domain: website.domain, link_type: "workspace_service_association" },
+      }).select("id").single();
+      if (installError || !installation) throw new Error("Could not link this Render service to the Misma website.");
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, installation_id: installation.id, provider: "render", level: "info",
+        event: "render.service_linked",
+        details: { service_id: projectId, service_name: project.name, website_domain: website.domain },
+      });
+      return json({ linked: true, installationId: installation.id }, 200, origin);
+    }
+
     if (action === "github-install-url") {
       // Resolve the installation slug from the authenticated GitHub App itself.
       // This removes a duplicate configuration value that could drift from GITHUB_APP_ID.
