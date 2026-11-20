@@ -13,6 +13,17 @@ type Connection = {
   status: string;
   updated_at: string;
 };
+type Website = { id: string; name: string; domain: string; website_url: string; status: string };
+type PlatformProject = {
+  id: string;
+  platform_connection_id: string;
+  name: string;
+  full_name: string | null;
+  repository_url: string | null;
+  dashboard_url: string | null;
+  default_branch: string | null;
+  metadata: Record<string, unknown> | null;
+};
 
 const plugins: Array<{
   id: Provider;
@@ -68,6 +79,13 @@ function PluginsPage() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [renderApiKey, setRenderApiKey] = useState("");
+  const [renderConfigLoading, setRenderConfigLoading] = useState(false);
+  const [renderWebsites, setRenderWebsites] = useState<Website[]>([]);
+  const [renderProjects, setRenderProjects] = useState<PlatformProject[]>([]);
+  const [renderWebsiteId, setRenderWebsiteId] = useState("");
+  const [renderProjectId, setRenderProjectId] = useState("");
+  const [renderProjectSearch, setRenderProjectSearch] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -77,9 +95,9 @@ function PluginsPage() {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) throw new Error("Sign in to manage plugins.");
         const { data: memberships, error: membershipError } = await supabase
-          .from("workspace_members").select("workspace_id").eq("user_id", user.id);
+          .from("workspace_members").select("workspace_id,role").eq("user_id", user.id);
         if (membershipError) throw membershipError;
-        const ids = [...new Set((memberships || []).map((row) => String(row.workspace_id)))];
+        const ids = [...new Set((memberships || []).filter((row) => ["owner", "admin"].includes(String(row.role))).map((row) => String(row.workspace_id)))];
         let options: Workspace[] = [];
         if (ids.length) {
           const { data, error: workspaceError } = await supabase.from("workspaces")
@@ -168,22 +186,143 @@ function PluginsPage() {
     }
   }
 
-  function openConfiguration(plugin: Provider) {
-    if (!workspaceId) {
-      setError("Choose a Misma workspace first.");
+  async function connectPlugin(plugin: Provider) {
+    if (!workspaceId || busy) {
+      if (!workspaceId) setError("Choose a Misma workspace first.");
       return;
     }
-    window.sessionStorage.setItem("misma_integrations_workspace", workspaceId);
-    window.location.assign("/dashboard/integrations?provider=" + encodeURIComponent(plugin));
+    setBusy(plugin);
+    setError("");
+    setNotice("");
+    try {
+      if (plugin === "github" || plugin === "vercel") {
+        const action = plugin === "github" ? "github-install-url" : "vercel-install-url";
+        const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
+          body: { action, workspaceId },
+        });
+        if (invokeError) throw new Error(invokeError.message || "Could not start the " + plugin + " connection.");
+        if (data?.error) throw new Error(String(data.error));
+        const installUrl = typeof data?.installUrl === "string" ? data.installUrl : "";
+        const validUrl = plugin === "github"
+          ? installUrl.startsWith("https://github.com/")
+          : installUrl.startsWith("https://vercel.com/integrations/");
+        if (!validUrl) throw new Error("Misma did not return a valid " + plugin + " authorization link.");
+        window.location.assign(installUrl);
+        return;
+      }
+
+      if (plugin === "render") {
+        if (!renderApiKey.trim()) throw new Error("Enter your Render API key.");
+        const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
+          body: { action: "render-connect", workspaceId, apiKey: renderApiKey.trim() },
+        });
+        if (invokeError) throw new Error(invokeError.message || "Could not connect Render.");
+        if (data?.error) throw new Error(String(data.error));
+        setRenderApiKey("");
+        const { data: refreshed, error: refreshError } = await supabase.from("platform_connections")
+          .select("id,provider,external_account_name,status,updated_at")
+          .eq("workspace_id", workspaceId).order("updated_at", { ascending: false });
+        if (refreshError) throw refreshError;
+        setConnections((refreshed || []) as Connection[]);
+        setNotice(String(data?.message || "Render is connected to this Misma workspace."));
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect this plugin.");
+    } finally {
+      setBusy("");
+    }
   }
 
   const selectedPlugin = plugins.find((plugin) => plugin.id === selected) || null;
   const selectedConnection = selected ? installedByProvider.get(selected) : null;
 
+  const filteredRenderProjects = renderProjects.filter((project) =>
+    (project.name + " " + (project.full_name || "")).toLowerCase().includes(renderProjectSearch.trim().toLowerCase())
+  );
+  const visibleRenderProjects = filteredRenderProjects.length ? filteredRenderProjects : renderProjects;
+
+  async function loadRenderConfiguration(connectionId: string) {
+    if (!workspaceId || !connectionId) return;
+    setRenderConfigLoading(true);
+    try {
+      const [websiteResult, projectResult] = await Promise.all([
+        supabase.from("website_connections")
+          .select("id,name,domain,website_url,status")
+          .eq("workspace_id", workspaceId)
+          .is("widget_deleted_at", null)
+          .order("created_at", { ascending: false }),
+        supabase.from("platform_projects")
+          .select("id,platform_connection_id,name,full_name,repository_url,dashboard_url,default_branch,metadata")
+          .eq("workspace_id", workspaceId)
+          .eq("provider", "render")
+          .order("name", { ascending: true }),
+      ]);
+      if (websiteResult.error) throw websiteResult.error;
+      if (projectResult.error) throw projectResult.error;
+      setRenderWebsites((websiteResult.data || []) as Website[]);
+      setRenderProjects(((projectResult.data || []) as PlatformProject[]).filter((project) => project.platform_connection_id === connectionId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load Render services and websites.");
+    } finally {
+      setRenderConfigLoading(false);
+    }
+  }
+
+  async function refreshRenderProjects() {
+    if (!workspaceId || !selectedConnection || selectedConnection.provider !== "render") return;
+    setBusy("render");
+    setError("");
+    setNotice("");
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
+        body: { action: "render-refresh-projects", workspaceId, platformConnectionId: selectedConnection.id },
+      });
+      if (invokeError) throw new Error(invokeError.message || "Could not refresh Render services.");
+      if (data?.error) throw new Error(String(data.error));
+      setRenderProjects(Array.isArray(data?.projects) ? data.projects as PlatformProject[] : []);
+      setRenderProjectId("");
+      setNotice("Render services refreshed.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not refresh Render services.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function linkRenderProject() {
+    if (!workspaceId || !renderProjectId || !renderWebsiteId) {
+      setError("Choose a Render service and a Misma website.");
+      return;
+    }
+    setBusy("render-link");
+    setError("");
+    setNotice("");
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
+        body: { action: "render-link-project", workspaceId, platformProjectId: renderProjectId, websiteConnectionId: renderWebsiteId },
+      });
+      if (invokeError) throw new Error(invokeError.message || "Could not associate the Render service.");
+      if (data?.error) throw new Error(String(data.error));
+      setNotice(data?.alreadyLinked
+        ? "This Render service is already associated with that website."
+        : "Render service associated with the selected Misma website.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not associate the Render service.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  useEffect(() => {
+    if (selected === "render" && selectedConnection?.provider === "render" && workspaceId) {
+      void loadRenderConfiguration(selectedConnection.id);
+    }
+  }, [selected, selectedConnection?.id, workspaceId]);
+
   return (
     <main className="misma-marketplace-page">
       <div className="misma-marketplace-shell">
-        <a className="misma-marketplace-back" href="/dashboard">← Back to Misma</a>
+        
         <header className="misma-marketplace-header">
           <div>
             <span className="misma-marketplace-eyebrow">Misma ecosystem</span>
@@ -277,14 +416,56 @@ function PluginsPage() {
             <h3>Permissions and scope</h3>
             <ul>{selectedPlugin.permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul>
             <p>Access is limited to the selected Misma workspace and the connected account's granted permissions. GitHub changes and production deployments must follow the approval flow.</p>
+            <p className="misma-plugin-storage-note">Misma validates provider access on the server and stores supported credentials encrypted in Supabase. Provider secrets are not stored in this browser.</p>
           </div>
-          {selectedPlugin.availability === "coming" ? <div className="misma-plugin-coming-note">Netlify account authorization and build actions are not enabled yet. Your existing connections are not affected.</div> : selectedConnection
+          {selectedPlugin.availability === "coming" ? <div className="misma-plugin-coming-note">Netlify authorization and build actions are not enabled yet.</div> : selectedConnection
             ? <div className="misma-plugin-connected-state"><span className="misma-plugin-status is-connected">Connected</span><strong>{selectedConnection.external_account_name || selectedPlugin.name + " account"}</strong><small>Connected to the selected workspace.</small></div>
             : <div className="misma-plugin-coming-note">This plugin is not connected to the selected workspace.</div>}
+          {selectedPlugin.id === "render" && !selectedConnection && selectedPlugin.availability !== "coming" && (
+            <label className="misma-plugin-credential-field">
+              <span>Render API key</span>
+              <input type="password" autoComplete="off" value={renderApiKey} onChange={(event) => setRenderApiKey(event.target.value)} placeholder="Paste your Render API key" />
+              <small>The key is sent to Misma's Supabase Edge Function for validation and encrypted storage.</small>
+            </label>
+          )}
+          {selectedPlugin.id === "render" && selectedConnection && (
+            <div className="misma-plugin-render-config">
+              <div className="misma-plugin-render-heading">
+                <div><h3>Render deployment target</h3><p>Choose which Render service belongs to a Misma website.</p></div>
+                <button type="button" onClick={() => void refreshRenderProjects()} disabled={busy === "render"}>{busy === "render" ? "Refreshing…" : "Refresh services"}</button>
+              </div>
+              {renderConfigLoading ? <p className="misma-plugin-render-hint">Loading your websites and Render services…</p> : (
+                <>
+                  <label className="misma-plugin-credential-field">
+                    <span>Misma website</span>
+                    <select value={renderWebsiteId} onChange={(event) => setRenderWebsiteId(event.target.value)}>
+                      <option value="">Choose a connected website</option>
+                      {renderWebsites.map((website) => <option key={website.id} value={website.id}>{website.name || website.domain} · {website.domain}</option>)}
+                    </select>
+                  </label>
+                  <label className="misma-plugin-credential-field">
+                    <span>Search Render services</span>
+                    <input value={renderProjectSearch} onChange={(event) => setRenderProjectSearch(event.target.value)} placeholder="Search by service or repository name" />
+                  </label>
+                  <label className="misma-plugin-credential-field">
+                    <span>Render service</span>
+                    <select value={renderProjectId} onChange={(event) => setRenderProjectId(event.target.value)}>
+                      <option value="">Choose a Render service</option>
+                      {visibleRenderProjects.map((project) => <option key={project.id} value={project.id}>{project.name}{project.full_name && project.full_name !== project.name ? " · " + project.full_name : ""}</option>)}
+                    </select>
+                  </label>
+                  {!renderWebsites.length && <p className="misma-plugin-render-hint">Add a website in Misma before linking a Render service.</p>}
+                  {!renderProjects.length && <p className="misma-plugin-render-hint">No Render services are stored yet. Refresh services to discover the services accessible to this account.</p>}
+                  {renderProjectSearch.trim() && !filteredRenderProjects.length && <p className="misma-plugin-render-hint">No service matched that search. The accessible service list is shown instead.</p>}
+                  <button type="button" className="misma-plugin-primary" disabled={busy === "render-link" || !renderWebsiteId || !renderProjectId} onClick={() => void linkRenderProject()}>{busy === "render-link" ? "Saving…" : "Use selected service"}</button>
+                </>
+              )}
+            </div>
+          )}
+          {error && <p className="misma-plugin-modal-feedback is-error" role="alert">{error}</p>}
+          {notice && <p className="misma-plugin-modal-feedback" role="status">{notice}</p>}
           <div className="misma-plugin-modal-actions">
-            {selectedPlugin.availability !== "coming" && (selectedConnection
-              ? <button type="button" className="misma-plugin-primary" onClick={() => openConfiguration(selectedPlugin.id)}>Configure workspace</button>
-              : <button type="button" className="misma-plugin-primary" onClick={() => openConfiguration(selectedPlugin.id)}>Connect {selectedPlugin.name}</button>)}
+            {selectedPlugin.availability !== "coming" && !selectedConnection && <button type="button" className="misma-plugin-primary" disabled={busy === selectedPlugin.id || (selectedPlugin.id === "render" && !renderApiKey.trim())} onClick={() => void connectPlugin(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Connecting…" : selectedPlugin.id === "github" ? "Continue to GitHub" : selectedPlugin.id === "vercel" ? "Continue to Vercel" : "Connect Render"}</button>}
             {selectedConnection && <button type="button" className="misma-plugin-danger" disabled={busy === selectedPlugin.id} onClick={() => void disconnect(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Disconnecting…" : "Disconnect"}</button>}
           </div>
         </section>

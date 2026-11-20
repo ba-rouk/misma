@@ -37,6 +37,10 @@ test("integration dashboard exposes the selected deployment mode and provider se
   assert.doesNotMatch(route, /workspace_members[\s\S]{0,350}\.maybeSingle\(\)/);
   const dashboard = await read("src/routes/dashboard.tsx");
   assert.match(dashboard, /window\.location\.assign\("\/dashboard\/plugins"\)/);
+  assert.match(route, /beforeLoad:[\s\S]*redirect\(\{ to: "\/dashboard\/plugins" \}\)/);
+  assert.doesNotMatch(route, /Back to Misma dashboard/);
+  const vercelCallback = await read("src/routes/integrations/vercel/callback.tsx");
+  assert.match(vercelCallback, /window\.location\.assign\("\/dashboard\/plugins"\)/);
 });
 
 
