@@ -173,7 +173,8 @@ async function listVercelProjects(token: string, teamId: string) {
     const result = await vercelRequest("/v9/projects?" + params.toString(), token);
     const items = Array.isArray(result.projects) ? result.projects : [];
     projects.push(...items);
-    const next = safeText(result.pagination?.next, 180);
+    const nextValue = result.pagination?.next;
+    const next = typeof nextValue === "string" || typeof nextValue === "number" ? String(nextValue) : "";
     if (!next || !items.length || seenCursors.has(next)) break;
     seenCursors.add(next);
     from = next;
