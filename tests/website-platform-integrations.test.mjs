@@ -36,7 +36,7 @@ test("integration dashboard exposes the selected deployment mode and provider se
   assert.match(route, /Choose a workspace/);
   assert.doesNotMatch(route, /workspace_members[\s\S]{0,350}\.maybeSingle\(\)/);
   const dashboard = await read("src/routes/dashboard.tsx");
-  assert.match(dashboard, /window\.location\.assign\("\/dashboard\/integrations"\)/);
+  assert.match(dashboard, /window\.location\.assign\("\/dashboard\/plugins"\)/);
 });
 
 
