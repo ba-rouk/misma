@@ -1553,6 +1553,33 @@ function Dashboard() {
 
   // Business and user data
   const [workspace, setWorkspace] = useState<any>(null);
+  useEffect(() => {
+    let active = true;
+    if (!workspace?.id || !token || staffMode) {
+      setWorkspacePluginConnections([]);
+      setChatEnabledPlugins([]);
+      return () => { active = false; };
+    }
+    void getSupabaseClient().from("platform_connections")
+      .select("id,provider,external_account_name")
+      .eq("workspace_id", workspace.id)
+      .eq("status", "connected")
+      .order("updated_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.warn("Could not load chat plugin connections.", error.code);
+          setWorkspacePluginConnections([]);
+          setChatEnabledPlugins([]);
+          return;
+        }
+        const rows = (data || []) as Array<{ id: string; provider: string; external_account_name: string | null }>;
+        const unique = rows.filter((item, index, all) => all.findIndex((candidate) => candidate.provider === item.provider) === index);
+        setWorkspacePluginConnections(unique);
+        setChatEnabledPlugins((current) => current.filter((provider) => unique.some((item) => item.provider === provider)));
+      });
+    return () => { active = false; };
+  }, [workspace?.id, token, staffMode]);
   const [workspaceAssets, setWorkspaceAssets] = useState<any[]>([]);
   const [workspaceAssetsLoaded, setWorkspaceAssetsLoaded] = useState(false);
   const [workspaceAssetsLoading, setWorkspaceAssetsLoading] = useState(false);
@@ -1829,6 +1856,8 @@ function Dashboard() {
   const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [workspacePluginConnections, setWorkspacePluginConnections] = useState<Array<{ id: string; provider: string; external_account_name: string | null }>>([]);
+  const [chatEnabledPlugins, setChatEnabledPlugins] = useState<string[]>([]);
   const [thinkHarder, setThinkHarder] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
@@ -3395,7 +3424,7 @@ function Dashboard() {
       },
       body: JSON.stringify({
         ...body,
-        ...(body.action === "chat" ? { aiSettings, privacySettings: privacyPreferences } : {}),
+        ...(body.action === "chat" ? { aiSettings, privacySettings: privacyPreferences, activePlugins: chatEnabledPlugins } : {}),
       }),
       signal,
     });
@@ -4847,7 +4876,7 @@ function Dashboard() {
           {expandedNavGroups.workspace && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "website-statistics" ? " active" : ""}`} onClick={() => { setActiveTab("website-statistics"); setMobileMenuOpen(false); }}>Website statistics</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "websites" ? " active" : ""}`} onClick={() => { setActiveTab("websites"); setMobileMenuOpen(false); }}>Websites <span>{connectedWebsites.length}</span></button>
-            <button type="button" className="aichat-nav-subbtn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/integrations"); }}>Platform integrations</button>
+            
           </div>}
           <button type="button" className={`aichat-nav-btn${activeTab === "images" ? " active" : ""}`} onClick={() => { setActiveTab("images"); setMobileMenuOpen(false); }} data-tooltip="Images">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="images" /></span><span className="aichat-nav-label">Images</span>
@@ -4861,6 +4890,7 @@ function Dashboard() {
           {expandedNavGroups.manage && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadHumanRequestNotificationCount > 0 && <span>{unreadHumanRequestNotificationCount}</span>}</button>
+            <button type="button" className="aichat-nav-subbtn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/memory"); }}>Memory</button>
           </div>}
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="build" /></span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.build ? "chevron-down" : "chevron-right"} /></span>
@@ -4869,12 +4899,9 @@ function Dashboard() {
             <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, connect: !v.connect }))} aria-expanded={Boolean(expandedNavGroups.connect)}>
-            <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Connect</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.connect ? "chevron-down" : "chevron-right"} /></span>
+          <button type="button" className="aichat-nav-btn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/plugins"); }} data-tooltip="Plugins">
+            <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Plugins</span>
           </button>
-          {expandedNavGroups.connect && <div className="aichat-nav-submenu">
-            <button type="button" className={`aichat-nav-subbtn${activeTab === "whatsapp" ? " active" : ""}`} onClick={() => { setActiveTab("whatsapp"); setMobileMenuOpen(false); }}>WhatsApp</button>
-          </div>}
                 
             </>
           )}
@@ -5471,6 +5498,18 @@ function Dashboard() {
                                   <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
                                   <span><strong>Create video</strong></span>
                                 </button>
+                                <div className="misma-chat-plugin-picker" role="group" aria-label="Plugins for this chat">
+                                  <div className="misma-chat-plugin-picker-heading">
+                                    <strong>Plugins</strong>
+                                    <button type="button" onClick={() => { setPlusMenuOpen(false); window.location.assign("/dashboard/plugins"); }}>Manage</button>
+                                  </div>
+                                  {workspacePluginConnections.length ? workspacePluginConnections.map((plugin) => (
+                                    <button key={plugin.id} type="button" className="misma-chat-plugin-toggle" role="menuitemcheckbox" aria-checked={chatEnabledPlugins.includes(plugin.provider)} onClick={() => setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider])}>
+                                      <span className="misma-chat-plugin-toggle-name"><i>{plugin.provider === "github" ? "GH" : plugin.provider === "vercel" ? "▲" : plugin.provider === "render" ? "R" : "N"}</i><span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span></span>
+                                      <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
+                                    </button>
+                                  )) : <p>No installed plugins in this workspace yet.</p>}
+                                </div>
                               </div>
                             )}
                           </div>
