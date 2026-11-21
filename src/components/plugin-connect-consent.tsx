@@ -55,7 +55,7 @@ export function PluginConnectConsent({ manifest, workspaceId, open, onClose, onC
     setLoading(true);
     setError("");
     try {
-      const url = await getPluginAuthorizationUrl(workspaceId, manifest.id);
+      const url = await getPluginAuthorizationUrl(workspaceId, activeManifest.id);
       popup.location.href = url;
     } catch (cause) {
       popup.close();
