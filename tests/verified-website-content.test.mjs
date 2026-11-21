@@ -7,14 +7,18 @@ const read = (path) => readFile(resolve(import.meta.dirname, "..", path), "utf8"
 test("verified website content is parsed from JSON-LD and returned as recommendations", async () => {
   const widget = await read("supabase/functions/misma-widget/index.ts");
   const migration = await read("supabase/migrations/20261121073006_verified_website_content_items.sql");
+  const scanStateMigration = await read("supabase/migrations/20261121073340_website_content_structured_scan_state.sql");
   const runtime = await read("src/assets/misma-widget-runtime.js");
   assert.match(widget, /extractStructuredContent/);
   assert.match(widget, /source_verified:\s*true/);
   assert.match(widget, /findWebsiteRecommendations/);
+  assert.match(widget, /structured_data_scanned === true/);
+  assert.match(widget, /previous\?\.structured_data_scanned === true/);
   assert.match(widget, /eq\("source_verified",true\)/);
   assert.match(widget, /recommendations,/);
   assert.match(migration, /create table if not exists public\.website_content_items/);
   assert.match(migration, /enable row level security/i);
+  assert.match(scanStateMigration, /structured_data_scanned boolean not null default false/);
   assert.match(runtime, /renderRecommendations\(data\.recommendations\)/);
   assert.match(runtime, /parsedImage\.protocol==="https:"/);
 });
