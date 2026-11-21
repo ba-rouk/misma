@@ -25,6 +25,27 @@ test("execution Edge Function validates workspace membership and GitHub App scop
   assert.match(fn, /platform_connections/);
   assert.ok(fn.includes("installationToken(installationId, repo.id)"));
   assert.match(fn, /repository_id: repoId/);
+  assert.match(fn, /isRepositoryListIntent/);
+  assert.match(fn, /formatRepositoryInventory/);
+  assert.match(fn, /listRepos\(installationId, progress\)/);
+  assert.match(fn, /repositoryListIntent/);
+  assert.match(fn, /text\/event-stream/);
+  assert.match(fn, /type: "activity"/);
+});
+
+test("GitHub repository inventory and live execution activity are returned through chat", async () => {
+  const fn = await read("supabase/functions/misma-execution/index.ts");
+  const dashboard = await read("src/routes/dashboard.tsx");
+  assert.match(fn, /function isRepositoryListIntent/);
+  assert.match(fn, /function formatRepositoryInventory/);
+  assert.match(fn, /\/installation\/repositories\?per_page=100&page=/);
+  assert.match(fn, /repositoryListIntent/);
+  assert.match(fn, /text\/event-stream/);
+  assert.match(fn, /type: "activity"/);
+  assert.match(fn, /APPROVE READ/);
+  assert.match(dashboard, /executionActivities/);
+  assert.match(dashboard, /content-type.*text\/event-stream/);
+  assert.match(dashboard, /aichat-execution-activity/);
 });
 
 test("execution workflow previews framework-aware patches and requires explicit approval", async () => {
