@@ -7004,12 +7004,7 @@ html, body, #app-root {
   color: #9ec6ff;
 }
 .aichat-mode-token.is-create:hover { background: rgba(51, 111, 220, .3); }
-.aichat-mode-token.is-thinking {
-  border-color: rgba(167, 139, 250, .38);
-  background: rgba(126, 87, 194, .2);
-  color: #cbb8ff;
-}
-.aichat-mode-token.is-thinking:hover { background: rgba(126, 87, 194, .32); }
+
 
 @media (max-width: 767px) {
   .aichat-image-generation-loading {
