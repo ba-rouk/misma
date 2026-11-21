@@ -288,5 +288,5 @@ test("Vercel settings has an explicit static route that renders the shared provi
   assert.match(route, /createFileRoute\("\/dashboard\/plugins\/vercel\/settings"\)/);
   assert.match(route, /PluginSettingsPage pluginId="vercel"/);
   assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
-  assert.match(shared, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/settings"\)/);
+  assert.match(shared, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId\/settings"\)/);
 });

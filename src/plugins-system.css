@@ -1006,3 +1006,98 @@ button, input, textarea, select { font-size: inherit; }
   .misma-plugin-directory-page .misma-plugin-header-title h1 { font-size: 25px; }
   .misma-plugin-directory-page .misma-plugin-header-title p { font-size: 13px; }
 }
+
+
+/* Connected-plugin overflow menu and the intentionally blank GitHub settings view. */
+.misma-plugin-directory-page .misma-plugin-installed-item {
+  position: relative;
+}
+.misma-plugin-directory-page .misma-plugin-installed-main {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  min-width: 62px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.misma-plugin-directory-page .misma-plugin-installed-main:focus-visible,
+.misma-plugin-directory-page .misma-plugin-installed-menu-trigger:focus-visible,
+.misma-plugin-installed-popup button:focus-visible {
+  outline: 2px solid #8fb5ff;
+  outline-offset: 3px;
+}
+.misma-plugin-directory-page .misma-plugin-installed-menu-trigger {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  z-index: 2;
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 9px;
+  background: #102236;
+  color: #d5e1ef;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,.22);
+}
+.misma-plugin-directory-page .misma-plugin-installed-menu-trigger:hover {
+  border-color: rgba(143,181,255,.55);
+  background: #19324d;
+  color: #fff;
+}
+.misma-plugin-directory-page .misma-plugin-installed-menu-trigger svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+.misma-plugin-installed-popup {
+  position: fixed;
+  z-index: 20000;
+  min-width: 136px;
+  padding: 5px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 11px;
+  background: #0b1a2a;
+  box-shadow: 0 16px 42px rgba(0,0,0,.42);
+}
+.misma-plugin-installed-popup button {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #edf4fb;
+  font: 500 13px/1.35 var(--font-sans, Inter, system-ui, sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+.misma-plugin-installed-popup button:hover {
+  background: rgba(77,141,255,.15);
+  color: #fff;
+}
+.misma-github-settings-empty-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  width: 100%;
+  padding: clamp(24px, 4vw, 52px);
+  background: #07111d;
+  color: #f4f7fb;
+  font: 16px/1.55 var(--font-sans, Inter, system-ui, sans-serif);
+}
+.misma-github-settings-empty-page h1 {
+  margin: 0;
+  color: #f4f7fb;
+  font-size: clamp(25px, 3vw, 32px);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+}
