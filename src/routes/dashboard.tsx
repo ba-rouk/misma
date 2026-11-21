@@ -1815,6 +1815,22 @@ function Dashboard() {
   const [currentConversationId, setCurrentConversationId] = useState<
     number | null
   >(null);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("misma_chat_plugins_v1_" + (currentConversationId ?? "new"));
+      const parsed = saved ? JSON.parse(saved) : [];
+      setChatEnabledPlugins(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []);
+    } catch {
+      setChatEnabledPlugins([]);
+    }
+  }, [currentConversationId]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("misma_chat_plugins_v1_" + (currentConversationId ?? "new"), JSON.stringify(chatEnabledPlugins));
+    } catch {
+      // Keep the current chat selection for this session if browser storage is unavailable.
+    }
+  }, [chatEnabledPlugins, currentConversationId]);
   const [viewStateRestored, setViewStateRestored] = useState(false);
   const [pendingRestoreConversationId, setPendingRestoreConversationId] = useState<number | null>(null);
   const [dashboardDataLoaded, setDashboardDataLoaded] = useState(false);
