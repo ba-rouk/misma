@@ -283,12 +283,10 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
 });
 
 test("Vercel settings has an explicit static route that renders the shared provider settings screen", async () => {
-  const route = await read("../src/routes/dashboard.plugins.vercel.settings.tsx");
+  const route = await read("../src/routes/dashboard_.plugins.vercel.settings.tsx");
   const shared = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
   assert.match(route, /createFileRoute\("\/dashboard\/plugins\/vercel\/settings"\)/);
   assert.match(route, /PluginSettingsPage pluginId="vercel"/);
   assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
   assert.match(shared, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/settings"\)/);
 });
-
-// Route regression coverage for the canonical Vercel settings URL.
