@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
-import { getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
+import { getPluginWorkspaceContext } from "../lib/plugin-connect";
 import { pluginList, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
@@ -24,7 +24,6 @@ function PluginsPage() {
   const [busy, setBusy] = useState<PluginId | "">("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [menuOpen, setMenuOpen] = useState<PluginId | null>(null);
 
   useEffect(() => {
     let active = true;
