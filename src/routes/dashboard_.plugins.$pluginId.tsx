@@ -178,17 +178,14 @@ function PluginDetailPage() {
   return (
     <main className="misma-plugin-detail-page" style={{ "--plugin-brand": manifest.brandColor } as CSSProperties}>
       <div className="misma-plugin-detail-shell">
-        <header className="misma-plugin-detail-header">
-          <button type="button" className="misma-plugin-detail-back" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
-          <h1>{manifest.name}</h1>
-          <button type="button" className="misma-plugin-detail-settings" aria-label={connection ? "Plugin settings" : "Connection information"} onClick={() => connection ? setSettingsOpen(true) : connectAction()}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
-          </button>
-        </header>
-
-        <section className="misma-plugin-hero">
-          <div className="misma-plugin-hero-topline"><PluginProviderLogo provider={manifest.id} size="hero"/><Badge tone={connection ? "success" : manifest.status === "coming" ? "warning" : "neutral"}>{connection ? "Connected" : manifest.status === "coming" ? "Coming later" : "Not connected"}</Badge></div>
-          <p className="misma-plugin-tagline">{manifest.tagline}</p>
+        <section className="misma-plugin-hero misma-plugin-hero-chatgpt">
+          <header className="misma-plugin-detail-header">
+            <button type="button" className="misma-plugin-detail-back" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
+            <h1>{manifest.name}</h1>
+            <button type="button" className="misma-plugin-detail-settings" aria-label={connection ? "Plugin settings" : "Connection information"} onClick={() => connection ? setSettingsOpen(true) : connectAction()}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+            </button>
+          </header>
           <div className="misma-plugin-preview-scroller" aria-label={manifest.name + " example previews"}>
             {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id}/><div className="misma-plugin-preview-caption"><strong>{card.title}</strong><span>{card.description}</span></div></div>)}
           </div>
@@ -201,13 +198,13 @@ function PluginDetailPage() {
 
         <section className="misma-plugin-detail-section">
           <SectionHeader title="App" />
-          <GlassCard className="misma-plugin-app-row"><PluginProviderLogo provider={manifest.id} size="lg"/><div><strong>{manifest.name}</strong><small>{manifest.role}</small></div><Badge tone={connection ? "success" : manifest.status === "coming" ? "warning" : "neutral"}>{connection ? "Connected" : manifest.status === "coming" ? "Coming later" : "Not connected"}</Badge></GlassCard>
+          <div className="misma-plugin-app-row"><PluginProviderLogo provider={manifest.id} size="lg"/><div><strong>{manifest.name}</strong><small>{manifest.role}</small></div></div>
         </section>
 
         <section className="misma-plugin-detail-section">
           <SectionHeader title="Skills" description="What this plugin can do in Misma today." />
-          <div className="misma-plugin-skills-grid">
-            {manifest.skills.map((skill) => <GlassCard className="misma-plugin-skill" key={skill.id}><span className="misma-plugin-skill-icon"><PluginSkillIcon name={skill.icon}/></span><div><strong>{skill.name}</strong><small>{skill.description}</small></div></GlassCard>)}
+          <div className="misma-plugin-skills-grid misma-plugin-skills-pills">
+            {manifest.skills.map((skill) => <span className="misma-plugin-skill-pill" key={skill.id} title={skill.description}><span className="misma-plugin-skill-icon"><PluginSkillIcon name={skill.icon}/></span><strong>{skill.name}</strong></span>)}
           </div>
         </section>
 
@@ -218,13 +215,13 @@ function PluginDetailPage() {
 
         <section className="misma-plugin-detail-section">
           <SectionHeader title="Information" />
-          <GlassCard className="misma-plugin-information">
+          <div className="misma-plugin-information">
             <div><span>Developer</span><strong>{manifest.developer}</strong></div>
             <div><span>Website</span><a href={manifest.website} target="_blank" rel="noreferrer">{manifest.website.replace(/^https?:\/\//, "")}</a></div>
             <div><span>Version</span><strong>{manifest.version}</strong></div>
             <div><span>Privacy Policy</span><a href={manifest.privacyUrl} target="_blank" rel="noreferrer">Read privacy policy ↗</a></div>
             <div><span>Terms of Service</span><a href={manifest.termsUrl} target="_blank" rel="noreferrer">Read terms ↗</a></div>
-          </GlassCard>
+          </div>
         </section>
 
         {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
