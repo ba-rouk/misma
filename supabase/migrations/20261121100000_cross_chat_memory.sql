@@ -82,6 +82,9 @@ create index if not exists memory_exchanges_user_created_idx
   on public.memory_exchanges(user_id, created_at desc) where deleted_at is null;
 create index if not exists memory_exchanges_chat_idx
   on public.memory_exchanges(chat_id, created_at desc);
+create unique index if not exists memory_exchanges_source_user_message_uidx
+  on public.memory_exchanges(user_id, source_user_message_id)
+  where source_user_message_id is not null and deleted_at is null;
 create index if not exists memory_exchanges_search_gin
   on public.memory_exchanges using gin(search_tsv);
 create index if not exists memory_exchanges_embedding_hnsw
