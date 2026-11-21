@@ -979,3 +979,10 @@ button, input, textarea, select { font-size: inherit; }
 }
 .aichat-recent-item { font-size:15px !important; }
 .aichat-recent-empty,.aichat-chats-widget-empty { font-size:14px !important; }
+
+/* Plugin chooser selection and permission controls */
+.misma-chat-plugin-empty { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 7px; }
+.misma-chat-plugin-empty p { margin:0; color:#b5c4d5; font-size:14px; }
+.misma-chat-plugin-empty button,.misma-chat-plugin-manage { border:0; background:transparent; color:#a9c8ff; font-size:14px; }
+.misma-chat-plugin-manage { display:block; width:100%; margin-top:5px; padding:9px 8px 5px; border-top:1px solid rgba(255,255,255,.09); text-align:left; }
+.aichat-mode-token.is-plugin { border-color:rgba(143,184,255,.32); background:rgba(77,141,255,.12); color:#c6dcff; }
