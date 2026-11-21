@@ -3,6 +3,7 @@ export type SettingPresence = "present" | "missing" | "empty";
 export const PROVIDER_SETTINGS = {
   github: ["GITHUB_APP_ID", "GITHUB_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET"],
   vercel: ["VERCEL_INTEGRATION_SLUG", "VERCEL_CLIENT_ID", "VERCEL_CLIENT_SECRET"],
+  netlify: ["NETLIFY_CLIENT_ID", "NETLIFY_CLIENT_SECRET"],
 } as const;
 
 export type ProviderName = keyof typeof PROVIDER_SETTINGS;
