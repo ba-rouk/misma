@@ -11,6 +11,7 @@ import interLatinFont from "@fontsource-variable/inter/files/inter-latin-wght-no
 import sourceSerifLatinFont from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
 import appCss from "../styles.css?url";
 import pluginSystemCss from "../plugins-system.css?url";
+import mismaDesignSystemCss from "../misma-design-system.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -29,6 +30,7 @@ export const Route = createRootRoute({
       { rel: "preload", href: sourceSerifLatinFont, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: pluginSystemCss },
+      { rel: "stylesheet", href: mismaDesignSystemCss },
       { rel: "icon", href: "/misma-favicon.png", type: "image/png", sizes: "48x48" },
     ],
   }),
