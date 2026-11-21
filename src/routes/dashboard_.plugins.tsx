@@ -198,6 +198,14 @@ function PluginsPage() {
   return (
     <main className="misma-marketplace-page misma-plugin-directory-page" onClick={() => setOpenPluginMenu(null)}>
       <div className="misma-marketplace-shell misma-plugin-directory-shell">
+        <header className="misma-marketplace-header misma-plugin-directory-header">
+          <div className="misma-plugin-header-title">
+            <button type="button" className="misma-page-back-button" aria-label="Go to dashboard" onClick={() => window.location.assign("/dashboard")}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+            </button>
+            <div><h1>Plugins</h1></div>
+          </div>
+        </header>
         <div className="misma-plugin-search-dock">
           <label className="misma-marketplace-search" htmlFor="misma-plugin-search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
