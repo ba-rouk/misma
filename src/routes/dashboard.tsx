@@ -1996,6 +1996,7 @@ function Dashboard() {
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionHighlightRef = useRef<HTMLDivElement>(null);
   const mobileMessageActionTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const knowledgeFileInputRef = useRef<HTMLInputElement>(null);
@@ -3707,6 +3708,27 @@ function Dashboard() {
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : "Could not crop this image.");
     }
+  };
+
+  const insertPluginMention = (provider: string) => {
+    const input = textareaRef.current;
+    const start = input?.selectionStart ?? draft.length;
+    const end = input?.selectionEnd ?? draft.length;
+    const prefix = draft.slice(0, start);
+    const suffix = draft.slice(end);
+    const addLeadingSpace = prefix.length > 0 && !/\\s$/.test(prefix);
+    const suffixHasSpace = /^\\s/.test(suffix);
+    const mention = (addLeadingSpace ? " " : "") + "@" + provider.toLowerCase() + (suffixHasSpace ? "" : " ");
+    const nextValue = prefix + mention + suffix;
+    const caret = prefix.length + mention.length + (suffixHasSpace ? 1 : 0);
+    setDraft(nextValue);
+    setPluginPickerOpen(false);
+    setPlusMenuOpen(false);
+    window.requestAnimationFrame(() => {
+      const target = textareaRef.current;
+      target?.focus();
+      target?.setSelectionRange(caret, caret);
+    });
   };
 
   const handleSend = async (
@@ -5512,21 +5534,29 @@ function Dashboard() {
                                   <button type="button" aria-label="Close plugins" onClick={() => setPluginPickerOpen(false)}>×</button>
                                 </div>
                                 {workspacePluginConnections.length ? workspacePluginConnections.map((plugin) => (
-                                  <button
-                                    key={plugin.id}
-                                    type="button"
-                                    className="misma-chat-plugin-option"
-                                    role="menuitemcheckbox"
-                                    aria-checked={chatEnabledPlugins.includes(plugin.provider)}
-                                    onClick={() => {
-                                      setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider]);
-                                      setPluginPickerOpen(false);
-                                    }}
-                                  >
-                                    <ChatPluginIcon provider={plugin.provider} />
-                                    <span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span>
-                                    <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
-                                  </button>
+                                  <div className="misma-chat-plugin-option" key={plugin.id}>
+                                    <button
+                                      type="button"
+                                      className="misma-chat-plugin-option-logo"
+                                      aria-label={"Open " + plugin.provider + " plugin details"}
+                                      onClick={() => {
+                                        setPluginPickerOpen(false);
+                                        setPlusMenuOpen(false);
+                                        window.location.assign("/dashboard/plugins/" + plugin.provider);
+                                      }}
+                                    >
+                                      <ChatPluginIcon provider={plugin.provider} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="misma-chat-plugin-option-select"
+                                      aria-label={"Insert @" + plugin.provider + " mention"}
+                                      onClick={() => insertPluginMention(plugin.provider)}
+                                    >
+                                      <strong>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</strong>
+                                      <small>Insert @{plugin.provider}</small>
+                                    </button>
+                                  </div>
                                 )) : (
                                   <div className="misma-chat-plugin-empty">
                                     <p>Connect your first plugin to use it in chat.</p>
@@ -5534,7 +5564,7 @@ function Dashboard() {
                                   </div>
                                 )}
                                 <div className="misma-chat-plugin-popup-footer">
-                                  <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Manage plugins</button>
+                                  <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Open Plugins</button>
                                 </div>
                               </div>
                             )}
@@ -5565,17 +5595,6 @@ function Dashboard() {
                       }
                     >
                       <>
-                        {chatEnabledPlugins.length > 0 && (
-                          <div className="misma-chat-plugin-chips" aria-label="Plugins enabled for this chat">
-                            {chatEnabledPlugins.map((provider) => (
-                              <span className="misma-chat-plugin-chip" key={provider}>
-                                <ChatPluginIcon provider={provider} />
-                                <strong>@{provider}</strong>
-                                <button type="button" aria-label={"Remove @" + provider} onClick={() => setChatEnabledPlugins((current) => current.filter((item) => item !== provider))}>×</button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
                         {createMode ? (
                           <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                             @create {createMode}<span aria-hidden="true">×</span>
@@ -5585,44 +5604,60 @@ function Dashboard() {
                             @thinking<span aria-hidden="true">×</span>
                           </button>
                         ) : null}
-                        <textarea
-                          ref={textareaRef}
-                          rows={1}
-                          className="aichat-composer-textarea"
-                          placeholder={composerFocused ? "" : createMode ? "Describe the " + createMode + " you want Agnes to create…" : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
-                          value={draft}
-                          onChange={(e) => {
-                            const nextValue = e.target.value;
-                            const createMatch = nextValue.match(/^@create\s+image(?=\s|$)\s*/i);
-                            if (createMatch) {
-                              setCreateMode("image");
-                              setThinkHarder(false);
-                              setDraft(nextValue.slice(createMatch[0].length));
-                              return;
-                            }
-                            const thinkingMatch = nextValue.match(/^@thinking(?=\s|$)\s*/i);
-                            if (thinkingMatch) {
-                              setThinkHarder(true);
-                              setCreateMode(null);
-                              setDraft(nextValue.slice(thinkingMatch[0].length));
-                              return;
-                            }
-                            setDraft(nextValue);
-                          }}
-                          onKeyDown={handleKeyDown}
-                          onPaste={handleComposerPaste}
-                          onFocus={() => {
-                            setComposerFocused(true);
-                            if (window.innerWidth < 768) {
-                              window.requestAnimationFrame(() => {
-                                textareaRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-                              });
-                            }
-                          }}
-                          onBlur={() => setComposerFocused(false)}
-                          disabled={isSending}
-                          aria-label="Message Misma"
-                        />
+                        <div className="misma-composer-inline-editor">
+                          <div className="misma-composer-inline-highlight" aria-hidden="true">
+                            <div className="misma-composer-inline-highlight-content" ref={mentionHighlightRef}>
+                              {draft.split(/(@(?:github|vercel|render|netlify)\b)/gi).map((part, index) =>
+                                /^@(github|vercel|render|netlify)$/i.test(part)
+                                  ? <span className="misma-composer-inline-mention" key={index}>{part}</span>
+                                  : <span key={index}>{part || "\u200b"}</span>
+                              )}
+                            </div>
+                          </div>
+                          <textarea
+                            ref={textareaRef}
+                            rows={1}
+                            className="aichat-composer-textarea misma-composer-inline-textarea"
+                            placeholder={composerFocused ? "" : createMode ? "Describe the " + createMode + " you want Agnes to create…" : thinkHarder ? "Ask Misma to think through this carefully…" : "Message Misma…"}
+                            value={draft}
+                            onChange={(e) => {
+                              const nextValue = e.target.value;
+                              const createMatch = nextValue.match(/^@create\s+image(?=\s|$)\s*/i);
+                              if (createMatch) {
+                                setCreateMode("image");
+                                setThinkHarder(false);
+                                setDraft(nextValue.slice(createMatch[0].length));
+                                return;
+                              }
+                              const thinkingMatch = nextValue.match(/^@thinking(?=\s|$)\s*/i);
+                              if (thinkingMatch) {
+                                setThinkHarder(true);
+                                setCreateMode(null);
+                                setDraft(nextValue.slice(thinkingMatch[0].length));
+                                return;
+                              }
+                              setDraft(nextValue);
+                            }}
+                            onScroll={(event) => {
+                              if (mentionHighlightRef.current) {
+                                mentionHighlightRef.current.style.transform = "translateY(-" + event.currentTarget.scrollTop + "px)";
+                              }
+                            }}
+                            onKeyDown={handleKeyDown}
+                            onPaste={handleComposerPaste}
+                            onFocus={() => {
+                              setComposerFocused(true);
+                              if (window.innerWidth < 768) {
+                                window.requestAnimationFrame(() => {
+                                  textareaRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                                });
+                              }
+                            }}
+                            onBlur={() => setComposerFocused(false)}
+                            disabled={isSending}
+                            aria-label="Message Misma"
+                          />
+                        </div>
                       </>
                     </VoiceInputBar>
                   </div>
