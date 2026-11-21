@@ -88,7 +88,7 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(css, /scroll-snap-type:\s*x mandatory/);
   assert.match(css, /\.misma-plugin-hero-gallery/);
   assert.match(css, /\.misma-plugin-information>div/);
-  assert.ok(css.includes(".misma-plugin-detail-primary {"));
+  assert.ok(css.includes(".misma-plugin-detail-page .misma-plugin-detail-primary {"));
   assert.ok(css.includes("background:#f7f7f8;"));
   assert.match(manifests, /authType: "oauth_pending"/);
   assert.match(manifests, /Coming later/);
