@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
-import { getPluginAuthorizationUrl, openPluginInChat } from "../lib/plugin-connect";
+import { openPluginInChat } from "../lib/plugin-connect";
 import { pluginList, type PluginId, type PluginManifest } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import { PluginSettingsSheet, type PluginConnectionSummary } from "../components/plugin-settings-sheet";
-import { Badge, Button, GlassCard, GlassRow, Input, SectionHeader } from "../components/misma-glass";
+import { Badge, GlassCard, Input, SectionHeader } from "../components/misma-glass";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
 type Workspace = { id: string; name: string };
@@ -146,37 +146,6 @@ function PluginsPage() {
     }
   }
 
-  function startProviderFlow(provider: PluginId) {
-    setConsentProvider(null);
-    setSettingsOpen(false);
-    setBusy(provider);
-    void getPluginAuthorizationUrl(workspaceId, provider).then((url) => {
-      window.location.assign(url);
-    }).catch((cause) => {
-      setError(cause instanceof Error ? cause.message : "Could not start the provider connection.");
-    }).finally(() => setBusy(""));
-  }
-
-  async function continueToProvider(provider: PluginId) {
-    const popup = window.open("about:blank", "_blank");
-    if (!popup) {
-      setError("Your browser blocked the provider tab. Allow popups and try again.");
-      return;
-    }
-    popup.opener = null;
-    setBusy(provider);
-    setError("");
-    try {
-      const url = await getPluginAuthorizationUrl(workspaceId, provider);
-      popup.location.href = url;
-    } catch (cause) {
-      popup.close();
-      setError(cause instanceof Error ? cause.message : "Could not open provider authorization.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   const startSettings = (provider?: PluginId) => {
     setSettingsProvider(provider || null);
     setSettingsOpen(true);
@@ -254,8 +223,12 @@ function PluginsPage() {
                             <button type="button" role="menuitem" className="is-danger" disabled={busy === plugin.id} onClick={() => { setMenuOpen(null); void uninstall(plugin.id); }}>Uninstall</button>
                           </div>}
                         </div>
+                      ) : coming ? (
+                        <button type="button" className="misma-plugin-info" aria-label={"More about " + plugin.name} title="More information" onClick={() => openDetails(plugin.id)}>
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7h.01"/></svg>
+                        </button>
                       ) : (
-                        <button type="button" className="misma-plugin-add" aria-label={"Connect " + plugin.name} title={coming ? "Coming later" : "Connect " + plugin.name} disabled={coming || busy === plugin.id} onClick={() => openConsent(plugin.id)}>
+                        <button type="button" className="misma-plugin-add" aria-label={"Connect " + plugin.name} title={"Connect " + plugin.name} disabled={busy === plugin.id} onClick={() => openConsent(plugin.id)}>
                           {busy === plugin.id ? "…" : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>}
                         </button>
                       )}
