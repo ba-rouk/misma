@@ -446,8 +446,10 @@ async function executeApprovedPlan(admin: any, job: Row, userId: string, connect
 async function processExecutionRequest(request: Request, progress: (event: Row) => void): Promise<Response> {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
-  const origin = request.headers.get("origin") || APP_ORIGIN;
-  if (![APP_ORIGIN, "http://localhost:5173", "http://localhost:3000"].includes(origin)) return json({ error: "Origin not allowed." }, 403, origin);
+  const requestedOrigin = request.headers.get("origin") || APP_ORIGIN;
+  const allowedOrigins = [APP_ORIGIN, "http://localhost:5173", "http://localhost:3000"];
+  const origin = allowedOrigins.includes(requestedOrigin) ? requestedOrigin : APP_ORIGIN;
+  if (!allowedOrigins.includes(requestedOrigin)) return json({ error: "Origin not allowed." }, 403, APP_ORIGIN);
   try {
     const input: unknown = await request.json();
     if (!isRecord(input)) return json({ error: "Invalid execution request." }, 400, origin);
@@ -715,7 +717,9 @@ async function processExecutionRequest(request: Request, progress: (event: Row) 
 async function main(request: Request): Promise<Response> {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
-  const origin = request.headers.get("origin") || APP_ORIGIN;
+  const requestedOrigin = request.headers.get("origin") || APP_ORIGIN;
+  const allowedOrigins = [APP_ORIGIN, "http://localhost:5173", "http://localhost:3000"];
+  const origin = allowedOrigins.includes(requestedOrigin) ? requestedOrigin : APP_ORIGIN;
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
