@@ -35,7 +35,7 @@ test("plugin directory hides Render and routes plugin details/settings", async (
 test("cross-chat account memory filters secrets and is isolated by owner", async () => {
   const chat = await read("supabase/functions/misma-chat/index.ts");
   const memory = await read("supabase/functions/_shared/memory.ts");
-  const migration = await read("supabase/migrations/20261121100000_cross_chat_memory.sql");
+  const migration = await read("supabase/migrations/20261121082724_cross_chat_memory.sql");
   assert.match(chat, /retrieveMemory/);
   assert.match(chat, /scheduleMemoryWrite/);
   assert.match(memory, /containsSensitiveSecret/);
