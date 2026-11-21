@@ -12,15 +12,25 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   const connect = await read("../src/lib/plugin-connect.ts");
   const consent = await read("../src/components/plugin-connect-consent.tsx");
   const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
+  const descriptionRoute = await read("../src/routes/dashboard.plugins.$pluginId.description.tsx");
   assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
   assert.doesNotMatch(page, /Business AI, connected/);
   assert.match(page, /Search plugins/);
-  assert.match(page, /Installed/);
+
   assert.doesNotMatch(page, /Popular|New & noteworthy|All popular plugins are installed/);
-  assert.match(page, /misma-plugin-installed-strip/);
-  assert.match(page, /misma-plugin-available-list/);
-  assert.match(page, /misma-plugin-add/);
+  assert.match(page, /misma-plugin-provider-grid/);
+  assert.match(page, /misma-plugin-provider-card/);
+
+  assert.match(page, /misma-plugin-provider-add/);
+  assert.match(page, /misma-plugin-provider-menu-trigger/);
   assert.match(page, /misma-plugin-search-dock/);
+  assert.ok(page.indexOf("misma-plugin-directory-header") < page.indexOf("misma-plugin-search-dock"));
+  assert.match(page, /Try in chat/);
+  assert.match(page, /Uninstall/);
+  assert.match(page, /openPluginInChat\\(provider, websiteId/);
+  assert.match(page, /description/);
+  assert.match(descriptionRoute, /createFileRoute/);
+  assert.match(descriptionRoute, /PluginDetailContent pluginId=\\{pluginId\\}/);
   assert.ok(page.includes('to="/dashboard/plugins/$pluginId/settings"'));
   assert.ok(page.includes("params={{ pluginId: openPluginMenu.provider }}"));
   assert.doesNotMatch(page, /openPluginSettings\(/);
@@ -67,6 +77,7 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.doesNotMatch(page, /Misma ecosystem/);
   assert.doesNotMatch(page, /Code & Repository Management/);
   assert.doesNotMatch(page, />Manage</);
+  assert.doesNotMatch(page, /misma-plugin-installed-menu-trigger/);
   assert.doesNotMatch(page, /Back to Misma/);
 });
 
@@ -287,17 +298,25 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
 });
 
-test("provider settings are nested routes rendered through the dashboard outlet", async () => {
+test("provider settings and descriptions are nested dashboard child routes", async () => {
   const route = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
+  const description = await read("../src/routes/dashboard.plugins.$pluginId.description.tsx");
+  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
   const generatedRoutes = await read("../src/routeTree.gen.ts");
   assert.match(route, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/settings"\)/);
   assert.match(route, /const \{ pluginId \} = Route\.useParams\(\)/);
   assert.match(route, /PluginSettingsPage pluginId=\{pluginId\}/);
+  assert.doesNotMatch(route, /misma-github-settings-empty-page/);
+  assert.match(description, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/description"\)/);
+  assert.match(description, /PluginDetailContent pluginId=\{pluginId\}/);
+  assert.match(detail, /export function PluginDetailContent/);
   assert.match(dashboard, /Outlet, useLocation/);
   assert.match(dashboard, /showPluginSettingsChild/);
+  assert.match(dashboard, /(?:settings\|description)/);
   assert.match(dashboard, /return showPluginSettingsChild \? <Outlet \/>/);
   assert.match(generatedRoutes, /dashboard\.plugins\.\$pluginId\.settings/);
+  assert.match(generatedRoutes, /dashboard\.plugins\.\$pluginId\.description/);
   assert.match(generatedRoutes, /getParentRoute: \(\) => DashboardRoute/);
   assert.doesNotMatch(generatedRoutes, /dashboard_\.plugins\.\$pluginId\.settings/);
 });
