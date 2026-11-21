@@ -4,5 +4,5 @@ import { VercelPluginDetailPage } from "./dashboard_.plugins.$pluginId";
 export const Route = createFileRoute("/dashboard/plugins/vercel")({ component: VercelPluginDetailRoute });
 
 function VercelPluginDetailRoute() {
-  return <PluginDetailPage pluginIdOverride="vercel" />;
+  return <VercelPluginDetailPage />;
 }

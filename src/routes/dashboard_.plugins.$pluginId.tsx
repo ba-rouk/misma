@@ -55,7 +55,16 @@ function ExamplePreview({ kind, provider, title, description }: { kind: string; 
 }
 
 
-export function PluginDetailPage({ pluginIdOverride }: { pluginIdOverride?: string } = {}) {
+export function PluginDetailPage() {
+  const { pluginId } = Route.useParams();
+  return <PluginDetailContent pluginId={pluginId} />;
+}
+
+export function VercelPluginDetailPage() {
+  return <PluginDetailContent pluginId="vercel" />;
+}
+
+function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
   const manifest = getPluginManifest(rawPluginId);
   const supabase = getSupabaseClient();
   const [workspaceId, setWorkspaceId] = useState("");
