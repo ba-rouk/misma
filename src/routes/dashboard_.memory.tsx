@@ -177,7 +177,7 @@ function MemoryPage() {
     setBusy(item.id);
     setError("");
     try {
-      const { error: deleteError } = await supabase.from("memory_facts").delete().eq("id", item.id);
+      const { error: deleteError } = await supabase.from("memory_facts").delete().eq("fact_key", item.fact_key);
       if (deleteError) throw deleteError;
       setNotice("Memory deleted.");
       await load();
@@ -191,8 +191,14 @@ function MemoryPage() {
     setBusy(item.id);
     setError("");
     try {
-      const { error: factsError } = await supabase.from("memory_facts").delete().eq("source_exchange_id", item.id);
-      if (factsError) throw factsError;
+      const { data: sourceFacts, error: sourceFactsError } = await supabase.from("memory_facts")
+        .select("fact_key").eq("source_exchange_id", item.id);
+      if (sourceFactsError) throw sourceFactsError;
+      const factKeys = [...new Set((sourceFacts || []).map((fact: any) => String(fact.fact_key)))];
+      for (const factKey of factKeys) {
+        const { error: factsError } = await supabase.from("memory_facts").delete().eq("fact_key", factKey);
+        if (factsError) throw factsError;
+      }
       const { error: exchangeError } = await supabase.from("memory_exchanges").delete().eq("id", item.id);
       if (exchangeError) throw exchangeError;
       setNotice("Past conversation memory deleted.");
