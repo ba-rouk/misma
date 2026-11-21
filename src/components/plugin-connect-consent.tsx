@@ -27,15 +27,16 @@ export function PluginConnectConsent({ manifest, workspaceId, open, onClose, onC
     return () => { active = false; };
   }, [open]);
   if (!manifest) return null;
+  const activeManifest = manifest;
 
-  const canAuthorize = manifest.authType === "github_app" || manifest.authType === "vercel_marketplace_oauth";
+  const canAuthorize = activeManifest.authType === "github_app" || activeManifest.authType === "vercel_marketplace_oauth";
   async function connect() {
     if (!canAuthorize || !workspaceId) return;
     setLoading(true);
     setError("");
     try {
-      const url = await getPluginAuthorizationUrl(workspaceId, manifest.id);
-      onConnected?.(manifest.id);
+      const url = await getPluginAuthorizationUrl(workspaceId, activeManifest.id);
+      onConnected?.(activeManifest.id);
       window.location.assign(url);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not begin the provider connection.");
