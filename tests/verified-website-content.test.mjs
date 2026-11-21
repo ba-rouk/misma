@@ -27,8 +27,8 @@ test("plugin directory exposes configured providers and all management routes", 
   const plugins = await read("src/routes/dashboard_.plugins.tsx");
   const detail = await read("src/routes/dashboard_.plugins.$pluginId.tsx");
   const tree = await read("src/routeTree.gen.ts");
-  assert.match(plugins, /const visiblePlugins = pluginList/);
-  assert.doesNotMatch(plugins, /plugin\.id !== "render"/);
+  assert.match(plugins, /const visiblePlugins = useMemo\(\(\) => pluginList\.filter\(\(plugin\) => plugin\.id !== "render"\)/);
+  assert.match(plugins, /const availablePlugins = filteredPlugins\.filter/);
   assert.match(plugins, /openDetails\(plugin\.id\)/);
   assert.match(plugins, /\/dashboard\/plugins\/.*\/connect/);
   assert.match(detail, /\/settings/);

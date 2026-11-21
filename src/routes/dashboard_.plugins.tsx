@@ -165,7 +165,7 @@ function PluginsPage() {
             <button type="button" className="misma-page-back-button" aria-label="Go to dashboard" onClick={() => window.location.assign("/dashboard")}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
             </button>
-            <div><h1>Plugins</h1></div>
+            <div><h1>Plugins</h1><p>Business AI, connected.</p></div>
           </div>
         </header>
 

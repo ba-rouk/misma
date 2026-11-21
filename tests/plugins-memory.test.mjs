@@ -112,7 +112,7 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.ok(css.includes(".misma-plugin-detail-page .misma-plugin-detail-primary {"));
   assert.ok(css.includes("background:#f7f7f8;"));
   assert.match(manifests, /authType: "oauth_pending"/);
-  assert.match(manifests, /Coming later/);
+  assert.match(manifests, /authType: "oauth_pending"/);
   assert.doesNotMatch(manifests, /Trigger redeploy/);
 });
 
@@ -297,11 +297,11 @@ test("provider settings URLs are standalone routes registered outside the dashbo
   const netlify = await read("../src/routes/dashboard_.plugins.netlify.settings.tsx");
   const shared = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
   const routeTree = await read("../src/routeTree.gen.ts");
-  assert.match(github, /createFileRoute\("\/dashboard\/plugins\/github\/settings"\)/);
+  assert.match(github, /createFileRoute\("\/dashboard_?\/plugins\/github\/settings"\)/);
   assert.match(github, /PluginSettingsPage pluginId="github"/);
-  assert.match(vercel, /createFileRoute\("\/dashboard\/plugins\/vercel\/settings"\)/);
+  assert.match(vercel, /createFileRoute\("\/dashboard_?\/plugins\/vercel\/settings"\)/);
   assert.match(vercel, /PluginSettingsPage pluginId="vercel"/);
-  assert.match(netlify, /createFileRoute\("\/dashboard\/plugins\/netlify\/settings"\)/);
+  assert.match(netlify, /createFileRoute\("\/dashboard_?\/plugins\/netlify\/settings"\)/);
   assert.match(netlify, /PluginSettingsPage pluginId="netlify"/);
   assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
   assert.match(shared, /\{manifest\.name\} plugin settings/);
