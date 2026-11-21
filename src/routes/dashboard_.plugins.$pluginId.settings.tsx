@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
-import { getPluginAuthorizationUrl } from "../lib/plugin-connect";
+import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plugin-connect";
 import { getPluginManifest } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { Badge, Button, GlassCard, GlassModal } from "../components/misma-glass";
 
 type PermissionMode = "always_ask" | "read" | "low_risk" | "all";
-type Connection = { id: string; provider: string; external_account_name: string | null; status: string; created_at: string; updated_at: string };
+type Connection = { id: string; provider: string; external_account_name: string | null; status: string; created_at: string; updated_at: string; workspace_id: string };
 const permissionOptions: Array<{ id: PermissionMode; title: string; description: string; badge?: string; elevated?: boolean }> = [
   { id: "always_ask", title: "Always ask", description: "Misma will ask before reading or making changes." },
   { id: "read", title: "Allow read actions", description: "Misma can read without asking, but will ask before making changes." },
@@ -55,30 +55,22 @@ function PluginSettingsPage() {
     if (!manifest) { setLoading(false); return () => { active = false; }; }
     void (async () => {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) { window.location.assign("/login"); return; }
-        const { data: members, error: memberError } = await supabase.from("workspace_members")
-          .select("workspace_id,role").eq("user_id", user.id);
-        if (memberError) throw memberError;
-        const ids = [...new Set((members || []).filter((row) => ["owner", "admin"].includes(String(row.role))).map((row) => String(row.workspace_id)))];
-        if (!ids.length) throw new Error("Ask a Misma account owner or admin to manage this provider connection.");
-        const { data: workspaces, error: workspaceError } = await supabase.from("workspaces")
-          .select("id").in("id", ids).order("created_at", { ascending: true });
-        if (workspaceError) throw workspaceError;
-        const defaultWorkspace = workspaces?.[0];
-        if (!defaultWorkspace) throw new Error("No provider account connection is available.");
+        const websiteId = new URLSearchParams(window.location.search).get("websiteId") || "";
+        const context = await getPluginWorkspaceContext(websiteId);
         const [connectionResult, pluginResult] = await Promise.all([
-          supabase.from("platform_connections").select("id,provider,external_account_name,status,created_at,updated_at")
-            .eq("workspace_id", defaultWorkspace.id).eq("provider", manifest.id).order("created_at", { ascending: false }),
+          supabase.from("platform_connections").select("id,provider,external_account_name,status,created_at,updated_at,workspace_id")
+            .in("workspace_id", context.workspaceIds).eq("provider", manifest.id).order("created_at", { ascending: false }),
           supabase.from("user_plugins").select("permission_mode,account_label")
-            .eq("user_id", user.id).eq("provider", manifest.id).maybeSingle(),
+            .eq("user_id", context.user.id).eq("provider", manifest.id).maybeSingle(),
         ]);
         if (connectionResult.error) throw connectionResult.error;
         if (pluginResult.error) throw pluginResult.error;
         if (!active) return;
-        setUserId(user.id);
-        setInternalWorkspaceId(defaultWorkspace.id);
-        setConnections((connectionResult.data || []) as Connection[]);
+        const rows = (connectionResult.data || []) as Connection[];
+        const connectedRow = rows.find((item) => item.status === "connected") || null;
+        setUserId(context.user.id);
+        setInternalWorkspaceId(connectedRow?.workspace_id || context.workspaceId);
+        setConnections(rows);
         const configuredPermission = String(pluginResult.data?.permission_mode || "low_risk");
         setPermission((permissionOptions.some((option) => option.id === configuredPermission)
           ? configuredPermission : "low_risk") as PermissionMode);
