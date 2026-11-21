@@ -166,6 +166,9 @@ test("Misma chat retrieves account memory and writes exchanges asynchronously", 
   assert.match(memory, /parsed\.data\.facts\.map/);
   assert.match(memory, /gemini-embedding-001/);
   assert.match(memory, /match_memory/);
+  assert.match(memory, /JSON\.stringify\(\{/);
+  assert.match(memory, /chatTitle: content\.replace/);
+  assert.doesNotMatch(memory, /String\(row\.chat_title/);
   assert.match(backfill, /memory_backfill_jobs/);
   assert.match(backfill, /persistMemoryExchange/);
   assert.match(config, /\[functions\.misma-memory-backfill\]/);
