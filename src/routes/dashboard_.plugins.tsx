@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
-import { getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
+import { getPluginAuthorizationUrl, getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
 import { pluginList, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
@@ -97,10 +97,43 @@ function PluginsPage() {
     window.location.assign("/dashboard/plugins/" + provider + "/description" + suffix);
   }
 
-  function openConsent(provider: PluginId) {
-    if (!pluginList.some((item) => item.id === provider) || !userId) return;
-    const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign("/dashboard/plugins/" + provider + "/connect" + suffix);
+  async function openConsent(provider: PluginId) {
+    if (!pluginList.some((item) => item.id === provider) || !userId || busy) return;
+    setBusy(provider);
+    setError("");
+    try {
+      if (provider === "netlify") {
+        // Start Netlify OAuth from the plus button. Keep the selected website
+        // in this tab because Netlify returns its access token in the URL fragment.
+        if (websiteId) window.sessionStorage.setItem("misma_plugins_website_id", websiteId);
+        else window.sessionStorage.removeItem("misma_plugins_website_id");
+        const context = await getPluginWorkspaceContext(websiteId);
+        const authorizationUrl = await getPluginAuthorizationUrl(context.workspaceId, provider);
+        window.location.assign(authorizationUrl);
+        return;
+      }
+      const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
+      window.location.assign("/dashboard/plugins/" + provider + "/connect" + suffix);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not start the provider connection.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function navigateBack() {
+    const referrer = document.referrer;
+    if (referrer) {
+      try {
+        if (new URL(referrer).origin === window.location.origin) {
+          window.history.back();
+          return;
+        }
+      } catch {
+        // Use the dashboard fallback when the referrer is not a valid URL.
+      }
+    }
+    window.location.assign("/dashboard");
   }
 
   async function uninstall(provider: PluginId) {
@@ -199,12 +232,10 @@ function PluginsPage() {
     <main className="misma-marketplace-page misma-plugin-directory-page" onClick={() => setOpenPluginMenu(null)}>
       <div className="misma-marketplace-shell misma-plugin-directory-shell">
         <header className="misma-marketplace-header misma-plugin-directory-header">
-          <div className="misma-plugin-header-title">
-            <button type="button" className="misma-page-back-button" aria-label="Go to dashboard" onClick={() => window.location.assign("/dashboard")}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
-            </button>
-            <div><h1>Plugins</h1></div>
-          </div>
+          <button type="button" className="misma-page-back-button misma-plugin-directory-back" aria-label="Go to previous page" onClick={navigateBack}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+          </button>
+          <div className="misma-plugin-directory-heading"><h1>Plugins</h1></div>
         </header>
         <div className="misma-plugin-search-dock">
           <label className="misma-marketplace-search" htmlFor="misma-plugin-search">
