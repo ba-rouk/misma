@@ -95,7 +95,7 @@ create index if not exists memory_facts_user_updated_idx
 create index if not exists memory_facts_search_gin
   on public.memory_facts using gin(search_tsv);
 create index if not exists memory_facts_embedding_hnsw
-  on public.memory_facts using hnsw(embedding vector_cosine_ops)
+  on public.memory_facts using hnsw(embedding extensions.vector_cosine_ops)
   where embedding is not null and deleted_at is null;
 create index if not exists memory_facts_key_idx
   on public.memory_facts(user_id, fact_key) where deleted_at is null;
