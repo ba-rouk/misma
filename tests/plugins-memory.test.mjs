@@ -10,7 +10,7 @@ test("plugin directory reuses workspace connections with installed and available
   const connect = await read("../src/lib/plugin-connect.ts");
   const consent = await read("../src/components/plugin-connect-consent.tsx");
   const settings = await read("../src/components/plugin-settings-sheet.tsx");
-  assert.match(page, /createFileRoute\("\/dashboard\/plugins"\)/);
+  assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
   assert.match(page, /Connect plugins to let Misma work across your tools/);
   assert.match(page, /Search plugins/);
   assert.match(page, /Installed/);
@@ -62,7 +62,7 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   const page = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const css = await read("../src/misma-design-system.css");
-  assert.match(page, /createFileRoute\("\/dashboard\/plugins\/\$pluginId"\)/);
+  assert.match(page, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId"\)/);
   assert.match(page, /getPluginManifest/);
   assert.match(page, /previewCards\.map/);
   assert.match(page, /ExamplePreview/);
@@ -170,7 +170,7 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   }
   assert.match(css, /\.aichat-side \.aichat-nav-btn/);
   assert.match(css, /\.aichat-side \.aichat-recent-item/);
-  assert.match(css, /@media \\(max-width: 767px\\)/);
+  assert.match(css, /@media \(max-width: 767px\)/);
   assert.match(css, /\.misma-plugin-settings-permissions fieldset/);
 });
 
