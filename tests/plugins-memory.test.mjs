@@ -34,7 +34,7 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.match(detail, /Try in chat/);
   assert.match(detail, /SectionHeader title="Information"/);
   assert.match(detail, /\/settings/);
-  assert.match(onboarding, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/connect"\)/);
+  assert.match(onboarding, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId\/connect"\)/);
   assert.match(onboarding, /getPluginAuthorizationUrl/);
   assert.match(onboarding, /getPluginWorkspaceContext/);
   assert.match(onboarding, /Add & Connect/);
