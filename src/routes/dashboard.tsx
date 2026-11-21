@@ -5720,10 +5720,6 @@ function Dashboard() {
                           <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                             @create {createMode}<span aria-hidden="true">×</span>
                           </button>
-                        ) : thinkHarder ? (
-                          <button type="button" className="aichat-mode-token is-thinking" onClick={() => setThinkHarder(false)} aria-label="Remove thinking mode">
-                            @thinking<span aria-hidden="true">×</span>
-                          </button>
                         ) : null}
                         <div className="misma-composer-inline-editor">
                           <div className="misma-composer-inline-highlight" aria-hidden="true">
