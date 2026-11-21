@@ -986,3 +986,12 @@ button, input, textarea, select { font-size: inherit; }
 .misma-chat-plugin-empty button,.misma-chat-plugin-manage { border:0; background:transparent; color:#a9c8ff; font-size:14px; }
 .misma-chat-plugin-manage { display:block; width:100%; margin-top:5px; padding:9px 8px 5px; border-top:1px solid rgba(255,255,255,.09); text-align:left; }
 .aichat-mode-token.is-plugin { border-color:rgba(143,184,255,.32); background:rgba(77,141,255,.12); color:#c6dcff; }
+
+.misma-glass-scrim-bottom { align-items:flex-end; }
+.misma-glass-bottom-sheet { width:min(100%,760px); border-radius:24px 24px 0 0; }
+.misma-glass-sticky-action { position:sticky; bottom:0; z-index:20; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); border-top:1px solid rgba(255,255,255,.1); background:rgba(7,17,29,.86); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); }
+.misma-glass-toggle { position:relative; width:48px; height:28px; padding:3px; border:1px solid rgba(255,255,255,.18); border-radius:99px; background:#344254; }
+.misma-glass-toggle span { display:block; width:20px; height:20px; border-radius:50%; background:#eaf1f9; transition:transform .16s ease; }
+.misma-glass-toggle.is-on { background:#326fe6; border-color:#78a6ff; }
+.misma-glass-toggle.is-on span { transform:translateX(19px); }
+.misma-plugin-skill-list svg { width:16px; height:16px; }
