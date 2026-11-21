@@ -1126,7 +1126,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 
 
 /* Plugin directory and Memory use the same deep surface as the notifications panel. */
-.misma-marketplace-page { background: #11141a !important; }
+.misma-marketplace-page, .misma-plugin-detail-page { background: #11141a !important; }
 .misma-memory-page { min-height: 100dvh; }
 .misma-memory-shell { max-width: 980px; }
 .misma-memory-settings {
