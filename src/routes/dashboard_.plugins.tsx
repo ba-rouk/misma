@@ -312,37 +312,14 @@ function PluginsPage() {
   return (
     <main className="misma-marketplace-page">
       <div className="misma-marketplace-shell">
-        <header className="misma-marketplace-header">
-          <div className="misma-marketplace-title-group">
-            <button
-              type="button"
-              className="misma-marketplace-back-button"
-              aria-label="Go to previous page"
-              title="Go back"
-              onClick={() => {
-                if (window.history.length > 1) window.history.back();
-                else window.location.assign("/dashboard");
-              }}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
-            </button>
-            <div>
-              <h1>Plugins</h1>
-              <p>Connect plugins to let Misma work across your tools and deploy your websites.</p>
-            </div>
-          </div>
-          <label className="misma-marketplace-workspace">
-            <span>Workspace</span>
-            <select value={workspaceId} onChange={(event) => {
-              setWorkspaceId(event.target.value);
-              if (event.target.value) window.sessionStorage.setItem("misma_integrations_workspace", event.target.value);
-              else window.sessionStorage.removeItem("misma_integrations_workspace");
-              setNotice("");
-            }} disabled={workspaceLoading || workspaces.length <= 1}>
-              <option value="">Choose a workspace</option>
-              {workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          </label>
+        <header className="misma-marketplace-header misma-marketplace-header-simple">
+          <button type="button" className="misma-marketplace-back-button" aria-label="Go to previous page" title="Go back" onClick={() => {
+            if (window.history.length > 1) window.history.back();
+            else window.location.assign("/dashboard");
+          }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+          </button>
+          <h1>Plugins</h1>
         </header>
 
         <label className="misma-marketplace-search">
@@ -350,12 +327,6 @@ function PluginsPage() {
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plugins..." aria-label="Search plugins" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}
         </label>
-
-        <nav className="misma-marketplace-filters" aria-label="Plugin filters">
-          {(["All", "Installed", "Developer & Hosting"] as const).map((item) => (
-            <button key={item} type="button" className={filter === item ? "is-active" : ""} onClick={() => setFilter(item)}>{item}</button>
-          ))}
-        </nav>
 
         {notice && <p className="misma-marketplace-feedback is-success" role="status">{notice}</p>}
         {error && <p className="misma-marketplace-feedback is-error" role="alert">{error}</p>}
