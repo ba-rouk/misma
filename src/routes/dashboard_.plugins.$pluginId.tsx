@@ -140,11 +140,19 @@ function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
   const examplePrompts = activeManifest.id === "github" ? [
     "@GitHub Inject the Misma chat widget script into my website repo and prepare a pull request",
     "@GitHub Explain this repo's authentication flow and file structure",
-    "@GitHub Review recent commits and check for build or deployment issues",
+    "@GitHub Review recent commits and summarize the changes",
+  ] : activeManifest.id === "vercel" ? [
+    "@Vercel Show the projects available in my connected account",
+    "@Vercel Find the project associated with my Misma website",
+    "@Vercel Summarize the repository and framework metadata for a selected project",
+  ] : activeManifest.id === "render" ? [
+    "@Render Show how my services will be associated with Misma websites",
+    "@Render Explain the service information Misma will access after authorization",
+    "@Render Prepare a checklist for connecting my hosting services",
   ] : [
-    "@" + activeManifest.name + " Trigger a new production deployment for my linked project",
-    "@" + activeManifest.name + " Check the status and build logs of my latest deployment",
-    "@" + activeManifest.name + " Show the projects or services linked to my website",
+    "@Netlify Show how authorized sites will appear in my Misma workspace",
+    "@Netlify Prepare a checklist for connecting a site",
+    "@Netlify Explain the information needed for site discovery",
   ];
   function connectAction() {
     setError("");
