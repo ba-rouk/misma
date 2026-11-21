@@ -1882,22 +1882,37 @@ Deno.serve(async (request) => {
       return jsonResponse(503, { error: "PDF analysis requires OPENROUTER_API_KEY. Other supported text and code files can use the configured chat providers." });
     }
 
-    const [{ data: accountMemoryRows, error: memoryReadError }, { data: connectedPluginRows, error: pluginReadError }, { data: workspaceRecord }] = await Promise.all([
+    const [{ data: accountMemoryRows, error: memoryReadError }, { data: connectedPluginRows, error: pluginReadError }, { data: userPluginRows, error: userPluginReadError }, { data: workspaceRecord }] = await Promise.all([
       db.from("user_memories").select("category,content,confidence").eq("user_id", userData.user.id).order("updated_at", { ascending: false }).limit(30),
       db.from("platform_connections").select("provider,external_account_name").eq("workspace_id", workspaceId).eq("status", "connected"),
+      db.from("user_plugins").select("provider,is_installed,permission_mode,account_label").eq("user_id", userData.user.id),
       db.from("workspaces").select("name").eq("id", workspaceId).maybeSingle(),
     ]);
     if (memoryReadError) console.warn("[misma-chat] Account memory could not be loaded.", memoryReadError.code);
     if (pluginReadError) console.warn("[misma-chat] Connected plugin context could not be loaded.", pluginReadError.code);
+    if (userPluginReadError) console.warn("[misma-chat] Installed plugin preferences could not be loaded.", userPluginReadError.code);
     const accountMemories = (accountMemoryRows || []).filter((row) =>
       typeof row.content === "string" && row.content.trim() && Number(row.confidence || 0) >= 0.5
     ).slice(0, 24);
     const allowedPluginIds = new Set(["github", "vercel", "render", "netlify"]);
     const requestedPluginIds = new Set((Array.isArray(input.activePlugins) ? input.activePlugins : [])
-      .filter((value): value is string => typeof value === "string" && allowedPluginIds.has(value)));
-    const activePluginConnections = (connectedPluginRows || []).filter((row) =>
-      typeof row.provider === "string" && requestedPluginIds.has(row.provider)
-    );
+      .filter((value): value is string => typeof value === "string" && allowedPluginIds.has(value.toLowerCase()))
+      .map((value) => value.toLowerCase()));
+    const installedPluginMap = new Map((userPluginRows || [])
+      .filter((row) => row.is_installed === true && allowedPluginIds.has(String(row.provider).toLowerCase()))
+      .map((row) => [String(row.provider).toLowerCase(), row]));
+    const activePluginConnections = (connectedPluginRows || [])
+      .filter((row) => typeof row.provider === "string" &&
+        requestedPluginIds.has(row.provider.toLowerCase()) &&
+        installedPluginMap.has(row.provider.toLowerCase()))
+      .map((row) => {
+        const preference = installedPluginMap.get(String(row.provider).toLowerCase());
+        return {
+          ...row,
+          account_label: preference?.account_label || null,
+          permission_mode: preference?.permission_mode || "low_risk",
+        };
+      });
     const activeWorkspaceName = typeof workspaceRecord?.name === "string" ? workspaceRecord.name : "Misma workspace";
 
     let systemPrompt =
@@ -1951,7 +1966,7 @@ Deno.serve(async (request) => {
     }
     if (activePluginConnections.length) {
       systemPrompt += "\n\nPLUGINS EXPLICITLY ENABLED FOR THIS CHAT:\n" +
-        activePluginConnections.map((item) => "- " + String(item.provider) + " (" + String(item.external_account_name || "connected account") + ")").join("\n") +
+        activePluginConnections.map((item) => "- " + String(item.provider) + " (" + String(item.account_label || item.external_account_name || "connected account") + "; permission mode: " + String(item.permission_mode || "low_risk") + ")").join("\n") +
         "\nEach provider has a separate responsibility: GitHub handles source repositories and code changes; Vercel, Render, and Netlify handle hosting/deployments. Do not mix their permissions. Plugin selection confirms that the user wants this integration considered, but it does not itself execute an API action.";
     }
     systemPrompt += "\n\nWEBSITE CODE AND WIDGET-INSTALLATION WORKFLOW: When a user asks to install or update the Misma website widget, first use relevant account memories and the active workspace context. Confirm the exact Misma workspace, GitHub repository, and hosting provider if any are missing. GitHub is responsible for inspecting code and preparing a branch/pull request; the selected hosting provider is responsible for deployment only after the repository change has been merged. Ask for explicit approval before merging or starting a production deployment. Never claim to have inspected code, created a branch or pull request, merged commits, started a deployment, or verified a live widget unless a corresponding integration operation has actually confirmed that result. If an operation is not available from this chat, explain that and direct the user to Plugins to manage the existing integration workflow.";
