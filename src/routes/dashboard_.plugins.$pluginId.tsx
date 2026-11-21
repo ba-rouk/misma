@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, openPluginInChat } from "../lib/plugin-connect";
 import { getPluginManifest, pluginList, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import { PluginSettingsSheet, type PluginConnectionSummary } from "../components/plugin-settings-sheet";
-import { Badge, Button, Chip, GlassCard, GlassRow, SectionHeader, StickyActionBar } from "../components/misma-glass";
+import { Badge, Button, GlassCard, SectionHeader, StickyActionBar } from "../components/misma-glass";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
 type PlatformProject = { id: string; provider: PluginId; name: string; full_name: string | null; platform_connection_id: string };
@@ -175,7 +175,7 @@ function PluginDetailPage() {
   );
 
   return (
-    <main className="misma-plugin-detail-page" style={{ "--plugin-brand": manifest.brandColor } as React.CSSProperties}>
+    <main className="misma-plugin-detail-page" style={{ "--plugin-brand": manifest.brandColor } as CSSProperties}>
       <div className="misma-plugin-detail-shell">
         <header className="misma-plugin-detail-header">
           <button type="button" className="misma-plugin-detail-back" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
