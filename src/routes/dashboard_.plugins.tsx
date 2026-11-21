@@ -98,6 +98,8 @@ function PluginsPage() {
   );
   const installedPlugins = visiblePlugins.filter((plugin) => {
     if (!installedByProvider.has(plugin.id)) return false;
+    if (filter === "Developer tools" && plugin.category !== "Code host") return false;
+    if (filter === "Hosting" && plugin.category !== "Hosting") return false;
     const searchText = [plugin.name, plugin.description, plugin.tagline, plugin.developer].join(" ").toLowerCase();
     return !query.trim() || searchText.includes(query.trim().toLowerCase());
   });
