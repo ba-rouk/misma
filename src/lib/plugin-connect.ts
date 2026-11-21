@@ -22,12 +22,13 @@ export async function getPluginAuthorizationUrl(workspaceId: string, provider: P
   return url;
 }
 
-export function openPluginInChat(provider: PluginId, websiteId?: string | null) {
+export function openPluginInChat(provider: PluginId, websiteId?: string | null, prompt?: string) {
   try {
     sessionStorage.setItem("misma_try_plugin_provider", provider);
+    sessionStorage.setItem("misma_try_plugin_prompt", prompt || "@" + provider + " ");
     if (websiteId) sessionStorage.setItem("misma_plugins_website_id", websiteId);
   } catch {
-    // The dashboard can still restore the previous chat without the optional plugin hint.
+    // The dashboard can still open even when the browser blocks optional session storage.
   }
   window.location.assign("/dashboard");
 }
