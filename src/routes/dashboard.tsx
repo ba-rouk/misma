@@ -3728,8 +3728,8 @@ function Dashboard() {
     const end = input?.selectionEnd ?? draft.length;
     const prefix = draft.slice(0, start);
     const suffix = draft.slice(end);
-    const addLeadingSpace = prefix.length > 0 && !/\\s$/.test(prefix);
-    const suffixHasSpace = /^\\s/.test(suffix);
+    const addLeadingSpace = prefix.length > 0 && !/\s$/.test(prefix);
+    const suffixHasSpace = /^\s/.test(suffix);
     const mention = (addLeadingSpace ? " " : "") + "@" + provider.toLowerCase() + (suffixHasSpace ? "" : " ");
     const nextValue = prefix + mention + suffix;
     const caret = prefix.length + mention.length + (suffixHasSpace ? 1 : 0);
