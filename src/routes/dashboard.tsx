@@ -1859,6 +1859,7 @@ function Dashboard() {
   const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [workspacePluginConnections, setWorkspacePluginConnections] = useState<Array<{ id: string; provider: string; external_account_name: string | null }>>([]);
   const [chatEnabledPlugins, setChatEnabledPlugins] = useState<string[]>([]);
   const [thinkHarder, setThinkHarder] = useState(false);
@@ -5515,7 +5516,7 @@ function Dashboard() {
                       toolbarStart={
                         <>
                           <div className="aichat-composer-plus-wrap">
-                            <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
+                            <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => { setPluginPickerOpen(false); setPlusMenuOpen((open) => !open); }}>
                               {plusMenuOpen ? (
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                               ) : (
@@ -5546,22 +5547,38 @@ function Dashboard() {
                                   <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
                                   <span><strong>Create image</strong></span>
                                 </button>
-                                <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("video"); setPlusMenuOpen(false); }}>
-                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
-                                  <span><strong>Create video</strong></span>
+                                <button type="button" role="menuitem" className="misma-chat-plugins-open" onClick={() => {
+                                  setPlusMenuOpen(false);
+                                  setPluginPickerOpen((open) => !open);
+                                }}>
+                                  <span className="aichat-plus-menu-icon">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4h6V3Zm6 0v6h6V5a2 2 0 0 0-2-2h-4ZM3 15v4a2 2 0 0 0 2 2h4v-6H3Zm12 6h4a2 2 0 0 0 2-2v-4h-6v6Z"/><path d="M10 10h4v4h-4z"/></svg>
+                                  </span>
+                                  <span><strong>Plugins</strong></span>
+                                  <span className="misma-chat-plugins-count">{workspacePluginConnections.length}</span>
                                 </button>
-                                <div className="misma-chat-plugin-picker" role="group" aria-label="Plugins for this chat">
-                                  <div className="misma-chat-plugin-picker-heading">
-                                    <strong>Plugins</strong>
-                                    <button type="button" onClick={() => { setPlusMenuOpen(false); window.location.assign("/dashboard/plugins"); }}>Manage</button>
-                                  </div>
-                                  {workspacePluginConnections.length ? workspacePluginConnections.map((plugin) => (
-                                    <button key={plugin.id} type="button" className="misma-chat-plugin-toggle" role="menuitemcheckbox" aria-checked={chatEnabledPlugins.includes(plugin.provider)} onClick={() => setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider])}>
-                                      <span className="misma-chat-plugin-toggle-name"><i>{plugin.provider === "github" ? "GH" : plugin.provider === "vercel" ? "▲" : plugin.provider === "render" ? "R" : "N"}</i><span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span></span>
-                                      <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
-                                    </button>
-                                  )) : <p>No installed plugins in this workspace yet.</p>}
+                              </div>
+                            )}
+                            {pluginPickerOpen && (
+                              <div className="misma-chat-plugin-popup" role="menu" aria-label="Connected plugins">
+                                <div className="misma-chat-plugin-popup-heading">
+                                  <strong>Plugins</strong>
+                                  <button type="button" aria-label="Close plugins" onClick={() => setPluginPickerOpen(false)}>×</button>
                                 </div>
+                                {workspacePluginConnections.length ? workspacePluginConnections.map((plugin) => (
+                                  <button
+                                    key={plugin.id}
+                                    type="button"
+                                    className="misma-chat-plugin-option"
+                                    role="menuitemcheckbox"
+                                    aria-checked={chatEnabledPlugins.includes(plugin.provider)}
+                                    onClick={() => setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider])}
+                                  >
+                                    <ChatPluginIcon provider={plugin.provider} />
+                                    <span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span>
+                                    <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
+                                  </button>
+                                )) : <p>No connected plugins for this workspace.</p>}
                               </div>
                             )}
                           </div>
