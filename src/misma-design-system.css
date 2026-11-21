@@ -310,7 +310,9 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 /* Reusable provider detail pages. */
 .misma-plugin-detail-page { min-height:100dvh; padding:18px 16px calc(112px + env(safe-area-inset-bottom)); background:var(--misma-bg); color:#f1f3f6; font:16px/1.55 var(--font-sans,Inter,system-ui,sans-serif); }
 .misma-plugin-detail-shell { width:min(100%,760px); margin:0 auto; }
-.misma-plugin-detail-header { position:relative; display:grid; grid-template-columns:42px minmax(0,1fr) 42px; align-items:center; gap:10px; min-height:50px; margin:0 0 17px; }\n.misma-plugin-detail-header > .misma-page-back-button { justify-self:start; align-self:start; }\n.misma-plugin-detail-header > .misma-plugin-detail-settings { justify-self:end; align-self:start; }
+.misma-plugin-detail-header { position:relative; display:grid; grid-template-columns:42px minmax(0,1fr) 42px; align-items:center; gap:10px; min-height:50px; margin:0 0 17px; }
+.misma-plugin-detail-header > .misma-page-back-button { justify-self:start; align-self:start; }
+.misma-plugin-detail-header > .misma-plugin-detail-settings { justify-self:end; align-self:start; }
 .misma-plugin-detail-header h1 { margin:0; overflow:hidden; color:#f6f7f9; font:600 21px/1.2 var(--font-serif,Georgia,serif); text-align:center; text-overflow:ellipsis; white-space:nowrap; }
 .misma-plugin-detail-back { display:grid; width:42px; height:42px; place-items:center; border:1px solid rgba(255,255,255,.12); border-radius:50%; background:rgba(255,255,255,.055); color:#f0f3f7; }
 .misma-plugin-detail-back svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -879,7 +881,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   z-index:1;
   inset:0;
   overflow:hidden;
-  padding:4px 6px;
+  padding:4px 10px;
   pointer-events:none;
   color:#f0f3f8;
   font-family:var(--font-sans);
@@ -919,7 +921,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   -webkit-text-fill-color:transparent;
   caret-color:#f3f6fb;
   background:transparent !important;
-  padding:4px 6px !important;
+  padding:4px 10px !important;
   font-family:var(--font-sans);
   font-size:var(--text-md);
   line-height:var(--leading-normal);
