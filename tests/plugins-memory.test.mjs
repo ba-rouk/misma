@@ -41,6 +41,25 @@ test("plugin marketplace uses the compact native-style list and connected-provid
   assert.doesNotMatch(page, />Manage</);
   assert.doesNotMatch(page, /\/dashboard\/integrations\?provider=/);
   assert.doesNotMatch(page, /Back to Misma/);
+  assert.match(page, /misma-plugin-installed-strip/);
+  assert.match(page, /Installed/);
+  assert.match(page, /Available/);
+  assert.match(page, /Use Misma to connect/);
+  assert.match(page, /currentUser\?\.email/);
+  assert.match(page, /PluginPermissionChoices/);
+  assert.match(page, /\/dashboard\/plugins\//);
+  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  assert.match(detail, /createFileRoute\("\/dashboard\/plugins\/\$pluginId"\)/);
+  assert.match(detail, /SectionHeader title="Skills"/);
+  assert.match(detail, /SectionHeader title="Permissions"/);
+  assert.match(detail, /SectionHeader title="Information"/);
+  assert.match(detail, /Try in chat/);
+  assert.match(detail, /PluginPermissionChoices/);
+  assert.match(detail, /misma_try_plugin_provider/);
+  const registry = await read("../src/lib/plugin-registry.ts");
+  assert.match(registry, /PLUGIN_MANIFESTS/);
+  assert.match(registry, /authType/);
+  assert.match(registry, /previewCards/);
 });
 
 
@@ -116,4 +135,18 @@ test("global Misma design tokens and typography are applied after the base style
   assert.match(css, /\.misma-marketplace-back-button/);
   assert.match(css, /\.misma-plugin-mark svg/);
   assert.match(css, /\.misma-plugin-modal \{[\s\S]*background: #07111d/);
+});
+
+test("Misma design system exposes shared glass primitives and typography rules", async () => {
+  const design = await read("../DESIGN_SYSTEM.md");
+  const primitives = await read("../src/components/glass-ui.tsx");
+  const css = await read("../src/plugins-system.css");
+  assert.match(design, /all new dashboard routes/i);
+  for (const primitive of ["GlassCard", "GlassModal", "BottomSheet", "GlassRow", "Button", "Badge", "Chip", "Input", "Toggle", "SectionHeader", "StickyActionBar"]) {
+    assert.match(primitives, new RegExp("function " + primitive));
+  }
+  assert.match(css, /--misma-glass-surface: rgba\(255,255,255,.05\)/);
+  assert.match(css, /--text-body: 16px/);
+  assert.match(css, /--text-xs: 13px/);
+  assert.match(css, /\.misma-plugin-permission-option/);
 });
