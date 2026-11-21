@@ -119,11 +119,29 @@ function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
   }
   async function continueToProvider() {
     if (!workspaceId || !canAuthorize) return;
-    const popup = window.open("about:blank", "_blank");
-    if (!popup) { setError("Your browser blocked the provider tab. Allow popups and try again."); return; }
-    popup.opener = null;
     setBusy(true);
     setError("");
+    // Netlify returns its token in the callback URL fragment. Keep that OAuth
+    // round-trip in this tab so the callback can read the workspace context
+    // saved by getPluginAuthorizationUrl in this tab's sessionStorage.
+    if (activeManifest.id === "netlify") {
+      try {
+        const url = await getPluginAuthorizationUrl(workspaceId, activeManifest.id);
+        window.location.assign(url);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not open provider authorization.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    const popup = window.open("about:blank", "_blank");
+    if (!popup) {
+      setBusy(false);
+      setError("Your browser blocked the provider tab. Allow popups and try again.");
+      return;
+    }
+    popup.opener = null;
     try {
       const url = await getPluginAuthorizationUrl(workspaceId, activeManifest.id);
       popup.location.href = url;
