@@ -8,14 +8,16 @@
   --misma-green: #10B981;
   --misma-glass-blur: blur(16px);
   --text-body: 16px;
-  --text-small: 15px;
-  --text-sm: 15px;
-  --text-base: 18px;
-  --text-md: 18px;
-  --text-lg: 18px;
+  --text-small: 14px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-md: 16px;
+  --text-lg: 16px;
+  --text-xs: 13px;
+  --text-badge: 13px;
 }
 html { font-size: 16px; }
-body { font-size: 18px; line-height: 1.55; }
+body { font-size: 16px; line-height: 1.55; }
 button, input, textarea, select { font-size: inherit; }
 .aichat-recent-list { gap: 4px !important; padding-top: 5px !important; padding-bottom: 9px !important; }
 .aichat-recent-item { min-height: 42px !important; padding: 10px 12px !important; font-size: 15px !important; line-height: 1.45 !important; border-radius: 9px !important; }

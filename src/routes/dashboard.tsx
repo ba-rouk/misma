@@ -1875,17 +1875,83 @@ function Dashboard() {
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [workspacePluginConnections, setWorkspacePluginConnections] = useState<Array<{ id: string; provider: string; external_account_name: string | null }>>([]);
+  const [workspacePluginConnectionsLoaded, setWorkspacePluginConnectionsLoaded] = useState(false);
   const [chatEnabledPlugins, setChatEnabledPlugins] = useState<string[]>([]);
+  const [pluginPreferencesLoadedKey, setPluginPreferencesLoadedKey] = useState("");
   const [thinkHarder, setThinkHarder] = useState(false);
+  const chatPluginPreferenceKey = dashboardUserId && workspace?.id
+    ? "misma_chat_plugins_v1_" + dashboardUserId + "_" + workspace.id + "_" + (currentConversationId === null ? "new" : String(currentConversationId))
+    : "";
+
   useEffect(() => {
+    let active = true;
+    setWorkspacePluginConnectionsLoaded(false);
+    if (!workspace?.id || !token || staffMode) {
+      setWorkspacePluginConnections([]);
+      setWorkspacePluginConnectionsLoaded(true);
+      return () => { active = false; };
+    }
+    void getSupabaseClient().from("platform_connections")
+      .select("id,provider,external_account_name")
+      .eq("workspace_id", workspace.id)
+      .eq("status", "connected")
+      .order("updated_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.warn("Could not load chat plugin connections.", error.code);
+          setWorkspacePluginConnections([]);
+        } else {
+          const rows = (data || []) as Array<{ id: string; provider: string; external_account_name: string | null }>;
+          const unique = rows.filter((item, index, all) => all.findIndex((candidate) => candidate.provider === item.provider) === index);
+          setWorkspacePluginConnections(unique);
+        }
+        setWorkspacePluginConnectionsLoaded(true);
+      });
+    return () => { active = false; };
+  }, [workspace?.id, token, staffMode]);
+
+  useEffect(() => {
+    if (!chatPluginPreferenceKey || !workspacePluginConnectionsLoaded) {
+      setChatEnabledPlugins([]);
+      setPluginPreferencesLoadedKey("");
+      return;
+    }
+    let saved: unknown = [];
+    try {
+      saved = JSON.parse(window.localStorage.getItem(chatPluginPreferenceKey) || "[]");
+    } catch {
+      saved = [];
+    }
+    const connected = new Set(workspacePluginConnections.map((item) => item.provider));
+    const activeProviders = Array.isArray(saved)
+      ? saved.filter((provider): provider is string => typeof provider === "string" && connected.has(provider))
+      : [];
+    setChatEnabledPlugins(activeProviders);
+    setPluginPreferencesLoadedKey(chatPluginPreferenceKey);
+  }, [chatPluginPreferenceKey, workspacePluginConnectionsLoaded, workspacePluginConnections]);
+
+  useEffect(() => {
+    if (!chatPluginPreferenceKey || pluginPreferencesLoadedKey !== chatPluginPreferenceKey || !workspacePluginConnectionsLoaded) return;
+    try {
+      const connected = new Set(workspacePluginConnections.map((item) => item.provider));
+      const safeProviders = chatEnabledPlugins.filter((provider) => connected.has(provider));
+      window.localStorage.setItem(chatPluginPreferenceKey, JSON.stringify(safeProviders));
+    } catch {
+      // The current chat still keeps its selected plugins in component state.
+    }
+  }, [chatPluginPreferenceKey, pluginPreferencesLoadedKey, workspacePluginConnectionsLoaded, workspacePluginConnections, chatEnabledPlugins]);
+
+  useEffect(() => {
+    if (!viewStateRestored || !workspacePluginConnectionsLoaded || !pluginPreferencesLoadedKey || pluginPreferencesLoadedKey !== chatPluginPreferenceKey) return;
     const provider = window.sessionStorage.getItem("misma_try_plugin_provider");
     if (!provider || !workspacePluginConnections.some((item) => item.provider === provider)) return;
     window.sessionStorage.removeItem("misma_try_plugin_provider");
     setChatEnabledPlugins((current) => current.includes(provider) ? current : [...current, provider]);
     setPlusMenuOpen(false);
-    setPluginPickerOpen(true);
+    setPluginPickerOpen(false);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [workspacePluginConnections]);
+  }, [viewStateRestored, workspacePluginConnectionsLoaded, workspacePluginConnections, pluginPreferencesLoadedKey, chatPluginPreferenceKey]);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
@@ -3651,6 +3717,24 @@ function Dashboard() {
     }
   };
 
+  const migrateNewChatPluginPreferences = (conversationId: number) => {
+    if (!dashboardUserId || !workspace?.id || !Number.isSafeInteger(conversationId) || conversationId < 1) return;
+    const base = "misma_chat_plugins_v1_" + dashboardUserId + "_" + workspace.id + "_";
+    const newChatKey = base + "new";
+    const conversationKey = base + String(conversationId);
+    try {
+      if (window.localStorage.getItem(conversationKey) !== null) return;
+      const saved = window.localStorage.getItem(newChatKey);
+      const providers = saved ? JSON.parse(saved) : chatEnabledPlugins;
+      const safeProviders = Array.isArray(providers)
+        ? providers.filter((provider): provider is string => typeof provider === "string" && workspacePluginConnections.some((item) => item.provider === provider))
+        : [];
+      window.localStorage.setItem(conversationKey, JSON.stringify(safeProviders));
+    } catch {
+      // Plugin chips remain active in component state for the current screen.
+    }
+  };
+
   const handleSend = async (
     customPrompt?: string,
     options: { retry?: boolean; signal?: AbortSignal; voice?: boolean } = {},
@@ -3735,6 +3819,7 @@ function Dashboard() {
           throw new Error("Misma could not create a conversation for this attachment.");
         }
         sendConversationId = createdId;
+        migrateNewChatPluginPreferences(createdId);
         activeConversationIdRef.current = createdId;
         setCurrentConversationId(createdId);
         loadData();
@@ -3813,7 +3898,9 @@ function Dashboard() {
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!sendConversationId && res.conversationId) {
-        activeConversationIdRef.current = Number(res.conversationId);
+        const createdConversationId = Number(res.conversationId);
+        migrateNewChatPluginPreferences(createdConversationId);
+        activeConversationIdRef.current = createdConversationId;
         setCurrentConversationId(res.conversationId);
       }
 
@@ -3986,6 +4073,7 @@ function Dashboard() {
         }
         // Only attach the new conversation to the screen when the user has not moved away.
         if (chatViewVersionRef.current === startViewVersion && activeConversationIdRef.current === null) {
+          migrateNewChatPluginPreferences(targetConversationId);
           activeConversationIdRef.current = targetConversationId;
           setCurrentConversationId(targetConversationId);
         }
@@ -5459,13 +5547,24 @@ function Dashboard() {
                                     className="misma-chat-plugin-option"
                                     role="menuitemcheckbox"
                                     aria-checked={chatEnabledPlugins.includes(plugin.provider)}
-                                    onClick={() => setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider])}
+                                    onClick={() => {
+                                      setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider]);
+                                      setPluginPickerOpen(false);
+                                    }}
                                   >
                                     <ChatPluginIcon provider={plugin.provider} />
                                     <span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span>
                                     <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
                                   </button>
-                                )) : <p>No connected plugins for this workspace.</p>}
+                                )) : (
+                                  <div className="misma-chat-plugin-empty">
+                                    <p>Connect your first plugin to use it in chat.</p>
+                                    <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Connect your first plugin</button>
+                                  </div>
+                                )}
+                                <div className="misma-chat-plugin-popup-footer">
+                                  <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Manage plugins</button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -5495,6 +5594,17 @@ function Dashboard() {
                       }
                     >
                       <>
+                        {chatEnabledPlugins.length > 0 && (
+                          <div className="misma-chat-plugin-chips" aria-label="Plugins enabled for this chat">
+                            {chatEnabledPlugins.map((provider) => (
+                              <span className="misma-chat-plugin-chip" key={provider}>
+                                <ChatPluginIcon provider={provider} />
+                                <strong>@{provider}</strong>
+                                <button type="button" aria-label={"Remove @" + provider} onClick={() => setChatEnabledPlugins((current) => current.filter((item) => item !== provider))}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {createMode ? (
                           <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                             @create {createMode}<span aria-hidden="true">×</span>
@@ -6485,6 +6595,13 @@ function Dashboard() {
                       <span className={"aichat-status-pill is-" + site.status}>{site.status}</span>
                     </div>
                     <small title={site.website_url}>{site.website_url}</small>
+                    <button type="button" className="aichat-website-plugins" onClick={() => {
+                      try { window.sessionStorage.setItem("misma_plugins_website_id", site.id); } catch { /* The URL still carries the selection. */ }
+                      window.location.assign("/dashboard/plugins?websiteId=" + encodeURIComponent(site.id));
+                    }} aria-label={"Open plugins for " + (site.name || site.domain)} title="Plugins">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5m6-5v5M7 9h10v4a5 5 0 0 1-10 0V9Zm5 9v3m-3 0h6"/></svg>
+                      <span>Plugins</span>
+                    </button>
                   </div>
                   <button
                     type="button"
