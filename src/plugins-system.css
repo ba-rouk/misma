@@ -500,3 +500,198 @@ button, input, textarea, select { font-size: inherit; }
   .misma-marketplace-back-button { width: 38px; height: 38px; margin-top: 1px; }
   .misma-marketplace-title-group h1 { margin-top: 0; }
 }
+
+/* Compact plugin catalogue and provider action popovers. */
+.misma-marketplace-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 560px at 96% -14%, rgba(77,141,255,.13), transparent 64%),
+    radial-gradient(720px 480px at -14% 34%, rgba(51,87,139,.14), transparent 70%),
+    #07111d;
+  color: #edf4fb;
+}
+.misma-marketplace-header-simple {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
+  margin: 0 0 24px;
+}
+.misma-marketplace-header-simple h1 {
+  margin: 0;
+  color: #f4f7fb;
+  font-size: clamp(27px, 3vw, 34px);
+  font-weight: 650;
+  letter-spacing: -.035em;
+}
+.misma-marketplace-back-button {
+  flex: none;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 50%;
+  background: #102238;
+  color: #e8f0fa;
+}
+.misma-marketplace-back-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.misma-plugin-list {
+  width: min(760px, 100%);
+  margin: 10px auto 0;
+  border-top: 1px solid rgba(255,255,255,.075);
+}
+.misma-plugin-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 82px;
+  padding: 13px 7px 13px 3px;
+  border-bottom: 1px solid rgba(255,255,255,.075);
+}
+.misma-plugin-row-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #f1f5fa;
+  text-align: left;
+}
+.misma-plugin-row-main .misma-plugin-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+}
+.misma-plugin-mark svg {
+  display: block;
+  width: 25px;
+  height: 25px;
+  fill: currentColor;
+}
+.misma-plugin-mark.is-github { color: #f4f7fb; }
+.misma-plugin-mark.is-vercel { color: #fff; }
+.misma-plugin-mark.is-render,
+.misma-plugin-mark.is-netlify { color: #b8d0ff; }
+.misma-plugin-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 620;
+}
+.misma-plugin-row-connected {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: #4d8dff;
+  box-shadow: 0 0 10px rgba(77,141,255,.45);
+}
+.misma-plugin-row-actions {
+  position: relative;
+  flex: none;
+}
+.misma-plugin-add,
+.misma-plugin-more {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #e3ecf7;
+}
+.misma-plugin-add svg,
+.misma-plugin-more svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.misma-plugin-add:hover,
+.misma-plugin-more:hover { background: rgba(255,255,255,.075); }
+.misma-plugin-add:disabled { opacity: .35; cursor: not-allowed; }
+.misma-plugin-context-menu {
+  position: absolute;
+  z-index: 30;
+  top: 48px;
+  right: 0;
+  width: 190px;
+  padding: 7px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 16px;
+  background: #18283a;
+  box-shadow: 0 18px 50px rgba(0,0,0,.55);
+}
+.misma-plugin-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #e7edf5;
+  text-align: left;
+  font-size: 14px;
+}
+.misma-plugin-context-menu button:hover { background: rgba(255,255,255,.07); }
+.misma-plugin-context-menu button svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.misma-plugin-context-divider {
+  height: 1px;
+  margin: 6px 5px;
+  background: rgba(255,255,255,.13);
+}
+.misma-plugin-context-menu button.is-danger { color: #f07878; }
+.misma-plugin-modal {
+  border-color: rgba(255,255,255,.12);
+  background: #07111d;
+}
+.misma-plugin-modal-heading { align-items: center; }
+.misma-plugin-modal-heading h2 {
+  margin: 0;
+  color: #f4f7fb;
+  font-size: 22px;
+}
+.misma-plugin-modal-description { color: #aebed0; }
+.misma-plugin-connected-state {
+  border-color: rgba(77,141,255,.3);
+  background: rgba(77,141,255,.09);
+}
+@media (max-width: 760px) {
+  .misma-marketplace-page { padding: 20px 14px 34px; }
+  .misma-marketplace-header-simple { margin-bottom: 20px; }
+  .misma-plugin-row { min-height: 76px; }
+  .misma-plugin-row-main { gap: 12px; }
+  .misma-plugin-row-main .misma-plugin-mark { width: 44px; height: 44px; }
+  .misma-plugin-context-menu { right: 0; width: 178px; }
+}
