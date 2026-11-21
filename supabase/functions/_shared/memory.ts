@@ -236,6 +236,12 @@ export async function persistMemoryExchange(
     return { saved: false };
   }
 
+  if (input.userMessageId) {
+    const { data: existingExchange } = await db.from("memory_exchanges").select("id")
+      .eq("user_id", input.userId).eq("source_user_message_id", input.userMessageId).maybeSingle();
+    if (existingExchange) return { saved: false, exchangeId: String(existingExchange.id) };
+  }
+
   const since = new Date(Date.now() - 60_000).toISOString();
   const { count: recentWrites } = await db.from("memory_exchanges")
     .select("id", { count: "exact", head: true })
