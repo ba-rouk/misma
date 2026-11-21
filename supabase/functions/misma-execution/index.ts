@@ -410,6 +410,16 @@ async function main(request: Request): Promise<Response> {
     const activePlugins = Array.isArray(input.activePlugins) ? input.activePlugins.map(x => String(x).toLowerCase()) : [];
     if (!job && (!activePlugins.includes("github") || !isInstallIntent(message))) return json({ handled: false }, 200, origin);
 
+    const { data: githubPreference, error: preferenceError } = await admin.from("user_plugins")
+      .select("permission_mode,is_installed")
+      .eq("user_id", userId).eq("provider", "github").maybeSingle();
+    if (preferenceError) throw new Error("Could not verify the GitHub plugin permission settings.");
+    if (!githubPreference || githubPreference.is_installed !== true) {
+      throw new Error("Install the GitHub plugin in your Misma account before using GitHub repository actions.");
+    }
+    const permissionMode = ["always_ask", "read", "low_risk", "all"].includes(String(githubPreference.permission_mode))
+      ? String(githubPreference.permission_mode) : "low_risk";
+
     const connection = await getGithubConnection(admin, workspaceId);
     const installationId = Number(connection.installation_id);
     if (!Number.isSafeInteger(installationId) || installationId <= 0) throw new Error("The connected GitHub App installation is invalid.");
@@ -475,7 +485,22 @@ async function main(request: Request): Promise<Response> {
       }
     }
 
-    if (job && job.status === "awaiting_repository") {
+    if (job && job.status === "awaiting_repository" && permissionMode === "always_ask" && job.metadata?.read_actions_approved !== true) {
+      if (/^(?:approve read|allow read|approve repository access)[.!]?$/i.test(message.trim())) {
+        const nextMetadata = { ...job.metadata, read_actions_approved: true, read_approved_at: now };
+        const { error: readApprovalError } = await admin.from("plugin_execution_jobs").update({
+          metadata: nextMetadata, updated_at: now,
+        }).eq("id", job.id).eq("workspace_id", workspaceId);
+        if (readApprovalError) throw new Error("Could not record your repository-read approval.");
+        job = { ...job, metadata: nextMetadata };
+        await addLog(admin, workspaceId, job.id, userId, "execution.repository_read_approved", { permission_mode: permissionMode });
+      } else {
+        responseText = "Before I list repositories or inspect repository files, may I read the GitHub repository information for this request? Reply APPROVE READ to continue, or CANCEL to stop.";
+      }
+    }
+
+    if (job && job.status === "awaiting_repository" &&
+        (permissionMode !== "always_ask" || job.metadata?.read_actions_approved === true)) {
       if (!job.metadata?.website_connection_id) {
         const websites = Array.isArray(job.metadata?.website_choices) ? job.metadata.website_choices : [];
         responseText ||= "Select the website first: " + websites.map((x: any, i: number) => (i + 1) + ". " + (x.name || x.domain)).join("; ");
@@ -552,19 +577,21 @@ async function main(request: Request): Promise<Response> {
         }, { onConflict: "job_id" });
         await addLog(admin, workspaceId, job.id, userId, "execution.plan_rejected");
         responseText = "I discarded the prepared changes. No GitHub branch, commit, or pull request was created.";
-      } else if (/^(?:approve|approved|yes(?:,? approve)?|approve changes|create the pull request)(?:\s+changes)?[.!]?$/i.test(message.trim())) {
+      } else if (/^(?:approve|approved|yes(?:,? approve)?|approve changes|create the pull request)(?:\s+changes)?[.!]?$/i.test(message.trim()) ||
+          permissionMode === "low_risk" || permissionMode === "all") {
+        const explicitApproval = /^(?:approve|approved|yes(?:,? approve)?|approve changes|create the pull request)(?:\s+changes)?[.!]?$/i.test(message.trim());
         const { data: website } = await admin.from("website_connections").select("id")
           .eq("id", job.metadata.website_connection_id).eq("workspace_id", workspaceId).is("widget_deleted_at", null).maybeSingle();
         if (!website) throw new Error("The selected website is no longer active. Prepare the plan again.");
         const { error: approvalError } = await admin.from("plugin_execution_approvals").upsert({
           workspace_id: workspaceId, job_id: job.id, approved_by: userId, decision: "approved",
-          approved_scope: { repository: job.repository_full_name, file_path: job.file_path, operation: "create_pull_request" },
+          approved_scope: { repository: job.repository_full_name, file_path: job.file_path, operation: "create_pull_request", permission_mode: permissionMode, auto_approved_by_policy: !explicitApproval },
         }, { onConflict: "job_id" });
         if (approvalError) throw new Error("Could not record your approval.");
         await admin.from("plugin_execution_jobs").update({
           status: "approved", approved_by: userId, approved_at: now, updated_at: now,
         }).eq("id", job.id).eq("workspace_id", workspaceId);
-        await addLog(admin, workspaceId, job.id, userId, "execution.plan_approved", { repository: job.repository_full_name });
+        await addLog(admin, workspaceId, job.id, userId, explicitApproval ? "execution.plan_approved" : "execution.plan_auto_approved", { repository: job.repository_full_name, permission_mode: permissionMode });
         let result: Row;
         try {
           result = await executeApprovedPlan(admin, { ...job, status: "approved" }, userId, connection);
