@@ -153,7 +153,7 @@ function PluginDetailPage() {
   }
 
   const primaryAction = connection ? (
-    <Button className="misma-plugin-detail-primary" onClick={tryInChat}>Try in chat</Button>
+    <Button className="misma-plugin-detail-primary" onClick={() => tryInChat()}>Try in chat</Button>
   ) : manifest.status === "coming" ? (
     <Button className="misma-plugin-detail-primary" disabled>Coming later</Button>
   ) : manifest.authType === "oauth_pending" ? (
