@@ -695,3 +695,83 @@ button, input, textarea, select { font-size: inherit; }
   .misma-plugin-row-main .misma-plugin-mark { width: 44px; height: 44px; }
   .misma-plugin-context-menu { right: 0; width: 178px; }
 }
+
+/* Dedicated plugin selector opened from the composer tools menu. */
+.misma-chat-plugins-open { gap: 12px !important; }
+.misma-chat-plugins-open .misma-chat-plugins-count {
+  margin-left: auto;
+  color: #9aacc0;
+  font-size: 11px;
+}
+.misma-chat-plugin-popup {
+  position: absolute;
+  z-index: 10010;
+  left: 0;
+  bottom: calc(100% + 10px);
+  width: min(280px, calc(100vw - 34px));
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  background: #0c1b2b;
+  color: #edf4fb;
+  box-shadow: 0 18px 55px rgba(0,0,0,.48);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.misma-chat-plugin-popup-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 1px 7px 7px;
+  color: #dce7f4;
+  font-size: 13px;
+}
+.misma-chat-plugin-popup-heading button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a9b8c9;
+  font-size: 20px;
+}
+.misma-chat-plugin-option {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 45px;
+  padding: 6px 7px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #edf4fb;
+  text-align: left;
+  font-size: 13px;
+}
+.misma-chat-plugin-option:hover { background: rgba(255,255,255,.06); }
+.misma-chat-plugin-option .misma-chat-plugin-check { margin-left: auto; }
+.misma-chat-plugin-logo {
+  display: grid;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 9px;
+  background: rgba(255,255,255,.05);
+  color: #edf4fb;
+}
+.misma-chat-plugin-logo svg { width: 17px; height: 17px; fill: currentColor; }
+.misma-chat-plugin-logo.is-vercel { color: #fff; }
+.misma-chat-plugin-logo.is-render,
+.misma-chat-plugin-logo.is-netlify { color: #9ec0ff; }
+.misma-chat-plugin-popup > p {
+  margin: 4px 7px 7px;
+  color: #94a7bb;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .misma-chat-plugin-popup { left: 0; bottom: calc(100% + 8px); }
+}
