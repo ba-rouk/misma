@@ -131,7 +131,7 @@ function PluginConnectPage() {
         </header>
 
         <section className="misma-plugin-connect-hero">
-          <PluginProviderLogo provider={manifest.id} size="xl" />
+          <PluginProviderLogo provider={manifest.id} size="hero" />
           <h1>Add {manifest.name} to Misma</h1>
           <p>By {manifest.developer}</p>
           <Badge tone={connected ? "success" : isUnavailable ? "warning" : "neutral"}>
