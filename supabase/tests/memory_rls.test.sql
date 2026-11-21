@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(6);
+select extensions.plan(7);
 
 create temporary table _memory_rls_users (user_a uuid, user_b uuid, workspace_b uuid, conversation_b bigint);
 insert into _memory_rls_users (user_a, user_b, workspace_b)
@@ -62,6 +62,20 @@ select extensions.is(
   )),
   2::bigint,
   'User B recalls their own exchange and fact from a different website context'
+);
+delete from public.memory_facts where user_id = (select user_b from _memory_rls_users);
+delete from public.memory_exchanges where user_id = (select user_b from _memory_rls_users);
+select extensions.is(
+  (select count(*) from public.match_memory(
+    null::extensions.vector,
+    'private project',
+    (select user_b from _memory_rls_users),
+    null,
+    10,
+    null
+  )),
+  0::bigint,
+  'Deleting memory stops it from being recalled'
 );
 select set_config('request.jwt.claim.sub', (select user_a::text from _memory_rls_users), true);
 
