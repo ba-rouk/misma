@@ -134,8 +134,11 @@ test("cross-chat memory schema uses owner-only RLS, pgvector and hybrid search",
   assert.match(page, /Reset all memory/);
   assert.match(page, /Export/);
   assert.match(page, /Pin/);
-  assert.match(page, /Import chat history/);
+  assert.doesNotMatch(page, /Import chat history|Import earlier chats|Add a fact|Save fact/);
   assert.match(page, /memory_settings/);
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(dashboard, /Manage memory/);
+  assert.doesNotMatch(dashboard, /window\.location\.assign\("\/dashboard\/memory"\)>Memory/);
 });
 
 test("memory RLS integration test proves one account cannot read another account's facts", async () => {
