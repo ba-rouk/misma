@@ -407,3 +407,26 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 @media (prefers-reduced-motion: reduce) {
   .misma-plugin-loading span, .misma-plugin-skeleton-list span { animation:none !important; }
 }
+
+/* Plugin picker empty state, website shortcut and accessible info actions. */
+.misma-chat-plugin-empty { padding:8px 7px 6px; }
+.misma-chat-plugin-empty p { margin:0 0 9px; color:#a7afbb; font-size:13px; line-height:1.45; }
+.misma-chat-plugin-empty button, .misma-chat-plugin-popup-footer button { width:100%; min-height:38px; padding:8px 10px; border:1px solid rgba(16,185,129,.31); border-radius:10px; background:rgba(16,185,129,.09); color:#a8eccd; font-size:13px; text-align:left; }
+.misma-chat-plugin-popup-footer { margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,.10); }
+.misma-chat-plugin-popup-footer button { border:0; background:transparent; color:#b8c3d0; }
+.misma-chat-plugin-popup-footer button:hover { background:rgba(255,255,255,.06); color:#fff; }
+.aichat-website-plugins { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:6px; min-height:34px; padding:0 10px; border:1px solid rgba(255,255,255,.13); border-radius:10px; background:rgba(255,255,255,.05); color:#dbe5ef; font:600 12px/1 var(--font-sans,Inter,system-ui,sans-serif); }
+.aichat-website-plugins svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.aichat-website-plugins:hover { border-color:rgba(16,185,129,.42); background:rgba(16,185,129,.09); color:#a6ebcd; }
+.misma-plugin-info { display:grid; flex:none; width:42px; height:42px; place-items:center; border:0; border-radius:12px; background:transparent; color:#aeb9c7; }
+.misma-plugin-info:hover { background:rgba(255,255,255,.07); color:#fff; }
+.misma-plugin-info svg { width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+@media (max-width: 767px) {
+  .aichat-website-plugins { min-height:38px; padding:0 9px; font-size:12px; }
+  .misma-plugin-settings-permissions fieldset { border-radius:17px; }
+  .misma-plugin-permission-option { padding:12px 11px; gap:10px; }
+  .misma-consent-actions { display:grid; grid-template-columns:1fr 1fr; }
+  .misma-consent-actions .misma-ui-button.is-primary { grid-column:1/-1; grid-row:1; }
+  .misma-consent-actions .misma-ui-button.is-secondary:first-child { grid-column:1; grid-row:2; }
+  .misma-consent-actions .misma-ui-button.is-secondary:nth-child(2) { grid-column:2; grid-row:2; }
+}
