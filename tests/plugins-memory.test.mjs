@@ -17,7 +17,6 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.match(page, /Search plugins/);
   assert.match(page, /Installed/);
   assert.doesNotMatch(page, /Popular|New & noteworthy|All popular plugins are installed/);
-  assert.match(page, /New & noteworthy/);
   assert.match(page, /misma-plugin-installed-strip/);
   assert.match(page, /misma-plugin-available-list/);
   assert.match(page, /misma-plugin-add/);
@@ -108,8 +107,8 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.ok(css.includes(".misma-plugin-detail-page .misma-plugin-detail-primary {"));
   assert.ok(css.includes("background:#f7f7f8;"));
   assert.match(manifests, /authType: "netlify_oauth"/);
-  assert.match(manifests, /id: "netlify"[\\s\\S]*status: "available"/);
-  assert.match(manifests, /pluginList = Object.values\\(pluginManifests\\).filter/);
+  assert.match(manifests, /id: "netlify"[\s\S]*status: "available"/);
+  assert.match(manifests, /pluginList = Object.values\(pluginManifests\).filter/);
   assert.doesNotMatch(manifests, /Trigger redeploy/);
 });
 
