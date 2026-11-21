@@ -889,7 +889,18 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   overflow-wrap:anywhere;
   word-break:break-word;
 }
-.misma-composer-inline-highlight-content { min-height:24px; white-space:pre-wrap; }
+.misma-composer-inline-highlight-content {
+  min-height:24px;
+  white-space:pre-wrap;
+  font-family:var(--font-sans);
+  font-size:var(--text-md);
+  line-height:var(--leading-normal);
+  letter-spacing:normal;
+  text-align:left;
+  direction:ltr;
+  unicode-bidi:plaintext;
+  box-sizing:border-box;
+}
 .misma-composer-inline-mention {
   color:#a9c9ff;
   font-weight:650;
@@ -908,6 +919,16 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   -webkit-text-fill-color:transparent;
   caret-color:#f3f6fb;
   background:transparent !important;
+  padding:4px 6px !important;
+  font-family:var(--font-sans);
+  font-size:var(--text-md);
+  line-height:var(--leading-normal);
+  letter-spacing:normal;
+  text-align:left;
+  direction:ltr;
+  unicode-bidi:plaintext;
+  text-indent:0;
+  box-sizing:border-box;
   resize:none;
 }
 .misma-composer-inline-textarea::placeholder {
