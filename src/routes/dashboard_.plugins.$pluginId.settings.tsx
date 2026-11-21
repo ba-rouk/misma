@@ -15,10 +15,14 @@ const permissionOptions: Array<{ id: PermissionMode; title: string; description:
   { id: "all", title: "Allow all actions", description: "Misma won't ask before reading or taking action. This comes with elevated risk.", elevated: true },
 ];
 
-export const Route = createFileRoute("/dashboard/plugins/$pluginId/settings")({ component: PluginSettingsPage });
+export const Route = createFileRoute("/dashboard/plugins/$pluginId/settings")({ component: PluginSettingsRoute });
 
-function PluginSettingsPage() {
+function PluginSettingsRoute() {
   const { pluginId } = Route.useParams();
+  return <PluginSettingsPage pluginId={pluginId} />;
+}
+
+export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
   const manifest = getPluginManifest(pluginId);
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState("");
