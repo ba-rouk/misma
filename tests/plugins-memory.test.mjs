@@ -121,7 +121,7 @@ test("cross-chat memory schema uses owner-only RLS, pgvector and hybrid search",
   assert.match(migration, /function public\.match_memory/i);
   assert.match(migration, /auth\.uid\(\)\) = user_id/);
   assert.match(migration, /alter table public\.conversations[\s\S]*incognito boolean/);
-  for (const table of ["memory_settings", "memory_exchanges", "memory_facts", "memory_backfill_jobs"]) {
+  for (const table of ["memory_settings", "memory_exchanges", "memory_facts", "memory_backfill_jobs", "memory_embedding_cache"]) {
     assert.match(migration, new RegExp("alter table public\\." + table + " enable row level security", "i"));
     assert.match(migration, new RegExp("create policy " + table + "_owner_all", "i"));
   }
