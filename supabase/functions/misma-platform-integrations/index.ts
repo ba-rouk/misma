@@ -182,6 +182,52 @@ async function listVercelProjects(token: string, teamId: string) {
   return projects.map(vercelProjectShape).filter(Boolean);
 }
 
+async function netlifyRequest(path: string, token: string) {
+  const response = await fetch("https://api.netlify.com/api/v1" + path, {
+    headers: { Accept: "application/json", Authorization: "Bearer " + token, "User-Agent": "Misma/1.0 (https://misma.onrender.com)" },
+  });
+  const raw = await response.text();
+  let body: any = {};
+  try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
+  if (!response.ok) {
+    const message = typeof body.message === "string" ? body.message : "Netlify API request failed.";
+    if (response.status === 401 || response.status === 403) throw new Error("Netlify rejected the authorization token. Reconnect the Netlify account and approve access again.");
+    throw new Error("Netlify request failed (" + response.status + "): " + message.slice(0, 220));
+  }
+  return body;
+}
+
+function netlifySiteShape(site: any) {
+  const id = safeText(site?.id, 180);
+  const name = safeText(site?.name || site?.custom_domain, 180);
+  if (!id || !name) return null;
+  const repo = safeText(site?.build_settings?.repo_url, 400);
+  const url = safeText(site?.ssl_url || site?.url, 400);
+  const siteSlug = safeText(site?.name, 180);
+  const dashboard = siteSlug ? "https://app.netlify.com/sites/" + encodeURIComponent(siteSlug) + "/overview" : "https://app.netlify.com/";
+  const deploy = site?.published_deploy && typeof site.published_deploy === "object" ? site.published_deploy : {};
+  return {
+    external_project_id: id, name, full_name: siteSlug || name, repository_url: repo || null,
+    dashboard_url: dashboard, default_branch: safeText(site?.build_settings?.repo_branch, 120) || null,
+    metadata: {
+      site_url: url || null, custom_domain: safeText(site?.custom_domain, 240) || null, repo_url: repo || null,
+      published_deploy_id: safeText(deploy?.id, 180) || null,
+      published_deploy_state: safeText(deploy?.state, 60) || null,
+      published_deploy_url: safeText(deploy?.ssl_url || deploy?.url, 400) || null,
+    },
+  };
+}
+
+async function listNetlifySites(token: string) {
+  const sites: any[] = [];
+  for (let page = 1; page <= 100; page++) {
+    const result = await netlifyRequest("/sites?per_page=100&page=" + page, token);
+    const items = Array.isArray(result) ? result : Array.isArray(result?.sites) ? result.sites : [];
+    sites.push(...items);
+    if (items.length < 100) break;
+  }
+  return sites.map(netlifySiteShape).filter(Boolean);
+}
 async function renderRequest(path: string, token: string, init: RequestInit = {}) {
   const response = await fetch("https://api.render.com" + path, {
     ...init,
