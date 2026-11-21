@@ -79,8 +79,9 @@ function PluginSettingsPage() {
         setUserId(user.id);
         setInternalWorkspaceId(defaultWorkspace.id);
         setConnections((connectionResult.data || []) as Connection[]);
-        setPermission((permissionOptions.some((option) => option.id === pluginResult.data?.permission_mode)
-          ? pluginResult.data.permission_mode : "low_risk") as PermissionMode);
+        const configuredPermission = String(pluginResult.data?.permission_mode || "low_risk");
+        setPermission((permissionOptions.some((option) => option.id === configuredPermission)
+          ? configuredPermission : "low_risk") as PermissionMode);
         setAccountLabel(String(pluginResult.data?.account_label || ""));
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load plugin settings.");
