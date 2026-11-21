@@ -4676,7 +4676,7 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
-  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
+  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-memory","label":"Memory","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
   const filteredSettingsNavItems = settingsNavItems.filter((item) =>
     !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
   );
@@ -6601,6 +6601,17 @@ function Dashboard() {
                 </div>
                 <div className="aichat-settings-action-row">
                   <div><strong>Manage saved conversations</strong><small>Long-press any chat in Recents to delete it.</small></div>
+                </div>
+              </section>
+
+              <section id="settings-memory" className="aichat-card aichat-settings-card">
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true">✦</span>
+                  <span><h3>Misma Memory</h3><p>Review the useful details Misma has saved from your conversations.</p></span>
+                </div>
+                <div className="aichat-settings-action-row">
+                  <div><strong>Manage memory</strong><small>View, search, export or delete saved facts and past conversation context.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/memory")}>Manage memory</button>
                 </div>
               </section>
 
