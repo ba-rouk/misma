@@ -38,7 +38,7 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.match(onboarding, /getPluginAuthorizationUrl/);
   assert.match(onboarding, /getPluginWorkspaceContext/);
   assert.match(onboarding, /Add & Connect/);
-  assert.match(onboarding, /Authorization is not available yet/);
+  assert.match(onboarding, /authorization is not available yet/);
   assert.doesNotMatch(page, /Render API key/);
   assert.doesNotMatch(consent, /Paste your Render API key/);
   assert.doesNotMatch(connect, /RENDER_API_KEY/);
