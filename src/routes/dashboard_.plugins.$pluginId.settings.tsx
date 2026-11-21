@@ -61,7 +61,9 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
           : [];
   const writeActions = manifest?.id === "github"
     ? ["Create a dedicated feature branch", "Commit an approved widget installation patch", "Open a pull request for review"]
-    : ["Project association is available where supported; direct provider deployment triggers are not enabled in this release."];
+    : manifest?.id === "netlify"
+      ? ["Associate a discovered Netlify site with a Misma website"]
+      : ["Project association is available where supported; direct provider deployment triggers are not enabled in this release."];
 
   useEffect(() => {
     let active = true;
