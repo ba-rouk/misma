@@ -162,6 +162,8 @@ test("Misma chat retrieves account memory and writes exchanges asynchronously", 
   assert.match(memory, /responseMimeType: "application\/json"/);
   assert.match(memory, /safeParse/);
   assert.match(memory, /containsSensitiveSecret/);
+  assert.match(memory, /Bearer\\s\+/);
+  assert.match(memory, /parsed\.data\.facts\.map/);
   assert.match(memory, /gemini-embedding-001/);
   assert.match(memory, /match_memory/);
   assert.match(backfill, /memory_backfill_jobs/);
