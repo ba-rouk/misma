@@ -1412,3 +1412,11 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 @media (prefers-reduced-motion: reduce) {
   .aichat-execution-activity-mark i { animation: none; }
 }
+
+.aichat-execution-activity li[data-status="waiting"] .aichat-execution-activity-mark {
+  border-style: dashed;
+  color: #b9c5d5;
+}
+.aichat-execution-activity li[data-status="waiting"] .aichat-execution-activity-status {
+  color: #a9b5c5;
+}
