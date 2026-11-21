@@ -1875,9 +1875,75 @@ function Dashboard() {
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [workspacePluginConnections, setWorkspacePluginConnections] = useState<Array<{ id: string; provider: string; external_account_name: string | null }>>([]);
+  const [workspacePluginConnectionsLoaded, setWorkspacePluginConnectionsLoaded] = useState(false);
   const [chatEnabledPlugins, setChatEnabledPlugins] = useState<string[]>([]);
+  const [pluginPreferencesLoadedKey, setPluginPreferencesLoadedKey] = useState("");
   const [thinkHarder, setThinkHarder] = useState(false);
+  const chatPluginPreferenceKey = dashboardUserId && workspace?.id
+    ? "misma_chat_plugins_v1_" + dashboardUserId + "_" + workspace.id + "_" + (currentConversationId === null ? "new" : String(currentConversationId))
+    : "";
+
   useEffect(() => {
+    let active = true;
+    setWorkspacePluginConnectionsLoaded(false);
+    if (!workspace?.id || !token || staffMode) {
+      setWorkspacePluginConnections([]);
+      setWorkspacePluginConnectionsLoaded(true);
+      return () => { active = false; };
+    }
+    void getSupabaseClient().from("platform_connections")
+      .select("id,provider,external_account_name")
+      .eq("workspace_id", workspace.id)
+      .eq("status", "connected")
+      .order("updated_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.warn("Could not load chat plugin connections.", error.code);
+          setWorkspacePluginConnections([]);
+        } else {
+          const rows = (data || []) as Array<{ id: string; provider: string; external_account_name: string | null }>;
+          const unique = rows.filter((item, index, all) => all.findIndex((candidate) => candidate.provider === item.provider) === index);
+          setWorkspacePluginConnections(unique);
+        }
+        setWorkspacePluginConnectionsLoaded(true);
+      });
+    return () => { active = false; };
+  }, [workspace?.id, token, staffMode]);
+
+  useEffect(() => {
+    if (!chatPluginPreferenceKey || !workspacePluginConnectionsLoaded) {
+      setChatEnabledPlugins([]);
+      setPluginPreferencesLoadedKey("");
+      return;
+    }
+    let saved: unknown = [];
+    try {
+      saved = JSON.parse(window.localStorage.getItem(chatPluginPreferenceKey) || "[]");
+    } catch {
+      saved = [];
+    }
+    const connected = new Set(workspacePluginConnections.map((item) => item.provider));
+    const activeProviders = Array.isArray(saved)
+      ? saved.filter((provider): provider is string => typeof provider === "string" && connected.has(provider))
+      : [];
+    setChatEnabledPlugins(activeProviders);
+    setPluginPreferencesLoadedKey(chatPluginPreferenceKey);
+  }, [chatPluginPreferenceKey, workspacePluginConnectionsLoaded, workspacePluginConnections]);
+
+  useEffect(() => {
+    if (!chatPluginPreferenceKey || pluginPreferencesLoadedKey !== chatPluginPreferenceKey || !workspacePluginConnectionsLoaded) return;
+    try {
+      const connected = new Set(workspacePluginConnections.map((item) => item.provider));
+      const safeProviders = chatEnabledPlugins.filter((provider) => connected.has(provider));
+      window.localStorage.setItem(chatPluginPreferenceKey, JSON.stringify(safeProviders));
+    } catch {
+      // The current chat still keeps its selected plugins in component state.
+    }
+  }, [chatPluginPreferenceKey, pluginPreferencesLoadedKey, workspacePluginConnectionsLoaded, workspacePluginConnections, chatEnabledPlugins]);
+
+  useEffect(() => {
+    if (!workspacePluginConnectionsLoaded || !pluginPreferencesLoadedKey || pluginPreferencesLoadedKey !== chatPluginPreferenceKey) return;
     const provider = window.sessionStorage.getItem("misma_try_plugin_provider");
     if (!provider || !workspacePluginConnections.some((item) => item.provider === provider)) return;
     window.sessionStorage.removeItem("misma_try_plugin_provider");
@@ -1885,7 +1951,7 @@ function Dashboard() {
     setPlusMenuOpen(false);
     setPluginPickerOpen(false);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [workspacePluginConnections]);
+  }, [workspacePluginConnectionsLoaded, workspacePluginConnections, pluginPreferencesLoadedKey, chatPluginPreferenceKey]);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
