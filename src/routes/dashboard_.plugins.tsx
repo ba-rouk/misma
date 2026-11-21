@@ -331,47 +331,45 @@ function PluginsPage() {
         {notice && <p className="misma-marketplace-feedback is-success" role="status">{notice}</p>}
         {error && <p className="misma-marketplace-feedback is-error" role="alert">{error}</p>}
 
-        <section className="misma-installed-section">
-          <div className="misma-marketplace-section-heading">
-            <div><h2>Installed plugins</h2><p>Connected tools for this workspace</p></div>
-            <span>{installedByProvider.size} connected</span>
-          </div>
-          {workspaceLoading || loading ? <div className="misma-marketplace-skeleton">Loading connections…</div>
-            : !workspaceId ? <div className="misma-marketplace-empty">Choose a workspace to see its installed plugins.</div>
-            : installedByProvider.size ? <div className="misma-installed-strip">
-              {[...installedByProvider.entries()].map(([provider, connection]) => {
-                const plugin = plugins.find((item) => item.id === provider)!;
-                return <button type="button" className="misma-installed-chip" key={connection.id} onClick={() => setSelected(provider)}>
-                  <ProviderLogo provider={provider} />
-                  <span><strong>{plugin.name}</strong><small>{connection.external_account_name || "Connected"}</small></span>
-                  <i aria-label="Connected" />
-                </button>;
-              })}
-            </div> : <div className="misma-marketplace-empty">No plugins are connected to this workspace yet. Choose a plugin below to get started.</div>}
-        </section>
-
-        <section className="misma-plugin-directory">
-          <div className="misma-marketplace-section-heading">
-            <div><h2>Plugin directory</h2><p>Each plugin has a separate permission boundary and responsibility.</p></div>
-            <span>{visiblePlugins.length} plugins</span>
-          </div>
-          {visiblePlugins.length ? <div className="misma-plugin-grid">
-            {visiblePlugins.map((plugin) => {
-              const connection = installedByProvider.get(plugin.id);
-              return <article className="misma-plugin-card" key={plugin.id}>
-                <button type="button" className="misma-plugin-card-main" onClick={() => setSelected(plugin.id)} aria-label={"View " + plugin.name + " details"}>
-                  <ProviderLogo provider={plugin.id} />
-                  <span className="misma-plugin-card-meta"><strong>{plugin.name}</strong><small>{plugin.publisher} · {plugin.category}</small></span>
-                  <span className={"misma-plugin-status" + (connection ? " is-connected" : plugin.availability === "coming" ? " is-coming" : "")}>{connection ? "Installed" : plugin.availability === "coming" ? "Coming soon" : "Available"}</span>
-                </button>
-                <p>{plugin.description}</p>
-                <div className="misma-plugin-card-footer">
-                  <span>{plugin.purpose}</span>
-                  <button type="button" onClick={() => setSelected(plugin.id)}>{connection ? "Manage" : plugin.availability === "coming" ? "Details" : "View plugin"} <span>↗</span></button>
+        <section className="misma-plugin-list" aria-label="Plugins">
+          {visiblePlugins.map((plugin) => {
+            const connection = installedByProvider.get(plugin.id);
+            const menuOpen = pluginMenuOpen === plugin.id;
+            return <article className="misma-plugin-row" key={plugin.id}>
+              <button type="button" className="misma-plugin-row-main" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }} aria-label={"Open " + plugin.name + " settings"}>
+                <ProviderLogo provider={plugin.id} />
+                <span className="misma-plugin-row-name">{plugin.name}</span>
+                {connection && <span className="misma-plugin-row-connected" aria-label="Connected" />}
+              </button>
+              {connection ? (
+                <div className="misma-plugin-row-actions">
+                  <button type="button" className="misma-plugin-more" aria-label={plugin.name + " options"} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setPluginMenuOpen(menuOpen ? null : plugin.id)}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+                  </button>
+                  {menuOpen && <div className="misma-plugin-context-menu" role="menu" aria-label={plugin.name + " options"}>
+                    <button type="button" role="menuitem" onClick={() => {
+                      window.sessionStorage.setItem("misma_try_plugin_provider", plugin.id);
+                      setPluginMenuOpen(null);
+                      window.location.assign("/dashboard");
+                    }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5a2 2 0 0 1 3.1-1.7l8 5.2a3.5 3.5 0 0 1 0 5.9l-8 5.2A2 2 0 0 1 8 18.4Z"/></svg><span>Try now</span>
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 15.5 20 17l-3 3-1.5-1a2 2 0 0 0-2.5 1V22h-4v-2a2 2 0 0 0-2.5-1L5 20l-3-3 1-1.5A2 2 0 0 0 2 13H1v-4h2a2 2 0 0 0 1-2.5L3 5l3-3 1.5 1A2 2 0 0 0 10 2V1h4v2a2 2 0 0 0 2.5 1L18 3l3 3-1 1.5A2 2 0 0 0 21 10h2v4h-2a2 2 0 0 0-2 1.5Z"/></svg><span>Settings</span>
+                    </button>
+                    <div className="misma-plugin-context-divider" />
+                    <button type="button" role="menuitem" className="is-danger" onClick={() => { setPluginMenuOpen(null); void disconnect(plugin.id); }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg><span>Uninstall</span>
+                    </button>
+                  </div>}
                 </div>
-              </article>;
-            })}
-          </div> : <div className="misma-marketplace-empty">No plugins match this search.</div>}
+              ) : (
+                <button type="button" className="misma-plugin-add" aria-label={"Connect " + plugin.name} title={plugin.availability === "coming" ? "Coming soon" : "Connect " + plugin.name} disabled={plugin.availability === "coming" || busy === plugin.id} onClick={() => void connectPlugin(plugin.id)}>
+                  {busy === plugin.id ? "…" : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>}
+                </button>
+              )}
+            </article>;
+          })}
         </section>
       </div>
 
