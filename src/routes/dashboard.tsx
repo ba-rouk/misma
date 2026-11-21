@@ -160,6 +160,20 @@ function HumanRequestIcon() {
   );
 }
 
+function ChatPluginIcon({ provider }: { provider: string }) {
+  const githubPath = "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12";
+  return (
+    <span className={"misma-chat-plugin-logo is-" + provider} aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        {provider === "github" ? <path d={githubPath} /> :
+          provider === "vercel" ? <path d="m12 1.6 12 20.8H0Z" /> :
+          provider === "render" ? <path d="M18.2 0c-3.1-.1-5.7 2.1-6.2 5.1-.7 4-4 6.9-7.9 6.9-1.4 0-2.7-.4-3.8-1V24H12v-9c0-1.7 1.3-3 3-3h3c3.4 0 6.1-2.8 6-6.2C23.9 2.7 21.3.2 18.2 0Z" /> :
+          <path d="m9.8 12.4 10.3 3.1c.3.1.6 0 .8-.2l2.9-2.9a.6.6 0 0 0 0-.9l-2.9-2.9c-.2-.2-.5-.3-.8-.2L9.8 11.6c-.4.1-.4.7 0 .8ZM7.9 13.8 7.9 19.4c0 .6.1.9.4 1.1l3.3 3.3c.3.3.6.3.8 0l2.8-2.8c.3-.3.3-.6 0-.8l-6.6-6.6c-.3-.3-.7-.1-.7.3ZM7.9 10.2c0 .4.4.6.7.3l6.6-6.6c.3-.3.3-.6 0-.8L12.4.2c-.2-.2-.6-.2-.8 0L8.3 3.5c-.3.3-.4.5-.4.8ZM5.6 15.2c-.3.3-.6.3-.8 0L2 12.4c-.3-.2-.3-.6 0-.8L4.8 8.8c.3-.3.6-.3.8 0l2.8 2.8c.3.3.3.6 0 .8Z" />}
+      </svg>
+    </span>
+  );
+}
+
 function SettingsNavIcon({ kind }: { kind: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1859,9 +1873,20 @@ function Dashboard() {
   const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [workspacePluginConnections, setWorkspacePluginConnections] = useState<Array<{ id: string; provider: string; external_account_name: string | null }>>([]);
   const [chatEnabledPlugins, setChatEnabledPlugins] = useState<string[]>([]);
   const [thinkHarder, setThinkHarder] = useState(false);
+  useEffect(() => {
+    const provider = window.sessionStorage.getItem("misma_try_plugin_provider");
+    if (!provider || !workspacePluginConnections.some((item) => item.provider === provider)) return;
+    window.sessionStorage.removeItem("misma_try_plugin_provider");
+    setChatEnabledPlugins((current) => current.includes(provider) ? current : [...current, provider]);
+    setPlusMenuOpen(false);
+    setPluginPickerOpen(true);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [workspacePluginConnections]);
+
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
   const composerPreviewUrlsRef = useRef<Map<File, string>>(new Map());
@@ -1872,12 +1897,12 @@ function Dashboard() {
   const [composerUploadProgress, setComposerUploadProgress] = useState<Map<File, number>>(new Map());
   const [lightboxAttachment, setLightboxAttachment] = useState<MessageAttachment | null>(null);
   const [, setUploadingAttachments] = useState(false);
-  const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
+  const [createMode, setCreateMode] = useState<"image" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
   const [mediaProgressPercent, setMediaProgressPercent] = useState(0);
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
   const [failedMediaRetry, setFailedMediaRetry] = useState<{
-    mode: "image" | "video";
+    mode: "image";
     prompt: string;
     conversationId: number;
     sourceUserMessageId: number;
@@ -3638,8 +3663,8 @@ function Dashboard() {
     }
 
     const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
-    if (implicitMediaMode) {
-      void handleCreateMedia(implicitMediaMode, textToSend);
+    if (implicitMediaMode === "image") {
+      void handleCreateMedia("image", textToSend);
       return null;
     }
 
@@ -3896,10 +3921,10 @@ function Dashboard() {
   };
 
   const handleCreateMedia = async (
-    requestedMode?: "image" | "video",
+    requestedMode?: "image",
     promptOverride?: string,
     reuse?: { sourceUserMessageId: number; replaceAiMessageId: number; attachments: MessageAttachment[] },
-    retrySaved?: { sourceUserMessageId: number; conversationId: number; prompt: string; mode: "image" | "video" },
+    retrySaved?: { sourceUserMessageId: number; conversationId: number; prompt: string; mode: "image" },
   ) => {
     const mode = requestedMode ?? retrySaved?.mode ?? createMode;
     if (!mode || !token || isSending || isGeneratingMedia) return;
@@ -3909,9 +3934,7 @@ function Dashboard() {
         ? failedMediaRetry
         : undefined
     );
-    const prompt = activeSavedRetry?.prompt || typedPrompt || (mode === "image"
-      ? "Create a high-quality image using the attached reference."
-      : "Create a short cinematic video using the attached reference.");
+    const prompt = activeSavedRetry?.prompt || typedPrompt || "Create a high-quality image using the attached reference.";
     const controller = new AbortController();
     mediaAbortControllerRef.current = controller;
     const startViewVersion = chatViewVersionRef.current;
@@ -3923,27 +3946,10 @@ function Dashboard() {
       if (!isTargetOpen()) return;
       setMessages((current) => isTargetOpen() ? updater(current) : current);
     };
-    const pause = (milliseconds: number) => new Promise<void>((resolve, reject) => {
-      if (controller.signal.aborted) {
-        reject(new DOMException("Stopped", "AbortError"));
-        return;
-      }
-      const timer = window.setTimeout(() => {
-        controller.signal.removeEventListener("abort", abort);
-        resolve();
-      }, milliseconds);
-      const abort = () => {
-        window.clearTimeout(timer);
-        controller.signal.removeEventListener("abort", abort);
-        reject(new DOMException("Stopped", "AbortError"));
-      };
-      controller.signal.addEventListener("abort", abort, { once: true });
-    });
-
     let imageProgressTimer: number | null = null;
     setChatError("");
-    setMediaProgress(mode === "image" ? "" : "Preparing your video with Agnes…");
-    setMediaProgressPercent(mode === "image" ? 5 : 0);
+    setMediaProgress("");
+    setMediaProgressPercent(5);
     setIsGeneratingMedia(true);
     if (mode === "image") {
       const startedAt = Date.now();
@@ -3966,7 +3972,7 @@ function Dashboard() {
     const pendingMessage: Message = {
       id: pendingMediaId,
       role: "ai",
-      text: mode === "image" ? "" : "Misma is preparing your video…",
+      text: "",
       pendingMedia: mode,
       created_at: new Date().toISOString(),
     };
@@ -4021,7 +4027,7 @@ function Dashboard() {
       }
 
       const result = await postChatAction({
-        action: mode === "image" ? "create-image" : "create-video",
+        action: "create-image",
         message: prompt,
         conversationId: targetConversationId,
         workspaceId: workspace?.id,
@@ -4050,141 +4056,19 @@ function Dashboard() {
         setSelectedFiles([]);
       }
 
-      if (mode === "image") {
-        if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
-        updateTargetMessages((current) => {
-          const withoutPending = current.filter((item) => item.id !== pendingMediaId);
-          return reuse
-            ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
-            : [...withoutPending, result.aiMessage];
-        });
-        if (isTargetOpen()) setMediaProgress("");
-        setFailedMediaRetry(null);
-        uploadedComposerAttachmentsRef.current.clear();
-        selectedComposerFilesRef.current = [];
-        loadData();
-        return;
-      }
-
-      const videoId = result.videoJob?.videoId;
-      const model = result.videoJob?.model;
-      if (typeof videoId !== "string" || typeof model !== "string") {
-        throw new Error("Agnes did not return a video generation job.");
-      }
-      updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
-        ...item,
-        text: "Agnes is generating your video…",
-        pendingMedia: "video",
-      } : item));
-
-      let completedUrl: string | null = null;
-      for (let attempt = 0; attempt < 120; attempt++) {
-        await pause(5000);
-        let status: Record<string, any> | null = null;
-        let pollError: unknown = null;
-        for (let retry = 0; retry < 3; retry++) {
-          try {
-            status = await postChatAction({
-              action: "poll-video",
-              workspaceId: workspace?.id,
-              conversationId: targetConversationId,
-              videoId,
-              model,
-            }, controller.signal);
-            pollError = null;
-            break;
-          } catch (error) {
-            pollError = error;
-            if (controller.signal.aborted) throw error;
-            const detail = error instanceof Error ? error.message : String(error);
-            if (!/agnes video status|temporar|network|failed to fetch|http (408|429|500|502|503|504)/i.test(detail) || retry === 2) break;
-            await pause(1200 * (retry + 1));
-          }
-        }
-        if (pollError || !status) throw pollError instanceof Error ? pollError : new Error("Agnes video status could not be retrieved.");
-        const progress = Number(status.progress) || 0;
-        if (isTargetOpen()) setMediaProgress(`Creating video… ${progress}%`);
-        updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
-          ...item,
-          text: `Agnes is generating your video… ${progress}%`,
-          pendingMedia: "video",
-        } : item));
-        if (status.status === "completed" && typeof status.url === "string") {
-          completedUrl = status.url;
-          break;
-        }
-        if (status.status === "failed") {
-          throw new Error(typeof status.error === "string" ? status.error : "Agnes video generation failed.");
-        }
-      }
-      if (!completedUrl) throw new Error("Video generation is taking longer than expected. The job may still be running; you can try again later.");
-      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
-      if (isTargetOpen()) setMediaProgress("Checking video frames for safe content…");
-      const reviewConfig = getSupabaseConfig();
-      if (!reviewConfig || !completedUrl) throw new Error("Could not prepare the generated video for its safety review.");
-      const reviewDownload = await fetch(`${reviewConfig.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: reviewConfig.publishableKey,
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          action: "download-video-for-review",
-          workspaceId: workspace?.id,
-          conversationId: targetConversationId,
-          videoId,
-          url: completedUrl,
-        }),
-        signal: controller.signal,
-      });
-      if (!reviewDownload.ok) {
-        const detail = await reviewDownload.json().catch(() => ({})) as { error?: string };
-        throw new Error(detail.error || "Could not inspect the generated video safely.");
-      }
-      const reviewBlob = await reviewDownload.blob();
-      if (reviewBlob.size <= 0 || reviewBlob.size > 150 * 1024 * 1024) {
-        throw new Error("The generated video is empty or too large to run a safety review.");
-      }
-      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
-      const reviewFile = new File([reviewBlob], "misma-generated-video-review.mp4", {
-        type: reviewBlob.type.startsWith("video/") ? reviewBlob.type : "video/mp4",
-      });
-      const reviewFrames = await extractVideoKeyframes(reviewFile);
-      if (reviewFrames.length < 2) throw new Error("Misma could not sample enough frames to review this video safely.");
-      const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true, controller.signal);
-      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
-      await postChatAction({
-        action: "review-video-frames",
-        workspaceId: workspace?.id,
-        conversationId: targetConversationId,
-        videoId,
-        url: completedUrl,
-        attachments: reviewAttachments,
-      }, controller.signal);
-      const saved = await postChatAction({
-        action: "save-generated-media",
-        workspaceId: workspace?.id,
-        conversationId: targetConversationId,
-        videoId,
-        url: completedUrl,
-        ...(reuse ? { replaceAiMessageId: reuse.replaceAiMessageId } : {}),
-      }, controller.signal);
-      if (!saved.aiMessage) throw new Error("The generated video could not be saved to this chat.");
+      if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
       updateTargetMessages((current) => {
         const withoutPending = current.filter((item) => item.id !== pendingMediaId);
         return reuse
-          ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? saved.aiMessage : item)
-          : [...withoutPending, saved.aiMessage];
+          ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
+          : [...withoutPending, result.aiMessage];
       });
-      if (isTargetOpen()) {
-        setMediaProgress("Video created.");
-        window.setTimeout(() => setMediaProgress(""), 3500);
-      }
+      if (isTargetOpen()) setMediaProgress("");
       setFailedMediaRetry(null);
       uploadedComposerAttachmentsRef.current.clear();
       selectedComposerFilesRef.current = [];
       loadData();
+      return;
     } catch (cause) {
       const responseData = cause instanceof Error
         ? (cause as Error & { responseData?: Record<string, any> }).responseData
@@ -4435,7 +4319,11 @@ function Dashboard() {
       setChatError("The original media prompt is unavailable, so this item cannot be recreated.");
       return;
     }
-    await handleCreateMedia(generatedMedia.kind === "generated-video" ? "video" : "image", promptMessage.text, {
+    if (generatedMedia.kind === "generated-video") {
+      setChatError("Video generation is no longer available in Misma.");
+      return;
+    }
+    await handleCreateMedia("image", promptMessage.text, {
       sourceUserMessageId,
       replaceAiMessageId,
       attachments: promptMessage.attachments || [],
@@ -5515,7 +5403,7 @@ function Dashboard() {
                       toolbarStart={
                         <>
                           <div className="aichat-composer-plus-wrap">
-                            <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => setPlusMenuOpen((open) => !open)}>
+                            <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => { setPluginPickerOpen(false); setPlusMenuOpen((open) => !open); }}>
                               {plusMenuOpen ? (
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                               ) : (
@@ -5546,22 +5434,38 @@ function Dashboard() {
                                   <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
                                   <span><strong>Create image</strong></span>
                                 </button>
-                                <button type="button" role="menuitem" onClick={() => { setThinkHarder(false); setCreateMode("video"); setPlusMenuOpen(false); }}>
-                                  <span className="aichat-plus-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
-                                  <span><strong>Create video</strong></span>
+                                <button type="button" role="menuitem" className="misma-chat-plugins-open" onClick={() => {
+                                  setPlusMenuOpen(false);
+                                  setPluginPickerOpen((open) => !open);
+                                }}>
+                                  <span className="aichat-plus-menu-icon">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4h6V3Zm6 0v6h6V5a2 2 0 0 0-2-2h-4ZM3 15v4a2 2 0 0 0 2 2h4v-6H3Zm12 6h4a2 2 0 0 0 2-2v-4h-6v6Z"/><path d="M10 10h4v4h-4z"/></svg>
+                                  </span>
+                                  <span><strong>Plugins</strong></span>
+                                  <span className="misma-chat-plugins-count">{workspacePluginConnections.length}</span>
                                 </button>
-                                <div className="misma-chat-plugin-picker" role="group" aria-label="Plugins for this chat">
-                                  <div className="misma-chat-plugin-picker-heading">
-                                    <strong>Plugins</strong>
-                                    <button type="button" onClick={() => { setPlusMenuOpen(false); window.location.assign("/dashboard/plugins"); }}>Manage</button>
-                                  </div>
-                                  {workspacePluginConnections.length ? workspacePluginConnections.map((plugin) => (
-                                    <button key={plugin.id} type="button" className="misma-chat-plugin-toggle" role="menuitemcheckbox" aria-checked={chatEnabledPlugins.includes(plugin.provider)} onClick={() => setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider])}>
-                                      <span className="misma-chat-plugin-toggle-name"><i>{plugin.provider === "github" ? "GH" : plugin.provider === "vercel" ? "▲" : plugin.provider === "render" ? "R" : "N"}</i><span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span></span>
-                                      <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
-                                    </button>
-                                  )) : <p>No installed plugins in this workspace yet.</p>}
+                              </div>
+                            )}
+                            {pluginPickerOpen && (
+                              <div className="misma-chat-plugin-popup" role="menu" aria-label="Connected plugins">
+                                <div className="misma-chat-plugin-popup-heading">
+                                  <strong>Plugins</strong>
+                                  <button type="button" aria-label="Close plugins" onClick={() => setPluginPickerOpen(false)}>×</button>
                                 </div>
+                                {workspacePluginConnections.length ? workspacePluginConnections.map((plugin) => (
+                                  <button
+                                    key={plugin.id}
+                                    type="button"
+                                    className="misma-chat-plugin-option"
+                                    role="menuitemcheckbox"
+                                    aria-checked={chatEnabledPlugins.includes(plugin.provider)}
+                                    onClick={() => setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider])}
+                                  >
+                                    <ChatPluginIcon provider={plugin.provider} />
+                                    <span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span>
+                                    <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
+                                  </button>
+                                )) : <p>No connected plugins for this workspace.</p>}
                               </div>
                             )}
                           </div>
@@ -5608,9 +5512,9 @@ function Dashboard() {
                           value={draft}
                           onChange={(e) => {
                             const nextValue = e.target.value;
-                            const createMatch = nextValue.match(/^@create\s+(image|video)(?=\s|$)\s*/i);
+                            const createMatch = nextValue.match(/^@create\s+image(?=\s|$)\s*/i);
                             if (createMatch) {
-                              setCreateMode(createMatch[1].toLowerCase() as "image" | "video");
+                              setCreateMode("image");
                               setThinkHarder(false);
                               setDraft(nextValue.slice(createMatch[0].length));
                               return;

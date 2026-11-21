@@ -4,28 +4,28 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("plugin marketplace has a workspace-scoped searchable directory and separate provider scopes", async () => {
+test("plugin marketplace uses the compact native-style list and connected-provider menus", async () => {
   const page = await read("../src/routes/dashboard_.plugins.tsx");
   assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
   assert.match(page, /Search plugins/);
-  assert.match(page, /Installed/);
-  assert.match(page, /Developer & Hosting/);
-  assert.match(page, /github.*vercel.*render.*netlify/s);
+  assert.match(page, /misma-plugin-list/);
+  assert.match(page, /misma-plugin-row/);
+  assert.match(page, /misma-plugin-add/);
+  assert.match(page, /misma-plugin-more/);
+  assert.match(page, /misma-plugin-context-menu/);
+  assert.match(page, /Try now/);
+  assert.match(page, /Settings/);
+  assert.match(page, /Uninstall/);
+  assert.match(page, /misma_try_plugin_provider/);
   assert.match(page, /platform_connections/);
   assert.match(page, /platform-disconnect/);
-  assert.match(page, /Permissions and scope/);
   assert.match(page, /workspace_id/);
-  assert.match(page, /Coming soon/);
-  assert.match(page, /async function connectPlugin/);
+  assert.match(page, /github.*vercel.*render.*netlify/s);
   assert.match(page, /github-install-url/);
   assert.match(page, /vercel-install-url/);
-  assert.match(page, /render-connect/);
   assert.match(page, /render-refresh-projects/);
   assert.match(page, /render-link-project/);
-  assert.match(page, /misma-plugin-credential-field/);
-  assert.match(page, /misma-plugin-render-config/);
-  assert.match(page, /misma-marketplace-back-button/);
-  assert.match(page, /window\.history\.back\(\)/);
+  assert.match(page, /Render-issued OAuth client/);
   assert.match(page, /function ProviderLogo/);
   assert.match(page, /aria-label=\{labels\[provider\] \+ " logo"\}/);
   assert.match(page, /github: "M12/);
@@ -33,9 +33,16 @@ test("plugin marketplace has a workspace-scoped searchable directory and separat
   assert.match(page, /netlify: "m9\.793/);
   assert.match(page, /render: "M18\.263/);
   assert.doesNotMatch(page, /Misma ecosystem/);
+  assert.doesNotMatch(page, /Connect plugins to let Misma/);
+  assert.doesNotMatch(page, /Plugin directory/);
+  assert.doesNotMatch(page, /Code & Repository Management/);
+  assert.doesNotMatch(page, /Render API key/);
+  assert.doesNotMatch(page, /render-connect/);
+  assert.doesNotMatch(page, />Manage</);
   assert.doesNotMatch(page, /\/dashboard\/integrations\?provider=/);
   assert.doesNotMatch(page, /Back to Misma/);
 });
+
 
 test("Misma Brain is an account-level RLS table with owner-only CRUD policies", async () => {
   const migration = await read("../supabase/migrations/20261120142721_account_level_user_memories.sql");
@@ -63,6 +70,8 @@ test("Misma chat injects cross-chat memories and whitelists connected plugins", 
   assert.match(edge, /PLUGINS EXPLICITLY ENABLED FOR THIS CHAT/);
   assert.match(edge, /WEBSITE CODE AND WIDGET-INSTALLATION WORKFLOW/);
   assert.match(edge, /Never claim to have inspected code/);
+  assert.match(edge, /allowedActions = new Set\(\["chat", "create-image", "download-generated-media", "core01-feedback"\]\)/);
+  assert.doesNotMatch(edge, /"create-video", "poll-video"/);
 });
 
 test("dashboard exposes Plugins and Memory and passes explicit chat plugin selection", async () => {
@@ -72,7 +81,13 @@ test("dashboard exposes Plugins and Memory and passes explicit chat plugin selec
   assert.doesNotMatch(dashboard, />Connect<\/span>/);
   assert.match(dashboard, /chatEnabledPlugins/);
   assert.match(dashboard, /activePlugins: chatEnabledPlugins/);
-  assert.match(dashboard, /misma-chat-plugin-picker/);
+  assert.match(dashboard, /misma-chat-plugin-popup/);
+  assert.match(dashboard, /misma-chat-plugins-open/);
+  assert.match(dashboard, /ChatPluginIcon/);
+  assert.match(dashboard, /misma_try_plugin_provider/);
+  assert.doesNotMatch(dashboard, /Create video/);
+  assert.doesNotMatch(dashboard, /setCreateMode\("video"\)/);
+  assert.doesNotMatch(dashboard, /@create\\s\+\(image\|video\)/);
 });
 
 test("plugin disconnect removes encrypted credentials and is workspace-authorized", async () => {

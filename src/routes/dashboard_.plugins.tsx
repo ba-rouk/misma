@@ -30,37 +30,22 @@ const plugins: Array<{
   name: string;
   publisher: string;
   category: string;
-  description: string;
-  purpose: string;
-  permissions: string[];
   availability: "available" | "coming";
 }> = [
   {
     id: "github", name: "GitHub", publisher: "Misma", category: "Developer",
-    description: "Connect repositories and let Misma understand and prepare focused code changes.",
-    purpose: "Code & Repository Management",
-    permissions: ["Read repositories available to your GitHub App installation.", "Inspect repository structure and supported website entry points.", "Create a dedicated branch and prepare a pull request for widget changes.", "Merge changes only through an explicitly approved workflow."],
     availability: "available",
   },
   {
     id: "vercel", name: "Vercel", publisher: "Vercel", category: "Hosting",
-    description: "Discover projects, associate the correct project with a Misma website, and monitor deployments.",
-    purpose: "Deployment & Hosting",
-    permissions: ["Read projects accessible to the connected account.", "Associate a selected project with a Misma workspace website.", "Trigger or monitor supported deployments after an approved repository change."],
     availability: "available",
   },
   {
     id: "render", name: "Render", publisher: "Render", category: "Hosting",
-    description: "Connect a Render account, find web services and static sites, and manage deploy targets.",
-    purpose: "Deployment & Hosting",
-    permissions: ["Validate your customer-owned Render API key.", "Discover services and static sites exposed by that key.", "Associate the chosen service with a Misma website and monitor deployment status."],
     availability: "available",
   },
   {
     id: "netlify", name: "Netlify", publisher: "Netlify", category: "Hosting",
-    description: "Prepare to connect sites and publishing workflows through your Netlify account.",
-    purpose: "Deployment & Hosting",
-    permissions: ["Planned: discover authorized Netlify sites and build configuration.", "Planned: trigger and monitor builds for the selected site."],
     availability: "coming",
   },
 ];
@@ -84,18 +69,14 @@ function ProviderLogo({ provider }: { provider: Provider }) {
 
 function PluginsPage() {
   const supabase = getSupabaseClient();
-  const [loading, setLoading] = useState(true);
-  const [workspaceLoading, setWorkspaceLoading] = useState(true);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "Installed" | "Developer & Hosting">("All");
   const [selected, setSelected] = useState<Provider | null>(null);
+  const [pluginMenuOpen, setPluginMenuOpen] = useState<Provider | null>(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [renderApiKey, setRenderApiKey] = useState("");
   const [renderConfigLoading, setRenderConfigLoading] = useState(false);
   const [renderWebsites, setRenderWebsites] = useState<Website[]>([]);
   const [renderProjects, setRenderProjects] = useState<PlatformProject[]>([]);
@@ -106,10 +87,9 @@ function PluginsPage() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      setWorkspaceLoading(true);
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) throw new Error("Sign in to manage plugins.");
+        if (authError || !user) throw new Error("Sign in to view plugins.");
         const { data: memberships, error: membershipError } = await supabase
           .from("workspace_members").select("workspace_id,role").eq("user_id", user.id);
         if (membershipError) throw membershipError;
@@ -122,15 +102,14 @@ function PluginsPage() {
           options = (data || []) as Workspace[];
         }
         if (alive) {
-          setWorkspaces(options);
           const saved = window.sessionStorage.getItem("misma_integrations_workspace");
-          const initial = options.find((item) => item.id === saved) || (options.length === 1 ? options[0] : null);
+          const initial = options.find((item) => item.id === saved) || options[0] || null;
           setWorkspaceId(initial?.id || "");
+          if (initial?.id) window.sessionStorage.setItem("misma_integrations_workspace", initial.id);
         }
       } catch (cause) {
         if (alive) setError(cause instanceof Error ? cause.message : "Could not load your workspaces.");
       } finally {
-        if (alive) setWorkspaceLoading(false);
       }
     })();
     return () => { alive = false; };
@@ -140,10 +119,8 @@ function PluginsPage() {
     let alive = true;
     if (!workspaceId) {
       setConnections([]);
-      setLoading(false);
       return () => { alive = false; };
     }
-    setLoading(true);
     void (async () => {
       try {
         const { data, error: connectionError } = await supabase.from("platform_connections")
@@ -154,7 +131,6 @@ function PluginsPage() {
       } catch (cause) {
         if (alive) setError(cause instanceof Error ? cause.message : "Could not load installed plugins.");
       } finally {
-        if (alive) setLoading(false);
       }
     })();
     return () => { alive = false; };
@@ -169,13 +145,9 @@ function PluginsPage() {
   }, [connections]);
 
   const visiblePlugins = useMemo(() => plugins.filter((plugin) => {
-    const installed = installedByProvider.has(plugin.id);
-    const searchable = [plugin.name, plugin.description, plugin.category, plugin.purpose].join(" ").toLowerCase();
-    if (query.trim() && !searchable.includes(query.trim().toLowerCase())) return false;
-    if (filter === "Installed" && !installed) return false;
-    if (filter === "Developer & Hosting" && !["Developer", "Hosting"].includes(plugin.category)) return false;
-    return true;
-  }), [filter, installedByProvider, query]);
+    const searchable = [plugin.name, plugin.category].join(" ").toLowerCase();
+    return !query.trim() || searchable.includes(query.trim().toLowerCase());
+  }), [query]);
 
   async function disconnect(plugin: Provider) {
     const connection = installedByProvider.get(plugin);
@@ -228,19 +200,7 @@ function PluginsPage() {
       }
 
       if (plugin === "render") {
-        if (!renderApiKey.trim()) throw new Error("Enter your Render API key.");
-        const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
-          body: { action: "render-connect", workspaceId, apiKey: renderApiKey.trim() },
-        });
-        if (invokeError) throw new Error(invokeError.message || "Could not connect Render.");
-        if (data?.error) throw new Error(String(data.error));
-        setRenderApiKey("");
-        const { data: refreshed, error: refreshError } = await supabase.from("platform_connections")
-          .select("id,provider,external_account_name,status,updated_at")
-          .eq("workspace_id", workspaceId).order("updated_at", { ascending: false });
-        if (refreshError) throw refreshError;
-        setConnections((refreshed || []) as Connection[]);
-        setNotice(String(data?.message || "Render is connected to this Misma workspace."));
+        throw new Error("Render sign-in is not available for third-party apps yet. Misma needs its own OAuth client registration from Render. No API key is requested here.");
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not connect this plugin.");
@@ -338,37 +298,14 @@ function PluginsPage() {
   return (
     <main className="misma-marketplace-page">
       <div className="misma-marketplace-shell">
-        <header className="misma-marketplace-header">
-          <div className="misma-marketplace-title-group">
-            <button
-              type="button"
-              className="misma-marketplace-back-button"
-              aria-label="Go to previous page"
-              title="Go back"
-              onClick={() => {
-                if (window.history.length > 1) window.history.back();
-                else window.location.assign("/dashboard");
-              }}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
-            </button>
-            <div>
-              <h1>Plugins</h1>
-              <p>Connect plugins to let Misma work across your tools and deploy your websites.</p>
-            </div>
-          </div>
-          <label className="misma-marketplace-workspace">
-            <span>Workspace</span>
-            <select value={workspaceId} onChange={(event) => {
-              setWorkspaceId(event.target.value);
-              if (event.target.value) window.sessionStorage.setItem("misma_integrations_workspace", event.target.value);
-              else window.sessionStorage.removeItem("misma_integrations_workspace");
-              setNotice("");
-            }} disabled={workspaceLoading || workspaces.length <= 1}>
-              <option value="">Choose a workspace</option>
-              {workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          </label>
+        <header className="misma-marketplace-header misma-marketplace-header-simple">
+          <button type="button" className="misma-marketplace-back-button" aria-label="Go to previous page" title="Go back" onClick={() => {
+            if (window.history.length > 1) window.history.back();
+            else window.location.assign("/dashboard");
+          }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+          </button>
+          <h1>Plugins</h1>
         </header>
 
         <label className="misma-marketplace-search">
@@ -377,56 +314,48 @@ function PluginsPage() {
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}
         </label>
 
-        <nav className="misma-marketplace-filters" aria-label="Plugin filters">
-          {(["All", "Installed", "Developer & Hosting"] as const).map((item) => (
-            <button key={item} type="button" className={filter === item ? "is-active" : ""} onClick={() => setFilter(item)}>{item}</button>
-          ))}
-        </nav>
-
         {notice && <p className="misma-marketplace-feedback is-success" role="status">{notice}</p>}
         {error && <p className="misma-marketplace-feedback is-error" role="alert">{error}</p>}
 
-        <section className="misma-installed-section">
-          <div className="misma-marketplace-section-heading">
-            <div><h2>Installed plugins</h2><p>Connected tools for this workspace</p></div>
-            <span>{installedByProvider.size} connected</span>
-          </div>
-          {workspaceLoading || loading ? <div className="misma-marketplace-skeleton">Loading connections…</div>
-            : !workspaceId ? <div className="misma-marketplace-empty">Choose a workspace to see its installed plugins.</div>
-            : installedByProvider.size ? <div className="misma-installed-strip">
-              {[...installedByProvider.entries()].map(([provider, connection]) => {
-                const plugin = plugins.find((item) => item.id === provider)!;
-                return <button type="button" className="misma-installed-chip" key={connection.id} onClick={() => setSelected(provider)}>
-                  <ProviderLogo provider={provider} />
-                  <span><strong>{plugin.name}</strong><small>{connection.external_account_name || "Connected"}</small></span>
-                  <i aria-label="Connected" />
-                </button>;
-              })}
-            </div> : <div className="misma-marketplace-empty">No plugins are connected to this workspace yet. Choose a plugin below to get started.</div>}
-        </section>
-
-        <section className="misma-plugin-directory">
-          <div className="misma-marketplace-section-heading">
-            <div><h2>Plugin directory</h2><p>Each plugin has a separate permission boundary and responsibility.</p></div>
-            <span>{visiblePlugins.length} plugins</span>
-          </div>
-          {visiblePlugins.length ? <div className="misma-plugin-grid">
-            {visiblePlugins.map((plugin) => {
-              const connection = installedByProvider.get(plugin.id);
-              return <article className="misma-plugin-card" key={plugin.id}>
-                <button type="button" className="misma-plugin-card-main" onClick={() => setSelected(plugin.id)} aria-label={"View " + plugin.name + " details"}>
-                  <ProviderLogo provider={plugin.id} />
-                  <span className="misma-plugin-card-meta"><strong>{plugin.name}</strong><small>{plugin.publisher} · {plugin.category}</small></span>
-                  <span className={"misma-plugin-status" + (connection ? " is-connected" : plugin.availability === "coming" ? " is-coming" : "")}>{connection ? "Installed" : plugin.availability === "coming" ? "Coming soon" : "Available"}</span>
-                </button>
-                <p>{plugin.description}</p>
-                <div className="misma-plugin-card-footer">
-                  <span>{plugin.purpose}</span>
-                  <button type="button" onClick={() => setSelected(plugin.id)}>{connection ? "Manage" : plugin.availability === "coming" ? "Details" : "View plugin"} <span>↗</span></button>
+        <section className="misma-plugin-list" aria-label="Plugins">
+          {visiblePlugins.map((plugin) => {
+            const connection = installedByProvider.get(plugin.id);
+            const menuOpen = pluginMenuOpen === plugin.id;
+            return <article className="misma-plugin-row" key={plugin.id}>
+              <button type="button" className="misma-plugin-row-main" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }} aria-label={"Open " + plugin.name + " settings"}>
+                <ProviderLogo provider={plugin.id} />
+                <span className="misma-plugin-row-name">{plugin.name}</span>
+                {connection && <span className="misma-plugin-row-connected" aria-label="Connected" />}
+              </button>
+              {connection ? (
+                <div className="misma-plugin-row-actions">
+                  <button type="button" className="misma-plugin-more" aria-label={plugin.name + " options"} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setPluginMenuOpen(menuOpen ? null : plugin.id)}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+                  </button>
+                  {menuOpen && <div className="misma-plugin-context-menu" role="menu" aria-label={plugin.name + " options"}>
+                    <button type="button" role="menuitem" onClick={() => {
+                      window.sessionStorage.setItem("misma_try_plugin_provider", plugin.id);
+                      setPluginMenuOpen(null);
+                      window.location.assign("/dashboard");
+                    }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5a2 2 0 0 1 3.1-1.7l8 5.2a3.5 3.5 0 0 1 0 5.9l-8 5.2A2 2 0 0 1 8 18.4Z"/></svg><span>Try now</span>
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 15.5 20 17l-3 3-1.5-1a2 2 0 0 0-2.5 1V22h-4v-2a2 2 0 0 0-2.5-1L5 20l-3-3 1-1.5A2 2 0 0 0 2 13H1v-4h2a2 2 0 0 0 1-2.5L3 5l3-3 1.5 1A2 2 0 0 0 10 2V1h4v2a2 2 0 0 0 2.5 1L18 3l3 3-1 1.5A2 2 0 0 0 21 10h2v4h-2a2 2 0 0 0-2 1.5Z"/></svg><span>Settings</span>
+                    </button>
+                    <div className="misma-plugin-context-divider" />
+                    <button type="button" role="menuitem" className="is-danger" onClick={() => { setPluginMenuOpen(null); void disconnect(plugin.id); }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg><span>Uninstall</span>
+                    </button>
+                  </div>}
                 </div>
-              </article>;
-            })}
-          </div> : <div className="misma-marketplace-empty">No plugins match this search.</div>}
+              ) : (
+                <button type="button" className="misma-plugin-add" aria-label={"Connect " + plugin.name} title={plugin.availability === "coming" ? "Coming soon" : "Connect " + plugin.name} disabled={plugin.availability === "coming" || busy === plugin.id} onClick={() => void connectPlugin(plugin.id)}>
+                  {busy === plugin.id ? "…" : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>}
+                </button>
+              )}
+            </article>;
+          })}
         </section>
       </div>
 
@@ -437,24 +366,19 @@ function PluginsPage() {
           <button type="button" className="misma-plugin-modal-close" aria-label="Close details" onClick={() => setSelected(null)}>×</button>
           <div className="misma-plugin-modal-heading">
             <ProviderLogo provider={selectedPlugin.id} />
-            <div><span className="misma-marketplace-eyebrow">{selectedPlugin.publisher} · Verified publisher</span><h2 id="misma-plugin-modal-title">{selectedPlugin.name}</h2><p>{selectedPlugin.purpose}</p></div>
+            <div><h2 id="misma-plugin-modal-title">{selectedPlugin.name}</h2></div>
           </div>
-          <p className="misma-plugin-modal-description">{selectedPlugin.description}</p>
-          <div className="misma-plugin-permissions">
-            <h3>Permissions and scope</h3>
-            <ul>{selectedPlugin.permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul>
-            <p>Access is limited to the selected Misma workspace and the connected account's granted permissions. GitHub changes and production deployments must follow the approval flow.</p>
-            <p className="misma-plugin-storage-note">Misma validates provider access on the server and stores supported credentials encrypted in Supabase. Provider secrets are not stored in this browser.</p>
-          </div>
-          {selectedPlugin.availability === "coming" ? <div className="misma-plugin-coming-note">Netlify authorization and build actions are not enabled yet.</div> : selectedConnection
-            ? <div className="misma-plugin-connected-state"><span className="misma-plugin-status is-connected">Connected</span><strong>{selectedConnection.external_account_name || selectedPlugin.name + " account"}</strong><small>Connected to the selected workspace.</small></div>
-            : <div className="misma-plugin-coming-note">This plugin is not connected to the selected workspace.</div>}
-          {selectedPlugin.id === "render" && !selectedConnection && selectedPlugin.availability !== "coming" && (
-            <label className="misma-plugin-credential-field">
-              <span>Render API key</span>
-              <input type="password" autoComplete="off" value={renderApiKey} onChange={(event) => setRenderApiKey(event.target.value)} placeholder="Paste your Render API key" />
-              <small>The key is sent to Misma's Supabase Edge Function for validation and encrypted storage.</small>
-            </label>
+          {selectedPlugin.availability === "coming" ? (
+            <p className="misma-plugin-modal-description">This connection is not available yet.</p>
+          ) : selectedConnection ? (
+            <div className="misma-plugin-connected-state">
+              <span className="misma-plugin-status is-connected">Connected</span>
+              <strong>{selectedConnection.external_account_name || selectedPlugin.name + " account"}</strong>
+            </div>
+          ) : selectedPlugin.id === "render" ? (
+            <p className="misma-plugin-modal-description">Render sign-in for third-party apps requires a Render-issued OAuth client. Misma does not currently have one. You will not be asked to paste an API key.</p>
+          ) : (
+            <p className="misma-plugin-modal-description">Connect your {selectedPlugin.name} account to Misma.</p>
           )}
           {selectedPlugin.id === "render" && selectedConnection && (
             <div className="misma-plugin-render-config">
@@ -493,8 +417,8 @@ function PluginsPage() {
           {error && <p className="misma-plugin-modal-feedback is-error" role="alert">{error}</p>}
           {notice && <p className="misma-plugin-modal-feedback" role="status">{notice}</p>}
           <div className="misma-plugin-modal-actions">
-            {selectedPlugin.availability !== "coming" && !selectedConnection && <button type="button" className="misma-plugin-primary" disabled={busy === selectedPlugin.id || (selectedPlugin.id === "render" && !renderApiKey.trim())} onClick={() => void connectPlugin(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Connecting…" : selectedPlugin.id === "github" ? "Continue to GitHub" : selectedPlugin.id === "vercel" ? "Continue to Vercel" : "Connect Render"}</button>}
-            {selectedConnection && <button type="button" className="misma-plugin-danger" disabled={busy === selectedPlugin.id} onClick={() => void disconnect(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Disconnecting…" : "Disconnect"}</button>}
+            {selectedPlugin.availability !== "coming" && !selectedConnection && selectedPlugin.id !== "render" && <button type="button" className="misma-plugin-primary" disabled={busy === selectedPlugin.id} onClick={() => void connectPlugin(selectedPlugin.id)}>Connect</button>}
+            {selectedConnection && <button type="button" className="misma-plugin-danger" disabled={busy === selectedPlugin.id} onClick={() => void disconnect(selectedPlugin.id)}>Uninstall</button>}
           </div>
         </section>
       </div>}
