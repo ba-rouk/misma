@@ -271,39 +271,48 @@ async function getFile(owner: string, repo: string, path: string, branch: string
   if (content.length > 300_000) throw new Error("The selected entry file is too large for a safe automatic patch.");
   return { content, sha: String(item.sha) };
 }
-async function inspectRepo(repo: Repo, installationId: number, siteKey: string) {
-  const token = await installationToken(installationId, repo.id);
-  const [owner, name] = repo.full_name.split("/");
-  const tree = await githubRequest("/repos/" + owner + "/" + name + "/git/trees/" + encodeURIComponent(repo.default_branch) + "?recursive=1", token);
-  if (tree.truncated) throw new Error("GitHub truncated this repository tree. Misma cannot reliably identify the application entry point.");
-  const paths = (Array.isArray(tree.tree) ? tree.tree : [])
-    .filter((item: any) => item.type === "blob" && typeof item.path === "string")
-    .map((item: any) => String(item.path));
-  const chosen = chooseAdapter(paths);
-  if (!chosen) {
-    const packagePath = paths.includes("package.json") ? "package.json" : null;
-    let technologies: string[] = [];
-    if (packagePath) {
-      const pkg = await getFile(owner, name, packagePath, repo.default_branch, token);
-      try {
-        const parsed = JSON.parse(pkg.content);
-        technologies = Object.keys({ ...(parsed.dependencies || {}), ...(parsed.devDependencies || {}) })
-          .filter(x => ["next","nuxt","vue","react","@angular/core","svelte","@sveltejs/kit","astro"].includes(x)).slice(0, 12);
-      } catch { /* detection remains conservative */ }
+async function inspectRepo(
+  repo: Repo, installationId: number, siteKey: string, progress?: (event: Row) => void,
+) {
+  progress?.({ type: "activity", step: "search_repository", title: "Searching repository files for a safe widget entry point", status: "running", detail: repo.full_name });
+  try {
+    const token = await installationToken(installationId, repo.id);
+    const [owner, name] = repo.full_name.split("/");
+    const tree = await githubRequest("/repos/" + owner + "/" + name + "/git/trees/" + encodeURIComponent(repo.default_branch) + "?recursive=1", token);
+    if (tree.truncated) throw new Error("GitHub truncated this repository tree. Misma cannot reliably identify the application entry point.");
+    const paths = (Array.isArray(tree.tree) ? tree.tree : [])
+      .filter((item: any) => item.type === "blob" && typeof item.path === "string")
+      .map((item: any) => String(item.path));
+    const chosen = chooseAdapter(paths);
+    progress?.({ type: "activity", step: "search_repository", title: "Repository search complete", status: "succeeded", detail: String(paths.length) + " files scanned" });
+    if (!chosen) {
+      const packagePath = paths.includes("package.json") ? "package.json" : null;
+      let technologies: string[] = [];
+      if (packagePath) {
+        const pkg = await getFile(owner, name, packagePath, repo.default_branch, token);
+        try {
+          const parsed = JSON.parse(pkg.content);
+          technologies = Object.keys({ ...(parsed.dependencies || {}), ...(parsed.devDependencies || {}) })
+            .filter(x => ["next","nuxt","vue","react","@angular/core","svelte","@sveltejs/kit","astro"].includes(x)).slice(0, 12);
+        } catch { /* detection remains conservative */ }
+      }
+      throw new Error("I inspected " + repo.full_name + " but could not identify a verified widget entry point." +
+        (technologies.length ? " Detected packages: " + technologies.join(", ") + "." : "") +
+        " This framework needs a dedicated adapter or a customer-selected shared HTML layout.");
     }
-    throw new Error("I inspected " + repo.full_name + " but could not identify a verified widget entry point." +
-      (technologies.length ? " Detected packages: " + technologies.join(", ") + "." : "") +
-      " This framework needs a dedicated adapter or a customer-selected shared HTML layout.");
+    const file = await getFile(owner, name, chosen.entrypoint, repo.default_branch, token);
+    const updated = buildWidgetPatch(chosen.adapter, chosen.entrypoint, file.content, siteKey);
+    if (updated === file.content) throw new Error("No safe widget change was generated.");
+    return {
+      framework: chosen.framework, adapter: chosen.adapter, entrypoint: chosen.entrypoint,
+      originalSha: file.sha, updatedContent: updated,
+      additions: updated.split("\n").length - file.content.split("\n").length,
+      summary: "Add the Misma widget loader to " + chosen.entrypoint + ".",
+    };
+  } catch (cause) {
+    progress?.({ type: "activity", step: "search_repository", title: "Repository search failed", status: "failed", detail: cause instanceof Error ? cause.message : "Repository search failed" });
+    throw cause;
   }
-  const file = await getFile(owner, name, chosen.entrypoint, repo.default_branch, token);
-  const updated = buildWidgetPatch(chosen.adapter, chosen.entrypoint, file.content, siteKey);
-  if (updated === file.content) throw new Error("No safe widget change was generated.");
-  return {
-    framework: chosen.framework, adapter: chosen.adapter, entrypoint: chosen.entrypoint,
-    originalSha: file.sha, updatedContent: updated,
-    additions: updated.split("\n").length - file.content.split("\n").length,
-    summary: "Add the Misma widget loader to " + chosen.entrypoint + ".",
-  };
 }
 async function createOrUpdateConversation(admin: any, workspaceId: string, conversationId: number | null, userText: string, assistantText: string) {
   let id = conversationId;
@@ -621,7 +630,7 @@ async function processExecutionRequest(request: Request, progress: (event: Row) 
             await step(admin, workspaceId, job.id, "inspect_repository", "running", { repository: selected.full_name }, "", progress);
             let plan: Awaited<ReturnType<typeof inspectRepo>>;
             try {
-              plan = await inspectRepo(selected, installationId, siteKey);
+              plan = await inspectRepo(selected, installationId, siteKey, progress);
             } catch (inspectionError) {
               const failure = inspectionError instanceof Error ? inspectionError.message : "Repository inspection failed.";
               await admin.from("plugin_execution_jobs").update({
@@ -696,6 +705,17 @@ async function processExecutionRequest(request: Request, progress: (event: Row) 
     }
 
     if (job && ["awaiting_merge","deploying","verifying"].includes(String(job.status)) && !responseText) {
+      progress({
+        type: "activity", step: "pull_request_merge",
+        title: "Waiting for the pull request to be merged in GitHub",
+        status: "waiting", detail: job.pull_request_url || job.repository_full_name,
+      });
+      progress({
+        type: "activity", step: "deployment_verification",
+        title: "Deployment verification is waiting for the merge",
+        status: "waiting",
+        detail: "Misma will report deployment only after the hosting provider confirms it.",
+      });
       responseText = "This installation is waiting for its pull request to be merged.\n\n" +
         (job.pull_request_url ? "Pull request: " + job.pull_request_url + "\n\n" : "") +
         "The pull request must be merged in GitHub. Misma has not reported a production deployment as successful.";
