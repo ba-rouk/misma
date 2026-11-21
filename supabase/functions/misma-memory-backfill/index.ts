@@ -91,8 +91,8 @@ Deno.serve(async (request: Request) => {
         if (!existing) {
           const userText = String(pendingUser.text || "");
           const assistantText = String(message.text || "");
-          const toolOutput = /@(github|vercel|render|netlify)\b/i.test(userText) ||
-            /(?:tool result|repository files|search results|deployment logs|commit sha|pull request created)/i.test(assistantText);
+          const toolOutput = /@[a-z][a-z0-9_-]*/i.test(userText) ||
+            /(?:tool result|repository files|search results|web results|deployment logs|commit sha|pull request created|plugin output|connected account|executed successfully)/i.test(assistantText);
           const saved = await persistMemoryExchange(db, {
             userId,
             workspaceId: String(conversation.workspace_id),
