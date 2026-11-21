@@ -430,3 +430,60 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   .misma-consent-actions .misma-ui-button.is-secondary:first-child { grid-column:1; grid-row:2; }
   .misma-consent-actions .misma-ui-button.is-secondary:nth-child(2) { grid-column:2; grid-row:2; }
 }
+
+
+/* ChatGPT-style plugin detail layout, using Misma's dashboard surface palette. */
+.misma-plugin-detail-page { background:var(--misma-bg); color:#f3f4f6; font-family:var(--font-sans,Inter,system-ui,sans-serif); }
+.misma-plugin-detail-shell { width:min(100%,720px); }
+.misma-plugin-hero-chatgpt { padding:0 0 13px; border:0; border-radius:0; overflow:visible; background:transparent; box-shadow:none; backdrop-filter:none; -webkit-backdrop-filter:none; }
+.misma-plugin-detail-header { position:absolute; inset:18px 16px auto; z-index:4; grid-template-columns:42px minmax(0,1fr) 42px; margin:0; pointer-events:none; }
+.misma-plugin-detail-header > * { pointer-events:auto; }
+.misma-plugin-detail-header h1 { font:600 21px/1.2 var(--font-sans,Inter,system-ui,sans-serif); text-shadow:0 2px 12px rgba(0,0,0,.65); }
+.misma-plugin-detail-back,.misma-plugin-detail-settings { width:44px; height:44px; border:1px solid rgba(255,255,255,.18); background:rgba(24,27,33,.78); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); box-shadow:0 5px 20px rgba(0,0,0,.25); }
+.misma-plugin-preview-scroller { gap:12px; margin:0 -16px; padding:0 16px 10px; scrollbar-width:none; }
+.misma-plugin-preview-scroller::-webkit-scrollbar { display:none; }
+.misma-plugin-preview-item { flex:0 0 min(88%,520px); }
+.misma-plugin-example-card { min-height:310px; padding:17px; border-radius:24px; background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.025)),var(--misma-surface); box-shadow:0 18px 48px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.11); }
+.misma-plugin-preview-caption { display:none; }
+.misma-plugin-description-section { align-items:flex-end; gap:8px; margin:20px 0 31px; }
+.misma-plugin-detail-description { color:#c3c7cf; font:400 21px/1.55 var(--font-sans,Inter,system-ui,sans-serif); letter-spacing:-.015em; -webkit-line-clamp:3; }
+.misma-plugin-more-link { color:#b7c9ff; font:500 16px/1.4 var(--font-sans,Inter,system-ui,sans-serif); }
+.misma-plugin-detail-section { margin:0 0 35px; }
+.misma-plugin-detail-section .misma-ui-section-header { margin:0 0 16px; }
+.misma-plugin-detail-section .misma-ui-section-header h2 { color:#f4f4f5; font:600 23px/1.3 var(--font-sans,Inter,system-ui,sans-serif); letter-spacing:-.02em; }
+.misma-plugin-detail-section .misma-ui-section-header p { color:#a8adb7; font-size:14px; }
+.misma-plugin-app-row { display:flex; align-items:center; gap:16px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.misma-plugin-app-row > div { display:grid; gap:2px; }
+.misma-plugin-app-row strong { color:#f5f5f5; font:500 20px/1.35 var(--font-sans,Inter,system-ui,sans-serif); }
+.misma-plugin-app-row small { color:#aeb2bb; font-size:16px; }
+.misma-plugin-skills-grid.misma-plugin-skills-pills { display:flex; flex-wrap:wrap; gap:10px; }
+.misma-plugin-skill-pill { display:inline-flex; align-items:center; gap:9px; min-height:54px; padding:7px 15px 7px 9px; border:1px solid rgba(255,255,255,.10); border-radius:999px; background:rgba(255,255,255,.09); color:#f1f2f4; }
+.misma-plugin-skill-pill .misma-plugin-skill-icon { width:32px; height:32px; border:0; border-radius:50%; background:transparent; color:#d8dbe1; }
+.misma-plugin-skill-pill .misma-plugin-skill-icon svg { width:21px; height:21px; }
+.misma-plugin-skill-pill strong { color:#f4f5f6; font:500 16px/1.3 var(--font-sans,Inter,system-ui,sans-serif); }
+.misma-plugin-information { display:block; overflow:visible; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.misma-plugin-information > div { display:grid; grid-template-columns:minmax(125px, .7fr) minmax(0,1.1fr); align-items:center; gap:16px; min-height:70px; padding:13px 0; border-bottom:1px solid rgba(255,255,255,.14); }
+.misma-plugin-information > div:last-child { border-bottom:0; }
+.misma-plugin-information > div > span { color:#aeb2bb; font-size:17px; }
+.misma-plugin-information > div > strong,.misma-plugin-information > div > a { color:#f2f3f5; font-size:18px; font-weight:450; overflow-wrap:anywhere; }
+.misma-plugin-information > div > a { color:#b8caff; text-decoration:none; }
+.misma-plugin-information > div > a:hover { text-decoration:underline; }
+.misma-plugin-permissions-card { padding:16px 18px; border-radius:18px; }
+.misma-plugin-detail-actionbar { background:linear-gradient(180deg,transparent,rgba(13,14,17,.88) 22%,rgba(13,14,17,.98)); }
+.misma-plugin-detail-action-inner { grid-template-columns:1fr; max-width:720px; }
+.misma-plugin-detail-primary { min-height:58px; border-radius:999px; background:#f5f5f5 !important; color:#111318 !important; border-color:#f5f5f5 !important; font:650 18px/1.2 var(--font-sans,Inter,system-ui,sans-serif); }
+.misma-plugin-detail-primary:hover:not(:disabled) { background:#e5e7eb !important; }
+.misma-plugin-provider-action { min-height:48px; border-radius:999px; }
+@media(max-width:767px) {
+ .misma-plugin-detail-page { padding:0 16px calc(105px + env(safe-area-inset-bottom)); }
+ .misma-plugin-detail-shell { width:100%; }
+ .misma-plugin-hero-chatgpt { margin:0 -16px; padding-top:0; }
+ .misma-plugin-detail-header { inset:18px 16px auto; }
+ .misma-plugin-preview-item { flex-basis:88%; }
+ .misma-plugin-example-card { min-height:310px; }
+ .misma-plugin-detail-description { font-size:21px; }
+ .misma-plugin-information > div { grid-template-columns:minmax(112px,.7fr) minmax(0,1.1fr); gap:10px; }
+ .misma-plugin-information > div > span { font-size:15px; }
+ .misma-plugin-information > div > strong,.misma-plugin-information > div > a { font-size:16px; }
+ .misma-plugin-detail-actionbar { padding-left:20px; padding-right:20px; }
+}
