@@ -95,7 +95,6 @@ function PluginsPage() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [renderApiKey, setRenderApiKey] = useState("");
   const [renderConfigLoading, setRenderConfigLoading] = useState(false);
   const [renderWebsites, setRenderWebsites] = useState<Website[]>([]);
   const [renderProjects, setRenderProjects] = useState<PlatformProject[]>([]);
@@ -124,8 +123,9 @@ function PluginsPage() {
         if (alive) {
           setWorkspaces(options);
           const saved = window.sessionStorage.getItem("misma_integrations_workspace");
-          const initial = options.find((item) => item.id === saved) || (options.length === 1 ? options[0] : null);
+          const initial = options.find((item) => item.id === saved) || options[0] || null;
           setWorkspaceId(initial?.id || "");
+          if (initial?.id) window.sessionStorage.setItem("misma_integrations_workspace", initial.id);
         }
       } catch (cause) {
         if (alive) setError(cause instanceof Error ? cause.message : "Could not load your workspaces.");
