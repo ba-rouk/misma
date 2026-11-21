@@ -245,6 +245,8 @@ function MemoryPage() {
       if (factsResult.error) throw factsResult.error;
       const exchangesResult = await supabase.from("memory_exchanges").delete().eq("user_id", userId);
       if (exchangesResult.error) throw exchangesResult.error;
+      const cacheResult = await supabase.from("memory_embedding_cache").delete().eq("user_id", userId);
+      if (cacheResult.error) throw cacheResult.error;
       await supabase.from("memory_backfill_jobs").delete().eq("user_id", userId);
       setNotice("All saved memory has been reset.");
       await load();
