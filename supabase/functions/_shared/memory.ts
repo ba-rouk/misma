@@ -212,3 +212,112 @@ function cosineSimilarity(left: number[] | null, right: number[] | null): number
 function safeFactKey(value: string): string {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 180) || "general_fact";
 }
+
+
+export async function persistMemoryExchange(
+  db: DbClient,
+  input: {
+    userId: string;
+    workspaceId: string;
+    websiteId?: string | null;
+    chatId: number;
+    userMessageId?: number | null;
+    assistantMessageId?: number | null;
+    userText: string;
+    assistantText: string;
+  },
+): Promise<{ saved: boolean; exchangeId?: string }> {
+  const userText = input.userText.trim();
+  const assistantText = input.assistantText.trim();
+  if (!userText || !assistantText || containsSensitiveSecret(userText) ||
+    containsSensitiveSecret(assistantText) || isTrivialExchange(userText, assistantText)) {
+    return { saved: false };
+  }
+
+  const extracted = await requestExtraction(userText, assistantText);
+  if (!extracted) return { saved: false };
+  const documentText = extracted.summary + "\n" + userText + "\n" + assistantText;
+  const embedded = await embedTexts([documentText], "RETRIEVAL_DOCUMENT", 350);
+  const exchangeEmbedding = embedded ? embedded.vectors[0] : null;
+  const messageIds = [input.userMessageId, input.assistantMessageId]
+    .filter((id) => Number.isSafeInteger(id) && Number(id) > 0);
+
+  const { data: exchange, error: exchangeError } = await db.from("memory_exchanges").insert({
+    user_id: input.userId,
+    workspace_id: input.workspaceId,
+    website_id: input.websiteId || null,
+    chat_id: input.chatId,
+    message_ids: messageIds,
+    source_user_message_id: input.userMessageId || null,
+    source_assistant_message_id: input.assistantMessageId || null,
+    user_text: userText.slice(0, 8000),
+    assistant_text: assistantText.slice(0, 12000),
+    summary: extracted.summary,
+    topics: extracted.topics,
+    entities: extracted.entities,
+    embedding: vectorLiteral(exchangeEmbedding),
+    embedding_model: exchangeEmbedding ? embedded?.model || "gemini-embedding-001:768" : null,
+    importance: extracted.importance,
+  }).select("id").single();
+  if (exchangeError || !exchange || !exchange.id) return { saved: false };
+
+  const factCandidates = extracted.facts.filter((fact) => fact.key && (fact.action === "delete" || fact.content.trim()));
+  if (!factCandidates.length) return { saved: true, exchangeId: String(exchange.id) };
+
+  const factsToEmbed = factCandidates.filter((fact) => fact.action !== "delete");
+  const factEmbeddings = factsToEmbed.length
+    ? await embedTexts(factsToEmbed.map((fact) => fact.content), "RETRIEVAL_DOCUMENT", 700)
+    : null;
+  const embeddingByKey = new Map<string, number[]>();
+  if (factEmbeddings) {
+    factsToEmbed.forEach((fact, index) => embeddingByKey.set(safeFactKey(fact.key), factEmbeddings.vectors[index]));
+  }
+
+  const { data: existingFacts } = await db.from("memory_facts")
+    .select("id,type,fact_key,content,embedding")
+    .eq("user_id", input.userId)
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(120);
+  const activeFacts = (existingFacts || []) as Array<{ id: string; type: string; fact_key: string; content: string; embedding: unknown }>;
+
+  for (const fact of factCandidates) {
+    const factKey = safeFactKey(fact.key);
+    let previous = activeFacts.find((item) => item.fact_key === factKey) || null;
+    if (fact.action === "delete") {
+      if (previous) {
+        await db.from("memory_facts").update({
+          deleted_at: new Date().toISOString(),
+          embedding: null,
+          updated_at: new Date().toISOString(),
+        }).eq("id", previous.id).eq("user_id", input.userId);
+      }
+      continue;
+    }
+
+    const nextContent = fact.content.trim().slice(0, 1200);
+    const embedding = embeddingByKey.get(factKey) || null;
+    if (!previous && embedding) {
+      previous = activeFacts.find((item) =>
+        item.type === fact.type && cosineSimilarity(parseVector(item.embedding), embedding) >= 0.93
+      ) || null;
+    }
+    if (previous && normalizeText(previous.content) === normalizeText(nextContent)) continue;
+
+    const { error: factError } = await db.from("memory_facts").insert({
+      user_id: input.userId,
+      workspace_id: input.workspaceId,
+      website_id: input.websiteId || null,
+      type: fact.type,
+      fact_key: factKey,
+      content: nextContent,
+      embedding: vectorLiteral(embedding),
+      embedding_model: embedding ? factEmbeddings?.model || "gemini-embedding-001:768" : null,
+      confidence: fact.confidence,
+      supersedes_id: previous ? previous.id : null,
+      source_exchange_id: exchange.id,
+    });
+    if (factError) console.warn("[misma-memory] Fact write skipped.", factError.code);
+  }
+  return { saved: true, exchangeId: String(exchange.id) };
+}
