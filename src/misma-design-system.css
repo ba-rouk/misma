@@ -1286,7 +1286,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 /* Keep the highlighted text layer and native caret on exactly the same metrics. */
 .misma-composer-inline-highlight {
   box-sizing: border-box;
-  padding: 5px 3px !important;
+  padding: 5px 12px !important;
   font: 400 14px/1.4 var(--font-sans, Inter, system-ui, sans-serif) !important;
   letter-spacing: normal !important;
   text-align: left !important;
@@ -1307,7 +1307,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 }
 .aichat-composer-input-row .misma-composer-inline-textarea {
   box-sizing: border-box !important;
-  padding: 5px 3px !important;
+  padding: 5px 12px !important;
   font: 400 14px/1.4 var(--font-sans, Inter, system-ui, sans-serif) !important;
   letter-spacing: normal !important;
   text-align: left !important;
