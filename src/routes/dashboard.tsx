@@ -5591,14 +5591,14 @@ function Dashboard() {
                     {executionActivities.map((activity) => (
                       <li key={activity.key} data-status={activity.status}>
                         <span className="aichat-execution-activity-mark" aria-hidden="true">
-                          {activity.status === "running" ? <i /> : activity.status === "failed" ? "!" : "✓"}
+                          {activity.status === "running" ? <i /> : activity.status === "waiting" ? "…" : activity.status === "failed" ? "!" : "✓"}
                         </span>
                         <span className="aichat-execution-activity-copy">
                           <strong>{activity.title}</strong>
                           {activity.detail && <small>{activity.detail}</small>}
                         </span>
                         <small className="aichat-execution-activity-status">
-                          {activity.status === "running" ? "In progress" : activity.status === "failed" ? "Failed" : "Done"}
+                          {activity.status === "running" ? "In progress" : activity.status === "waiting" ? "Waiting" : activity.status === "failed" ? "Failed" : "Done"}
                         </small>
                       </li>
                     ))}
