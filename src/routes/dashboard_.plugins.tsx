@@ -263,7 +263,7 @@ function PluginsPage() {
           style={{ top: openPluginMenu.top, left: openPluginMenu.left }}
           onClick={(event) => event.stopPropagation()}
         >
-          <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); openPluginSettings(openPluginMenu.provider); }}>
+          <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); if (openPluginMenu) openPluginSettings(openPluginMenu.provider); }}>
             Settings
           </button>
         </div>
