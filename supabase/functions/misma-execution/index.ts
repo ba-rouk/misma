@@ -10,7 +10,7 @@ const CORS = {
   "Vary": "Origin",
 };
 type Row = Record<string, any>;
-type Repo = { id: number; full_name: string; name: string; default_branch: string; html_url: string; private: boolean };
+type Repo = { id: number; full_name: string; name: string; default_branch: string; html_url: string; private: boolean; description: string; visibility: string; language: string | null; created_at: string | null; updated_at: string | null; pushed_at: string | null; fork: boolean; archived: boolean; stargazers_count: number; forks_count: number; open_issues_count: number; size: number; topics: string[]; license: string | null };
 type Adapter = "html" | "next-app" | "astro" | "sveltekit" | "blade" | "django" | "php";
 function json(body: Row, status = 200, origin = APP_ORIGIN) {
   return Response.json(body, { status, headers: { ...CORS, "Access-Control-Allow-Origin": origin, "Cache-Control": "no-store" } });
@@ -112,7 +112,10 @@ async function addLog(admin: any, workspaceId: string, jobId: string, actor: str
     workspace_id: workspaceId, job_id: jobId, actor_user_id: actor, event, details,
   });
 }
-async function step(admin: any, workspaceId: string, jobId: string, key: string, status: string, output: Row = {}, error = "") {
+async function step(
+  admin: any, workspaceId: string, jobId: string, key: string, status: string,
+  output: Row = {}, error = "", progress?: (event: Row) => void,
+) {
   await admin.from("plugin_execution_steps").upsert({
     workspace_id: workspaceId, job_id: jobId, step_key: key, status,
     output_summary: output, error_message: error || null,
@@ -121,6 +124,17 @@ async function step(admin: any, workspaceId: string, jobId: string, key: string,
     finished_at: ["succeeded","failed","skipped"].includes(status) ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
   }, { onConflict: "job_id,step_key" });
+  const titles: Record<string, string> = {
+    resolve_website: "Checking Misma website context",
+    inspect_repository: "Inspecting repository files",
+    create_branch: "Creating a GitHub feature branch",
+    commit_widget_patch: "Adding the approved widget script",
+    create_pull_request: "Opening a GitHub pull request",
+  };
+  progress?.({
+    type: "activity", step: key, title: titles[key] || key.replace(/_/g, " "),
+    status, detail: safe(output.repository || output.filePath || output.branchName || output.entrypoint || error, 180),
+  });
 }
 async function getGithubConnection(admin: any, workspaceId: string) {
   const { data, error } = await admin.from("platform_connections")
@@ -130,7 +144,8 @@ async function getGithubConnection(admin: any, workspaceId: string) {
   if (error || !data?.installation_id) throw new Error("Connect the Misma GitHub App and grant access to the website repository first.");
   return data;
 }
-async function listRepos(installationId: number): Promise<Repo[]> {
+async function listRepos(installationId: number, progress?: (event: Row) => void): Promise<Repo[]> {
+  progress?.({ type: "activity", step: "list_repositories", title: "Listing repositories accessible to GitHub", status: "running" });
   const token = await installationToken(installationId);
   const results: Repo[] = [];
   let page = 1;
@@ -142,13 +157,57 @@ async function listRepos(installationId: number): Promise<Repo[]> {
       results.push({
         id: Number(repo.id), full_name: String(repo.full_name), name: String(repo.name || ""),
         default_branch: String(repo.default_branch || "main"), html_url: String(repo.html_url || ""),
-        private: Boolean(repo.private),
+        private: Boolean(repo.private), description: safe(repo.description, 300),
+        visibility: String(repo.visibility || (repo.private ? "private" : "public")),
+        language: typeof repo.language === "string" ? repo.language : null,
+        created_at: typeof repo.created_at === "string" ? repo.created_at : null,
+        updated_at: typeof repo.updated_at === "string" ? repo.updated_at : null,
+        pushed_at: typeof repo.pushed_at === "string" ? repo.pushed_at : null,
+        fork: Boolean(repo.fork), archived: Boolean(repo.archived),
+        stargazers_count: Number(repo.stargazers_count || 0), forks_count: Number(repo.forks_count || 0),
+        open_issues_count: Number(repo.open_issues_count || 0), size: Number(repo.size || 0),
+        topics: Array.isArray(repo.topics) ? repo.topics.map((topic: unknown) => safe(topic, 48)).filter(Boolean) : [],
+        license: safe(repo.license?.spdx_id || repo.license?.name, 80) || null,
       });
     }
     if (items.length < 100) break;
     page++;
   }
+  progress?.({ type: "activity", step: "list_repositories", title: "Repository listing complete", status: "succeeded", detail: String(results.length) + " repositories" });
   return results;
+}
+function isRepositoryListIntent(message: string): boolean {
+  const lower = message.toLowerCase();
+  const hasRepo = /\b(repos?|repositories)\b/.test(lower);
+  const asksToList = /\b(list|show|display|view|find|what|which|all|my|account|available|accessible|details?)\b/.test(lower);
+  return hasRepo && asksToList && !isInstallIntent(message);
+}
+function isReadApprovalMessage(message: string): boolean {
+  return /^@?github\s+(?:approve read|allow read|approve repository access)[.!]?$/i.test(message.trim());
+}
+function formatRepositoryInventory(repositories: Repo[], accountName: string): string {
+  const heading = "I checked the connected GitHub App for **" + (accountName || "your GitHub account") + "** and found **" +
+    repositories.length + "** accessible repositories.\n\n";
+  if (!repositories.length) {
+    return heading + "No repositories are currently available to this GitHub App. Review its repository access in GitHub App settings and grant the repositories you want Misma to manage.";
+  }
+  const rows = repositories.map((repo, index) => {
+    const visibility = repo.visibility || (repo.private ? "private" : "public");
+    const updated = repo.pushed_at || repo.updated_at;
+    const facts = [
+      visibility, "default branch: " + (repo.default_branch || "not reported"),
+      "language: " + (repo.language || "not detected"),
+      updated ? "last pushed: " + updated.slice(0, 10) : "",
+      repo.fork ? "fork" : "", repo.archived ? "archived" : "",
+      "stars: " + repo.stargazers_count, "forks: " + repo.forks_count,
+      "open issues: " + repo.open_issues_count,
+      repo.license ? "license: " + repo.license : "",
+      repo.topics.length ? "topics: " + repo.topics.slice(0, 6).join(", ") : "",
+    ].filter(Boolean);
+    const description = repo.description ? " — " + repo.description.replace(/\s+/g, " ").slice(0, 180) : "";
+    return (index + 1) + ". **[" + repo.full_name + "](" + repo.html_url + ")**" + description + "\n   " + facts.join(" · ");
+  }).join("\n\n");
+  return heading + rows + "\n\nThese are the repositories currently granted to Misma's GitHub App. If one you expect is missing, expand the app installation's repository access in GitHub.";
 }
 function decodeContent(value: string): string {
   const normalized = value.replace(/\s/g, "");
@@ -286,7 +345,7 @@ function chooseNumberOrName(message: string, choices: Array<{ name: string; full
   return choices.findIndex(item => normalized === String(item.full_name || "").toLowerCase() ||
     normalized === item.name.toLowerCase());
 }
-async function executeApprovedPlan(admin: any, job: Row, userId: string, connection: Row) {
+async function executeApprovedPlan(admin: any, job: Row, userId: string, connection: Row, progress?: (event: Row) => void) {
   const plan = isRecord(job.plan) ? job.plan : {};
   const repoId = Number(job.repository_id);
   const fullName = String(job.repository_full_name || "");
@@ -296,7 +355,7 @@ async function executeApprovedPlan(admin: any, job: Row, userId: string, connect
       typeof plan.entrypoint !== "string" || typeof plan.framework !== "string") {
     throw new Error("The approved installation plan is incomplete. Please inspect the repository again.");
   }
-  await step(admin, job.workspace_id, job.id, "create_branch", "running");
+  await step(admin, job.workspace_id, job.id, "create_branch", "running", {}, "", progress);
   const token = await installationToken(Number(connection.installation_id), repoId);
   // The token was minted with repository_ids=[repoId], so this API read
   // verifies both the repository identity and that the installation still grants it.
@@ -310,9 +369,9 @@ async function executeApprovedPlan(admin: any, job: Row, userId: string, connect
   await githubRequest("/repos/" + owner + "/" + repo + "/git/refs", token, {
     method: "POST", body: JSON.stringify({ ref: "refs/heads/" + branchName, sha: baseRef.object.sha }),
   });
-  await step(admin, job.workspace_id, job.id, "create_branch", "succeeded", { branchName, baseBranch: base });
+  await step(admin, job.workspace_id, job.id, "create_branch", "succeeded", { branchName, baseBranch: base }, "", progress);
 
-  await step(admin, job.workspace_id, job.id, "commit_widget_patch", "running", { filePath: plan.entrypoint });
+  await step(admin, job.workspace_id, job.id, "commit_widget_patch", "running", { filePath: plan.entrypoint }, "", progress);
   const safePath = String(plan.entrypoint).split("/").map(encodeURIComponent).join("/");
   const currentFile = await githubRequest("/repos/" + owner + "/" + repo + "/contents/" + safePath + "?ref=" + encodeURIComponent(base), token);
   if (currentFile.sha !== plan.originalSha) {
@@ -328,9 +387,9 @@ async function executeApprovedPlan(admin: any, job: Row, userId: string, connect
     }),
   });
   const commitSha = String(updated.commit?.sha || "");
-  await step(admin, job.workspace_id, job.id, "commit_widget_patch", "succeeded", { filePath: plan.entrypoint, commitSha });
+  await step(admin, job.workspace_id, job.id, "commit_widget_patch", "succeeded", { filePath: plan.entrypoint, commitSha }, "", progress);
 
-  await step(admin, job.workspace_id, job.id, "create_pull_request", "running");
+  await step(admin, job.workspace_id, job.id, "create_pull_request", "running", {}, "", progress);
   const pull = await githubRequest("/repos/" + owner + "/" + repo + "/pulls", token, {
     method: "POST",
     body: JSON.stringify({
@@ -377,14 +436,14 @@ async function executeApprovedPlan(admin: any, job: Row, userId: string, connect
     status: "awaiting_merge", branch_name: branchName, pull_request_number: pullNumber,
     pull_request_url: pullUrl, updated_at: new Date().toISOString(),
   }).eq("id", job.id).eq("workspace_id", job.workspace_id);
-  await step(admin, job.workspace_id, job.id, "create_pull_request", "succeeded", { pullRequestUrl: pullUrl, pullRequestNumber: pullNumber });
+  await step(admin, job.workspace_id, job.id, "create_pull_request", "succeeded", { pullRequestUrl: pullUrl, pullRequestNumber: pullNumber }, "", progress);
   await addLog(admin, job.workspace_id, job.id, userId, "github.pull_request_created", {
     repository: fullName, pull_request_number: pullNumber, framework: plan.framework, entrypoint: plan.entrypoint,
   });
   return { pullUrl, pullNumber, branchName, commitSha, entrypoint: plan.entrypoint, framework: plan.framework };
 }
 
-async function main(request: Request): Promise<Response> {
+async function processExecutionRequest(request: Request, progress: (event: Row) => void): Promise<Response> {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   const origin = request.headers.get("origin") || APP_ORIGIN;
@@ -408,7 +467,12 @@ async function main(request: Request): Promise<Response> {
       job = data;
     }
     const activePlugins = Array.isArray(input.activePlugins) ? input.activePlugins.map(x => String(x).toLowerCase()) : [];
-    if (!job && (!activePlugins.includes("github") || !isInstallIntent(message))) return json({ handled: false }, 200, origin);
+    const githubActive = activePlugins.includes("github");
+    const repositoryListIntent = githubActive && isRepositoryListIntent(message);
+    const repositoryReadApproved = githubActive && isReadApprovalMessage(message);
+    if (!job && (!githubActive || (!isInstallIntent(message) && !repositoryListIntent && !repositoryReadApproved))) {
+      return json({ handled: false }, 200, origin);
+    }
 
     const { data: githubPreference, error: preferenceError } = await admin.from("user_plugins")
       .select("permission_mode,is_installed")
@@ -422,12 +486,26 @@ async function main(request: Request): Promise<Response> {
       throw new Error("Install the GitHub plugin in your Misma account before continuing repository actions.");
     }
 
+    progress({ type: "activity", step: "github_connection", title: "Checking your connected GitHub account", status: "running" });
     const connection = await getGithubConnection(admin, workspaceId);
+    progress({ type: "activity", step: "github_connection", title: "GitHub account verified", status: "succeeded", detail: safe(connection.external_account_name, 100) });
     const installationId = Number(connection.installation_id);
     if (!Number.isSafeInteger(installationId) || installationId <= 0) throw new Error("The connected GitHub App installation is invalid.");
     let responseText = "";
     let jobId = job?.id || "";
     const now = new Date().toISOString();
+
+    if (!job && (repositoryListIntent || repositoryReadApproved)) {
+      if (permissionMode === "always_ask" && !repositoryReadApproved) {
+        const approvalText = "Before I read your GitHub repository metadata, please approve read access for this request. Reply **@github APPROVE READ** to continue, or leave it unanswered to cancel.";
+        const saved = await createOrUpdateConversation(admin, workspaceId, conversationId, message, approvalText);
+        return json({ handled: true, ...saved, execution: { provider: "github", action: "list_repositories", status: "awaiting_read_approval" } }, 200, origin);
+      }
+      const repositories = await listRepos(installationId, progress);
+      const inventoryText = formatRepositoryInventory(repositories, safe(connection.external_account_name, 100));
+      const saved = await createOrUpdateConversation(admin, workspaceId, conversationId, message, inventoryText);
+      return json({ handled: true, ...saved, execution: { provider: "github", action: "list_repositories", status: "succeeded", repositoryCount: repositories.length } }, 200, origin);
+    }
 
     if (!job) {
       const { data: websites, error: websitesError } = await admin.from("website_connections")
@@ -460,7 +538,7 @@ async function main(request: Request): Promise<Response> {
         job = created;
         jobId = created.id;
         await addLog(admin, workspaceId, jobId, userId, "execution.job_created", { operation: "widget_install" });
-        await step(admin, workspaceId, jobId, "resolve_website", "succeeded", { websiteCount: websites.length });
+        await step(admin, workspaceId, jobId, "resolve_website", "succeeded", { websiteCount: websites.length }, "", progress);
         if (websites.length > 1) {
           responseText = "I found " + websites.length + " active Misma websites in this workspace. Which website should receive the widget?\n\n" +
             websites.map((site: any, index: number) => (index + 1) + ". " + (site.name || site.domain || "Website") + (site.domain ? " — " + site.domain : "")).join("\n") +
@@ -538,7 +616,7 @@ async function main(request: Request): Promise<Response> {
               repository_url: selected.html_url, default_branch: selected.default_branch,
               updated_at: now,
             }).eq("id", job.id).eq("workspace_id", workspaceId);
-            await step(admin, workspaceId, job.id, "inspect_repository", "running", { repository: selected.full_name });
+            await step(admin, workspaceId, job.id, "inspect_repository", "running", { repository: selected.full_name }, "", progress);
             let plan: Awaited<ReturnType<typeof inspectRepo>>;
             try {
               plan = await inspectRepo(selected, installationId, siteKey);
@@ -547,7 +625,7 @@ async function main(request: Request): Promise<Response> {
               await admin.from("plugin_execution_jobs").update({
                 status: "failed", error_message: failure.slice(0, 600), updated_at: new Date().toISOString(),
               }).eq("id", job.id).eq("workspace_id", workspaceId);
-              await step(admin, workspaceId, job.id, "inspect_repository", "failed", {}, failure.slice(0, 300));
+              await step(admin, workspaceId, job.id, "inspect_repository", "failed", {}, failure.slice(0, 300), progress);
               await addLog(admin, workspaceId, job.id, userId, "repository.inspection_failed", { message: failure.slice(0, 240) });
               throw inspectionError;
             }
@@ -558,7 +636,7 @@ async function main(request: Request): Promise<Response> {
             job = { ...job, status: "awaiting_approval", file_path: plan.entrypoint, plan };
             await step(admin, workspaceId, job.id, "inspect_repository", "succeeded", {
               repository: selected.full_name, framework: plan.framework, entrypoint: plan.entrypoint,
-            });
+            }, "", progress);
             await addLog(admin, workspaceId, job.id, userId, "repository.widget_plan_prepared", {
               repository: selected.full_name, framework: plan.framework, entrypoint: plan.entrypoint,
             });
@@ -596,7 +674,7 @@ async function main(request: Request): Promise<Response> {
         await addLog(admin, workspaceId, job.id, userId, explicitApproval ? "execution.plan_approved" : "execution.plan_auto_approved", { repository: job.repository_full_name, permission_mode: permissionMode });
         let result: Row;
         try {
-          result = await executeApprovedPlan(admin, { ...job, status: "approved" }, userId, connection);
+          result = await executeApprovedPlan(admin, { ...job, status: "approved" }, userId, connection, progress);
           job = { ...job, status: "awaiting_merge", pull_request_url: result.pullUrl, pull_request_number: result.pullNumber };
         } catch (executionError) {
           const failure = executionError instanceof Error ? executionError.message : "GitHub execution failed.";
@@ -632,5 +710,39 @@ async function main(request: Request): Promise<Response> {
     console.error("[misma-execution] Request failed:", message.slice(0, 300));
     return json({ error: message }, 400, origin);
   }
+}
+
+async function main(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  const origin = request.headers.get("origin") || APP_ORIGIN;
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: Row) => {
+        try { controller.enqueue(encoder.encode("data: " + JSON.stringify(event) + "\n\n")); }
+        catch { /* The requesting chat was closed while the action was running. */ }
+      };
+      void processExecutionRequest(request, send).then(async (response) => {
+        const body = await response.json().catch(() => ({ error: "Misma could not read the execution response." }));
+        send({ type: "result", status: response.status, body });
+        try { controller.close(); } catch { /* The stream was already cancelled. */ }
+      }).catch((cause) => {
+        send({ type: "result", status: 500, body: { error: cause instanceof Error ? cause.message : "Misma execution failed." } });
+        try { controller.close(); } catch { /* The stream was already cancelled. */ }
+      });
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      ...CORS,
+      "Access-Control-Allow-Origin": origin,
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 Deno.serve(main);
