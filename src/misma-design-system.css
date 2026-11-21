@@ -1348,3 +1348,77 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 @media (max-width:560px) {
   .aichat-execution-activity { margin-left:0; }
 }
+
+
+/* Plugin navigation and description-page structure. */
+.misma-marketplace-page .misma-plugin-directory-header {
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:flex-start !important;
+  justify-content:flex-start !important;
+  gap:12px;
+  margin-bottom:18px !important;
+}
+.misma-plugin-directory-header .misma-plugin-directory-back {
+  align-self:flex-start;
+  flex:none;
+}
+.misma-plugin-directory-heading {
+  width:100%;
+  min-width:0;
+}
+.misma-plugin-directory-heading h1 {
+  margin:0;
+  color:#f7f8fa;
+  font:600 clamp(30px,4vw,38px)/1.12 var(--font-serif,Georgia,serif);
+  letter-spacing:-.035em;
+}
+.misma-plugin-detail-header {
+  display:flex !important;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  gap:13px;
+  min-height:0;
+  padding:0 0 17px;
+  margin:0 0 20px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+.misma-plugin-detail-header > .misma-plugin-detail-back-button {
+  align-self:flex-start;
+  justify-self:auto;
+}
+.misma-plugin-detail-header-row {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 42px;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  min-width:0;
+}
+.misma-plugin-detail-header-row h1 {
+  min-width:0;
+  margin:0;
+  color:#f6f7f9;
+  font:600 24px/1.2 var(--font-serif,Georgia,serif);
+  text-align:left;
+  letter-spacing:-.025em;
+  overflow-wrap:anywhere;
+}
+.misma-plugin-detail-header-row .misma-plugin-detail-settings {
+  justify-self:end;
+}
+.misma-plugin-detail-body {
+  display:grid;
+  gap:20px;
+  min-width:0;
+  padding-top:2px;
+}
+.misma-plugin-detail-body > section {
+  min-width:0;
+  margin-top:0 !important;
+}
+@media (max-width:560px) {
+  .misma-plugin-detail-header { gap:11px; }
+  .misma-plugin-detail-header-row h1 { font-size:22px; }
+}

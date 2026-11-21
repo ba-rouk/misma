@@ -25,6 +25,12 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.match(page, /misma-plugin-provider-menu-trigger/);
   assert.match(page, /misma-plugin-search-dock/);
   assert.ok(page.indexOf("misma-plugin-directory-header") < page.indexOf("misma-plugin-search-dock"));
+  assert.match(page, /misma-plugin-directory-back/);
+  assert.match(page, /misma-plugin-directory-heading/);
+  assert.match(page, /function navigateBack\(\)/);
+  assert.match(page, /getPluginAuthorizationUrl, getPluginWorkspaceContext/);
+  assert.match(page, /if \(provider === "netlify"\)[\s\S]*getPluginAuthorizationUrl\(context\.workspaceId, provider\)[\s\S]*window\.location\.assign\(authorizationUrl\)/);
+  assert.match(page, /misma_plugins_website_id/);
   assert.match(page, /Try in chat/);
   assert.match(page, /Uninstall/);
   assert.ok(page.includes("openPluginInChat(provider, websiteId"));
@@ -100,6 +106,9 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /Connect \{manifest\.name\}/);
   assert.match(page, /misma-plugin-skills-grid/);
   assert.match(page, /misma-plugin-detail-actionbar/);
+  assert.match(page, /misma-plugin-detail-header-row/);
+  assert.match(page, /misma-plugin-detail-body/);
+  assert.match(page, /misma-plugin-detail-back-button/);
   assert.match(page, /misma-plugin-hero-gallery/);
   assert.match(page, /misma-plugin-example-slide/);
   assert.match(page, /SectionHeader title="App"/);
