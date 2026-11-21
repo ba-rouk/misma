@@ -13,16 +13,17 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   const consent = await read("../src/components/plugin-connect-consent.tsx");
   const settings = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
   assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
-  assert.match(page, /Business AI, connected/);
+  assert.doesNotMatch(page, /Business AI, connected/);
   assert.match(page, /Search plugins/);
   assert.match(page, /Installed/);
-  assert.match(page, /Popular/);
+  assert.doesNotMatch(page, /Popular|New & noteworthy|All popular plugins are installed/);
   assert.match(page, /New & noteworthy/);
   assert.match(page, /misma-plugin-installed-strip/);
   assert.match(page, /misma-plugin-available-list/);
   assert.match(page, /misma-plugin-add/);
   assert.match(page, /misma-plugin-search-dock/);
-  assert.ok(page.includes('href={"/dashboard/plugins/" + openPluginMenu.provider + "/settings"'));
+  assert.ok(page.includes('to="/dashboard/plugins/$pluginId/settings"'));
+  assert.ok(page.includes("params={{ pluginId: openPluginMenu.provider }}"));
   assert.doesNotMatch(page, /openPluginSettings\(/);
   assert.match(page, /getPluginWorkspaceContext/);
   assert.match(page, /context\.workspaceIds/);
@@ -46,6 +47,7 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.doesNotMatch(connect, /RENDER_API_KEY/);
   assert.match(connect, /github-install-url/);
   assert.match(connect, /vercel-install-url/);
+  assert.match(connect, /netlify-install-url/);
   assert.match(consent, /Use Misma to connect/);
   assert.match(consent, /getUser\(\)/);
   assert.match(consent, /avatar/);
@@ -105,8 +107,9 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(css, /\.misma-plugin-information>div/);
   assert.ok(css.includes(".misma-plugin-detail-page .misma-plugin-detail-primary {"));
   assert.ok(css.includes("background:#f7f7f8;"));
-  assert.match(manifests, /authType: "oauth_pending"/);
-  assert.match(manifests, /Coming later/);
+  assert.match(manifests, /authType: "netlify_oauth"/);
+  assert.match(manifests, /id: "netlify"[\\s\\S]*status: "available"/);
+  assert.match(manifests, /pluginList = Object.values\\(pluginManifests\\).filter/);
   assert.doesNotMatch(manifests, /Trigger redeploy/);
 });
 
@@ -299,11 +302,35 @@ test("every plugin settings URL has an explicit static provider route", async ()
   const render = await read("../src/routes/dashboard.plugins.render.settings.tsx");
   const netlify = await read("../src/routes/dashboard.plugins.netlify.settings.tsx");
   assert.match(github, /createFileRoute\("\/dashboard\/plugins\/github\/settings"\)/);
-  assert.match(github, /GitHub settings/);
+  assert.match(github, /GitHub plugin settings/);
   assert.match(github, /misma-github-settings-empty-page/);
   assert.doesNotMatch(github, /PluginSettingsPage|useEffect|supabase/);
   assert.match(render, /createFileRoute\("\/dashboard\/plugins\/render\/settings"\)/);
   assert.match(render, /PluginSettingsPage pluginId="render"/);
   assert.match(netlify, /createFileRoute\("\/dashboard\/plugins\/netlify\/settings"\)/);
   assert.match(netlify, /PluginSettingsPage pluginId="netlify"/);
+});
+
+
+test("Netlify OAuth connects and discovers authorized sites", async () => {
+  const manifests = await read("../src/lib/plugin-manifests.ts");
+  const connect = await read("../src/lib/plugin-connect.ts");
+  const callback = await read("../src/routes/integrations/netlify/callback.tsx");
+  const edge = await read("../supabase/functions/misma-platform-integrations/index.ts");
+  const config = await read("../supabase/functions/misma-platform-integrations/config.ts");
+  const health = await read("../supabase/functions/misma-platform-integrations/health.ts");
+  assert.match(manifests, /authType: "netlify_oauth"/);
+  assert.match(connect, /netlify-install-url/);
+  assert.match(callback, /netlify-complete-installation/);
+  assert.match(callback, /window\.history\.replaceState/);
+  assert.match(callback, /netlify-link-site/);
+  assert.match(edge, /action === "netlify-install-url"/);
+  assert.match(edge, /action === "netlify-complete-installation"/);
+  assert.match(edge, /action === "netlify-refresh-sites"/);
+  assert.match(edge, /action === "netlify-link-site"/);
+  assert.match(edge, /encryptCredentialPayload/);
+  assert.match(edge, /listNetlifySites/);
+  assert.match(config, /NETLIFY_CLIENT_ID/);
+  assert.match(config, /NETLIFY_CLIENT_SECRET/);
+  assert.match(health, /netlify/);
 });
