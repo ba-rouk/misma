@@ -241,6 +241,8 @@ function MemoryPage() {
       const auth = await supabase.auth.getUser();
       if (auth.error || !auth.data.user) throw new Error("Your session has expired.");
       const userId = auth.data.user.id;
+      const legacyResult = await supabase.from("user_memories").delete().eq("user_id", userId);
+      if (legacyResult.error) throw legacyResult.error;
       const factsResult = await supabase.from("memory_facts").delete().eq("user_id", userId);
       if (factsResult.error) throw factsResult.error;
       const exchangesResult = await supabase.from("memory_exchanges").delete().eq("user_id", userId);
