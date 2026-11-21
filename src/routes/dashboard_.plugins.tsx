@@ -251,4 +251,5 @@ function PluginsPage() {
         </label>
       </div>
     </main>
+  );
 }
