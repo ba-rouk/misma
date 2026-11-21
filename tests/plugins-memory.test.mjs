@@ -109,8 +109,8 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
 
 
 test("cross-chat memory schema uses owner-only RLS, pgvector and hybrid search", async () => {
-  const migration = await read("../supabase/migrations/20261121100000_cross_chat_memory.sql");
-  const cacheMigration = await read("../supabase/migrations/20261121103000_memory_embedding_cache.sql");
+  const migration = await read("../supabase/migrations/20261121082724_cross_chat_memory.sql");
+  const cacheMigration = await read("../supabase/migrations/20261121082731_memory_embedding_cache.sql");
   const allMigrations = migration + cacheMigration;
   const page = await read("../src/routes/dashboard_.memory.tsx");
   assert.match(migration, /create table if not exists public\.memory_exchanges/);
