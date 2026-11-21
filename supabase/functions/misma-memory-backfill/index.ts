@@ -89,17 +89,22 @@ Deno.serve(async (request: Request) => {
         const { data: existing } = await db.from("memory_exchanges").select("id")
           .eq("user_id", userId).eq("source_user_message_id", pendingUser.id).maybeSingle();
         if (!existing) {
-          await persistMemoryExchange(db, {
+          const userText = String(pendingUser.text || "");
+          const assistantText = String(message.text || "");
+          const toolOutput = /@(github|vercel|render|netlify)\b/i.test(userText) ||
+            /(?:tool result|repository files|search results|deployment logs|commit sha|pull request created)/i.test(assistantText);
+          const saved = await persistMemoryExchange(db, {
             userId,
             workspaceId: String(conversation.workspace_id),
             websiteId: conversation.website_connection_id ? String(conversation.website_connection_id) : null,
             chatId: Number(conversation.id),
             userMessageId: Number(pendingUser.id),
             assistantMessageId: Number(message.id),
-            userText: String(pendingUser.text || ""),
-            assistantText: String(message.text || ""),
+            userText,
+            assistantText,
+            toolOutput,
           });
-          processed++;
+          if (saved.saved) processed++;
         }
         pendingUser = null;
       }
