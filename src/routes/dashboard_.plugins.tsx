@@ -1,427 +1,286 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
+import { getPluginAuthorizationUrl, openPluginInChat } from "../lib/plugin-connect";
+import { pluginList, type PluginId, type PluginManifest } from "../lib/plugin-manifests";
+import { PluginProviderLogo } from "../components/plugin-provider-logo";
+import { PluginConnectConsent } from "../components/plugin-connect-consent";
+import { PluginSettingsSheet, type PluginConnectionSummary } from "../components/plugin-settings-sheet";
+import { Badge, Button, GlassCard, GlassRow, Input, SectionHeader } from "../components/misma-glass";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
-
-type Provider = "github" | "vercel" | "render" | "netlify";
 type Workspace = { id: string; name: string };
-type Connection = {
-  id: string;
-  provider: Provider;
-  external_account_name: string | null;
-  status: string;
-  updated_at: string;
-};
-type Website = { id: string; name: string; domain: string; website_url: string; status: string };
-type PlatformProject = {
-  id: string;
-  platform_connection_id: string;
-  name: string;
-  full_name: string | null;
-  repository_url: string | null;
-  dashboard_url: string | null;
-  default_branch: string | null;
-  metadata: Record<string, unknown> | null;
-};
-
-const plugins: Array<{
-  id: Provider;
-  name: string;
-  publisher: string;
-  category: string;
-  availability: "available" | "coming";
-}> = [
-  {
-    id: "github", name: "GitHub", publisher: "Misma", category: "Developer",
-    availability: "available",
-  },
-  {
-    id: "vercel", name: "Vercel", publisher: "Vercel", category: "Hosting",
-    availability: "available",
-  },
-  {
-    id: "render", name: "Render", publisher: "Render", category: "Hosting",
-    availability: "available",
-  },
-  {
-    id: "netlify", name: "Netlify", publisher: "Netlify", category: "Hosting",
-    availability: "coming",
-  },
-];
-
-function ProviderLogo({ provider }: { provider: Provider }) {
-  const labels: Record<Provider, string> = {
-    github: "GitHub", vercel: "Vercel", render: "Render", netlify: "Netlify",
-  };
-  const paths: Record<Provider, string> = {
-    github: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
-    vercel: "m12 1.608 12 20.784H0Z",
-    netlify: "m9.793 12.405 10.299 3.13c.347.106.561.053.775-.161l2.943-2.916a.616.616 0 0 0 0-.91l-2.943-2.915c-.214-.214-.428-.268-.776-.161l-10.298 3.13c-.428.133-.428.668 0 .802m-1.846 1.391L7.92 19.36c0 .562.107.855.374 1.123l3.29 3.316c.268.268.589.268.83 0l2.835-2.835c.268-.267.268-.562 0-.83l-6.607-6.606c-.294-.295-.695-.134-.695.267m0-3.585c-.027.402.401.562.696.268l6.607-6.607c.267-.268.267-.589 0-.83L12.415.18c-.24-.24-.562-.24-.83 0l-3.29 3.317c-.267.267-.374.481-.374.83zm-4.092 5.03c-.268.268-.562.268-.83 0L.19 12.405c-.267-.24-.267-.562 0-.83L3.025 8.74c.268-.267.562-.267.83 0l2.835 2.835c.267.268.267.589 0 .83z",
-    render: "M18.263.007c-3.121-.147-5.744 2.109-6.192 5.082-.018.138-.045.272-.067.405-.696 3.703-3.936 6.507-7.827 6.507-1.388 0-2.691-.356-3.825-.979a.2024.2024 0 0 0-.302.178V24H12v-8.999c0-1.656 1.338-3 2.987-3h2.988c3.382 0 6.103-2.817 5.97-6.244-.12-3.084-2.61-5.603-5.682-5.75",
-  };
-  return (
-    <span className={"misma-plugin-mark is-" + provider} role="img" aria-label={labels[provider] + " logo"}>
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={paths[provider]} /></svg>
-    </span>
-  );
-}
+type Website = { id: string; name: string | null; domain: string; website_url: string | null };
+type PlatformProject = { id: string; provider: PluginId; name: string; full_name: string | null; platform_connection_id: string };
 
 function PluginsPage() {
   const supabase = getSupabaseClient();
+  const [userId, setUserId] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
-  const [connections, setConnections] = useState<Connection[]>([]);
+  const [connections, setConnections] = useState<PluginConnectionSummary[]>([]);
+  const [projects, setProjects] = useState<PlatformProject[]>([]);
+  const [websites, setWebsites] = useState<Website[]>([]);
+  const [websiteId, setWebsiteId] = useState("");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Provider | null>(null);
-  const [pluginMenuOpen, setPluginMenuOpen] = useState<Provider | null>(null);
-  const [busy, setBusy] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<PluginId | "">("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [renderConfigLoading, setRenderConfigLoading] = useState(false);
-  const [renderWebsites, setRenderWebsites] = useState<Website[]>([]);
-  const [renderProjects, setRenderProjects] = useState<PlatformProject[]>([]);
-  const [renderWebsiteId, setRenderWebsiteId] = useState("");
-  const [renderProjectId, setRenderProjectId] = useState("");
-  const [renderProjectSearch, setRenderProjectSearch] = useState("");
+  const [menuOpen, setMenuOpen] = useState<PluginId | null>(null);
+  const [consentProvider, setConsentProvider] = useState<PluginManifest | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsProvider, setSettingsProvider] = useState<PluginId | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) throw new Error("Sign in to view plugins.");
-        const { data: memberships, error: membershipError } = await supabase
-          .from("workspace_members").select("workspace_id,role").eq("user_id", user.id);
-        if (membershipError) throw membershipError;
-        const ids = [...new Set((memberships || []).filter((row) => ["owner", "admin"].includes(String(row.role))).map((row) => String(row.workspace_id)))];
-        let options: Workspace[] = [];
-        if (ids.length) {
-          const { data, error: workspaceError } = await supabase.from("workspaces")
-            .select("id,name").in("id", ids).order("created_at", { ascending: true });
-          if (workspaceError) throw workspaceError;
-          options = (data || []) as Workspace[];
-        }
-        if (alive) {
-          const saved = window.sessionStorage.getItem("misma_integrations_workspace");
-          const initial = options.find((item) => item.id === saved) || options[0] || null;
-          setWorkspaceId(initial?.id || "");
-          if (initial?.id) window.sessionStorage.setItem("misma_integrations_workspace", initial.id);
-        }
-      } catch (cause) {
-        if (alive) setError(cause instanceof Error ? cause.message : "Could not load your workspaces.");
-      } finally {
-      }
-    })();
-    return () => { alive = false; };
-  }, [supabase]);
-
-  useEffect(() => {
-    let alive = true;
-    if (!workspaceId) {
-      setConnections([]);
-      return () => { alive = false; };
-    }
+    let active = true;
+    const params = new URLSearchParams(window.location.search);
+    const requestedWebsite = params.get("websiteId") || window.sessionStorage.getItem("misma_plugins_website_id") || "";
+    if (requestedWebsite) setWebsiteId(requestedWebsite);
     void (async () => {
       try {
-        const { data, error: connectionError } = await supabase.from("platform_connections")
-          .select("id,provider,external_account_name,status,updated_at")
-          .eq("workspace_id", workspaceId).order("updated_at", { ascending: false });
-        if (connectionError) throw connectionError;
-        if (alive) setConnections((data || []) as Connection[]);
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          window.location.assign("/login");
+          return;
+        }
+        const { data: memberships, error: membershipError } = await supabase.from("workspace_members")
+          .select("workspace_id,role").eq("user_id", user.id);
+        if (membershipError) throw membershipError;
+        const ids = [...new Set((memberships || [])
+          .filter((row) => ["owner", "admin"].includes(String(row.role)))
+          .map((row) => String(row.workspace_id)))];
+        if (!ids.length) throw new Error("Ask a Misma workspace owner or admin to manage plugins.");
+        const { data: workspaceRows, error: workspaceError } = await supabase.from("workspaces")
+          .select("id,name").in("id", ids).order("created_at", { ascending: true });
+        if (workspaceError) throw workspaceError;
+        const options = (workspaceRows || []) as Workspace[];
+        const saved = window.sessionStorage.getItem("misma_integrations_workspace") || "";
+        const initial = options.find((item) => item.id === saved) || options[0];
+        if (!initial) throw new Error("No Misma workspace is available for this account.");
+        if (!active) return;
+        setUserId(user.id);
+        setWorkspaceId(initial.id);
+        window.sessionStorage.setItem("misma_integrations_workspace", initial.id);
+        await loadWorkspaceData(initial.id, active);
       } catch (cause) {
-        if (alive) setError(cause instanceof Error ? cause.message : "Could not load installed plugins.");
+        if (active) setError(cause instanceof Error ? cause.message : "Could not load your plugins.");
       } finally {
+        if (active) setLoading(false);
       }
     })();
-    return () => { alive = false; };
-  }, [supabase, workspaceId]);
+    return () => { active = false; };
+  }, [supabase]);
+
+  async function loadWorkspaceData(id: string, stillActive = true) {
+    const [connectionResult, projectResult, websiteResult] = await Promise.all([
+      supabase.from("platform_connections").select("id,provider,external_account_name,status,updated_at")
+        .eq("workspace_id", id).order("updated_at", { ascending: false }),
+      supabase.from("platform_projects").select("id,provider,name,full_name,platform_connection_id")
+        .eq("workspace_id", id).order("name", { ascending: true }),
+      supabase.from("website_connections").select("id,name,domain,website_url")
+        .eq("workspace_id", id).is("widget_deleted_at", null).order("created_at", { ascending: false }),
+    ]);
+    if (connectionResult.error) throw connectionResult.error;
+    if (projectResult.error) throw projectResult.error;
+    if (websiteResult.error) throw websiteResult.error;
+    if (!stillActive) return;
+    setConnections((connectionResult.data || []) as PluginConnectionSummary[]);
+    setProjects((projectResult.data || []) as PlatformProject[]);
+    setWebsites((websiteResult.data || []) as Website[]);
+  }
 
   const installedByProvider = useMemo(() => {
-    const map = new Map<Provider, Connection>();
-    for (const item of connections) {
-      if (item.status === "connected" && !map.has(item.provider)) map.set(item.provider, item);
+    const map = new Map<PluginId, PluginConnectionSummary>();
+    for (const connection of connections) {
+      if (connection.status === "connected" && !map.has(connection.provider)) map.set(connection.provider, connection);
     }
     return map;
   }, [connections]);
-
-  const visiblePlugins = useMemo(() => plugins.filter((plugin) => {
-    const searchable = [plugin.name, plugin.category].join(" ").toLowerCase();
-    return !query.trim() || searchable.includes(query.trim().toLowerCase());
+  const filteredPlugins = useMemo(() => pluginList.filter((plugin) => {
+    const text = [plugin.name, plugin.description, plugin.role, plugin.developer].join(" ").toLowerCase();
+    return !query.trim() || text.includes(query.trim().toLowerCase());
   }), [query]);
+  const installedPlugins = pluginList.filter((plugin) => installedByProvider.has(plugin.id));
+  const selectedWebsite = websites.find((website) => website.id === websiteId) || null;
+  const linkedProjects = useMemo(() => {
+    const grouped: Record<string, string[]> = {};
+    for (const plugin of pluginList) {
+      grouped[plugin.id] = projects.filter((project) => project.provider === plugin.id)
+        .map((project) => project.full_name || project.name).slice(0, 12);
+    }
+    return grouped;
+  }, [projects]);
 
-  async function disconnect(plugin: Provider) {
-    const connection = installedByProvider.get(plugin);
+  function openDetails(provider: PluginId) {
+    const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
+    window.location.assign("/dashboard/plugins/" + provider + suffix);
+  }
+
+  function openConsent(provider: PluginId) {
+    const manifest = pluginList.find((item) => item.id === provider) || null;
+    if (!manifest || manifest.status === "coming") return;
+    setError("");
+    setConsentProvider(manifest);
+  }
+
+  async function uninstall(provider: PluginId) {
+    const connection = installedByProvider.get(provider);
     if (!connection || !workspaceId || busy) return;
-    const descriptor = plugins.find((item) => item.id === plugin);
-    const confirmed = window.confirm("Disconnect " + descriptor?.name + " from this Misma workspace? Existing code and deployments will not be deleted.");
-    if (!confirmed) return;
-    setBusy(plugin);
+    const manifest = pluginList.find((item) => item.id === provider);
+    if (!window.confirm("Uninstall " + manifest?.name + " from this Misma workspace? This does not delete your repositories, projects, services, or deployments.")) return;
+    setBusy(provider);
     setError("");
     setNotice("");
     try {
       const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
-        body: { action: "platform-disconnect", workspaceId, provider: plugin, platformConnectionId: connection.id },
+        body: { action: "platform-disconnect", workspaceId, provider, platformConnectionId: connection.id },
       });
-      if (invokeError) throw new Error(invokeError.message || "Could not disconnect this plugin.");
+      if (invokeError) throw new Error(invokeError.message || "Could not uninstall this plugin.");
       if (data?.error) throw new Error(String(data.error));
       setConnections((current) => current.map((item) => item.id === connection.id ? { ...item, status: "disconnected" } : item));
-      setNotice(descriptor?.name + " is disconnected from this workspace.");
-      setSelected(null);
+      setNotice(manifest?.name + " has been disconnected from this Misma workspace.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not disconnect this plugin.");
+      setError(cause instanceof Error ? cause.message : "Could not uninstall this plugin.");
     } finally {
       setBusy("");
     }
   }
 
-  async function connectPlugin(plugin: Provider) {
-    if (!workspaceId || busy) {
-      if (!workspaceId) setError("Choose a Misma workspace first.");
+  function startProviderFlow(provider: PluginId) {
+    setConsentProvider(null);
+    setSettingsOpen(false);
+    setBusy(provider);
+    void getPluginAuthorizationUrl(workspaceId, provider).then((url) => {
+      window.location.assign(url);
+    }).catch((cause) => {
+      setError(cause instanceof Error ? cause.message : "Could not start the provider connection.");
+    }).finally(() => setBusy(""));
+  }
+
+  async function continueToProvider(provider: PluginId) {
+    const popup = window.open("about:blank", "_blank");
+    if (!popup) {
+      setError("Your browser blocked the provider tab. Allow popups and try again.");
       return;
     }
-    setBusy(plugin);
+    popup.opener = null;
+    setBusy(provider);
     setError("");
-    setNotice("");
     try {
-      if (plugin === "github" || plugin === "vercel") {
-        const action = plugin === "github" ? "github-install-url" : "vercel-install-url";
-        const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
-          body: { action, workspaceId },
-        });
-        if (invokeError) throw new Error(invokeError.message || "Could not start the " + plugin + " connection.");
-        if (data?.error) throw new Error(String(data.error));
-        const installUrl = typeof data?.installUrl === "string" ? data.installUrl : "";
-        const validUrl = plugin === "github"
-          ? installUrl.startsWith("https://github.com/")
-          : installUrl.startsWith("https://vercel.com/integrations/");
-        if (!validUrl) throw new Error("Misma did not return a valid " + plugin + " authorization link.");
-        window.location.assign(installUrl);
-        return;
-      }
-
-      if (plugin === "render") {
-        throw new Error("Render sign-in is not available for third-party apps yet. Misma needs its own OAuth client registration from Render. No API key is requested here.");
-      }
+      const url = await getPluginAuthorizationUrl(workspaceId, provider);
+      popup.location.href = url;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not connect this plugin.");
+      popup.close();
+      setError(cause instanceof Error ? cause.message : "Could not open provider authorization.");
     } finally {
       setBusy("");
     }
   }
 
-  const selectedPlugin = plugins.find((plugin) => plugin.id === selected) || null;
-  const selectedConnection = selected ? installedByProvider.get(selected) : null;
-
-  const filteredRenderProjects = renderProjects.filter((project) =>
-    (project.name + " " + (project.full_name || "")).toLowerCase().includes(renderProjectSearch.trim().toLowerCase())
-  );
-  const visibleRenderProjects = filteredRenderProjects.length ? filteredRenderProjects : renderProjects;
-
-  async function loadRenderConfiguration(connectionId: string) {
-    if (!workspaceId || !connectionId) return;
-    setRenderConfigLoading(true);
-    try {
-      const [websiteResult, projectResult] = await Promise.all([
-        supabase.from("website_connections")
-          .select("id,name,domain,website_url,status")
-          .eq("workspace_id", workspaceId)
-          .is("widget_deleted_at", null)
-          .order("created_at", { ascending: false }),
-        supabase.from("platform_projects")
-          .select("id,platform_connection_id,name,full_name,repository_url,dashboard_url,default_branch,metadata")
-          .eq("workspace_id", workspaceId)
-          .eq("provider", "render")
-          .order("name", { ascending: true }),
-      ]);
-      if (websiteResult.error) throw websiteResult.error;
-      if (projectResult.error) throw projectResult.error;
-      setRenderWebsites((websiteResult.data || []) as Website[]);
-      setRenderProjects(((projectResult.data || []) as PlatformProject[]).filter((project) => project.platform_connection_id === connectionId));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not load Render services and websites.");
-    } finally {
-      setRenderConfigLoading(false);
-    }
-  }
-
-  async function refreshRenderProjects() {
-    if (!workspaceId || !selectedConnection || selectedConnection.provider !== "render") return;
-    setBusy("render");
-    setError("");
-    setNotice("");
-    try {
-      const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
-        body: { action: "render-refresh-projects", workspaceId, platformConnectionId: selectedConnection.id },
-      });
-      if (invokeError) throw new Error(invokeError.message || "Could not refresh Render services.");
-      if (data?.error) throw new Error(String(data.error));
-      setRenderProjects(Array.isArray(data?.projects) ? data.projects as PlatformProject[] : []);
-      setRenderProjectId("");
-      setNotice("Render services refreshed.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not refresh Render services.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function linkRenderProject() {
-    if (!workspaceId || !renderProjectId || !renderWebsiteId) {
-      setError("Choose a Render service and a Misma website.");
-      return;
-    }
-    setBusy("render-link");
-    setError("");
-    setNotice("");
-    try {
-      const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
-        body: { action: "render-link-project", workspaceId, platformProjectId: renderProjectId, websiteConnectionId: renderWebsiteId },
-      });
-      if (invokeError) throw new Error(invokeError.message || "Could not associate the Render service.");
-      if (data?.error) throw new Error(String(data.error));
-      setNotice(data?.alreadyLinked
-        ? "This Render service is already associated with that website."
-        : "Render service associated with the selected Misma website.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not associate the Render service.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  useEffect(() => {
-    if (selected === "render" && selectedConnection?.provider === "render" && workspaceId) {
-      void loadRenderConfiguration(selectedConnection.id);
-    }
-  }, [selected, selectedConnection?.id, workspaceId]);
+  const startSettings = (provider?: PluginId) => {
+    setSettingsProvider(provider || null);
+    setSettingsOpen(true);
+    setMenuOpen(null);
+  };
 
   return (
     <main className="misma-marketplace-page">
-      <div className="misma-marketplace-shell">
-        <header className="misma-marketplace-header misma-marketplace-header-simple">
-          <button type="button" className="misma-marketplace-back-button" aria-label="Go to previous page" title="Go back" onClick={() => {
-            if (window.history.length > 1) window.history.back();
-            else window.location.assign("/dashboard");
-          }}>
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+      <div className="misma-marketplace-shell misma-plugin-directory-shell">
+        <header className="misma-marketplace-header misma-plugin-directory-header">
+          <div className="misma-plugin-header-title">
+            <button type="button" className="misma-marketplace-back-button" aria-label="Go to previous page" onClick={() => {
+              if (window.history.length > 1) window.history.back();
+              else window.location.assign("/dashboard");
+            }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+            </button>
+            <div><h1>Plugins</h1><p>Connect plugins to let Misma work across your tools.</p></div>
+          </div>
+          <button type="button" className="misma-plugin-header-settings" aria-label="Plugin settings" title="Plugin settings" onClick={() => startSettings()}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
           </button>
-          <h1>Plugins</h1>
         </header>
 
-        <label className="misma-marketplace-search">
+        <label className="misma-marketplace-search" htmlFor="misma-plugin-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plugins..." aria-label="Search plugins" />
+          <Input id="misma-plugin-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plugins" aria-label="Search plugins" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}
         </label>
 
-        {notice && <p className="misma-marketplace-feedback is-success" role="status">{notice}</p>}
-        {error && <p className="misma-marketplace-feedback is-error" role="alert">{error}</p>}
+        {selectedWebsite && <div className="misma-plugin-website-context"><span>Website selected</span><strong>{selectedWebsite.name || selectedWebsite.domain}</strong><button type="button" onClick={() => { setWebsiteId(""); window.sessionStorage.removeItem("misma_plugins_website_id"); window.history.replaceState(null, "", "/dashboard/plugins"); }}>Clear</button></div>}
+        {notice && <p className="misma-plugin-feedback" role="status">{notice}</p>}
+        {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
 
-        <section className="misma-plugin-list" aria-label="Plugins">
-          {visiblePlugins.map((plugin) => {
-            const connection = installedByProvider.get(plugin.id);
-            const menuOpen = pluginMenuOpen === plugin.id;
-            return <article className="misma-plugin-row" key={plugin.id}>
-              <button type="button" className="misma-plugin-row-main" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }} aria-label={"Open " + plugin.name + " settings"}>
-                <ProviderLogo provider={plugin.id} />
-                <span className="misma-plugin-row-name">{plugin.name}</span>
-                {connection && <span className="misma-plugin-row-connected" aria-label="Connected" />}
-              </button>
-              {connection ? (
-                <div className="misma-plugin-row-actions">
-                  <button type="button" className="misma-plugin-more" aria-label={plugin.name + " options"} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setPluginMenuOpen(menuOpen ? null : plugin.id)}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-                  </button>
-                  {menuOpen && <div className="misma-plugin-context-menu" role="menu" aria-label={plugin.name + " options"}>
-                    <button type="button" role="menuitem" onClick={() => {
-                      window.sessionStorage.setItem("misma_try_plugin_provider", plugin.id);
-                      setPluginMenuOpen(null);
-                      window.location.assign("/dashboard");
-                    }}>
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5a2 2 0 0 1 3.1-1.7l8 5.2a3.5 3.5 0 0 1 0 5.9l-8 5.2A2 2 0 0 1 8 18.4Z"/></svg><span>Try now</span>
-                    </button>
-                    <button type="button" role="menuitem" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }}>
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 15.5 20 17l-3 3-1.5-1a2 2 0 0 0-2.5 1V22h-4v-2a2 2 0 0 0-2.5-1L5 20l-3-3 1-1.5A2 2 0 0 0 2 13H1v-4h2a2 2 0 0 0 1-2.5L3 5l3-3 1.5 1A2 2 0 0 0 10 2V1h4v2a2 2 0 0 0 2.5 1L18 3l3 3-1 1.5A2 2 0 0 0 21 10h2v4h-2a2 2 0 0 0-2 1.5Z"/></svg><span>Settings</span>
-                    </button>
-                    <div className="misma-plugin-context-divider" />
-                    <button type="button" role="menuitem" className="is-danger" onClick={() => { setPluginMenuOpen(null); void disconnect(plugin.id); }}>
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg><span>Uninstall</span>
-                    </button>
-                  </div>}
-                </div>
-              ) : (
-                <button type="button" className="misma-plugin-add" aria-label={"Connect " + plugin.name} title={plugin.availability === "coming" ? "Coming soon" : "Connect " + plugin.name} disabled={plugin.availability === "coming" || busy === plugin.id} onClick={() => void connectPlugin(plugin.id)}>
-                  {busy === plugin.id ? "…" : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>}
+        <section className="misma-plugin-installed-section" aria-labelledby="misma-installed-title">
+          <SectionHeader title="Installed" description={installedPlugins.length ? installedPlugins.length + " connected plugins" : "Your connected plugins appear here."} />
+          {loading ? <div className="misma-plugin-loading" aria-label="Loading plugins"><span/><span/><span/></div> : installedPlugins.length ? (
+            <div className="misma-plugin-installed-strip">
+              {installedPlugins.map((plugin) => (
+                <button type="button" className="misma-plugin-installed-item" key={plugin.id} onClick={() => openDetails(plugin.id)} aria-label={"Open " + plugin.name + " details"}>
+                  <PluginProviderLogo provider={plugin.id} size="lg" />
+                  <span>{plugin.name}</span>
                 </button>
-              )}
-            </article>;
-          })}
+              ))}
+            </div>
+          ) : <GlassCard className="misma-plugin-empty-installed">No plugins connected yet. Add one from the list below.</GlassCard>}
+        </section>
+
+        <section className="misma-plugin-available-section" aria-labelledby="misma-available-title">
+          <SectionHeader title="Available" description="Choose a plugin to see its capabilities and permissions." />
+          {loading ? <div className="misma-plugin-skeleton-list"><span/><span/><span/><span/></div> : filteredPlugins.length ? (
+            <div className="misma-plugin-available-list">
+              {filteredPlugins.map((plugin) => {
+                const connection = installedByProvider.get(plugin.id);
+                const connected = Boolean(connection);
+                const coming = plugin.status === "coming";
+                const menuIsOpen = menuOpen === plugin.id;
+                return (
+                  <article className="misma-plugin-available-row" key={plugin.id}>
+                    <button type="button" className="misma-plugin-row-content" onClick={() => openDetails(plugin.id)} aria-label={"View " + plugin.name + " details"}>
+                      <PluginProviderLogo provider={plugin.id} size="lg" />
+                      <span className="misma-plugin-row-copy"><strong>{plugin.name}</strong><small>{plugin.tagline}</small></span>
+                    </button>
+                    <div className="misma-plugin-row-end">
+                      <Badge tone={connected ? "success" : coming ? "warning" : "neutral"}>{connected ? "Connected" : coming ? "Coming later" : "Not connected"}</Badge>
+                      {connected ? (
+                        <div className="misma-plugin-overflow-wrap">
+                          <button type="button" className="misma-plugin-overflow" aria-label={plugin.name + " options"} aria-haspopup="menu" aria-expanded={menuIsOpen} onClick={() => setMenuOpen(menuIsOpen ? null : plugin.id)}>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+                          </button>
+                          {menuIsOpen && <div className="misma-plugin-overflow-menu" role="menu">
+                            <button type="button" role="menuitem" onClick={() => { setMenuOpen(null); openPluginInChat(plugin.id, websiteId); }}>Try in chat</button>
+                            <button type="button" role="menuitem" onClick={() => startSettings(plugin.id)}>Settings</button>
+                            <div />
+                            <button type="button" role="menuitem" className="is-danger" disabled={busy === plugin.id} onClick={() => { setMenuOpen(null); void uninstall(plugin.id); }}>Uninstall</button>
+                          </div>}
+                        </div>
+                      ) : (
+                        <button type="button" className="misma-plugin-add" aria-label={"Connect " + plugin.name} title={coming ? "Coming later" : "Connect " + plugin.name} disabled={coming || busy === plugin.id} onClick={() => openConsent(plugin.id)}>
+                          {busy === plugin.id ? "…" : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : <GlassCard className="misma-plugin-empty-installed">No plugins match “{query}”.</GlassCard>}
         </section>
       </div>
 
-      {selectedPlugin && <div className="misma-plugin-modal-backdrop" role="presentation" onMouseDown={(event) => {
-        if (event.target === event.currentTarget) setSelected(null);
-      }}>
-        <section className="misma-plugin-modal" role="dialog" aria-modal="true" aria-labelledby="misma-plugin-modal-title">
-          <button type="button" className="misma-plugin-modal-close" aria-label="Close details" onClick={() => setSelected(null)}>×</button>
-          <div className="misma-plugin-modal-heading">
-            <ProviderLogo provider={selectedPlugin.id} />
-            <div><h2 id="misma-plugin-modal-title">{selectedPlugin.name}</h2></div>
-          </div>
-          {selectedPlugin.availability === "coming" ? (
-            <p className="misma-plugin-modal-description">This connection is not available yet.</p>
-          ) : selectedConnection ? (
-            <div className="misma-plugin-connected-state">
-              <span className="misma-plugin-status is-connected">Connected</span>
-              <strong>{selectedConnection.external_account_name || selectedPlugin.name + " account"}</strong>
-            </div>
-          ) : selectedPlugin.id === "render" ? (
-            <p className="misma-plugin-modal-description">Render sign-in for third-party apps requires a Render-issued OAuth client. Misma does not currently have one. You will not be asked to paste an API key.</p>
-          ) : (
-            <p className="misma-plugin-modal-description">Connect your {selectedPlugin.name} account to Misma.</p>
-          )}
-          {selectedPlugin.id === "render" && selectedConnection && (
-            <div className="misma-plugin-render-config">
-              <div className="misma-plugin-render-heading">
-                <div><h3>Render deployment target</h3><p>Choose which Render service belongs to a Misma website.</p></div>
-                <button type="button" onClick={() => void refreshRenderProjects()} disabled={busy === "render"}>{busy === "render" ? "Refreshing…" : "Refresh services"}</button>
-              </div>
-              {renderConfigLoading ? <p className="misma-plugin-render-hint">Loading your websites and Render services…</p> : (
-                <>
-                  <label className="misma-plugin-credential-field">
-                    <span>Misma website</span>
-                    <select value={renderWebsiteId} onChange={(event) => setRenderWebsiteId(event.target.value)}>
-                      <option value="">Choose a connected website</option>
-                      {renderWebsites.map((website) => <option key={website.id} value={website.id}>{website.name || website.domain} · {website.domain}</option>)}
-                    </select>
-                  </label>
-                  <label className="misma-plugin-credential-field">
-                    <span>Search Render services</span>
-                    <input value={renderProjectSearch} onChange={(event) => setRenderProjectSearch(event.target.value)} placeholder="Search by service or repository name" />
-                  </label>
-                  <label className="misma-plugin-credential-field">
-                    <span>Render service</span>
-                    <select value={renderProjectId} onChange={(event) => setRenderProjectId(event.target.value)}>
-                      <option value="">Choose a Render service</option>
-                      {visibleRenderProjects.map((project) => <option key={project.id} value={project.id}>{project.name}{project.full_name && project.full_name !== project.name ? " · " + project.full_name : ""}</option>)}
-                    </select>
-                  </label>
-                  {!renderWebsites.length && <p className="misma-plugin-render-hint">Add a website in Misma before linking a Render service.</p>}
-                  {!renderProjects.length && <p className="misma-plugin-render-hint">No Render services are stored yet. Refresh services to discover the services accessible to this account.</p>}
-                  {renderProjectSearch.trim() && !filteredRenderProjects.length && <p className="misma-plugin-render-hint">No service matched that search. The accessible service list is shown instead.</p>}
-                  <button type="button" className="misma-plugin-primary" disabled={busy === "render-link" || !renderWebsiteId || !renderProjectId} onClick={() => void linkRenderProject()}>{busy === "render-link" ? "Saving…" : "Use selected service"}</button>
-                </>
-              )}
-            </div>
-          )}
-          {error && <p className="misma-plugin-modal-feedback is-error" role="alert">{error}</p>}
-          {notice && <p className="misma-plugin-modal-feedback" role="status">{notice}</p>}
-          <div className="misma-plugin-modal-actions">
-            {selectedPlugin.availability !== "coming" && !selectedConnection && selectedPlugin.id !== "render" && <button type="button" className="misma-plugin-primary" disabled={busy === selectedPlugin.id} onClick={() => void connectPlugin(selectedPlugin.id)}>Connect</button>}
-            {selectedConnection && <button type="button" className="misma-plugin-danger" disabled={busy === selectedPlugin.id} onClick={() => void disconnect(selectedPlugin.id)}>Uninstall</button>}
-          </div>
-        </section>
-      </div>}
+      <PluginConnectConsent manifest={consentProvider} workspaceId={workspaceId} open={Boolean(consentProvider)} onClose={() => setConsentProvider(null)} />
+      <PluginSettingsSheet
+        open={settingsOpen}
+        manifests={pluginList}
+        connections={connections}
+        workspaceId={workspaceId}
+        userId={userId}
+        initialProvider={settingsProvider}
+        linkedProjects={linkedProjects}
+        onClose={() => { setSettingsOpen(false); setSettingsProvider(null); }}
+        onReconnect={(provider) => { setSettingsOpen(false); openConsent(provider); }}
+        onUninstall={(provider) => { setSettingsOpen(false); void uninstall(provider); }}
+      />
     </main>
   );
 }
