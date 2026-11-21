@@ -9,6 +9,15 @@ export function GlassRow({ children, className = "", ...props }: SurfaceProps) {
 export function GlassModal({ children, className = "", ...props }: SurfaceProps) {
   return <div className={"misma-glass-scrim"}><section className={"misma-glass-modal " + className} role="dialog" aria-modal="true" {...props}>{children}</section></div>;
 }
+export function BottomSheet({ children, className = "", ...props }: SurfaceProps) {
+  return <div className="misma-glass-scrim misma-glass-scrim-bottom"><section className={"misma-glass-modal misma-glass-bottom-sheet " + className} role="dialog" aria-modal="true" {...props}>{children}</section></div>;
+}
+export function StickyActionBar({ children, className = "", ...props }: SurfaceProps) {
+  return <div className={"misma-glass-sticky-action " + className} {...props}>{children}</div>;
+}
+export function Toggle({ checked, onChange, label, disabled = false }: { checked: boolean; onChange: (checked: boolean) => void; label: string; disabled?: boolean }) {
+  return <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} className={"misma-glass-toggle" + (checked ? " is-on" : "")} onClick={() => onChange(!checked)}><span /></button>;
+}
 export function SectionHeader({ title, detail, action }: { title: string; detail?: string; action?: ReactNode }) {
   return <header className="misma-section-header"><div><h2>{title}</h2>{detail && <p>{detail}</p>}</div>{action}</header>;
 }
