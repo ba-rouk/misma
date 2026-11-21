@@ -96,7 +96,11 @@ function PluginsPage() {
     (filter === "Developer tools" && plugin.category === "Code host") ||
     (filter === "Hosting" && plugin.category === "Hosting")
   );
-  const installedPlugins = visiblePlugins.filter((plugin) => installedByProvider.has(plugin.id));
+  const installedPlugins = visiblePlugins.filter((plugin) => {
+    if (!installedByProvider.has(plugin.id)) return false;
+    const searchText = [plugin.name, plugin.description, plugin.tagline, plugin.developer].join(" ").toLowerCase();
+    return !query.trim() || searchText.includes(query.trim().toLowerCase());
+  });
   const popularPlugins = filteredByCategory.filter((plugin) => ["github", "vercel"].includes(plugin.id) && !installedByProvider.has(plugin.id));
   const newPlugins = filteredByCategory.filter((plugin) => ["render", "netlify"].includes(plugin.id) && !installedByProvider.has(plugin.id));
   const selectedWebsite = websites.find((website) => website.id === websiteId) || null;
@@ -105,34 +109,8 @@ function PluginsPage() {
     window.location.assign("/dashboard/plugins/" + provider + suffix);
   }
 
-  async function openConsent(provider: PluginId) {
-    const manifest = pluginList.find((item) => item.id === provider) || null;
-    if (!manifest || !userId) return;
-    setError("");
-    const existingConnection = installedByProvider.get(provider) ||
-      connections.find((item) => item.provider === provider && item.status === "connected");
-    const existingPreference = userPlugins.find((item) => item.provider === provider);
-    if (existingConnection && existingPreference?.is_installed === false) {
-      setBusy(provider);
-      try {
-        const { error: restoreError } = await supabase.from("user_plugins").upsert({
-          user_id: userId,
-          provider,
-          permission_mode: existingPreference.permission_mode || "low_risk",
-          account_label: existingPreference.account_label || null,
-          is_installed: true,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id,provider" });
-        if (restoreError) throw restoreError;
-        setUserPlugins((rows) => rows.map((item) => item.provider === provider ? { ...item, is_installed: true } : item));
-        setNotice(manifest.name + " has been added back to your installed plugins.");
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not reinstall this plugin.");
-      } finally {
-        setBusy("");
-      }
-      return;
-    }
+  function openConsent(provider: PluginId) {
+    if (!pluginList.some((item) => item.id === provider) || !userId) return;
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
     window.location.assign("/dashboard/plugins/" + provider + "/connect" + suffix);
   }
