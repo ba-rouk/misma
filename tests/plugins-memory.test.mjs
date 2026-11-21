@@ -195,7 +195,7 @@ test("dashboard inserts inline plugin mentions at the caret and scopes tools to 
   assert.ok(dashboard.includes("activePlugins: extractActivePlugins(textToSend)"));
   assert.ok(dashboard.includes("insertPluginMention"));
   assert.ok(dashboard.includes("memoryIncognito"));
-  assert.ok(dashboard.includes("misma-memory-incognito-toggle"));
+  assert.doesNotMatch(dashboard, /misma-memory-incognito-toggle|Don't remember this chat|Incognito on/);
   assert.doesNotMatch(dashboard, /aichat-website-plugins/);
   assert.ok(dashboard.includes("selectionStart"));
   assert.ok(dashboard.includes("selectionEnd"));
