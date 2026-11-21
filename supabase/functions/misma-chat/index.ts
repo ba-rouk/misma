@@ -1859,6 +1859,15 @@ Deno.serve(async (request) => {
       .select("enabled,retention_days").eq("user_id", userData.user.id).maybeSingle();
     if (memorySettingsError) console.warn("[misma-chat] Memory settings could not be loaded.", memorySettingsError.code);
     const memoryEnabled = memorySettings?.enabled !== false;
+    const retentionDays = Number(memorySettings?.retention_days || 0);
+    if (memoryEnabled && Number.isFinite(retentionDays) && retentionDays > 0) {
+      const retentionCutoff = new Date(Date.now() - retentionDays * 86_400_000).toISOString();
+      const retentionTask = Promise.all([
+        db.from("memory_exchanges").delete().eq("user_id", userData.user.id).lt("created_at", retentionCutoff),
+        db.from("memory_facts").delete().eq("user_id", userData.user.id).lt("created_at", retentionCutoff),
+      ]).then(() => undefined).catch(() => undefined);
+      scheduleMemoryWrite(retentionTask);
+    }
 
     const memoryQueryText = history.slice(-4).map((item) => item.text).concat([userVisibleMessage]).join("\n");
     const hasPluginOrExternalOutput = requestedPluginIds.size > 0 || requestedAttachments.length > 0 ||
