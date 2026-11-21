@@ -1,15 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, openPluginInChat } from "../lib/plugin-connect";
-import { getPluginManifest, pluginList, type PluginId } from "../lib/plugin-manifests";
+import { getPluginManifest, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
-import { PluginSettingsSheet, type PluginConnectionSummary } from "../components/plugin-settings-sheet";
+import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Badge, Button, SectionHeader, StickyActionBar } from "../components/misma-glass";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
-type PlatformProject = { id: string; provider: PluginId; name: string; full_name: string | null; platform_connection_id: string };
 
 function ExamplePreview({ kind, provider, title, description }: { kind: string; provider: PluginId; title: string; description: string }) {
   const examples = kind === "repository"
@@ -61,14 +60,11 @@ function PluginDetailPage() {
   const manifest = getPluginManifest(rawPluginId);
   const supabase = getSupabaseClient();
   const [workspaceId, setWorkspaceId] = useState("");
-  const [userId, setUserId] = useState("");
   const [connection, setConnection] = useState<PluginConnectionSummary | null>(null);
-  const [allConnections, setAllConnections] = useState<PluginConnectionSummary[]>([]);
-  const [projects, setProjects] = useState<PlatformProject[]>([]);
+  const [accountLabel, setAccountLabel] = useState("");
   const [websiteId, setWebsiteId] = useState("");
   const [expandedDescription, setExpandedDescription] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -86,34 +82,31 @@ function PluginDetailPage() {
         const { data: workspaceRows, error: workspaceError } = await supabase.from("workspaces").select("id,name").in("id", ids).order("created_at", { ascending: true });
         if (workspaceError) throw workspaceError;
         const rows = workspaceRows || [];
-        const saved = window.sessionStorage.getItem("misma_integrations_workspace") || "";
-        const workspace = rows.find((item) => item.id === saved) || rows[0];
-        if (!workspace) throw new Error("No Misma workspace is available for this account.");
-        const [connectionResult, projectResult] = await Promise.all([
-          supabase.from("platform_connections").select("id,provider,external_account_name,status,updated_at").eq("workspace_id", workspace.id).order("updated_at", { ascending: false }),
-          supabase.from("platform_projects").select("id,provider,name,full_name,platform_connection_id").eq("workspace_id", workspace.id).order("name", { ascending: true }),
+        const workspace = rows[0];
+        if (!workspace) throw new Error("Your Misma account does not yet have a provider connection target.");
+        const [connectionResult, pluginResult] = await Promise.all([
+          supabase.from("platform_connections")
+            .select("id,provider,external_account_name,status,updated_at,created_at")
+            .eq("workspace_id", workspace.id).eq("provider", manifest.id)
+            .order("updated_at", { ascending: false }),
+          supabase.from("user_plugins")
+            .select("is_installed,account_label").eq("user_id", user.id).eq("provider", manifest.id).maybeSingle(),
         ]);
         if (connectionResult.error) throw connectionResult.error;
-        if (projectResult.error) throw projectResult.error;
+        if (pluginResult.error) throw pluginResult.error;
         if (!active) return;
-        setUserId(user.id);
         setWorkspaceId(workspace.id);
-        setAllConnections((connectionResult.data || []) as PluginConnectionSummary[]);
-        setConnection(((connectionResult.data || []) as PluginConnectionSummary[]).find((item) => item.provider === manifest.id && item.status === "connected") || null);
-        setProjects((projectResult.data || []) as PlatformProject[]);
-        window.sessionStorage.setItem("misma_integrations_workspace", workspace.id);
+        setAccountLabel(String(pluginResult.data?.account_label || ""));
+        const isInstalled = pluginResult.data?.is_installed === true;
+        setConnection(isInstalled
+          ? ((connectionResult.data || []) as PluginConnectionSummary[]).find((item) => item.status === "connected") || null
+          : null);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load plugin details.");
       }
     })();
     return () => { active = false; };
   }, [supabase, manifest?.id]);
-
-  const linkedProjects = useMemo(() => {
-    const grouped: Record<string, string[]> = {};
-    for (const plugin of pluginList) grouped[plugin.id] = projects.filter((item) => item.provider === plugin.id).map((item) => item.full_name || item.name);
-    return grouped;
-  }, [projects]);
 
   if (!manifest) {
     return <main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => window.location.assign("/dashboard/plugins")}>Back to Plugins</Button></div></main>;
@@ -142,16 +135,25 @@ function PluginDetailPage() {
       setBusy(false);
     }
   }
-  function tryInChat() {
-    openPluginInChat(activeManifest.id, websiteId);
+  function tryInChat(prompt = "@" + activeManifest.id + " ") {
+    openPluginInChat(activeManifest.id, websiteId, prompt);
   }
+  const examplePrompts = activeManifest.id === "github" ? [
+    "@GitHub Inject the Misma chat widget script into my website repo and prepare a pull request",
+    "@GitHub Explain this repo's authentication flow and file structure",
+    "@GitHub Review recent commits and check for build or deployment issues",
+  ] : [
+    "@" + activeManifest.name + " Trigger a new production deployment for my linked project",
+    "@" + activeManifest.name + " Check the status and build logs of my latest deployment",
+    "@" + activeManifest.name + " Show the projects or services linked to my website",
+  ];
   function connectAction() {
     setError("");
     setConsentOpen(true);
   }
 
   const primaryAction = connection ? (
-    <Button className="misma-plugin-detail-primary" onClick={tryInChat}>Try in chat</Button>
+    <Button className="misma-plugin-detail-primary" onClick={() => tryInChat()}>Try in chat</Button>
   ) : manifest.status === "coming" ? (
     <Button className="misma-plugin-detail-primary" disabled>Coming later</Button>
   ) : manifest.authType === "oauth_pending" ? (
@@ -168,7 +170,7 @@ function PluginDetailPage() {
           <header className="misma-plugin-detail-header">
             <button type="button" className="misma-plugin-detail-back" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
             <h1>{manifest.name}</h1>
-            <button type="button" className="misma-plugin-detail-settings" aria-label={connection ? "Plugin settings" : "Connection information"} onClick={() => connection ? setSettingsOpen(true) : connectAction()}>
+            <button type="button" className="misma-plugin-detail-settings" aria-label="Plugin settings" onClick={() => window.location.assign("/dashboard/plugins/" + manifest.id + "/settings")}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
             </button>
           </header>
@@ -180,6 +182,26 @@ function PluginDetailPage() {
         </section>        <section className="misma-plugin-description-section">
           <p className={"misma-plugin-detail-description" + (expandedDescription ? " is-expanded" : "")}>{manifest.description}</p>
           <button type="button" className="misma-plugin-more-link" aria-expanded={expandedDescription} onClick={() => setExpandedDescription((value) => !value)}>{expandedDescription ? "Less" : "More"}</button>
+        </section>
+
+        <section className="misma-plugin-prompt-showcase">
+          <h2>Try an example</h2>
+          <div className="misma-plugin-prompt-list">
+            {examplePrompts.map((prompt) => (
+              <button type="button" className="misma-plugin-prompt-card" key={prompt} disabled={!connection} onClick={() => tryInChat(prompt)}>
+                <span>{prompt}</span><b aria-hidden="true">→</b>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="misma-plugin-detail-section misma-plugin-connected-accounts">
+          <SectionHeader title="Apps" />
+          <div className="misma-plugin-connected-account-row">
+            <PluginProviderLogo provider={manifest.id} size="md" />
+            <div><strong>{accountLabel || connection?.external_account_name || manifest.name + " account"}</strong><small>{connection ? "Primary connected account" : "No account connected yet"}</small></div>
+            <Badge tone={connection ? "success" : "neutral"}>{connection ? "Connected" : "Not connected"}</Badge>
+          </div>
         </section>
 
         <section className="misma-plugin-detail-section misma-plugin-app-section">
@@ -208,25 +230,7 @@ function PluginDetailPage() {
         </div>
       </StickyActionBar>
       <PluginConnectConsent manifest={manifest} workspaceId={workspaceId} open={consentOpen} onClose={() => setConsentOpen(false)} />
-      <PluginSettingsSheet
-        open={settingsOpen}
-        manifests={pluginList}
-        connections={allConnections}
-        workspaceId={workspaceId}
-        userId={userId}
-        initialProvider={manifest.id}
-        linkedProjects={linkedProjects}
-        onClose={() => setSettingsOpen(false)}
-        onReconnect={(provider) => { setSettingsOpen(false); setConsentOpen(true); }}
-        onUninstall={async (provider) => {
-          const selected = allConnections.find((item) => item.provider === provider && item.status === "connected");
-          if (!selected || !workspaceId) return;
-          if (!window.confirm("Uninstall " + provider + " from this Misma workspace?")) return;
-          const { error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", { body: { action: "platform-disconnect", workspaceId, provider, platformConnectionId: selected.id } });
-          if (invokeError) setError(invokeError.message || "Could not uninstall plugin.");
-          else { setAllConnections((items) => items.map((item) => item.id === selected.id ? { ...item, status: "disconnected" } : item)); setConnection(null); setSettingsOpen(false); }
-        }}
-      />
+
     </main>
   );
 }

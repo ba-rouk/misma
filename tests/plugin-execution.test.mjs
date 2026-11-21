@@ -38,6 +38,14 @@ test("execution workflow previews framework-aware patches and requires explicit 
   assert.match(fn, /decision: "approved"/);
   assert.match(fn, /No GitHub branch, commit, or pull request was created/);
   assert.match(fn, /currentFile\.sha !== plan\.originalSha/);
+  assert.match(fn, /from\("user_plugins"\)/);
+  assert.match(fn, /permission_mode/);
+  assert.match(fn, /is_installed !== true/);
+  assert.match(fn, /permissionMode !== "always_ask"/);
+  assert.match(fn, /APPROVE READ/);
+  assert.match(fn, /execution\.repository_read_approved/);
+  assert.match(fn, /auto_approved_by_policy/);
+  assert.match(fn, /execution\.plan_auto_approved/);
 });
 
 test("execution workflow uses a dedicated GitHub branch and pull request, never writes to the default branch", async () => {

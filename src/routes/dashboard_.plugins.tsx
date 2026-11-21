@@ -5,20 +5,20 @@ import { openPluginInChat } from "../lib/plugin-connect";
 import { pluginList, type PluginId, type PluginManifest } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
-import { PluginSettingsSheet, type PluginConnectionSummary } from "../components/plugin-settings-sheet";
+import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Badge, GlassCard, Input, SectionHeader } from "../components/misma-glass";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
 type Workspace = { id: string; name: string };
 type Website = { id: string; name: string | null; domain: string; website_url: string | null };
-type PlatformProject = { id: string; provider: PluginId; name: string; full_name: string | null; platform_connection_id: string };
+type UserPlugin = { provider: PluginId; is_installed: boolean; permission_mode: string; account_label: string | null };
 
 function PluginsPage() {
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
   const [connections, setConnections] = useState<PluginConnectionSummary[]>([]);
-  const [projects, setProjects] = useState<PlatformProject[]>([]);
+  const [userPlugins, setUserPlugins] = useState<UserPlugin[]>([]);
   const [websites, setWebsites] = useState<Website[]>([]);
   const [websiteId, setWebsiteId] = useState("");
   const [query, setQuery] = useState("");
@@ -28,8 +28,6 @@ function PluginsPage() {
   const [error, setError] = useState("");
   const [menuOpen, setMenuOpen] = useState<PluginId | null>(null);
   const [consentProvider, setConsentProvider] = useState<PluginManifest | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsProvider, setSettingsProvider] = useState<PluginId | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -49,19 +47,17 @@ function PluginsPage() {
         const ids = [...new Set((memberships || [])
           .filter((row) => ["owner", "admin"].includes(String(row.role)))
           .map((row) => String(row.workspace_id)))];
-        if (!ids.length) throw new Error("Ask a Misma workspace owner or admin to manage plugins.");
+        if (!ids.length) throw new Error("Ask a Misma account owner or admin to manage plugins.");
         const { data: workspaceRows, error: workspaceError } = await supabase.from("workspaces")
           .select("id,name").in("id", ids).order("created_at", { ascending: true });
         if (workspaceError) throw workspaceError;
         const options = (workspaceRows || []) as Workspace[];
-        const saved = window.sessionStorage.getItem("misma_integrations_workspace") || "";
-        const initial = options.find((item) => item.id === saved) || options[0];
-        if (!initial) throw new Error("No Misma workspace is available for this account.");
+        const initial = options[0];
+        if (!initial) throw new Error("No provider connection is available for this Misma account.");
         if (!active) return;
         setUserId(user.id);
         setWorkspaceId(initial.id);
-        window.sessionStorage.setItem("misma_integrations_workspace", initial.id);
-        await loadWorkspaceData(initial.id, active);
+        await loadWorkspaceData(initial.id, active, user.id);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load your plugins.");
       } finally {
@@ -71,74 +67,108 @@ function PluginsPage() {
     return () => { active = false; };
   }, [supabase]);
 
-  async function loadWorkspaceData(id: string, stillActive = true) {
-    const [connectionResult, projectResult, websiteResult] = await Promise.all([
-      supabase.from("platform_connections").select("id,provider,external_account_name,status,updated_at")
+  async function loadWorkspaceData(id: string, stillActive = true, currentUserId = userId) {
+    const [connectionResult, websiteResult, pluginResult] = await Promise.all([
+      supabase.from("platform_connections").select("id,provider,external_account_name,status,updated_at,created_at")
         .eq("workspace_id", id).order("updated_at", { ascending: false }),
-      supabase.from("platform_projects").select("id,provider,name,full_name,platform_connection_id")
-        .eq("workspace_id", id).order("name", { ascending: true }),
       supabase.from("website_connections").select("id,name,domain,website_url")
         .eq("workspace_id", id).is("widget_deleted_at", null).order("created_at", { ascending: false }),
+      supabase.from("user_plugins").select("provider,is_installed,permission_mode,account_label").eq("user_id", currentUserId),
     ]);
     if (connectionResult.error) throw connectionResult.error;
-    if (projectResult.error) throw projectResult.error;
     if (websiteResult.error) throw websiteResult.error;
+    if (pluginResult.error) throw pluginResult.error;
     if (!stillActive) return;
-    setConnections((connectionResult.data || []) as PluginConnectionSummary[]);
-    setProjects((projectResult.data || []) as PlatformProject[]);
+    const connectedRows = (connectionResult.data || []) as PluginConnectionSummary[];
+    const pluginRows = (pluginResult.data || []) as UserPlugin[];
+    // When OAuth first returns, create the per-user install record once. An explicit uninstall stays uninstalled.
+    const known = new Set(pluginRows.map((item) => item.provider));
+    const newlyConnected = [...new Set(connectedRows.filter((item) => item.status === "connected").map((item) => item.provider))]
+      .filter((provider) => !known.has(provider));
+    if (newlyConnected.length) {
+      const { error: insertError } = await supabase.from("user_plugins").upsert(
+        newlyConnected.map((provider) => ({ user_id: currentUserId, provider, is_installed: true, permission_mode: "low_risk" })),
+        { onConflict: "user_id,provider" },
+      );
+      if (!insertError) {
+        newlyConnected.forEach((provider) => pluginRows.push({ provider, is_installed: true, permission_mode: "low_risk", account_label: null }));
+      }
+    }
+    setConnections(connectedRows);
+    setUserPlugins(pluginRows);
     setWebsites((websiteResult.data || []) as Website[]);
   }
 
   const installedByProvider = useMemo(() => {
     const map = new Map<PluginId, PluginConnectionSummary>();
     for (const connection of connections) {
-      if (connection.status === "connected" && !map.has(connection.provider)) map.set(connection.provider, connection);
+      const installed = userPlugins.some((item) => item.provider === connection.provider && item.is_installed);
+      if (connection.status === "connected" && installed && !map.has(connection.provider)) map.set(connection.provider, connection);
     }
     return map;
-  }, [connections]);
+  }, [connections, userPlugins]);
   const filteredPlugins = useMemo(() => pluginList.filter((plugin) => {
     const text = [plugin.name, plugin.description, plugin.role, plugin.developer].join(" ").toLowerCase();
     return !query.trim() || text.includes(query.trim().toLowerCase());
   }), [query]);
   const installedPlugins = pluginList.filter((plugin) => installedByProvider.has(plugin.id));
   const selectedWebsite = websites.find((website) => website.id === websiteId) || null;
-  const linkedProjects = useMemo(() => {
-    const grouped: Record<string, string[]> = {};
-    for (const plugin of pluginList) {
-      grouped[plugin.id] = projects.filter((project) => project.provider === plugin.id)
-        .map((project) => project.full_name || project.name).slice(0, 12);
-    }
-    return grouped;
-  }, [projects]);
-
   function openDetails(provider: PluginId) {
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
     window.location.assign("/dashboard/plugins/" + provider + suffix);
   }
 
-  function openConsent(provider: PluginId) {
+  async function openConsent(provider: PluginId) {
     const manifest = pluginList.find((item) => item.id === provider) || null;
-    if (!manifest || manifest.status === "coming") return;
+    if (!manifest || manifest.status === "coming" || !userId) return;
     setError("");
+    const existingConnection = installedByProvider.get(provider) ||
+      connections.find((item) => item.provider === provider && item.status === "connected");
+    const existingPreference = userPlugins.find((item) => item.provider === provider);
+    if (existingConnection && existingPreference?.is_installed === false) {
+      setBusy(provider);
+      try {
+        const { error: restoreError } = await supabase.from("user_plugins").upsert({
+          user_id: userId,
+          provider,
+          permission_mode: existingPreference.permission_mode || "low_risk",
+          account_label: existingPreference.account_label || null,
+          is_installed: true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id,provider" });
+        if (restoreError) throw restoreError;
+        setUserPlugins((rows) => rows.map((item) => item.provider === provider ? { ...item, is_installed: true } : item));
+        setNotice(manifest.name + " has been added back to your installed plugins.");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not reinstall this plugin.");
+      } finally {
+        setBusy("");
+      }
+      return;
+    }
     setConsentProvider(manifest);
   }
 
   async function uninstall(provider: PluginId) {
-    const connection = installedByProvider.get(provider);
-    if (!connection || !workspaceId || busy) return;
+    if (!userId || busy) return;
     const manifest = pluginList.find((item) => item.id === provider);
-    if (!window.confirm("Uninstall " + manifest?.name + " from this Misma workspace? This does not delete your repositories, projects, services, or deployments.")) return;
+    if (!window.confirm("Uninstall " + manifest?.name + " from your Misma account? This does not disconnect or delete the provider account or its resources.")) return;
     setBusy(provider);
     setError("");
     setNotice("");
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
-        body: { action: "platform-disconnect", workspaceId, provider, platformConnectionId: connection.id },
-      });
-      if (invokeError) throw new Error(invokeError.message || "Could not uninstall this plugin.");
-      if (data?.error) throw new Error(String(data.error));
-      setConnections((current) => current.map((item) => item.id === connection.id ? { ...item, status: "disconnected" } : item));
-      setNotice(manifest?.name + " has been disconnected from this Misma workspace.");
+      const existing = userPlugins.find((item) => item.provider === provider);
+      const { error: saveError } = await supabase.from("user_plugins").upsert({
+        user_id: userId, provider, is_installed: false,
+        permission_mode: existing?.permission_mode || "low_risk",
+        account_label: existing?.account_label || null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,provider" });
+      if (saveError) throw saveError;
+      setUserPlugins((rows) => rows.some((item) => item.provider === provider)
+        ? rows.map((item) => item.provider === provider ? { ...item, is_installed: false } : item)
+        : [...rows, { provider, is_installed: false, permission_mode: "low_risk", account_label: null }]);
+      setNotice((manifest?.name || "Plugin") + " was uninstalled. Its provider account remains connected.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not uninstall this plugin.");
     } finally {
@@ -146,11 +176,7 @@ function PluginsPage() {
     }
   }
 
-  const startSettings = (provider?: PluginId) => {
-    setSettingsProvider(provider || null);
-    setSettingsOpen(true);
-    setMenuOpen(null);
-  };
+
 
   return (
     <main className="misma-marketplace-page">
@@ -165,7 +191,7 @@ function PluginsPage() {
             </button>
             <div><h1>Plugins</h1><p>Connect plugins to let Misma work across your tools.</p></div>
           </div>
-          <button type="button" className="misma-plugin-header-settings" aria-label="Plugin settings" title="Plugin settings" onClick={() => startSettings()}>
+          <button type="button" className="misma-plugin-header-settings" aria-label="Plugin settings" title="Plugin settings" onClick={() => window.location.assign("/dashboard/plugins/" + (installedPlugins[0]?.id || pluginList[0]?.id || "github") + "/settings")}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
           </button>
         </header>
@@ -218,7 +244,7 @@ function PluginsPage() {
                           </button>
                           {menuIsOpen && <div className="misma-plugin-overflow-menu" role="menu">
                             <button type="button" role="menuitem" onClick={() => { setMenuOpen(null); openPluginInChat(plugin.id, websiteId); }}>Try in chat</button>
-                            <button type="button" role="menuitem" onClick={() => startSettings(plugin.id)}>Settings</button>
+                            <button type="button" role="menuitem" onClick={() => { setMenuOpen(null); window.location.assign("/dashboard/plugins/" + plugin.id + "/settings"); }}>Settings</button>
                             <div />
                             <button type="button" role="menuitem" className="is-danger" disabled={busy === plugin.id} onClick={() => { setMenuOpen(null); void uninstall(plugin.id); }}>Uninstall</button>
                           </div>}
@@ -242,18 +268,7 @@ function PluginsPage() {
       </div>
 
       <PluginConnectConsent manifest={consentProvider} workspaceId={workspaceId} open={Boolean(consentProvider)} onClose={() => setConsentProvider(null)} />
-      <PluginSettingsSheet
-        open={settingsOpen}
-        manifests={pluginList}
-        connections={connections}
-        workspaceId={workspaceId}
-        userId={userId}
-        initialProvider={settingsProvider}
-        linkedProjects={linkedProjects}
-        onClose={() => { setSettingsOpen(false); setSettingsProvider(null); }}
-        onReconnect={(provider) => { setSettingsOpen(false); openConsent(provider); }}
-        onUninstall={(provider) => { setSettingsOpen(false); void uninstall(provider); }}
-      />
+
     </main>
   );
 }
