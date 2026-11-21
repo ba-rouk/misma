@@ -1,6 +1,6 @@
 export type PluginId = "github" | "vercel" | "render" | "netlify";
 export type PluginStatus = "available" | "coming";
-export type PluginAuthType = "github_app" | "vercel_marketplace_oauth" | "oauth_pending" | "coming";
+export type PluginAuthType = "github_app" | "vercel_marketplace_oauth" | "netlify_oauth" | "oauth_pending" | "coming";
 
 export interface PluginSkill {
   id: string;
@@ -138,33 +138,38 @@ export const pluginManifests: Record<PluginId, PluginManifest> = {
     id: "netlify",
     name: "Netlify",
     role: "Hosting",
-    tagline: "Connect Netlify sites and publishing workflows.",
-    description: "Netlify support is being prepared. Account authorization, site discovery, and build/deployment actions are not enabled yet. This plugin will become available after the customer OAuth flow and provider API adapter are complete.",
+    tagline: "Discover Netlify sites and connect them to Misma websites.",
+    description: "Connect your Netlify account securely with OAuth. Misma can discover the sites you authorize, read site and build metadata, and associate a selected Netlify site with a website in your Misma workspace.",
     developer: "Netlify, Inc.",
     website: "https://www.netlify.com",
-    version: "Coming later",
+    version: "1.0.0",
     privacyUrl: "https://www.netlify.com/privacy/",
     termsUrl: "https://www.netlify.com/legal/terms-of-use/",
     icon: "netlify",
     brandColor: "#32c6c8",
-    status: "coming",
-    authType: "coming",
+    status: "available",
+    authType: "netlify_oauth",
     category: "Hosting",
     skills: [
-      { id: "discover-sites", name: "Discover sites", description: "Planned: list sites authorized by the connected Netlify account.", icon: "globe" },
-      { id: "build-status", name: "Check build status", description: "Planned: display site build and deployment status.", icon: "activity" },
+      { id: "discover-sites", name: "Discover sites", description: "List the sites accessible to the connected Netlify account.", icon: "globe" },
+      { id: "build-status", name: "Read site metadata", description: "Read site URLs, repository metadata and current deployment details.", icon: "activity" },
+      { id: "associate-site", name: "Link a site", description: "Associate a Netlify site with a website registered in Misma.", icon: "link" },
     ],
     permissions: [
-      "Netlify authorization is not enabled yet.",
-      "Misma will request only the account and site permissions needed when this integration launches.",
+      "Read your Netlify account identity and the sites accessible to that account.",
+      "Read site metadata and deployment details returned by the Netlify API.",
+      "Save a site-to-website association in your Misma workspace.",
+      "Misma stores the OAuth access token encrypted and does not request your Netlify password.",
+      "Production deployments and destructive site changes are not enabled by this connection.",
     ],
     previewCards: [
-      { id: "sites", title: "Netlify sites", description: "Example preview only. Site discovery is not available yet.", kind: "sites" },
+      { id: "sites", title: "Netlify sites", description: "Discover sites accessible to the connected Netlify account.", kind: "sites" },
+      { id: "association", title: "Website association", description: "Choose which Netlify site belongs to a registered Misma website.", kind: "sites" },
     ],
   },
 };
 
-export const pluginList = Object.values(pluginManifests);
+export const pluginList = Object.values(pluginManifests).filter((plugin) => plugin.id !== "render");
 export function getPluginManifest(id: string): PluginManifest | null {
   return Object.prototype.hasOwnProperty.call(pluginManifests, id)
     ? pluginManifests[id as PluginId]
