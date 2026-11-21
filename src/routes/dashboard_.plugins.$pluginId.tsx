@@ -134,7 +134,8 @@ function PluginDetailPage() {
     return <main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => window.location.assign("/dashboard/plugins")}>Back to Plugins</Button></div></main>;
   }
 
-  const canAuthorize = manifest.authType === "github_app" || manifest.authType === "vercel_marketplace_oauth";
+  const activeManifest = manifest;
+  const canAuthorize = activeManifest.authType === "github_app" || activeManifest.authType === "vercel_marketplace_oauth";
   function backToPlugins() {
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
     window.location.assign("/dashboard/plugins" + suffix);
@@ -147,7 +148,7 @@ function PluginDetailPage() {
     setBusy(true);
     setError("");
     try {
-      const url = await getPluginAuthorizationUrl(workspaceId, manifest.id);
+      const url = await getPluginAuthorizationUrl(workspaceId, activeManifest.id);
       popup.location.href = url;
     } catch (cause) {
       popup.close();
@@ -157,7 +158,7 @@ function PluginDetailPage() {
     }
   }
   function tryInChat() {
-    openPluginInChat(manifest.id, websiteId);
+    openPluginInChat(activeManifest.id, websiteId);
   }
   function connectAction() {
     setError("");
