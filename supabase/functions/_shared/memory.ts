@@ -1,3 +1,4 @@
+declare const EdgeRuntime: { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
 import { z } from "npm:zod@4";
 
 const schema = z.object({
@@ -52,7 +53,7 @@ export function containsSensitiveSecret(text: string): boolean {
     /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/,
     /\b(?:xox[baprs]-[A-Za-z0-9-]{16,}|AIza[0-9A-Za-z_-]{30,})\b/,
     /\b(?:api[_ -]?key|password|passphrase|client[_ -]?secret|access[_ -]?token|refresh[_ -]?token|private[_ -]?key)\s*[:=]\s*\S{6,}/i,
-    /\b(?:\d[ -]?){13,19}\b/,
+    /\b(?:\d[ -]?){13,19}\b/g,
   ];
   for (const pattern of patterns) {
     const matches = text.match(pattern);
@@ -225,11 +226,12 @@ export async function persistMemoryExchange(
     assistantMessageId?: number | null;
     userText: string;
     assistantText: string;
+    toolOutput?: boolean;
   },
 ): Promise<{ saved: boolean; exchangeId?: string }> {
   const userText = input.userText.trim();
   const assistantText = input.assistantText.trim();
-  if (!userText || !assistantText || containsSensitiveSecret(userText) ||
+  if (input.toolOutput || !userText || !assistantText || containsSensitiveSecret(userText) ||
     containsSensitiveSecret(assistantText) || isTrivialExchange(userText, assistantText)) {
     return { saved: false };
   }
@@ -285,13 +287,11 @@ export async function persistMemoryExchange(
     const factKey = safeFactKey(fact.key);
     let previous = activeFacts.find((item) => item.fact_key === factKey) || null;
     if (fact.action === "delete") {
-      if (previous) {
-        await db.from("memory_facts").update({
-          deleted_at: new Date().toISOString(),
-          embedding: null,
-          updated_at: new Date().toISOString(),
-        }).eq("id", previous.id).eq("user_id", input.userId);
-      }
+      await db.from("memory_facts").update({
+        deleted_at: new Date().toISOString(),
+        embedding: null,
+        updated_at: new Date().toISOString(),
+      }).eq("user_id", input.userId).eq("fact_key", factKey).is("deleted_at", null);
       continue;
     }
 
