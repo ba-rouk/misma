@@ -22,6 +22,8 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.match(page, /misma-plugin-available-list/);
   assert.match(page, /misma-plugin-add/);
   assert.match(page, /misma-plugin-search-dock/);
+  assert.ok(page.includes('href={"/dashboard/plugins/" + openPluginMenu.provider + "/settings"'));
+  assert.doesNotMatch(page, /openPluginSettings\(/);
   assert.match(page, /getPluginWorkspaceContext/);
   assert.match(page, /context\.workspaceIds/);
   assert.match(page, /from\("user_plugins"\)/);
@@ -211,6 +213,7 @@ test("dashboard inserts inline plugin mentions at the caret and scopes tools to 
   assert.match(dashboard, /Think harder/);
   assert.match(dashboard, /Create image/);
   assert.match(dashboard, /Connect your first plugin/);
+  assert.doesNotMatch(dashboard, /misma-memory-incognito-toggle|Don't remember this chat|Incognito on/);
   assert.doesNotMatch(dashboard, /Create video/);
   assert.doesNotMatch(dashboard, /setCreateMode\("video"\)/);
   assert.ok(css.includes("misma-composer-inline-mention"));
@@ -289,4 +292,18 @@ test("Vercel settings has an explicit static route that renders the shared provi
   assert.match(route, /PluginSettingsPage pluginId="vercel"/);
   assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
   assert.match(shared, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId\/settings"\)/);
+});
+
+test("every plugin settings URL has an explicit static provider route", async () => {
+  const github = await read("../src/routes/dashboard.plugins.github.settings.tsx");
+  const render = await read("../src/routes/dashboard.plugins.render.settings.tsx");
+  const netlify = await read("../src/routes/dashboard.plugins.netlify.settings.tsx");
+  assert.match(github, /createFileRoute\("\/dashboard\/plugins\/github\/settings"\)/);
+  assert.match(github, /GitHub settings/);
+  assert.match(github, /misma-github-settings-empty-page/);
+  assert.doesNotMatch(github, /PluginSettingsPage|useEffect|supabase/);
+  assert.match(render, /createFileRoute\("\/dashboard\/plugins\/render\/settings"\)/);
+  assert.match(render, /PluginSettingsPage pluginId="render"/);
+  assert.match(netlify, /createFileRoute\("\/dashboard\/plugins\/netlify\/settings"\)/);
+  assert.match(netlify, /PluginSettingsPage pluginId="netlify"/);
 });
