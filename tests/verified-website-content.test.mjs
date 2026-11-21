@@ -23,13 +23,17 @@ test("verified website content is parsed from JSON-LD and returned as recommenda
   assert.match(runtime, /parsedImage\.protocol==="https:"/);
 });
 
-test("plugin directory hides Render and routes plugin details/settings", async () => {
+test("plugin directory exposes configured providers and all management routes", async () => {
   const plugins = await read("src/routes/dashboard_.plugins.tsx");
+  const detail = await read("src/routes/dashboard_.plugins.$pluginId.tsx");
   const tree = await read("src/routeTree.gen.ts");
-  assert.match(plugins, /plugin\.id !== "render"/);
+  assert.match(plugins, /const visiblePlugins = pluginList/);
+  assert.doesNotMatch(plugins, /plugin\.id !== "render"/);
   assert.match(plugins, /openDetails\(plugin\.id\)/);
-  assert.match(plugins, /\/dashboard\/plugins\/.*\/settings/);
+  assert.match(plugins, /\/dashboard\/plugins\/.*\/connect/);
+  assert.match(detail, /\/settings/);
   assert.match(tree, /dashboard_\.plugins\.\$pluginId\.settings/);
+  assert.match(tree, /dashboard_\.plugins\.\$pluginId\.connect/);
 });
 
 test("cross-chat account memory filters secrets and is isolated by owner", async () => {
