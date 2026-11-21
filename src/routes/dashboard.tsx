@@ -3564,10 +3564,12 @@ function Dashboard() {
   };
 
   const extractActivePlugins = (value: string): string[] => {
-    const connected = new Set(workspacePluginConnections.map((item) => item.provider.toLowerCase()));
+    // Preserve explicit @provider mentions even while the workspace connection
+    // list is still loading or stale. The authenticated Edge Function remains
+    // responsible for verifying installation, permissions and provider access.
     const matches = Array.from(value.matchAll(/(?:^|[^A-Za-z0-9_])@(github|vercel|render|netlify)\b/gi))
       .map((match) => String(match[1]).toLowerCase());
-    return [...new Set(matches)].filter((provider) => connected.has(provider));
+    return [...new Set(matches)];
   };
 
   const postChatAction = async (body: Record<string, unknown>, signal?: AbortSignal) => {
