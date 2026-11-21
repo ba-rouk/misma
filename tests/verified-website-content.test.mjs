@@ -32,10 +32,17 @@ test("plugin directory hides Render and routes plugin details/settings", async (
   assert.match(tree, /dashboard_\.plugins\.\$pluginId\.settings/);
 });
 
-test("automatic account memory remains per-user and skips obvious sensitive disclosures", async () => {
+test("cross-chat account memory filters secrets and is isolated by owner", async () => {
   const chat = await read("supabase/functions/misma-chat/index.ts");
-  assert.match(chat, /user_memories/);
-  assert.match(chat, /automatic_chat_extraction/);
-  assert.match(chat, /my medical|my health|my religion|my political/i);
-  assert.match(chat, /project\.current/);
+  const memory = await read("supabase/functions/_shared/memory.ts");
+  const migration = await read("supabase/migrations/20261121100000_cross_chat_memory.sql");
+  assert.match(chat, /retrieveMemory/);
+  assert.match(chat, /scheduleMemoryWrite/);
+  assert.match(memory, /containsSensitiveSecret/);
+  assert.match(memory, /PRIVATE KEY/);
+  assert.match(memory, /isTrivialExchange/);
+  assert.match(memory, /safeParse/);
+  assert.match(memory, /gemini-embedding-001/);
+  assert.match(migration, /auth\.uid\(\)\) = user_id/);
+  assert.match(migration, /match_memory/);
 });
