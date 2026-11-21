@@ -30,37 +30,22 @@ const plugins: Array<{
   name: string;
   publisher: string;
   category: string;
-  description: string;
-  purpose: string;
-  permissions: string[];
   availability: "available" | "coming";
 }> = [
   {
     id: "github", name: "GitHub", publisher: "Misma", category: "Developer",
-    description: "Connect repositories and let Misma understand and prepare focused code changes.",
-    purpose: "Code & Repository Management",
-    permissions: ["Read repositories available to your GitHub App installation.", "Inspect repository structure and supported website entry points.", "Create a dedicated branch and prepare a pull request for widget changes.", "Merge changes only through an explicitly approved workflow."],
     availability: "available",
   },
   {
     id: "vercel", name: "Vercel", publisher: "Vercel", category: "Hosting",
-    description: "Discover projects, associate the correct project with a Misma website, and monitor deployments.",
-    purpose: "Deployment & Hosting",
-    permissions: ["Read projects accessible to the connected account.", "Associate a selected project with a Misma workspace website.", "Trigger or monitor supported deployments after an approved repository change."],
     availability: "available",
   },
   {
     id: "render", name: "Render", publisher: "Render", category: "Hosting",
-    description: "Connect a Render account, find web services and static sites, and manage deploy targets.",
-    purpose: "Deployment & Hosting",
-    permissions: ["Validate your customer-owned Render API key.", "Discover services and static sites exposed by that key.", "Associate the chosen service with a Misma website and monitor deployment status."],
     availability: "available",
   },
   {
     id: "netlify", name: "Netlify", publisher: "Netlify", category: "Hosting",
-    description: "Prepare to connect sites and publishing workflows through your Netlify account.",
-    purpose: "Deployment & Hosting",
-    permissions: ["Planned: discover authorized Netlify sites and build configuration.", "Planned: trigger and monitor builds for the selected site."],
     availability: "coming",
   },
 ];
@@ -92,6 +77,7 @@ function PluginsPage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"All" | "Installed" | "Developer & Hosting">("All");
   const [selected, setSelected] = useState<Provider | null>(null);
+  const [pluginMenuOpen, setPluginMenuOpen] = useState<Provider | null>(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -170,7 +156,7 @@ function PluginsPage() {
 
   const visiblePlugins = useMemo(() => plugins.filter((plugin) => {
     const installed = installedByProvider.has(plugin.id);
-    const searchable = [plugin.name, plugin.description, plugin.category, plugin.purpose].join(" ").toLowerCase();
+    const searchable = [plugin.name, plugin.category].join(" ").toLowerCase();
     if (query.trim() && !searchable.includes(query.trim().toLowerCase())) return false;
     if (filter === "Installed" && !installed) return false;
     if (filter === "Developer & Hosting" && !["Developer", "Hosting"].includes(plugin.category)) return false;
@@ -228,19 +214,7 @@ function PluginsPage() {
       }
 
       if (plugin === "render") {
-        if (!renderApiKey.trim()) throw new Error("Enter your Render API key.");
-        const { data, error: invokeError } = await supabase.functions.invoke("misma-platform-integrations", {
-          body: { action: "render-connect", workspaceId, apiKey: renderApiKey.trim() },
-        });
-        if (invokeError) throw new Error(invokeError.message || "Could not connect Render.");
-        if (data?.error) throw new Error(String(data.error));
-        setRenderApiKey("");
-        const { data: refreshed, error: refreshError } = await supabase.from("platform_connections")
-          .select("id,provider,external_account_name,status,updated_at")
-          .eq("workspace_id", workspaceId).order("updated_at", { ascending: false });
-        if (refreshError) throw refreshError;
-        setConnections((refreshed || []) as Connection[]);
-        setNotice(String(data?.message || "Render is connected to this Misma workspace."));
+        throw new Error("Render sign-in is not available for third-party apps yet. Misma needs its own OAuth client registration from Render. No API key is requested here.");
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not connect this plugin.");
