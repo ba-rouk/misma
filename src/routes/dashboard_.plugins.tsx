@@ -47,13 +47,13 @@ function PluginsPage() {
         const ids = [...new Set((memberships || [])
           .filter((row) => ["owner", "admin"].includes(String(row.role)))
           .map((row) => String(row.workspace_id)))];
-        if (!ids.length) throw new Error("Ask a Misma workspace owner or admin to manage plugins.");
+        if (!ids.length) throw new Error("Ask a Misma account owner or admin to manage plugins.");
         const { data: workspaceRows, error: workspaceError } = await supabase.from("workspaces")
           .select("id,name").in("id", ids).order("created_at", { ascending: true });
         if (workspaceError) throw workspaceError;
         const options = (workspaceRows || []) as Workspace[];
         const initial = options[0];
-        if (!initial) throw new Error("No Misma workspace is available for this account.");
+        if (!initial) throw new Error("No provider connection is available for this Misma account.");
         if (!active) return;
         setUserId(user.id);
         setWorkspaceId(initial.id);
@@ -118,10 +118,34 @@ function PluginsPage() {
     window.location.assign("/dashboard/plugins/" + provider + suffix);
   }
 
-  function openConsent(provider: PluginId) {
+  async function openConsent(provider: PluginId) {
     const manifest = pluginList.find((item) => item.id === provider) || null;
-    if (!manifest || manifest.status === "coming") return;
+    if (!manifest || manifest.status === "coming" || !userId) return;
     setError("");
+    const existingConnection = installedByProvider.get(provider) ||
+      connections.find((item) => item.provider === provider && item.status === "connected");
+    const existingPreference = userPlugins.find((item) => item.provider === provider);
+    if (existingConnection && existingPreference?.is_installed === false) {
+      setBusy(provider);
+      try {
+        const { error: restoreError } = await supabase.from("user_plugins").upsert({
+          user_id: userId,
+          provider,
+          permission_mode: existingPreference.permission_mode || "low_risk",
+          account_label: existingPreference.account_label || null,
+          is_installed: true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id,provider" });
+        if (restoreError) throw restoreError;
+        setUserPlugins((rows) => rows.map((item) => item.provider === provider ? { ...item, is_installed: true } : item));
+        setNotice(manifest.name + " has been added back to your installed plugins.");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not reinstall this plugin.");
+      } finally {
+        setBusy("");
+      }
+      return;
+    }
     setConsentProvider(manifest);
   }
 
