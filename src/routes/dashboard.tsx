@@ -3956,18 +3956,18 @@ function Dashboard() {
             const { value, done } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const frames = buffer.split(/\\r?\\n\\r?\\n/);
+            const frames = buffer.split(/\r?\n\r?\n/);
             buffer = frames.pop() || "";
             for (const frame of frames) {
-              const data = frame.split(/\\r?\\n/).filter((line) => line.startsWith("data:"))
-                .map((line) => line.slice(5).trim()).join("\\n");
+              const data = frame.split(/\r?\n/).filter((line) => line.startsWith("data:"))
+                .map((line) => line.slice(5).trim()).join("\n");
               applyExecutionEvent(data);
             }
           }
           buffer += decoder.decode();
           if (buffer.trim()) {
-            const data = buffer.split(/\\r?\\n/).filter((line) => line.startsWith("data:"))
-              .map((line) => line.slice(5).trim()).join("\\n");
+            const data = buffer.split(/\r?\n/).filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trim()).join("\n");
             applyExecutionEvent(data);
           }
           if (!receivedResult) throw new Error("The GitHub action stream ended before Misma returned a result.");
