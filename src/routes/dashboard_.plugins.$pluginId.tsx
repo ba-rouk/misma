@@ -20,7 +20,7 @@ function PluginDetailPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [account, setAccount] = useState<{ name: string; email: string; avatar: string | null } | null>(null);
   const [consentOpen, setConsentOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(new URLSearchParams(window.location.search).get("settings") === "1");
+  const [manageOpen, setManageOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [authorizationUrl, setAuthorizationUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,6 +28,10 @@ function PluginDetailPage() {
   const [notice, setNotice] = useState("");
   const connected = connection?.status === "connected";
   const settingsKey = "misma_plugin_permission_" + pluginId + "_v1";
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("settings") === "1") setManageOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!plugin) return;
