@@ -37,6 +37,7 @@ function providerHealth(provider: ProviderName): ProviderHealth {
 export function getIntegrationSettingsHealth() {
   const github = providerHealth("github");
   const vercel = providerHealth("vercel");
+  const netlify = providerHealth("netlify");
   const configuredVersion = Deno.env.get("PLATFORM_CREDENTIAL_ACTIVE_KEY_VERSION")?.trim() || "1";
   const parsedVersion = Number(configuredVersion);
   const activeVersion = Number.isSafeInteger(parsedVersion) && parsedVersion > 0 && parsedVersion <= 32767
@@ -55,6 +56,7 @@ export function getIntegrationSettingsHealth() {
     providers: {
       github,
       vercel,
+      netlify,
     },
     sharedCredentialVault: {
       settings: vaultSettings,

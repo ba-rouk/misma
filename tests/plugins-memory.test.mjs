@@ -16,8 +16,10 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.match(page, /Business AI, connected/);
   assert.match(page, /Search plugins/);
   assert.match(page, /Installed/);
-  assert.match(page, /Popular/);
-  assert.match(page, /New & noteworthy/);
+  assert.doesNotMatch(page, /Popular|New & noteworthy|All popular plugins are installed|Connect the tools that power your development workflow/);
+  assert.doesNotMatch(page, /misma-plugin-directory-filter-label|misma-plugin-directory-filter/);
+  assert.match(page, /plugin.id !== "render"/);
+  assert.match(page, /Available/);
   assert.match(page, /misma-plugin-installed-strip/);
   assert.match(page, /misma-plugin-available-list/);
   assert.match(page, /misma-plugin-add/);
@@ -46,6 +48,10 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.doesNotMatch(connect, /RENDER_API_KEY/);
   assert.match(connect, /github-install-url/);
   assert.match(connect, /vercel-install-url/);
+  assert.match(connect, /netlify-install-url/);
+  assert.match(manifests, /authType: "netlify_oauth"/);
+  assert.match(detail, /netlify_oauth/);
+  assert.match(settings, /netlify_oauth/);
   assert.match(consent, /Use Misma to connect/);
   assert.match(consent, /getUser\(\)/);
   assert.match(consent, /avatar/);
@@ -285,25 +291,42 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
 });
 
-test("Vercel settings has an explicit static route that renders the shared provider settings screen", async () => {
-  const route = await read("../src/routes/dashboard.plugins.vercel.settings.tsx");
+test("provider settings URLs are standalone routes registered outside the dashboard layout", async () => {
+  const github = await read("../src/routes/dashboard_.plugins.github.settings.tsx");
+  const vercel = await read("../src/routes/dashboard_.plugins.vercel.settings.tsx");
+  const netlify = await read("../src/routes/dashboard_.plugins.netlify.settings.tsx");
   const shared = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
-  assert.match(route, /createFileRoute\("\/dashboard\/plugins\/vercel\/settings"\)/);
-  assert.match(route, /PluginSettingsPage pluginId="vercel"/);
-  assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
-  assert.match(shared, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId\/settings"\)/);
-});
-
-test("every plugin settings URL has an explicit static provider route", async () => {
-  const github = await read("../src/routes/dashboard.plugins.github.settings.tsx");
-  const render = await read("../src/routes/dashboard.plugins.render.settings.tsx");
-  const netlify = await read("../src/routes/dashboard.plugins.netlify.settings.tsx");
+  const routeTree = await read("../src/routeTree.gen.ts");
   assert.match(github, /createFileRoute\("\/dashboard\/plugins\/github\/settings"\)/);
-  assert.match(github, /GitHub settings/);
-  assert.match(github, /misma-github-settings-empty-page/);
-  assert.doesNotMatch(github, /PluginSettingsPage|useEffect|supabase/);
-  assert.match(render, /createFileRoute\("\/dashboard\/plugins\/render\/settings"\)/);
-  assert.match(render, /PluginSettingsPage pluginId="render"/);
+  assert.match(github, /PluginSettingsPage pluginId="github"/);
+  assert.match(vercel, /createFileRoute\("\/dashboard\/plugins\/vercel\/settings"\)/);
+  assert.match(vercel, /PluginSettingsPage pluginId="vercel"/);
   assert.match(netlify, /createFileRoute\("\/dashboard\/plugins\/netlify\/settings"\)/);
   assert.match(netlify, /PluginSettingsPage pluginId="netlify"/);
+  assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
+  assert.match(shared, /\{manifest\.name\} plugin settings/);
+  for (const path of ["/dashboard/plugins/github/settings", "/dashboard/plugins/vercel/settings", "/dashboard/plugins/netlify/settings"]) {
+    assert.ok(routeTree.includes("'" + path + "'"), path + " must be present in the generated route tree");
+  }
+});
+
+test("Netlify OAuth callback stores credentials server-side and exposes only site metadata", async () => {
+  const callback = await read("../src/routes/integrations/netlify/callback.tsx");
+  const edge = await read("../supabase/functions/misma-platform-integrations/index.ts");
+  const health = await read("../supabase/functions/misma-platform-integrations/health.ts");
+  const config = await read("../supabase/functions/misma-platform-integrations/config.ts");
+  assert.match(callback, /createFileRoute\("\/integrations\/netlify\/callback"\)/);
+  assert.match(callback, /window\.location\.hash/);
+  assert.match(callback, /window\.history\.replaceState/);
+  assert.match(callback, /netlify-complete-installation/);
+  assert.match(edge, /action === "netlify-install-url"/);
+  assert.match(edge, /action === "netlify-complete-installation"/);
+  assert.match(edge, /action === "netlify-refresh-projects"/);
+  assert.match(edge, /action === "netlify-link-project"/);
+  assert.match(edge, /platform_oauth_states/);
+  assert.match(edge, /credentialAad\(workspaceId, "netlify"/);
+  assert.match(edge, /Authorization: "Bearer " \+ token/);
+  assert.match(health, /providerHealth\("netlify"\)/);
+  assert.match(config, /NETLIFY_CLIENT_ID/);
+  assert.match(config, /NETLIFY_CLIENT_SECRET/);
 });

@@ -5,10 +5,11 @@ export async function getPluginAuthorizationUrl(workspaceId: string, provider: P
   if (provider === "render") {
     throw new Error("Render account sign-in is not enabled yet. Misma is waiting for its own Render OAuth client registration; no personal API key is requested.");
   }
-  if (provider === "netlify") {
-    throw new Error("Netlify account authorization is coming later.");
-  }
-  const action = provider === "github" ? "github-install-url" : "vercel-install-url";
+  const action = provider === "github"
+    ? "github-install-url"
+    : provider === "vercel"
+      ? "vercel-install-url"
+      : "netlify-install-url";
   const { data, error } = await getSupabaseClient().functions.invoke("misma-platform-integrations", {
     body: { action, workspaceId },
   });
@@ -17,7 +18,9 @@ export async function getPluginAuthorizationUrl(workspaceId: string, provider: P
   const url = typeof data?.installUrl === "string" ? data.installUrl : "";
   const allowed = provider === "github"
     ? url.startsWith("https://github.com/")
-    : url.startsWith("https://vercel.com/integrations/");
+    : provider === "vercel"
+      ? url.startsWith("https://vercel.com/integrations/")
+      : url.startsWith("https://app.netlify.com/authorize?");
   if (!allowed) throw new Error("Misma did not return a valid " + provider + " authorization link.");
   return url;
 }

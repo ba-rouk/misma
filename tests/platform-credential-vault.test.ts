@@ -61,6 +61,10 @@ test("provider credential normalization accepts only required provider secrets",
     normalizeCredentialPayload("vercel", { accessToken: "vercel-token", ignored: "not-persisted" }),
     { kind: "oauth_tokens", payload: { accessToken: "vercel-token" } },
   );
+  assert.deepEqual(
+    normalizeCredentialPayload("netlify", { accessToken: "netlify-oauth-token", ignored: "not-persisted" }),
+    { kind: "oauth_tokens", payload: { accessToken: "netlify-oauth-token" } },
+  );
   assert.throws(() => normalizeCredentialPayload("netlify", { accessToken: "" }));
   assert.throws(() => normalizeCredentialPayload("render", { token: "wrong-field-name" }));
 });

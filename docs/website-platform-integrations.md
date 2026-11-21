@@ -12,7 +12,7 @@ The dashboard route is /dashboard/integrations.
 - The first code adapter supports root index.html and public/index.html. Framework-specific entrypoints (for example Next.js App Router, Astro, SvelteKit, or server-rendered templates) need dedicated adapters; Misma must not guess and modify arbitrary files.
 - Vercel Marketplace authorization, server-side code exchange, encrypted credential storage, complete paginated project discovery, and project-to-website association are implemented.
 - Render customer API-key authorization, encrypted credential storage, complete paginated service discovery, and service-to-website association are implemented. Each customer supplies their own Render API key; Misma does not use a shared operator key.
-- Netlify still has database records and a dashboard card, but its customer authorization/API adapter is not active yet.
+- Netlify OAuth authorization, one-time state validation, encrypted credential storage, paginated site discovery, and site-to-website association are implemented. Direct deployment triggers are not enabled in this release.
 
 ## Create the Misma GitHub App
 
@@ -59,6 +59,7 @@ Expected provider settings:
 
 - GitHub: `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`.
 - Vercel: `VERCEL_INTEGRATION_SLUG`, `VERCEL_CLIENT_ID`, and `VERCEL_CLIENT_SECRET`.
+- Netlify: `NETLIFY_CLIENT_ID` and `NETLIFY_CLIENT_SECRET`. The OAuth redirect URI must be `https://misma.onrender.com/integrations/netlify/callback`.
 
 `GITHUB_APP_SLUG` is optional; the current implementation derives the slug from GitHub's authenticated `/app` endpoint. The shared credential-vault key `PLATFORM_CREDENTIAL_ENCRYPTION_KEY_V1` is separate and is used when saving encrypted customer platform credentials.
 
@@ -69,7 +70,8 @@ The Edge Function has verify_jwt = false because GitHub's setup callback and web
 - Setup callback: verifies a short-lived, one-time state hash before saving the installation.
 - Webhook: verifies X-Hub-Signature-256 with the configured webhook secret.
 - Dashboard actions: require a valid Supabase access token and an owner/admin membership in the supplied workspace.
-- Provider tokens: installation tokens are minted server-side for each operation and are not stored in the database.
+- Netlify OAuth callback: verifies and consumes a short-lived state hash, removes the returned access token from the browser URL immediately, and sends the token directly to the authenticated Edge Function for encrypted storage.
+- Provider tokens: GitHub installation tokens are minted server-side for each operation; Netlify OAuth tokens are stored encrypted in `platform_credentials` and are never returned to the browser.
 
 ## Database model
 
@@ -87,9 +89,9 @@ Authenticated users can read only records belonging to their workspace. Writes a
 
 1. Apply 20261117120000_website_platform_integrations.sql to the Misma Supabase project.
 2. Deploy the misma-platform-integrations Edge Function.
-3. Set `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET` in Supabase Edge Function secrets.
-4. Register the Setup URL, Webhook URL, permissions, and installation event in the GitHub App.
-5. Deploy the Misma application containing /dashboard/integrations.
+3. Set `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `NETLIFY_CLIENT_ID`, and `NETLIFY_CLIENT_SECRET` in Supabase Edge Function secrets.
+4. Register the GitHub Setup URL and Webhook URL. In the Netlify OAuth application, set the redirect URI to `https://misma.onrender.com/integrations/netlify/callback`.
+5. Deploy the Misma application containing /dashboard/integrations and /dashboard/plugins.
 6. Test using a non-production repository first. Verify manual PR mode before testing auto-merge with branch protection enabled.
 
 ## Safety guarantees

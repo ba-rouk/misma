@@ -246,6 +246,78 @@ async function listRenderServices(token: string) {
   }
   return services.map(renderServiceShape).filter(Boolean);
 }
+
+async function netlifyRequest(path: string, token: string) {
+  const response = await fetch("https://api.netlify.com/api/v1" + path, {
+    headers: {
+      Accept: "application/json",
+      Authorization: "Bearer " + token,
+    },
+  });
+  const raw = await response.text();
+  let body: any = {};
+  try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("Netlify rejected this authorization. Reconnect the Netlify plugin from Misma.");
+    }
+    const message = typeof body.message === "string" ? body.message : "Netlify API request failed.";
+    throw new Error("Netlify request failed (" + response.status + "): " + message.slice(0, 220));
+  }
+  return { body, link: response.headers.get("link") || "" };
+}
+
+function netlifyNextPage(link: string) {
+  const match = /<([^>]+)>\\s*;\\s*rel=["']?next["']?/i.exec(link);
+  if (!match) return "";
+  const url = new URL(match[1]);
+  if (url.origin !== "https://api.netlify.com" || !url.pathname.startsWith("/api/v1/")) {
+    throw new Error("Netlify returned an invalid pagination link.");
+  }
+  return url.pathname.slice("/api/v1".length) + url.search;
+}
+
+function netlifySiteShape(site: any) {
+  const id = safeText(site?.id, 180);
+  const slug = safeText(site?.site_slug || site?.name, 180);
+  const name = safeText(site?.name || slug || id, 180);
+  if (!id || !name) return null;
+  const adminUrl = safeText(site?.admin_url, 500);
+  const dashboardUrl = /^https:\\/\\/app\\.netlify\\.com\\//i.test(adminUrl)
+    ? adminUrl
+    : "https://app.netlify.com/sites/" + encodeURIComponent(slug || id);
+  const siteUrl = safeText(site?.ssl_url || site?.url, 500);
+  const buildSettings = site?.build_settings && typeof site.build_settings === "object" ? site.build_settings : {};
+  return {
+    external_project_id: id,
+    name,
+    full_name: slug || name,
+    repository_url: safeText(buildSettings.repo_url, 500) || null,
+    dashboard_url: dashboardUrl,
+    default_branch: safeText(buildSettings.repo_branch, 120) || null,
+    metadata: {
+      site_url: siteUrl || null,
+      custom_domain: safeText(site?.custom_domain, 255) || null,
+      state: safeText(site?.state, 60) || null,
+      repository_url: safeText(buildSettings.repo_url, 500) || null,
+    },
+  };
+}
+
+async function listNetlifySites(token: string) {
+  const sites: any[] = [];
+  const seenPages = new Set<string>();
+  let path = "/sites?per_page=100";
+  for (let page = 0; page < 100 && path; page++) {
+    if (seenPages.has(path)) break;
+    seenPages.add(path);
+    const result = await netlifyRequest(path, token);
+    const items = Array.isArray(result.body) ? result.body : Array.isArray(result.body?.sites) ? result.body.sites : [];
+    sites.push(...items);
+    path = netlifyNextPage(result.link);
+  }
+  return sites.map(netlifySiteShape).filter(Boolean);
+}
 async function verifyWebhook(raw: string, signature: string) {
   const secret = required("GITHUB_WEBHOOK_SECRET");
   if (!/^sha256=[a-f0-9]{64}$/i.test(signature)) return false;
@@ -655,7 +727,57 @@ async function main(request: Request) {
           projectRef: health.projectRef,
         };
       }
+
+      const netlifyHealth = health.providers.netlify;
+      try {
+        if (netlifyHealth.missingSettings.length) {
+          throw new Error(missingSettingsMessage("Netlify", netlifyHealth.missingSettings, health.projectRef));
+        }
+        required("NETLIFY_CLIENT_ID");
+        required("NETLIFY_CLIENT_SECRET");
+        checks.netlify = {
+          status: "configured",
+          clientIdConfigured: true,
+          clientSecretConfigured: true,
+          missingSettings: netlifyHealth.missingSettings,
+          runtime: health.runtime,
+          projectRef: health.projectRef,
+          callbackUrl: APP_ORIGIN + "/integrations/netlify/callback",
+          message: "Netlify OAuth application keys are present. A fresh account authorization is still needed to verify access to sites.",
+        };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "Netlify configuration could not be checked.";
+        checks.netlify = {
+          status: "error",
+          message: message.slice(0, 500),
+          missingSettings: netlifyHealth.missingSettings,
+          runtime: health.runtime,
+          projectRef: health.projectRef,
+        };
+      }
       return json({ checks }, 200, origin);
+    }
+
+    if (action === "netlify-install-url") {
+      const clientId = required("NETLIFY_CLIENT_ID");
+      required("NETLIFY_CLIENT_SECRET");
+      const state = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      const { error: stateError } = await admin.from("platform_oauth_states").insert({
+        workspace_id: workspaceId,
+        user_id: userId,
+        provider: "netlify",
+        state_hash: await sha256(state),
+        expires_at: expiresAt,
+      });
+      if (stateError) throw new Error("Could not prepare a secure Netlify authorization request. Try again.");
+      const callback = APP_ORIGIN + "/integrations/netlify/callback?workspaceId=" + encodeURIComponent(workspaceId);
+      const authorization = new URL("https://app.netlify.com/authorize");
+      authorization.searchParams.set("client_id", clientId);
+      authorization.searchParams.set("response_type", "token");
+      authorization.searchParams.set("redirect_uri", callback);
+      authorization.searchParams.set("state", state);
+      return json({ installUrl: authorization.toString() }, 200, origin);
     }
 
     if (action === "vercel-install-url") {
@@ -836,6 +958,197 @@ async function main(request: Request) {
         workspace_id: workspaceId, installation_id: installation.id, provider: "vercel", level: "info",
         event: "vercel.project_linked",
         details: { project_id: projectId, project_name: project.name, website_domain: website.domain },
+      });
+      return json({ linked: true, installationId: installation.id }, 200, origin);
+    }
+
+    if (action === "netlify-complete-installation") {
+      const state = safeText(body.state, 180);
+      const accessToken = safeText(body.accessToken, 16_384);
+      if (!state || !accessToken) {
+        return json({ error: "Netlify did not return a complete authorization response. Start the connection again." }, 400, origin);
+      }
+      const now = new Date().toISOString();
+      const stateHash = await sha256(state);
+      const { data: pendingState, error: stateLookupError } = await admin.from("platform_oauth_states")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", userId)
+        .eq("provider", "netlify")
+        .eq("state_hash", stateHash)
+        .is("consumed_at", null)
+        .gt("expires_at", now)
+        .maybeSingle();
+      if (stateLookupError || !pendingState) {
+        throw new Error("This Netlify authorization has expired or was already used. Start the connection again from Misma.");
+      }
+      const { data: consumedState, error: consumeError } = await admin.from("platform_oauth_states")
+        .update({ consumed_at: now })
+        .eq("id", pendingState.id)
+        .is("consumed_at", null)
+        .gt("expires_at", now)
+        .select("id")
+        .maybeSingle();
+      if (consumeError || !consumedState) {
+        throw new Error("This Netlify authorization has already been used. Start the connection again from Misma.");
+      }
+
+      // Netlify's OAuth access token is used server-side only. Verify it against the
+      // account endpoint and site list before encrypting it in the shared credential vault.
+      let netlifyUser: any = {};
+      try {
+        const userResult = await netlifyRequest("/user", accessToken);
+        netlifyUser = userResult.body?.user && typeof userResult.body.user === "object"
+          ? userResult.body.user
+          : userResult.body;
+      } catch {
+        // Site discovery below remains the authoritative authorization check.
+      }
+      const sites = await listNetlifySites(accessToken);
+      const fingerprint = await sha256(accessToken);
+      const externalAccountId = safeText(netlifyUser?.id, 180) || "netlify-oauth-" + fingerprint.slice(0, 24);
+      const accountName = safeText(netlifyUser?.full_name || netlifyUser?.name || netlifyUser?.email, 160) || "Netlify account";
+      const { data: existingConnection, error: lookupError } = await admin.from("platform_connections")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("provider", "netlify")
+        .eq("external_account_id", externalAccountId)
+        .maybeSingle();
+      if (lookupError) throw new Error("Could not check the existing Netlify connection.");
+      const connectionId = String(existingConnection?.id || crypto.randomUUID());
+      const normalized = normalizeCredentialPayload("netlify", { accessToken });
+      const keyVersion = activeCredentialKeyVersion();
+      const encrypted = await encryptCredentialPayload(
+        normalized.payload,
+        credentialAad(workspaceId, "netlify", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const { data: connection, error: connectionError } = await admin.from("platform_connections").upsert({
+        id: connectionId,
+        workspace_id: workspaceId,
+        provider: "netlify",
+        external_account_id: externalAccountId,
+        external_account_name: accountName,
+        status: "connected",
+        metadata: { source: "netlify_oauth", netlify_user_id: safeText(netlifyUser?.id, 180) || null },
+        updated_at: now,
+      }, { onConflict: "workspace_id,provider,external_account_id" }).select("id").single();
+      if (connectionError || !connection) throw new Error("Netlify was authorized, but Misma could not save the workspace connection.");
+      const { error: credentialError } = await admin.from("platform_credentials").upsert({
+        workspace_id: workspaceId,
+        platform_connection_id: connection.id,
+        provider: "netlify",
+        credential_kind: "oauth_tokens",
+        secret_ciphertext: encrypted.ciphertext,
+        secret_iv: encrypted.iv,
+        key_version: keyVersion,
+        last_validated_at: now,
+        last_validation_status: "valid",
+        created_by: userId,
+        updated_at: now,
+      }, { onConflict: "platform_connection_id" });
+      if (credentialError) throw new Error("Netlify was authorized, but Misma could not securely save the access token.");
+      const projects = [];
+      for (const project of sites) {
+        const { data: saved, error } = await admin.from("platform_projects").upsert({
+          workspace_id: workspaceId,
+          platform_connection_id: connection.id,
+          provider: "netlify",
+          ...project,
+          last_synced_at: now,
+        }, { onConflict: "workspace_id,provider,external_project_id" })
+          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+        if (error || !saved) throw new Error("Netlify connected, but Misma could not save the discovered sites.");
+        projects.push(saved);
+      }
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId,
+        provider: "netlify",
+        level: "info",
+        event: "netlify.account_connected",
+        details: { sites_discovered: projects.length, account_name: accountName },
+      });
+      return json({
+        connected: true,
+        provider: "netlify",
+        platformConnectionId: connection.id,
+        accountName,
+        projects,
+        message: projects.length
+          ? "Netlify is connected. Choose a site and associate it with your Misma website."
+          : "Netlify is connected, but this account has no accessible sites.",
+      }, 200, origin);
+    }
+
+    if (action === "netlify-refresh-projects") {
+      const connectionId = safeText(body.platformConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) return json({ error: "Choose a valid Netlify connection." }, 400, origin);
+      const { data: connection, error: connectionError } = await admin.from("platform_connections")
+        .select("id").eq("id", connectionId).eq("workspace_id", workspaceId)
+        .eq("provider", "netlify").eq("status", "connected").maybeSingle();
+      if (connectionError || !connection) throw new Error("That Netlify connection is not available in this workspace.");
+      const { data: credential, error: credentialError } = await admin.from("platform_credentials")
+        .select("secret_ciphertext,secret_iv,key_version").eq("platform_connection_id", connectionId)
+        .eq("workspace_id", workspaceId).eq("provider", "netlify").maybeSingle();
+      if (credentialError || !credential) throw new Error("Reconnect Netlify because its encrypted access token is missing.");
+      const keyVersion = Number(credential.key_version);
+      const saved = await decryptCredentialPayload(
+        { ciphertext: credential.secret_ciphertext, iv: credential.secret_iv },
+        credentialAad(workspaceId, "netlify", connectionId, keyVersion),
+        credentialKeyForVersion(keyVersion),
+      );
+      const sites = await listNetlifySites(saved.accessToken);
+      const now = new Date().toISOString();
+      const projects = [];
+      for (const project of sites) {
+        const { data: item, error } = await admin.from("platform_projects").upsert({
+          workspace_id: workspaceId, platform_connection_id: connectionId, provider: "netlify",
+          ...project, last_synced_at: now,
+        }, { onConflict: "workspace_id,provider,external_project_id" })
+          .select("id,external_project_id,name,full_name,repository_url,dashboard_url,default_branch,metadata").single();
+        if (error || !item) throw new Error("Could not save the refreshed Netlify site list.");
+        projects.push(item);
+      }
+      await admin.from("platform_credentials").update({
+        last_validated_at: now, last_validation_status: "valid",
+      }).eq("platform_connection_id", connectionId).eq("workspace_id", workspaceId);
+      return json({ projects }, 200, origin);
+    }
+
+    if (action === "netlify-link-project") {
+      const projectId = safeText(body.platformProjectId, 80);
+      const websiteConnectionId = safeText(body.websiteConnectionId, 80);
+      if (!/^[0-9a-f-]{36}$/i.test(projectId) || !/^[0-9a-f-]{36}$/i.test(websiteConnectionId)) {
+        return json({ error: "Choose a Netlify site and a Misma website." }, 400, origin);
+      }
+      const [{ data: project, error: projectError }, { data: website, error: websiteError }] = await Promise.all([
+        admin.from("platform_projects").select("id,name,dashboard_url")
+          .eq("id", projectId).eq("workspace_id", workspaceId).eq("provider", "netlify").maybeSingle(),
+        admin.from("website_connections").select("id,name,domain")
+          .eq("id", websiteConnectionId).eq("workspace_id", workspaceId).is("widget_deleted_at", null).maybeSingle(),
+      ]);
+      if (projectError || !project) throw new Error("That Netlify site is not available in this workspace.");
+      if (websiteError || !website) throw new Error("That Misma website is not available in this workspace.");
+      const { data: existing } = await admin.from("website_installations").select("id")
+        .eq("workspace_id", workspaceId).eq("website_connection_id", websiteConnectionId)
+        .eq("platform_project_id", projectId).eq("provider", "netlify")
+        .neq("status", "removed").limit(1).maybeSingle();
+      if (existing) return json({ linked: true, alreadyLinked: true, installationId: existing.id }, 200, origin);
+      const { data: installation, error: installError } = await admin.from("website_installations").insert({
+        workspace_id: workspaceId,
+        website_connection_id: websiteConnectionId,
+        platform_project_id: projectId,
+        provider: "netlify",
+        deployment_mode: "manual",
+        status: "prepared",
+        dashboard_url: project.dashboard_url || "https://app.netlify.com/",
+        metadata: { project_name: project.name, website_domain: website.domain, link_type: "workspace_site_association" },
+      }).select("id").single();
+      if (installError || !installation) throw new Error("Could not link this Netlify site to the Misma website.");
+      await admin.from("platform_installation_logs").insert({
+        workspace_id: workspaceId, installation_id: installation.id, provider: "netlify", level: "info",
+        event: "netlify.site_linked",
+        details: { site_id: projectId, site_name: project.name, website_domain: website.domain },
       });
       return json({ linked: true, installationId: installation.id }, 200, origin);
     }

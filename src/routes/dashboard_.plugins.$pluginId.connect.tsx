@@ -27,7 +27,7 @@ function PluginConnectPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const canAuthorize = manifest?.authType === "github_app" || manifest?.authType === "vercel_marketplace_oauth";
+  const canAuthorize = manifest?.authType === "github_app" || manifest?.authType === "vercel_marketplace_oauth" || manifest?.authType === "netlify_oauth";
   const websiteId = typeof window === "undefined"
     ? ""
     : new URLSearchParams(window.location.search).get("websiteId") || "";

@@ -1,6 +1,6 @@
 export type PluginId = "github" | "vercel" | "render" | "netlify";
 export type PluginStatus = "available" | "coming";
-export type PluginAuthType = "github_app" | "vercel_marketplace_oauth" | "oauth_pending" | "coming";
+export type PluginAuthType = "github_app" | "vercel_marketplace_oauth" | "netlify_oauth" | "oauth_pending" | "coming";
 
 export interface PluginSkill {
   id: string;
@@ -138,28 +138,25 @@ export const pluginManifests: Record<PluginId, PluginManifest> = {
     id: "netlify",
     name: "Netlify",
     role: "Hosting",
-    tagline: "Connect Netlify sites and publishing workflows.",
-    description: "Netlify support is being prepared. Account authorization, site discovery, and build/deployment actions are not enabled yet. This plugin will become available after the customer OAuth flow and provider API adapter are complete.",
+    tagline: "Connect sites and inspect your Netlify projects.",
+    description: "Misma connects through Netlify OAuth, securely stores the authorized access token in its encrypted credential vault, and discovers the sites available to your account. You can associate a Netlify site with a Misma website and use its project details in your workflow.",
     developer: "Netlify, Inc.",
     website: "https://www.netlify.com",
-    version: "Coming later",
+    version: "1.0.0",
     privacyUrl: "https://www.netlify.com/privacy/",
     termsUrl: "https://www.netlify.com/legal/terms-of-use/",
     icon: "netlify",
     brandColor: "#32c6c8",
-    status: "coming",
-    authType: "coming",
+    status: "available",
+    authType: "netlify_oauth",
     category: "Hosting",
     skills: [
-      { id: "discover-sites", name: "Discover sites", description: "Planned: list sites authorized by the connected Netlify account.", icon: "globe" },
-      { id: "build-status", name: "Check build status", description: "Planned: display site build and deployment status.", icon: "activity" },
+      { id: "discover-sites", name: "Discover sites", description: "List the Netlify sites available to the account you authorize.", icon: "globe" },
+      { id: "read-site-metadata", name: "Read site details", description: "Inspect site names, domains, repository metadata and dashboard links.", icon: "activity" },
     ],
-    permissions: [
-      "Netlify authorization is not enabled yet.",
-      "Misma will request only the account and site permissions needed when this integration launches.",
-    ],
+    permissions: ["Read sites and project metadata available to your Netlify account.", "Misma stores the access token encrypted and does not expose it to the browser."],
     previewCards: [
-      { id: "sites", title: "Netlify sites", description: "Example preview only. Site discovery is not available yet.", kind: "sites" },
+      { id: "sites", title: "Netlify sites", description: "Connect the projects you want to manage from Misma.", kind: "sites" },
     ],
   },
 };

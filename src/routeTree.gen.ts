@@ -16,6 +16,11 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as IntegrationsNetlifyCallbackRouteImport } from './routes/integrations/netlify/callback'
+import { Route as IntegrationsVercelCallbackRouteImport } from './routes/integrations/vercel/callback'
+import { Route as DashboardGithubPluginSettingsRouteImport } from './routes/dashboard_.plugins.github.settings'
+import { Route as DashboardNetlifyPluginSettingsRouteImport } from './routes/dashboard_.plugins.netlify.settings'
+import { Route as DashboardVercelPluginSettingsRouteImport } from './routes/dashboard_.plugins.vercel.settings'
 import { Route as DashboardPluginsRouteImport } from './routes/dashboard_.plugins'
 import { Route as DashboardPluginDetailRouteImport } from './routes/dashboard_.plugins.$pluginId'
 import { Route as DashboardPluginSettingsRouteImport } from './routes/dashboard_.plugins.$pluginId.settings'
@@ -55,6 +60,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IntegrationsNetlifyCallbackRoute = IntegrationsNetlifyCallbackRouteImport.update({ id: '/integrations/netlify/callback', path: '/integrations/netlify/callback', getParentRoute: () => rootRouteImport } as any)
+const IntegrationsVercelCallbackRoute = IntegrationsVercelCallbackRouteImport.update({ id: '/integrations/vercel/callback', path: '/integrations/vercel/callback', getParentRoute: () => rootRouteImport } as any)
+const DashboardGithubPluginSettingsRoute = DashboardGithubPluginSettingsRouteImport.update({ id: '/dashboard/plugins/github/settings', path: '/dashboard/plugins/github/settings', getParentRoute: () => rootRouteImport } as any)
+const DashboardNetlifyPluginSettingsRoute = DashboardNetlifyPluginSettingsRouteImport.update({ id: '/dashboard/plugins/netlify/settings', path: '/dashboard/plugins/netlify/settings', getParentRoute: () => rootRouteImport } as any)
+const DashboardVercelPluginSettingsRoute = DashboardVercelPluginSettingsRouteImport.update({ id: '/dashboard/plugins/vercel/settings', path: '/dashboard/plugins/vercel/settings', getParentRoute: () => rootRouteImport } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -64,6 +74,11 @@ export interface FileRoutesByFullPath {
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/integrations/netlify/callback': typeof IntegrationsNetlifyCallbackRoute
+  '/integrations/vercel/callback': typeof IntegrationsVercelCallbackRoute
+  '/dashboard/plugins/github/settings': typeof DashboardGithubPluginSettingsRoute
+  '/dashboard/plugins/netlify/settings': typeof DashboardNetlifyPluginSettingsRoute
+  '/dashboard/plugins/vercel/settings': typeof DashboardVercelPluginSettingsRoute
   '/dashboard/plugins/$pluginId/settings': typeof DashboardPluginSettingsRoute
   '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
   '/dashboard/plugins': typeof DashboardPluginsRoute
@@ -76,9 +91,14 @@ export interface FileRoutesByTo {
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/dashboard/plugins': typeof DashboardPluginsRoute
-  '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
+  '/integrations/netlify/callback': typeof IntegrationsNetlifyCallbackRoute
+  '/integrations/vercel/callback': typeof IntegrationsVercelCallbackRoute
+  '/dashboard/plugins/github/settings': typeof DashboardGithubPluginSettingsRoute
+  '/dashboard/plugins/netlify/settings': typeof DashboardNetlifyPluginSettingsRoute
+  '/dashboard/plugins/vercel/settings': typeof DashboardVercelPluginSettingsRoute
   '/dashboard/plugins/$pluginId/settings': typeof DashboardPluginSettingsRoute
+  '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
+  '/dashboard/plugins': typeof DashboardPluginsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,9 +109,14 @@ export interface FileRoutesById {
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/dashboard/plugins': typeof DashboardPluginsRoute
-  '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
+  '/integrations/netlify/callback': typeof IntegrationsNetlifyCallbackRoute
+  '/integrations/vercel/callback': typeof IntegrationsVercelCallbackRoute
+  '/dashboard/plugins/github/settings': typeof DashboardGithubPluginSettingsRoute
+  '/dashboard/plugins/netlify/settings': typeof DashboardNetlifyPluginSettingsRoute
+  '/dashboard/plugins/vercel/settings': typeof DashboardVercelPluginSettingsRoute
   '/dashboard/plugins/$pluginId/settings': typeof DashboardPluginSettingsRoute
+  '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
+  '/dashboard/plugins': typeof DashboardPluginsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -103,6 +128,11 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/sitemap.xml'
     | '/auth/callback'
+    | '/integrations/netlify/callback'
+    | '/integrations/vercel/callback'
+    | '/dashboard/plugins/github/settings'
+    | '/dashboard/plugins/netlify/settings'
+    | '/dashboard/plugins/vercel/settings'
     | '/dashboard/plugins/$pluginId/settings'
     | '/dashboard/plugins/$pluginId'
     | '/dashboard/plugins'
@@ -115,9 +145,14 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/sitemap.xml'
     | '/auth/callback'
-    | '/dashboard/plugins'
-    | '/dashboard/plugins/$pluginId'
+    | '/integrations/netlify/callback'
+    | '/integrations/vercel/callback'
+    | '/dashboard/plugins/github/settings'
+    | '/dashboard/plugins/netlify/settings'
+    | '/dashboard/plugins/vercel/settings'
     | '/dashboard/plugins/$pluginId/settings'
+    | '/dashboard/plugins/$pluginId'
+    | '/dashboard/plugins'
   id:
     | '__root__'
     | '/'
@@ -127,9 +162,14 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/sitemap.xml'
     | '/auth/callback'
-    | '/dashboard/plugins'
-    | '/dashboard/plugins/$pluginId'
+    | '/integrations/netlify/callback'
+    | '/integrations/vercel/callback'
+    | '/dashboard/plugins/github/settings'
+    | '/dashboard/plugins/netlify/settings'
+    | '/dashboard/plugins/vercel/settings'
     | '/dashboard/plugins/$pluginId/settings'
+    | '/dashboard/plugins/$pluginId'
+    | '/dashboard/plugins'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -140,6 +180,11 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  IntegrationsNetlifyCallbackRoute: typeof IntegrationsNetlifyCallbackRoute
+  IntegrationsVercelCallbackRoute: typeof IntegrationsVercelCallbackRoute
+  DashboardGithubPluginSettingsRoute: typeof DashboardGithubPluginSettingsRoute
+  DashboardNetlifyPluginSettingsRoute: typeof DashboardNetlifyPluginSettingsRoute
+  DashboardVercelPluginSettingsRoute: typeof DashboardVercelPluginSettingsRoute
   DashboardPluginsRoute: typeof DashboardPluginsRoute
   DashboardPluginDetailRoute: typeof DashboardPluginDetailRoute
   DashboardPluginSettingsRoute: typeof DashboardPluginSettingsRoute
@@ -196,18 +241,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard/plugins': {
-      id: '/dashboard/plugins'
-      path: '/dashboard/plugins'
-      fullPath: '/dashboard/plugins'
-      preLoaderRoute: typeof DashboardPluginsRouteImport
+    '/integrations/netlify/callback': {
+      id: '/integrations/netlify/callback'
+      path: '/integrations/netlify/callback'
+      fullPath: '/integrations/netlify/callback'
+      preLoaderRoute: typeof IntegrationsNetlifyCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard/plugins/$pluginId': {
-      id: '/dashboard/plugins/$pluginId'
-      path: '/dashboard/plugins/$pluginId'
-      fullPath: '/dashboard/plugins/$pluginId'
-      preLoaderRoute: typeof DashboardPluginDetailRouteImport
+    '/integrations/vercel/callback': {
+      id: '/integrations/vercel/callback'
+      path: '/integrations/vercel/callback'
+      fullPath: '/integrations/vercel/callback'
+      preLoaderRoute: typeof IntegrationsVercelCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/plugins/github/settings': {
+      id: '/dashboard/plugins/github/settings'
+      path: '/dashboard/plugins/github/settings'
+      fullPath: '/dashboard/plugins/github/settings'
+      preLoaderRoute: typeof DashboardGithubPluginSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/plugins/netlify/settings': {
+      id: '/dashboard/plugins/netlify/settings'
+      path: '/dashboard/plugins/netlify/settings'
+      fullPath: '/dashboard/plugins/netlify/settings'
+      preLoaderRoute: typeof DashboardNetlifyPluginSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/plugins/vercel/settings': {
+      id: '/dashboard/plugins/vercel/settings'
+      path: '/dashboard/plugins/vercel/settings'
+      fullPath: '/dashboard/plugins/vercel/settings'
+      preLoaderRoute: typeof DashboardVercelPluginSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/plugins/$pluginId/settings': {
@@ -217,12 +283,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPluginSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/plugins/$pluginId': {
+      id: '/dashboard/plugins/$pluginId'
+      path: '/dashboard/plugins/$pluginId'
+      fullPath: '/dashboard/plugins/$pluginId'
+      preLoaderRoute: typeof DashboardPluginDetailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/plugins': {
+      id: '/dashboard/plugins'
+      path: '/dashboard/plugins'
+      fullPath: '/dashboard/plugins'
+      preLoaderRoute: typeof DashboardPluginsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const DashboardPluginsRoute = DashboardPluginsRouteImport.update({ id: '/dashboard/plugins', path: '/dashboard/plugins', getParentRoute: () => rootRouteImport } as any)
 const DashboardPluginDetailRoute = DashboardPluginDetailRouteImport.update({ id: '/dashboard/plugins/$pluginId', path: '/dashboard/plugins/$pluginId', getParentRoute: () => rootRouteImport } as any)
 const DashboardPluginSettingsRoute = DashboardPluginSettingsRouteImport.update({ id: '/dashboard/plugins/$pluginId/settings', path: '/dashboard/plugins/$pluginId/settings', getParentRoute: () => rootRouteImport } as any)
+
+const IntegrationsNetlifyCallbackRoute = IntegrationsNetlifyCallbackRouteImport.update({ id: '/integrations/netlify/callback', path: '/integrations/netlify/callback', getParentRoute: () => rootRouteImport } as any)
+const IntegrationsVercelCallbackRoute = IntegrationsVercelCallbackRouteImport.update({ id: '/integrations/vercel/callback', path: '/integrations/vercel/callback', getParentRoute: () => rootRouteImport } as any)
+const DashboardGithubPluginSettingsRoute = DashboardGithubPluginSettingsRouteImport.update({ id: '/dashboard/plugins/github/settings', path: '/dashboard/plugins/github/settings', getParentRoute: () => rootRouteImport } as any)
+const DashboardNetlifyPluginSettingsRoute = DashboardNetlifyPluginSettingsRouteImport.update({ id: '/dashboard/plugins/netlify/settings', path: '/dashboard/plugins/netlify/settings', getParentRoute: () => rootRouteImport } as any)
+const DashboardVercelPluginSettingsRoute = DashboardVercelPluginSettingsRouteImport.update({ id: '/dashboard/plugins/vercel/settings', path: '/dashboard/plugins/vercel/settings', getParentRoute: () => rootRouteImport } as any)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -232,6 +318,11 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  IntegrationsNetlifyCallbackRoute: IntegrationsNetlifyCallbackRoute,
+  IntegrationsVercelCallbackRoute: IntegrationsVercelCallbackRoute,
+  DashboardGithubPluginSettingsRoute: DashboardGithubPluginSettingsRoute,
+  DashboardNetlifyPluginSettingsRoute: DashboardNetlifyPluginSettingsRoute,
+  DashboardVercelPluginSettingsRoute: DashboardVercelPluginSettingsRoute,
   DashboardPluginsRoute: DashboardPluginsRoute,
   DashboardPluginDetailRoute: DashboardPluginDetailRoute,
   DashboardPluginSettingsRoute: DashboardPluginSettingsRoute,

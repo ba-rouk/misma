@@ -112,7 +112,7 @@ function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
   }
 
   const activeManifest = manifest;
-  const canAuthorize = activeManifest.authType === "github_app" || activeManifest.authType === "vercel_marketplace_oauth";
+  const canAuthorize = activeManifest.authType === "github_app" || activeManifest.authType === "vercel_marketplace_oauth" || activeManifest.authType === "netlify_oauth";
   function backToPlugins() {
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
     window.location.assign("/dashboard/plugins" + suffix);
