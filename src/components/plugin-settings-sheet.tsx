@@ -67,7 +67,14 @@ export function PluginSettingsSheet({
   }
 
   function resetPermission() {
-    savePermission("low_risk");
+    if (activeProvider) {
+      try {
+        window.localStorage.removeItem(preferenceKey(userId, workspaceId, activeProvider));
+      } catch {
+        // The current browser session still falls back to the default permission level.
+      }
+    }
+    setPermission("low_risk");
   }
 
   return (
