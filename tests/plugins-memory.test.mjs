@@ -27,10 +27,10 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   assert.ok(page.indexOf("misma-plugin-directory-header") < page.indexOf("misma-plugin-search-dock"));
   assert.match(page, /Try in chat/);
   assert.match(page, /Uninstall/);
-  assert.match(page, /openPluginInChat\\(provider, websiteId/);
+  assert.ok(page.includes("openPluginInChat(provider, websiteId"));
   assert.match(page, /description/);
   assert.match(descriptionRoute, /createFileRoute/);
-  assert.match(descriptionRoute, /PluginDetailContent pluginId=\\{pluginId\\}/);
+  assert.ok(descriptionRoute.includes("PluginDetailContent pluginId={pluginId}"));
   assert.ok(page.includes('to="/dashboard/plugins/$pluginId/settings"'));
   assert.ok(page.includes("params={{ pluginId: openPluginMenu.provider }}"));
   assert.doesNotMatch(page, /openPluginSettings\(/);
