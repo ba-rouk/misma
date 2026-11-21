@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
+import { PluginBrand } from "../components/plugin-brand";
+import { PLUGIN_MANIFESTS, type PluginId } from "../lib/plugin-registry";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
 
@@ -73,6 +75,9 @@ function PluginsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Provider | null>(null);
+  const [consentProvider, setConsentProvider] = useState<Provider | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; avatar: string | null } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [pluginMenuOpen, setPluginMenuOpen] = useState<Provider | null>(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
@@ -90,6 +95,7 @@ function PluginsPage() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) throw new Error("Sign in to view plugins.");
+        if (alive) setCurrentUser({ id: user.id, email: user.email || "", name: String(user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "Misma user"), avatar: typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null });
         const { data: memberships, error: membershipError } = await supabase
           .from("workspace_members").select("workspace_id,role").eq("user_id", user.id);
         if (membershipError) throw membershipError;
@@ -174,7 +180,7 @@ function PluginsPage() {
     }
   }
 
-  async function connectPlugin(plugin: Provider) {
+  async function startPluginConnection(plugin: Provider) {
     if (!workspaceId || busy) {
       if (!workspaceId) setError("Choose a Misma workspace first.");
       return;
@@ -207,6 +213,19 @@ function PluginsPage() {
     } finally {
       setBusy("");
     }
+  }
+
+  function connectPlugin(plugin: Provider) {
+    if (plugin === "netlify") return;
+    setConsentProvider(plugin);
+    setPluginMenuOpen(null);
+  }
+
+  async function confirmPluginConnection() {
+    if (!consentProvider) return;
+    const provider = consentProvider;
+    setConsentProvider(null);
+    await startPluginConnection(provider);
   }
 
   const selectedPlugin = plugins.find((plugin) => plugin.id === selected) || null;
@@ -299,13 +318,18 @@ function PluginsPage() {
     <main className="misma-marketplace-page">
       <div className="misma-marketplace-shell">
         <header className="misma-marketplace-header misma-marketplace-header-simple">
-          <button type="button" className="misma-marketplace-back-button" aria-label="Go to previous page" title="Go back" onClick={() => {
-            if (window.history.length > 1) window.history.back();
-            else window.location.assign("/dashboard");
-          }}>
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+          <div className="misma-marketplace-title-group">
+            <button type="button" className="misma-marketplace-back-button" aria-label="Go to previous page" title="Go back" onClick={() => {
+              if (window.history.length > 1) window.history.back();
+              else window.location.assign("/dashboard");
+            }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
+            </button>
+            <h1>Plugins</h1>
+          </div>
+          <button type="button" className="misma-marketplace-settings-button" aria-label="Plugin permissions settings" onClick={() => setSettingsOpen(true)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.7 3-1.7-.7a7.6 7.6 0 0 1-1.5.9l-.3 1.8h-3.5l-.3-1.8a7.6 7.6 0 0 1-1.5-.9l-1.7.7-1.7-3 1.4-1.1a7.8 7.8 0 0 1 0-1.8l-1.4-1.1 1.7-3 1.7.7a7.6 7.6 0 0 1 1.5-.9l.3-1.8h3.5l.3 1.8a7.6 7.6 0 0 1 1.5.9l1.7-.7 1.7 3-1.4 1.1a7.8 7.8 0 0 1 0 1.8Z"/></svg>
           </button>
-          <h1>Plugins</h1>
         </header>
 
         <label className="misma-marketplace-search">
@@ -314,6 +338,20 @@ function PluginsPage() {
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}
         </label>
 
+        <section className="misma-plugin-installed" aria-label="Installed plugins">
+          <div className="misma-plugin-section-heading"><h2>Installed</h2><span>{installedByProvider.size}</span></div>
+          {installedByProvider.size ? (
+            <div className="misma-plugin-installed-strip">
+              {Array.from(installedByProvider.keys()).map((provider) => (
+                <button type="button" key={provider} aria-label={"Open " + provider + " plugin"} title={provider} onClick={() => window.location.assign("/dashboard/plugins/" + provider)}>
+                  <PluginBrand provider={provider as PluginId} size="large" />
+                </button>
+              ))}
+            </div>
+          ) : <p className="misma-plugin-installed-empty">Your connected plugins will appear here.</p>}
+        </section>
+
+        <div className="misma-plugin-section-heading misma-plugin-available-heading"><h2>Available</h2><span>{visiblePlugins.length}</span></div>
         {notice && <p className="misma-marketplace-feedback is-success" role="status">{notice}</p>}
         {error && <p className="misma-marketplace-feedback is-error" role="alert">{error}</p>}
 
@@ -322,10 +360,13 @@ function PluginsPage() {
             const connection = installedByProvider.get(plugin.id);
             const menuOpen = pluginMenuOpen === plugin.id;
             return <article className="misma-plugin-row" key={plugin.id}>
-              <button type="button" className="misma-plugin-row-main" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }} aria-label={"Open " + plugin.name + " settings"}>
-                <ProviderLogo provider={plugin.id} />
-                <span className="misma-plugin-row-name">{plugin.name}</span>
-                {connection && <span className="misma-plugin-row-connected" aria-label="Connected" />}
+              <button type="button" className="misma-plugin-row-main" onClick={() => window.location.assign("/dashboard/plugins/" + plugin.id)} aria-label={"View " + plugin.name + " details"}>
+                <PluginBrand provider={plugin.id} size="large" />
+                <span className="misma-plugin-row-copy">
+                  <span className="misma-plugin-row-name">{plugin.name}</span>
+                  <span className="misma-plugin-row-description">{PLUGIN_MANIFESTS[plugin.id].tagline}</span>
+                  <span className={"misma-plugin-status " + (connection ? "is-connected" : plugin.availability === "coming" ? "is-coming" : "is-not-connected")}>{connection ? "Connected" : plugin.availability === "coming" ? "Coming later" : "Not connected"}</span>
+                </span>
               </button>
               {connection ? (
                 <div className="misma-plugin-row-actions">
@@ -340,7 +381,7 @@ function PluginsPage() {
                     }}>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5a2 2 0 0 1 3.1-1.7l8 5.2a3.5 3.5 0 0 1 0 5.9l-8 5.2A2 2 0 0 1 8 18.4Z"/></svg><span>Try now</span>
                     </button>
-                    <button type="button" role="menuitem" onClick={() => { setSelected(plugin.id); setPluginMenuOpen(null); }}>
+                    <button type="button" role="menuitem" onClick={() => { window.location.assign("/dashboard/plugins/" + plugin.id + "?settings=1"); setPluginMenuOpen(null); }}>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 15.5 20 17l-3 3-1.5-1a2 2 0 0 0-2.5 1V22h-4v-2a2 2 0 0 0-2.5-1L5 20l-3-3 1-1.5A2 2 0 0 0 2 13H1v-4h2a2 2 0 0 0 1-2.5L3 5l3-3 1.5 1A2 2 0 0 0 10 2V1h4v2a2 2 0 0 0 2.5 1L18 3l3 3-1 1.5A2 2 0 0 0 21 10h2v4h-2a2 2 0 0 0-2 1.5Z"/></svg><span>Settings</span>
                     </button>
                     <div className="misma-plugin-context-divider" />
@@ -349,6 +390,10 @@ function PluginsPage() {
                     </button>
                   </div>}
                 </div>
+              ) : plugin.availability === "coming" ? (
+                <button type="button" className="misma-plugin-info" aria-label={plugin.name + " information"} onClick={() => window.location.assign("/dashboard/plugins/" + plugin.id)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                </button>
               ) : (
                 <button type="button" className="misma-plugin-add" aria-label={"Connect " + plugin.name} title={plugin.availability === "coming" ? "Coming soon" : "Connect " + plugin.name} disabled={plugin.availability === "coming" || busy === plugin.id} onClick={() => void connectPlugin(plugin.id)}>
                   {busy === plugin.id ? "…" : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>}
@@ -358,6 +403,40 @@ function PluginsPage() {
           })}
         </section>
       </div>
+
+      {consentProvider && (
+        <div className="misma-plugin-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setConsentProvider(null); }}>
+          <section className="misma-plugin-modal misma-plugin-consent" role="dialog" aria-modal="true" aria-labelledby="misma-plugin-consent-title">
+            <button type="button" className="misma-plugin-modal-close" aria-label="Close consent" onClick={() => setConsentProvider(null)}>×</button>
+            <div className="misma-plugin-modal-heading"><PluginBrand provider={consentProvider} size="large" /><div><h2 id="misma-plugin-consent-title">Use Misma to connect {consentProvider[0].toUpperCase() + consentProvider.slice(1)}</h2><p>Review what this connection shares.</p></div></div>
+            <div className="misma-plugin-consent-account">
+              {currentUser?.avatar ? <img src={currentUser.avatar} alt="" /> : <span>{(currentUser?.name || "M").slice(0,1).toUpperCase()}</span>}
+              <div><strong>{currentUser?.name || "Misma account"}</strong><small>{currentUser?.email || "Signed-in Misma account"}</small></div>
+            </div>
+            <div className="misma-plugin-permissions">
+              <h3>What Misma will be able to do</h3>
+              <ul>{PLUGIN_MANIFESTS[consentProvider].permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul>
+              <p>{PLUGIN_MANIFESTS[consentProvider].never.join(" ")}</p>
+            </div>
+            {consentProvider === "render" && <p className="misma-plugin-coming-note">Render account sign-in is awaiting a Render-issued OAuth client for Misma. No customer API key will be requested.</p>}
+            <div className="misma-plugin-modal-actions">
+              <button type="button" className="misma-plugin-secondary" onClick={() => setConsentProvider(null)}>Cancel</button>
+              <button type="button" className="misma-plugin-primary" disabled={consentProvider === "render" || busy === consentProvider} onClick={() => void confirmPluginConnection()}>{busy === consentProvider ? "Connecting…" : "Connect"}</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="misma-plugin-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
+          <section className="misma-plugin-modal misma-plugin-permission-sheet" role="dialog" aria-modal="true" aria-labelledby="misma-plugin-permission-title">
+            <button type="button" className="misma-plugin-modal-close" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>×</button>
+            <h2 id="misma-plugin-permission-title">Plugin permissions</h2>
+            <p className="misma-plugin-modal-description">Choose how Misma should ask before using connected plugins. These preferences are saved on this device; server-enforced permission checks are part of Batch 2.</p>
+            <PluginPermissionChoices storageKey="misma_plugin_permission_default_v1" />
+          </section>
+        </div>
+      )}
 
       {selectedPlugin && <div className="misma-plugin-modal-backdrop" role="presentation" onMouseDown={(event) => {
         if (event.target === event.currentTarget) setSelected(null);
