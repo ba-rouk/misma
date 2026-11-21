@@ -52,6 +52,9 @@ export function containsSensitiveSecret(text: string): boolean {
     /\b(?:sk-[A-Za-z0-9_-]{16,}|sk_live_[A-Za-z0-9]{12,}|rk_live_[A-Za-z0-9]{12,})\b/,
     /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/,
     /\b(?:xox[baprs]-[A-Za-z0-9-]{16,}|AIza[0-9A-Za-z_-]{30,})\b/,
+    /\bAKIA[0-9A-Z]{16}\b/,
+    /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/i,
+    /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
     /\b(?:api[_ -]?key|password|passphrase|client[_ -]?secret|access[_ -]?token|refresh[_ -]?token|private[_ -]?key)\s*[:=]\s*\S{6,}/i,
     /\b(?:\d[ -]?){13,19}\b/g,
   ];
@@ -131,7 +134,16 @@ async function requestExtraction(userText: string, assistantText: string): Promi
       }
       raw = String(raw).trim();
       const parsed = schema.safeParse(JSON.parse(raw));
-      if (parsed.success) return parsed.data;
+      if (parsed.success) {
+        const extractedText = [
+          parsed.data.summary,
+          ...parsed.data.topics,
+          ...parsed.data.entities,
+          ...parsed.data.facts.map((fact) => fact.content),
+          ...parsed.data.facts.map((fact) => fact.key),
+        ].join("\n");
+        if (!containsSensitiveSecret(extractedText)) return parsed.data;
+      }
     } catch {
       // Memory extraction is best-effort and must never fail the chat.
     }
