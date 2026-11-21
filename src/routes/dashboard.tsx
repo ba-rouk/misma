@@ -2882,6 +2882,34 @@ function Dashboard() {
       setChatError("Could not update this chat's memory privacy setting.");
     } else {
       setConversations((items: any[]) => items.map((item) => Number(item.id) === currentConversationId ? { ...item, incognito: next } : item));
+      if (next) {
+        const supabase = getSupabaseClient();
+        const { data: exchanges, error: exchangeReadError } = await supabase.from("memory_exchanges")
+          .select("id").eq("chat_id", currentConversationId);
+        if (exchangeReadError) {
+          setChatError("Incognito is on, but saved memory from this chat could not be cleared. Delete it from Memory settings.");
+          return;
+        }
+        const exchangeIds = (exchanges || []).map((item: any) => String(item.id));
+        if (exchangeIds.length) {
+          const { data: facts, error: factReadError } = await supabase.from("memory_facts")
+            .select("fact_key").in("source_exchange_id", exchangeIds);
+          if (factReadError) {
+            setChatError("Incognito is on, but saved facts from this chat could not be cleared. Delete them from Memory settings.");
+            return;
+          }
+          const keys = [...new Set((facts || []).map((item: any) => String(item.fact_key)))];
+          for (const key of keys) {
+            const { error: deleteFactError } = await supabase.from("memory_facts").delete().eq("fact_key", key);
+            if (deleteFactError) {
+              setChatError("Incognito is on, but saved facts from this chat could not be cleared. Delete them from Memory settings.");
+              return;
+            }
+          }
+          const { error: deleteExchangeError } = await supabase.from("memory_exchanges").delete().eq("chat_id", currentConversationId);
+          if (deleteExchangeError) setChatError("Incognito is on, but saved conversation memory could not be cleared. Delete it from Memory settings.");
+        }
+      }
     }
   };
 
