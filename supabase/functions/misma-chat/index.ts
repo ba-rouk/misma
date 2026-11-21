@@ -1000,10 +1000,9 @@ Deno.serve(async (request) => {
   const useConversationHistory = privacySettings.useConversationHistory !== false;
   const aiSettings = isRecord(input.aiSettings) ? input.aiSettings : {};
   if (action === "chat" && input.publicDemo !== true && input.regenerate !== true && input.editMessageId == null) {
-    const implicitMediaMode = detectMediaIntent(message);
-    if (implicitMediaMode) action = implicitMediaMode === "image" ? "create-image" : "create-video";
+    if (detectMediaIntent(message) === "image") action = "create-image";
   }
-  const allowedActions = new Set(["chat", "create-image", "create-video", "poll-video", "save-generated-media", "download-generated-media", "download-video-for-review", "review-video-frames", "core01-feedback"]);
+  const allowedActions = new Set(["chat", "create-image", "download-generated-media", "core01-feedback"]);
   if (!allowedActions.has(action)) return jsonResponse(400, { error: "Unsupported Misma AI action." });
   const regenerate = input.regenerate === true;
   const regenerateMedia = input.regenerateMedia === true;
@@ -1015,7 +1014,7 @@ Deno.serve(async (request) => {
   if (regenerate && editMessageId !== null) {
     return jsonResponse(400, { error: "A message cannot be edited and regenerated in the same request." });
   }
-  const actionNeedsPrompt = action === "chat" || action === "create-image" || action === "create-video";
+  const actionNeedsPrompt = action === "chat" || action === "create-image";
   const rawAttachmentList = Array.isArray(input.attachments) ? input.attachments : [];
   if (actionNeedsPrompt && !regenerate && !retryMedia && ((!message && rawAttachmentList.length === 0) || message.length > 4_000)) {
     return jsonResponse(400, { error: "Enter a prompt up to 4,000 characters or attach a file." });
@@ -1037,7 +1036,7 @@ Deno.serve(async (request) => {
     !Number.isSafeInteger(replaceAiMessageId) || Number(replaceAiMessageId) < 1)) {
     return jsonResponse(400, { error: "A valid original prompt and media response are required to regenerate this asset." });
   }
-  if (retryMedia && (regenerateMedia || !["create-image", "create-video"].includes(action) ||
+  if (retryMedia && (regenerateMedia || action !== "create-image" ||
     !Number.isSafeInteger(sourceUserMessageId) || Number(sourceUserMessageId) < 1)) {
     return jsonResponse(400, { error: "A valid saved media prompt is required to retry generation." });
   }
