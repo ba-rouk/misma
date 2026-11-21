@@ -877,14 +877,11 @@ button, input, textarea, select { font-size: inherit; }
 .misma-plugin-directory-page .misma-plugin-website-context strong { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .misma-plugin-directory-page .misma-plugin-website-context button { border: 0; background: none; color: #91baff; font-size: 12px; }
 .misma-plugin-search-dock {
-  position: fixed;
-  z-index: 80;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  padding: 12px max(16px, calc((100vw - 840px)/2)) calc(13px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(7,17,29,0), rgba(7,17,29,.94) 28%, #07111d);
-  pointer-events: none;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 12px 0 4px;
+  background: transparent;
 }
 .misma-plugin-search-dock .misma-marketplace-search {
   width: min(100%, 900px);
@@ -893,8 +890,7 @@ button, input, textarea, select { font-size: inherit; }
   border-radius: 999px;
   background: rgba(18,33,51,.97);
   border-color: rgba(255,255,255,.13);
-  box-shadow: 0 10px 40px rgba(0,0,0,.32);
-  pointer-events: auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,.18);
 }
 .misma-plugin-detail-header h1 { font-family: var(--font-sans, Inter, sans-serif); }
 .misma-plugin-identity {
