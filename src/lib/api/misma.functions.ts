@@ -75,7 +75,7 @@ export const getMismaData = createServerFn({ method: "POST" })
     const [workspaceResult, conversationsResult, ordersResult, knowledgeResult, pendingKnowledgeResult, customersResult, websitesResult, handoffsResult, notificationsResult, productsResult, channelConnectionsResult] =
       await Promise.all([
         db.from("workspaces").select("id,name,location,description,opening_hours,primary_language").eq("id", workspaceId).single(),
-        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
+        db.from("conversations").select("id,channel,latest_text,status,updated_at,group_name,contact_id,website_connection_id,incognito").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(200),
         db.from("orders").select("id,item,total_rwf,status,created_at,contacts(name)").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
         db.from("knowledge_entries").select("id,question,answer,source_type,source_ref,website_connection_id,room_id").eq("workspace_id", workspaceId).eq("approved", true).order("id", { ascending: false }),
         db.from("knowledge_entries").select("id,question,answer,source_type,source_ref,website_connection_id,room_id,created_at").eq("workspace_id", workspaceId).eq("approved", false).order("id", { ascending: false }),

@@ -658,6 +658,16 @@ type Message = {
   created_at?: string;
   attachments?: MessageAttachment[];
   pendingMedia?: "image" | "video";
+  memoryUsed?: Array<{
+    memoryType: "exchange" | "fact";
+    exchangeId: string | null;
+    factId: string | null;
+    chatId: number | null;
+    chatTitle: string;
+    content: string;
+    createdAt: string;
+  }>;
+  memoryUpdated?: boolean;
 };
 
 type MessageAttachment = {
@@ -1788,6 +1798,7 @@ function Dashboard() {
   const [currentConversationId, setCurrentConversationId] = useState<
     number | null
   >(null);
+  const [memoryIncognito, setMemoryIncognito] = useState(false);
   const [viewStateRestored, setViewStateRestored] = useState(false);
   const [pendingRestoreConversationId, setPendingRestoreConversationId] = useState<number | null>(null);
   const [dashboardDataLoaded, setDashboardDataLoaded] = useState(false);
@@ -2748,6 +2759,8 @@ function Dashboard() {
     if (!hasCachedConversationMessages) setMessages([]);
     setChatActionMenuId(null);
     setCurrentConversationId(convId);
+    const selectedConversation = conversations.find((item: any) => Number(item.id) === convId) as any;
+    setMemoryIncognito(selectedConversation?.incognito === true);
     setVisitorIsTyping(false);
     if (options.activateWorkspace !== false) setActiveTab("workspace");
     setMobileMenuOpen(false);
@@ -2834,6 +2847,7 @@ function Dashboard() {
     activeConversationIdRef.current = null;
     setChatActionMenuId(null);
     setCurrentConversationId(null);
+    setMemoryIncognito(false);
     setVisitorIsTyping(false);
     setMessages([]);
     setDraft("");
@@ -2854,6 +2868,48 @@ function Dashboard() {
     }
   };
 
+  const handleToggleMemoryIncognito = async () => {
+    const next = !memoryIncognito;
+    setMemoryIncognito(next);
+    setChatError("");
+    if (!currentConversationId || !workspace?.id) return;
+    const { error } = await getSupabaseClient().from("conversations")
+      .update({ incognito: next })
+      .eq("id", currentConversationId)
+      .eq("workspace_id", workspace.id);
+    if (error) {
+      setMemoryIncognito(!next);
+      setChatError("Could not update this chat's memory privacy setting.");
+    } else {
+      setConversations((items: any[]) => items.map((item) => Number(item.id) === currentConversationId ? { ...item, incognito: next } : item));
+      if (next) {
+        const supabase = getSupabaseClient();
+        const { data: exchanges, error: exchangeReadError } = await supabase.from("memory_exchanges")
+          .select("id").eq("chat_id", currentConversationId);
+        if (exchangeReadError) {
+          setChatError("Incognito is on, but saved memory from this chat could not be cleared. Delete it from Memory settings.");
+          return;
+        }
+        const exchangeIds = (exchanges || []).map((item: any) => String(item.id));
+        if (exchangeIds.length) {
+          const { error: deleteFactError } = await supabase.from("memory_facts")
+            .delete().in("source_exchange_id", exchangeIds);
+          if (deleteFactError) {
+            setChatError("Incognito is on, but saved facts from this chat could not be cleared. Delete them from Memory settings.");
+            return;
+          }
+          const { error: deleteExchangeError } = await supabase.from("memory_exchanges").delete().eq("chat_id", currentConversationId);
+          if (deleteExchangeError) {
+            setChatError("Incognito is on, but saved conversation memory could not be cleared. Delete it from Memory settings.");
+            return;
+          }
+        }
+        const { error: legacyDeleteError } = await supabase.from("user_memories")
+          .delete().eq("source_conversation_id", currentConversationId);
+        if (legacyDeleteError) setChatError("Incognito is on, but older saved memory from this chat could not be cleared.");
+      }
+    }
+  };
 
   const handleSetConversationGroup = async (conversationId: number, groupName: string | null) => {
     if (!token) return;
@@ -3524,7 +3580,7 @@ function Dashboard() {
       },
       body: JSON.stringify({
         ...body,
-        ...(body.action === "chat" ? { aiSettings, privacySettings: privacyPreferences, activePlugins: extractActivePlugins(String(body.message || "")) } : {}),
+        ...(body.action === "chat" ? { aiSettings, privacySettings: privacyPreferences, activePlugins: extractActivePlugins(String(body.message || "")), incognito: memoryIncognito } : {}),
       }),
       signal,
     });
@@ -3903,6 +3959,10 @@ function Dashboard() {
       }
 
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
+      res.aiMessage = {
+        ...res.aiMessage,
+        memoryUsed: Array.isArray(res.memoryUsed) ? res.memoryUsed : [],
+      };
 
       if (!sendConversationId && res.conversationId) {
         const createdConversationId = Number(res.conversationId);
@@ -3948,6 +4008,22 @@ function Dashboard() {
           return next;
         });
         if (autoSpeakReplies && !options.signal) handleReadAloud(res.aiMessage);
+      }
+
+      if (res.memoryQueued && res.userMessage && Number.isSafeInteger(Number(res.userMessage.id))) {
+        const sourceUserMessageId = Number(res.userMessage.id);
+        const sourceAiMessageId = String(res.aiMessage.id);
+        void (async () => {
+          for (let attempt = 0; attempt < 20; attempt++) {
+            await new Promise((resolve) => window.setTimeout(resolve, 700));
+            const { data } = await getSupabaseClient().from("memory_exchanges").select("id")
+              .eq("source_user_message_id", sourceUserMessageId).maybeSingle();
+            if (data) {
+              setMessages((current) => current.map((item) => item.id === sourceAiMessageId ? { ...item, memoryUpdated: true } : item));
+              return;
+            }
+          }
+        })();
       }
 
       setSelectedFiles([]);
@@ -5311,6 +5387,29 @@ function Dashboard() {
                             </div>
                           ) : <MarkdownContent content={msg.text} /> }
                         </div>}
+                        {isAiMessage && !msg.pendingMedia && ((msg.memoryUsed && msg.memoryUsed.length > 0) || msg.memoryUpdated) && (
+                          <div className="misma-memory-message-meta">
+                            {msg.memoryUpdated && <span className="misma-memory-updated-chip">Memory updated</span>}
+                            {msg.memoryUsed && msg.memoryUsed.length > 0 && (
+                              <details className="misma-memory-used-details">
+                                <summary className="misma-memory-used-chip">Memory used · {msg.memoryUsed.length}</summary>
+                                <div className="misma-memory-used-popover">
+                                  {msg.memoryUsed.map((source, index) => (
+                                    <div className="misma-memory-used-source" key={(source.exchangeId || source.factId || "memory") + "-" + index}>
+                                      <strong>{source.chatTitle || "Saved memory"}</strong>
+                                      <small>{new Date(source.createdAt).toLocaleDateString()} · {source.memoryType}</small>
+                                      <p>{source.content}</p>
+                                      {source.chatId && <button type="button" onClick={() => {
+                                        try { window.localStorage.setItem("misma_dashboard_view_v1", JSON.stringify({ activeTab: "workspace", conversationId: source.chatId })); } catch { /* Open the dashboard without restoring when storage is unavailable. */ }
+                                        window.location.assign("/dashboard");
+                                      }}>Open original chat</button>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        )}
                         {!msg.pendingMedia && !isCustomerMessage && (
                         <div
                           className={`aichat-message-actions${isUserMessage && mobileActionMessageId === msg.id ? " is-mobile-open" : ""}`}
@@ -5495,6 +5594,17 @@ function Dashboard() {
                     <VoiceInputBar
                       toolbarStart={
                         <>
+                          <button
+                            type="button"
+                            className="misma-memory-incognito-toggle"
+                            aria-pressed={memoryIncognito}
+                            disabled={isSending || isGeneratingMedia}
+                            title={memoryIncognito ? "Memory is disabled for this chat" : "Misma may remember useful details from this chat"}
+                            onClick={() => void handleToggleMemoryIncognito()}
+                          >
+                            <span aria-hidden="true">{memoryIncognito ? "◉" : "○"}</span>
+                            {memoryIncognito ? "Incognito on" : "Don't remember this chat"}
+                          </button>
                           <div className="aichat-composer-plus-wrap">
                             <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => { setPluginPickerOpen(false); setPlusMenuOpen((open) => !open); }}>
                               {plusMenuOpen ? (
@@ -6613,13 +6723,6 @@ function Dashboard() {
                       <span className={"aichat-status-pill is-" + site.status}>{site.status}</span>
                     </div>
                     <small title={site.website_url}>{site.website_url}</small>
-                    <button type="button" className="aichat-website-plugins" onClick={() => {
-                      try { window.sessionStorage.setItem("misma_plugins_website_id", site.id); } catch { /* The URL still carries the selection. */ }
-                      window.location.assign("/dashboard/plugins?websiteId=" + encodeURIComponent(site.id));
-                    }} aria-label={"Open plugins for " + (site.name || site.domain)} title="Plugins">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5m6-5v5M7 9h10v4a5 5 0 0 1-10 0V9Zm5 9v3m-3 0h6"/></svg>
-                      <span>Plugins</span>
-                    </button>
                   </div>
                   <button
                     type="button"

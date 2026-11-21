@@ -57,3 +57,6 @@ jobs:
 
       - name: Check website platform integration Edge Function
         run: deno check supabase/functions/misma-platform-integrations/index.ts
+
+      - name: Check memory backfill Edge Function
+        run: deno check supabase/functions/misma-memory-backfill/index.ts

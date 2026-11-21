@@ -108,28 +108,67 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
 });
 
 
-test("Misma Brain is an account-level RLS table with owner-only CRUD policies", async () => {
-  const migration = await read("../supabase/migrations/20261120142721_account_level_user_memories.sql");
+test("cross-chat memory schema uses owner-only RLS, pgvector and hybrid search", async () => {
+  const migration = await read("../supabase/migrations/20261121100000_cross_chat_memory.sql");
+  const cacheMigration = await read("../supabase/migrations/20261121103000_memory_embedding_cache.sql");
+  const allMigrations = migration + cacheMigration;
   const page = await read("../src/routes/dashboard_.memory.tsx");
-  assert.match(migration, /create table if not exists public\.user_memories/);
-  assert.match(migration, /user_id uuid not null references auth\.users/);
-  assert.match(migration, /enable row level security/i);
-  for (const operation of ["select", "insert", "update", "delete"]) {
-    assert.match(migration, new RegExp("for " + operation + " to authenticated", "i"));
+  assert.match(migration, /create table if not exists public\.memory_exchanges/);
+  assert.match(migration, /create table if not exists public\.memory_facts/);
+  assert.match(migration, /create table if not exists public\.memory_settings/);
+  assert.match(migration, /create table if not exists public\.memory_backfill_jobs/);
+  assert.match(migration, /extensions\.vector\(768\)/);
+  assert.match(migration, /using hnsw/);
+  assert.match(migration, /using gin/);
+  assert.match(migration, /function public\.match_memory/i);
+  assert.match(migration, /auth\.uid\(\)\) = user_id/);
+  assert.match(migration, /alter table public\.conversations[\s\S]*incognito boolean/);
+  for (const table of ["memory_settings", "memory_exchanges", "memory_facts", "memory_backfill_jobs", "memory_embedding_cache"]) {
+    assert.match(allMigrations, new RegExp("alter table public\\." + table + " enable row level security", "i"));
+    assert.match(allMigrations, new RegExp("create policy " + (table === "memory_backfill_jobs" ? "memory_backfill_owner_all" : table + "_owner_all"), "i"));
   }
-  assert.match(migration, /auth\.uid\(\).*user_id|auth\.uid\(\)\) = user_id/);
-  assert.match(page, /from\("user_memories"\)/);
-  assert.match(page, /\.update\(/);
-  assert.match(page, /\.delete\(/);
-  assert.match(page, /\.insert\(/);
+  assert.match(page, /from\("memory_facts"\)/);
+  assert.match(page, /from\("memory_exchanges"\)/);
+  assert.match(page, /Facts/);
+  assert.match(page, /Past conversations/);
+  assert.match(page, /Reset all memory/);
+  assert.match(page, /Export/);
+  assert.match(page, /Pin/);
+  assert.match(page, /Import chat history/);
+  assert.match(page, /memory_settings/);
 });
 
-test("Misma chat injects cross-chat memories and whitelists connected plugins", async () => {
+test("memory RLS integration test proves one account cannot read another account's facts", async () => {
+  const rlsTest = await read("../supabase/tests/memory_rls.test.sql");
+  assert.match(rlsTest, /set local role authenticated/i);
+  assert.match(rlsTest, /request\.jwt\.claim\.sub/);
+  assert.match(rlsTest, /memory_facts/);
+  assert.match(rlsTest, /is\(/);
+});
+
+test("Misma chat retrieves account memory and writes exchanges asynchronously", async () => {
   const edge = await read("../supabase/functions/misma-chat/index.ts");
-  assert.match(edge, /from\("user_memories"\)/);
-  assert.match(edge, /MISMA BRAIN/);
-  assert.match(edge, /extractAccountMemoryFacts/);
-  assert.match(edge, /upsert\(extractedMemories/);
+  const memory = await read("../supabase/functions/_shared/memory.ts");
+  const backfill = await read("../supabase/functions/misma-memory-backfill/index.ts");
+  const config = await read("../supabase/config.toml");
+  assert.match(edge, /retrieveMemory/);
+  assert.match(edge, /persistMemoryExchange/);
+  assert.match(edge, /scheduleMemoryWrite/);
+  assert.match(edge, /memoryUsed/);
+  assert.match(edge, /memoryRecallNotFound/);
+  assert.match(edge, /chatIncognito/);
+  assert.match(edge, /hasPluginOrExternalOutput/);
+  assert.match(edge, /MEMORY SAFETY/);
+  assert.match(memory, /responseMimeType: "application\/json"/);
+  assert.match(memory, /safeParse/);
+  assert.match(memory, /containsSensitiveSecret/);
+  assert.match(memory, /Bearer\\s\+/);
+  assert.match(memory, /parsed\.data\.facts\.map/);
+  assert.match(memory, /gemini-embedding-001/);
+  assert.match(memory, /match_memory/);
+  assert.match(backfill, /memory_backfill_jobs/);
+  assert.match(backfill, /persistMemoryExchange/);
+  assert.match(config, /\[functions\.misma-memory-backfill\]/);
   assert.match(edge, /platform_connections/);
   assert.match(edge, /PLUGINS EXPLICITLY ENABLED FOR THIS CHAT/);
   assert.match(edge, /WEBSITE CODE AND WIDGET-INSTALLATION WORKFLOW/);
@@ -146,6 +185,9 @@ test("dashboard inserts inline plugin mentions at the caret and scopes tools to 
   assert.ok(dashboard.includes("extractActivePlugins"));
   assert.ok(dashboard.includes("activePlugins: extractActivePlugins(textToSend)"));
   assert.ok(dashboard.includes("insertPluginMention"));
+  assert.ok(dashboard.includes("memoryIncognito"));
+  assert.ok(dashboard.includes("misma-memory-incognito-toggle"));
+  assert.doesNotMatch(dashboard, /aichat-website-plugins/);
   assert.ok(dashboard.includes("selectionStart"));
   assert.ok(dashboard.includes("selectionEnd"));
   assert.ok(dashboard.includes("misma-chat-plugin-option-logo"));
