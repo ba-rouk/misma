@@ -903,74 +903,6 @@ async function isMismaMediaSafe(
   throw new Error("MEDIA_SAFETY_UNAVAILABLE");
 }
 
-function extractAccountMemoryFacts(
-  message: string,
-  workspaceId: string,
-  workspaceName: string,
-  sourceConversationId: number,
-): JsonRecord[] {
-  const text = message.trim();
-  if (!text || text.length > 4_000 || /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:api[_ -]?key|password|client[_ -]?secret|access[_ -]?token)\s*[:=]\s*\S{8,}/i.test(text) || /\b(?:diagnosed with|my medical|my health|my religion|my political|my sexual|my criminal|my bank|my credit card|my passport|my national id)\b/i.test(text)) {
-    return [];
-  }
-  const facts: JsonRecord[] = [];
-  const add = (memoryKey: string, category: string, content: string, metadata: JsonRecord = {}) => {
-    const cleaned = content.trim().slice(0, 700);
-    if (!cleaned || facts.some((item) => item.memory_key === memoryKey)) return;
-    facts.push({
-      user_id: "", // populated from the authenticated user before the upsert
-      memory_key: memoryKey.slice(0, 160),
-      category,
-      content: cleaned,
-      metadata: { source: "automatic_chat_extraction", ...metadata },
-      source_conversation_id: sourceConversationId,
-      confidence: 0.92,
-      updated_at: new Date().toISOString(),
-    });
-  };
-
-  if (workspaceName) {
-    add("workspace." + workspaceId, "workspace", "Misma workspace: " + workspaceName, { workspace_id: workspaceId });
-  }
-
-  const repositoryUrl = text.match(/https?:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/i)?.[1];
-  const repositoryLabel = text.match(/\b(?:github\s+)?(?:repository|repo|source\s+repository)\s*(?:is|:|=)\s*([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\b/i)?.[1];
-  const repository = (repositoryUrl || repositoryLabel || "").replace(/\.git$/i, "");
-  if (repository) {
-    add("repository." + repository.toLowerCase(), "infrastructure", "Website source repository: " + repository, { repository, workspace_id: workspaceId });
-  }
-
-  const mappedHosting = text.match(/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\s+(?:is\s+)?(?:hosted|deployed|running)\s+(?:on|at)\s+(vercel|render|netlify)\b/i);
-  if (mappedHosting) {
-    add("hosting." + mappedHosting[1].toLowerCase(), "infrastructure",
-      mappedHosting[1] + " is hosted on " + mappedHosting[2] + ".",
-      { repository: mappedHosting[1], provider: mappedHosting[2].toLowerCase(), workspace_id: workspaceId });
-  } else {
-    const providerMatch = text.match(/\b(?:hosting provider|hosted on|deployed on|deploy(?:ment)? to|production hosting)\s*(?:is|:|=|on|to)?\s*(vercel|render|netlify)\b/i);
-    if (providerMatch) {
-      add("hosting.default", "infrastructure", "User identified " + providerMatch[1] + " as a hosting/deployment provider.", { provider: providerMatch[1].toLowerCase(), workspace_id: workspaceId });
-    }
-  }
-
-  const stackLead = text.match(/\b(?:built with|using|uses|stack (?:is|includes)|developed with)\s+([^.!?\n]{2,120})/i)?.[1];
-  if (stackLead) {
-    const knownStack = stackLead.match(/\b(?:React|Next\.js|NextJS|Vue|Nuxt|Svelte|SvelteKit|Angular|Astro|Vite|TypeScript|JavaScript|Python|Django|Flask|Laravel|WordPress|PHP|Ruby on Rails|Flutter)\b/gi) || [];
-    const stack = [...new Set(knownStack.map((item) => item.toLowerCase()))].join(", ");
-    if (stack) add("technology." + workspaceId, "technology", "Project technology stack: " + stack + ".", { workspace_id: workspaceId });
-  }
-
-  const preference = text.match(/\b(?:i prefer|my preference is|please always use|always use|please keep|i want you to always)\s+([^.!?\n]{3,180})/i)?.[1];
-  if (preference) add("preference.general", "preference", "User preference: " + preference.trim() + ".", { workspace_id: workspaceId });
-  const business = text.match(/\b(?:my business|my company|our business|our company)\s+(?:is|called|named)\s+([^.!?\n]{2,120})/i)?.[1];
-  if (business) add("business.identity", "business", "Business name: " + business.trim() + ".", { workspace_id: workspaceId });
-  const currentProject = text.match(/\b(?:i am working on|i'm working on|i am building|i'm building|my current project is|the project is)\s+([^.!?\n]{3,140})/i)?.[1];
-  if (currentProject) add("project.current", "project", "Current project: " + currentProject.trim() + ".", { workspace_id: workspaceId });
-  const role = text.match(/\b(?:i work as|my role is|i am a|i'm a)\s+(developer|founder|owner|designer|engineer|manager|student|teacher|consultant)\b/i)?.[1];
-  if (role) add("profile.role", "profile", "User role: " + role.toLowerCase() + ".", { workspace_id: workspaceId });
-
-  return facts.slice(0, 12);
-}
-
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1896,18 +1828,13 @@ Deno.serve(async (request) => {
       return jsonResponse(503, { error: "PDF analysis requires OPENROUTER_API_KEY. Other supported text and code files can use the configured chat providers." });
     }
 
-    const [{ data: accountMemoryRows, error: memoryReadError }, { data: connectedPluginRows, error: pluginReadError }, { data: userPluginRows, error: userPluginReadError }, { data: workspaceRecord }] = await Promise.all([
-      db.from("user_memories").select("category,content,confidence").eq("user_id", userData.user.id).order("updated_at", { ascending: false }).limit(30),
+    const [{ data: connectedPluginRows, error: pluginReadError }, { data: userPluginRows, error: userPluginReadError }, { data: workspaceRecord }] = await Promise.all([
       db.from("platform_connections").select("provider,external_account_name").eq("workspace_id", workspaceId).eq("status", "connected"),
       db.from("user_plugins").select("provider,is_installed,permission_mode,account_label").eq("user_id", userData.user.id),
       db.from("workspaces").select("name").eq("id", workspaceId).maybeSingle(),
     ]);
-    if (memoryReadError) console.warn("[misma-chat] Account memory could not be loaded.", memoryReadError.code);
     if (pluginReadError) console.warn("[misma-chat] Connected plugin context could not be loaded.", pluginReadError.code);
     if (userPluginReadError) console.warn("[misma-chat] Installed plugin preferences could not be loaded.", userPluginReadError.code);
-    const accountMemories = (accountMemoryRows || []).filter((row) =>
-      typeof row.content === "string" && row.content.trim() && Number(row.confidence || 0) >= 0.5
-    ).slice(0, 24);
     const allowedPluginIds = new Set(["github", "vercel", "render", "netlify"]);
     const requestedPluginIds = new Set((Array.isArray(input.activePlugins) ? input.activePlugins : [])
       .filter((value): value is string => typeof value === "string" && allowedPluginIds.has(value.toLowerCase()))
@@ -2158,26 +2085,6 @@ Deno.serve(async (request) => {
       scheduleMemoryWrite(memoryTask);
     }
 
-    // Legacy extraction remains as a compatibility fallback for the old memory table.
-    // It is disabled whenever account memory is off or the current chat is incognito.
-    if (!voice && action === "chat" && memoryEnabled && !chatIncognito && !retryExistingUserMessage && editMessageId === null) {
-      try {
-        const extractedMemories = extractAccountMemoryFacts(
-          userVisibleMessage,
-          workspaceId,
-          activeWorkspaceName,
-          savedConversationId,
-        ).map((item) => ({ ...item, user_id: userData.user.id }));
-        if (extractedMemories.length) {
-          const { error: memoryWriteError } = await db.from("user_memories")
-            .upsert(extractedMemories, { onConflict: "user_id,memory_key" });
-          if (memoryWriteError) console.warn("[misma-chat] Account memory extraction was not saved.", memoryWriteError.code);
-        }
-      } catch (memoryError) {
-        console.warn("[misma-chat] Account memory extraction skipped.", memoryError instanceof Error ? memoryError.name : "unknown");
-      }
-    }
-
     // Speech turns are retained only as AI context; never convert private spoken content
     // into visible Core.01 learning examples.
     if (!voice) {
@@ -2257,6 +2164,8 @@ Deno.serve(async (request) => {
       thinkHarder,
       memoryUsed: memoryRetrieval.sources,
       memoryRecallNotFound: explicitMemoryRecall && !memoryRetrieval.found,
+      memoryQueued: !voice && memoryEnabled && !chatIncognito && !retryExistingUserMessage &&
+        editMessageId === null && !hasPluginOrExternalOutput && !containsSensitiveSecret(userVisibleMessage),
     });
   } catch (error) {
     console.error("[misma-chat] Request failed.", error instanceof Error ? error.message : "unknown error");
