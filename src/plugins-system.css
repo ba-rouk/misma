@@ -893,21 +893,6 @@ button, input, textarea, select { font-size: inherit; }
   box-shadow: 0 10px 40px rgba(0,0,0,.18);
 }
 .misma-plugin-detail-header h1 { font-family: var(--font-sans, Inter, sans-serif); }
-.misma-plugin-identity {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  width: min(100% - 34px, 680px);
-  margin: 10px auto 18px;
-  padding: 13px 15px;
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius: 17px;
-  background: rgba(255,255,255,.045);
-}
-.misma-plugin-identity > div:not(.misma-provider-logo) { display: grid; gap: 3px; flex: 1; min-width: 0; }
-.misma-plugin-identity strong { color: #f4f7fb; font-size: 16px; font-weight: 650; }
-.misma-plugin-identity small { color: #a7b5c7; font-size: 13px; }
-.misma-plugin-identity .misma-provider-logo { width: 52px; height: 52px; border-radius: 14px; }
 .misma-plugin-detail-action-inner { width: min(100%, 760px); margin: 0 auto; }
 .misma-plugin-connect-page {
   min-height: 100dvh;

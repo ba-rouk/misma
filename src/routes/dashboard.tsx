@@ -5583,25 +5583,11 @@ function Dashboard() {
               )}
 
               {executionActivities.length > 0 && (
-                <section className="aichat-execution-activity" aria-label="Misma action activity" aria-live="polite">
-                  <div className="aichat-execution-activity-title">
-                    <span className="aichat-execution-activity-provider">GH</span>
-                    <strong>GitHub activity</strong>
-                    {isSending && <span className="aichat-execution-activity-live">Live</span>}
-                  </div>
+                <section className="aichat-execution-activity" aria-label="GitHub activity" aria-live="polite">
                   <ol>
                     {executionActivities.map((activity) => (
                       <li key={activity.key} data-status={activity.status}>
-                        <span className="aichat-execution-activity-mark" aria-hidden="true">
-                          {activity.status === "running" ? <i /> : activity.status === "waiting" ? "…" : activity.status === "failed" ? "!" : "✓"}
-                        </span>
-                        <span className="aichat-execution-activity-copy">
-                          <strong>{activity.title}</strong>
-                          {activity.detail && <small>{activity.detail}</small>}
-                        </span>
-                        <small className="aichat-execution-activity-status">
-                          {activity.status === "running" ? "In progress" : activity.status === "waiting" ? "Waiting" : activity.status === "failed" ? "Failed" : "Done"}
-                        </small>
+                        <span>{activity.title}{activity.detail ? " · " + activity.detail : ""}</span>
                       </li>
                     ))}
                   </ol>
