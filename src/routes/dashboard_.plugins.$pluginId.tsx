@@ -61,6 +61,7 @@ function PluginDetailPage() {
   const supabase = getSupabaseClient();
   const [workspaceId, setWorkspaceId] = useState("");
   const [connection, setConnection] = useState<PluginConnectionSummary | null>(null);
+  const [accountLabel, setAccountLabel] = useState("");
   const [websiteId, setWebsiteId] = useState("");
   const [expandedDescription, setExpandedDescription] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -83,14 +84,23 @@ function PluginDetailPage() {
         const rows = workspaceRows || [];
         const workspace = rows[0];
         if (!workspace) throw new Error("Your Misma account does not yet have a provider connection target.");
-        const { data: connectionRows, error: connectionError } = await supabase.from("platform_connections")
-          .select("id,provider,external_account_name,status,updated_at,created_at")
-          .eq("workspace_id", workspace.id).eq("provider", manifest.id)
-          .order("updated_at", { ascending: false });
-        if (connectionError) throw connectionError;
+        const [connectionResult, pluginResult] = await Promise.all([
+          supabase.from("platform_connections")
+            .select("id,provider,external_account_name,status,updated_at,created_at")
+            .eq("workspace_id", workspace.id).eq("provider", manifest.id)
+            .order("updated_at", { ascending: false }),
+          supabase.from("user_plugins")
+            .select("is_installed,account_label").eq("user_id", user.id).eq("provider", manifest.id).maybeSingle(),
+        ]);
+        if (connectionResult.error) throw connectionResult.error;
+        if (pluginResult.error) throw pluginResult.error;
         if (!active) return;
         setWorkspaceId(workspace.id);
-        setConnection(((connectionRows || []) as PluginConnectionSummary[]).find((item) => item.status === "connected") || null);
+        setAccountLabel(String(pluginResult.data?.account_label || ""));
+        const isInstalled = pluginResult.data?.is_installed === true;
+        setConnection(isInstalled
+          ? ((connectionResult.data || []) as PluginConnectionSummary[]).find((item) => item.status === "connected") || null
+          : null);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load plugin details.");
       }
@@ -166,7 +176,7 @@ function PluginDetailPage() {
           </header>
   
           <div className="misma-plugin-preview-scroller">
-            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id} title={card.title} description={card.description}/></div>)}
+            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><button type="button" className="misma-plugin-example-prompt-button" disabled={!connection} onClick={() => tryInChat(examplePrompts[manifest.previewCards.indexOf(card)] || "@" + manifest.id + " ")}><ExamplePreview kind={card.kind} provider={manifest.id} title={card.title} description={card.description}/></button></div>)}
           </div>
           <div className="misma-plugin-gallery-hint" aria-hidden="true"><span/><span/></div>
         </section>        <section className="misma-plugin-description-section">
@@ -189,7 +199,7 @@ function PluginDetailPage() {
           <SectionHeader title="Apps" />
           <div className="misma-plugin-connected-account-row">
             <PluginProviderLogo provider={manifest.id} size="md" />
-            <div><strong>{connection?.external_account_name || manifest.name + " account"}</strong><small>{connection ? "Primary connected account" : "No account connected yet"}</small></div>
+            <div><strong>{accountLabel || connection?.external_account_name || manifest.name + " account"}</strong><small>{connection ? "Primary connected account" : "No account connected yet"}</small></div>
             <Badge tone={connection ? "success" : "neutral"}>{connection ? "Connected" : "Not connected"}</Badge>
           </div>
         </section>
