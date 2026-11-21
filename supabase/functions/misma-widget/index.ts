@@ -878,7 +878,7 @@ function extractStructuredContent(html: string, pageUrl: string): AnyRecord[] {
   };
   for (const node of nodes) {
     const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
-    const type = types.map((v) => String(v || "").split("/").pop().toLowerCase()).map((v) => typeMap[v]).find(Boolean);
+    const type = types.map((v) => String(v || "").split("/").pop()?.toLowerCase() || "").map((v) => typeMap[v]).find(Boolean);
     const name = safeString(node.name || node.headline, 240);
     if (!type || name.length < 2) continue;
     const description = safeString(node.description || node.abstract, 1800);
@@ -1856,7 +1856,7 @@ async function handlePhoneWebhook(request: Request, db: Db) {
       spoken = "Your request is with the business team. They will call you back as soon as possible.";
     } else {
       try {
-        spoken = await answerCustomer(db, workspaceId, speech);
+        spoken = (await answerCustomer(db, workspaceId, speech)).answer;
         await db.from("messages").insert({ conversation_id: conversation.id, role: "ai", text: spoken });
         await db.from("conversations").update({ latest_text: spoken.slice(0, 200), updated_at: new Date().toISOString() }).eq("id", conversation.id);
       } catch {
@@ -1943,7 +1943,7 @@ async function handleWhatsAppWebhook(request: Request, db: Db) {
         if (wantsHuman) {
           answer = "I have notified the business team. A person will follow up with you in this WhatsApp conversation.";
         } else {
-          try { answer = await answerCustomer(db, workspaceId, body); }
+          try { answer = (await answerCustomer(db, workspaceId, body)).answer; }
           catch { answer = "I am having trouble responding right now. Please try again shortly or ask to speak with a team member."; }
         }
         await db.from("messages").insert({ conversation_id: conversation.data.id, role: "ai", text: answer });
