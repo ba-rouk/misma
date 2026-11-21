@@ -85,7 +85,7 @@ create index if not exists memory_exchanges_chat_idx
 create index if not exists memory_exchanges_search_gin
   on public.memory_exchanges using gin(search_tsv);
 create index if not exists memory_exchanges_embedding_hnsw
-  on public.memory_exchanges using hnsw(embedding vector_cosine_ops)
+  on public.memory_exchanges using hnsw(embedding extensions.vector_cosine_ops)
   where embedding is not null and deleted_at is null;
 create index if not exists memory_facts_user_updated_idx
   on public.memory_facts(user_id, updated_at desc) where deleted_at is null;
@@ -243,6 +243,7 @@ as $function$
     cross join query_data
     where fact.user_id = p_user_id
       and fact.deleted_at is null
+      and (p_exclude_chat_id is null or source.chat_id is null or source.chat_id <> p_exclude_chat_id)
       and not exists (
         select 1 from public.memory_facts newer
         where newer.supersedes_id = fact.id and newer.deleted_at is null
