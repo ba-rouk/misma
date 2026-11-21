@@ -314,12 +314,14 @@ test("every plugin settings URL has an explicit static provider route", async ()
 test("Netlify OAuth connects and discovers authorized sites", async () => {
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const connect = await read("../src/lib/plugin-connect.ts");
+  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
   const callback = await read("../src/routes/integrations/netlify/callback.tsx");
   const edge = await read("../supabase/functions/misma-platform-integrations/index.ts");
   const config = await read("../supabase/functions/misma-platform-integrations/config.ts");
   const health = await read("../supabase/functions/misma-platform-integrations/health.ts");
   assert.match(manifests, /authType: "netlify_oauth"/);
   assert.match(connect, /netlify-install-url/);
+  assert.match(detail, /if \(activeManifest\.id === "netlify"\)[\s\S]*window\.location\.assign\(url\)/);
   assert.match(callback, /netlify-complete-installation/);
   assert.match(callback, /window\.history\.replaceState/);
   assert.match(callback, /netlify-link-site/);
