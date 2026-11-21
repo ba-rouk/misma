@@ -10,6 +10,22 @@ export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component
 type Connection = { id: string; provider: PluginId; external_account_name: string | null; status: string };
 type Project = { id: string; name: string; full_name: string | null; dashboard_url: string | null; repository_url: string | null };
 
+function PluginSkillIcon({ name }: { name: string }) {
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const paths: Record<string, React.ReactNode> = {
+    "book-open": <><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H12v17H5.5A2.5 2.5 0 0 0 3 22Z"/><path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H12v17h6.5A2.5 2.5 0 0 1 21 22Z"/></>,
+    code: <><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></>,
+    "git-pull-request": <><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v9M18 15.5V9a3 3 0 0 0-3-3h-2"/></>,
+    folder: <><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></>,
+    activity: <><path d="M3 12h4l3-7 4 14 3-7h4"/></>,
+    link: <><path d="M10 13a5 5 0 0 0 7.1 0l2-2A5 5 0 0 0 12 3.9l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/></>,
+    layers: <><path d="m12 3 9 5-9 5-9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></>,
+    "refresh-cw": <><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.5-3"/></>,
+    globe: <><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}>{paths[name] || <circle cx="12" cy="12" r="8"/>}</svg>;
+}
+
 function PluginDetailPage() {
   const { pluginId: rawId } = Route.useParams();
   const pluginId = rawId as PluginId;
@@ -150,7 +166,7 @@ function PluginDetailPage() {
 
       <GlassCard className="misma-plugin-detail-section">
         <SectionHeader title="Skills" detail="Capabilities available through this plugin."/>
-        <div className="misma-plugin-skill-list">{plugin.skills.map((skill) => <Chip key={skill.name}><span aria-hidden="true">{skill.icon}</span>{skill.name}</Chip>)}</div>
+        <div className="misma-plugin-skill-list">{plugin.skills.map((skill) => <Chip key={skill.name}><PluginSkillIcon name={skill.icon}/>{skill.name}</Chip>)}</div>
       </GlassCard>
 
       <GlassCard className="misma-plugin-detail-section">
