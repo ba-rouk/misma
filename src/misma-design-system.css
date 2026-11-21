@@ -1374,51 +1374,74 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   letter-spacing:-.035em;
 }
 .misma-plugin-detail-header {
-  display:flex !important;
-  flex-direction:column;
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr);
   align-items:stretch;
-  justify-content:flex-start;
-  gap:13px;
+  gap:15px;
   min-height:0;
-  padding:0 0 17px;
-  margin:0 0 20px;
+  padding:0 0 20px;
+  margin:0 0 28px;
   border-bottom:1px solid rgba(255,255,255,.10);
 }
-.misma-plugin-detail-header > .misma-plugin-detail-back-button {
-  align-self:flex-start;
-  justify-self:auto;
-}
-.misma-plugin-detail-header-row {
-  display:grid;
-  grid-template-columns:minmax(0,1fr) 42px;
+.misma-plugin-detail-topline {
+  display:flex;
   align-items:center;
+  justify-content:space-between;
   gap:12px;
+  width:100%;
+  min-height:42px;
+}
+.misma-plugin-detail-header .misma-plugin-detail-back-button { align-self:flex-start; }
+.misma-plugin-detail-settings {
+  display:grid;
+  flex:none;
+  width:42px;
+  height:42px;
+  place-items:center;
+  padding:0;
+  border:1px solid rgba(255,255,255,.13);
+  border-radius:50%;
+  background:rgba(255,255,255,.055);
+  color:#eef2f7;
+  cursor:pointer;
+}
+.misma-plugin-detail-settings svg {
+  width:19px;
+  height:19px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.7;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.misma-plugin-detail-heading {
   width:100%;
   min-width:0;
 }
-.misma-plugin-detail-header-row h1 {
+.misma-plugin-detail-heading h1 {
   min-width:0;
   margin:0;
   color:#f6f7f9;
-  font:600 24px/1.2 var(--font-serif,Georgia,serif);
+  font:600 25px/1.2 var(--font-serif,Georgia,serif);
   text-align:left;
   letter-spacing:-.025em;
   overflow-wrap:anywhere;
 }
-.misma-plugin-detail-header-row .misma-plugin-detail-settings {
-  justify-self:end;
-}
 .misma-plugin-detail-body {
   display:grid;
-  gap:20px;
+  gap:24px;
   min-width:0;
-  padding-top:2px;
+  padding-top:0;
 }
 .misma-plugin-detail-body > section {
   min-width:0;
   margin-top:0 !important;
 }
+.misma-plugin-detail-body > .misma-plugin-hero-gallery {
+  margin-top:0 !important;
+}
 @media (max-width:560px) {
-  .misma-plugin-detail-header { gap:11px; }
-  .misma-plugin-detail-header-row h1 { font-size:22px; }
+  .misma-plugin-detail-header { gap:14px; margin-bottom:30px; }
+  .misma-plugin-detail-heading h1 { font-size:23px; }
+  .misma-plugin-detail-body { gap:22px; }
 }
