@@ -9,7 +9,7 @@ test("plugin directory reuses workspace connections with installed and available
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const connect = await read("../src/lib/plugin-connect.ts");
   const consent = await read("../src/components/plugin-connect-consent.tsx");
-  const settings = await read("../src/components/plugin-settings-sheet.tsx");
+  const settings = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
   assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
   assert.match(page, /Connect plugins to let Misma work across your tools/);
   assert.match(page, /Search plugins/);
@@ -23,9 +23,11 @@ test("plugin directory reuses workspace connections with installed and available
   assert.match(page, /Settings/);
   assert.match(page, /Uninstall/);
   assert.match(page, /PluginConnectConsent/);
-  assert.match(page, /PluginSettingsSheet/);
+  assert.match(page, /from\("user_plugins"\)/);
+  assert.match(page, /is_installed: false/);
+  assert.doesNotMatch(page, /misma_integrations_workspace/);
   assert.match(page, /platform_connections/);
-  assert.match(page, /platform-disconnect/);
+  assert.doesNotMatch(page, /platform-disconnect/);
   assert.match(page, /workspace_id/);
   assert.match(page, /openPluginInChat/);
   assert.match(page, /websiteId/);
@@ -50,7 +52,13 @@ test("plugin directory reuses workspace connections with installed and available
   assert.match(settings, /Allow low-risk actions/);
   assert.match(settings, /Allow all actions/);
   assert.match(settings, /ELEVATED RISK/);
-  assert.match(settings, /removeItem/);
+  assert.match(settings, /permission_mode/);
+  assert.match(settings, /Disconnect account/);
+  assert.match(settings, /Rename account/);
+  assert.match(settings, /View plugin detail/);
+  assert.match(settings, /Reset to default/);
+  assert.match(settings, /is_installed: false/);
+  assert.doesNotMatch(settings, /misma_integrations_workspace/);
   assert.doesNotMatch(page, /Misma ecosystem/);
   assert.doesNotMatch(page, /Plugin directory/);
   assert.doesNotMatch(page, /Code & Repository Management/);
@@ -82,6 +90,10 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /SectionHeader title="App"/);
   assert.match(page, /SectionHeader title="Skill"/);
   assert.match(page, /SectionHeader title="Information"/);
+  assert.match(page, /misma-plugin-prompt-showcase/);
+  assert.match(page, /examplePrompts/);
+  assert.match(page, /\/settings/);
+  assert.match(page, /misma-plugin-connected-accounts/);
   assert.match(page, /misma-plugin-skill-chip/);
   assert.match(page, /misma-plugin-information/);
   assert.doesNotMatch(page, /SectionHeader title="Permissions"/);
@@ -126,32 +138,62 @@ test("Misma chat injects cross-chat memories and whitelists connected plugins", 
   assert.doesNotMatch(edge, /"create-video", "poll-video"/);
 });
 
-test("dashboard exposes Plugins and Memory and passes explicit chat plugin selection", async () => {
+test("dashboard inserts inline plugin mentions at the caret and scopes tools to installed plugins", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.match(dashboard, /window\.location\.assign\("\/dashboard\/plugins"\)/);
-  assert.match(dashboard, /window\.location\.assign\("\/dashboard\/memory"\)/);
-  assert.doesNotMatch(dashboard, />Connect<\/span>/);
-  assert.match(dashboard, /chatEnabledPlugins/);
-  assert.match(dashboard, /activePlugins: chatEnabledPlugins/);
+  const css = await read("../src/misma-design-system.css");
+  assert.match(dashboard, /window\\.location\\.assign\\("\\/dashboard\\/plugins"\\)/);
+  assert.match(dashboard, /window\\.location\\.assign\\("\\/dashboard\\/memory"\\)/);
+  assert.doesNotMatch(dashboard, />Connect<\\/span>/);
+  assert.match(dashboard, /extractActivePlugins/);
+  assert.match(dashboard, /activePlugins: extractActivePlugins\\(textToSend\\)/);
+  assert.match(dashboard, /insertPluginMention/);
+  assert.match(dashboard, /selectionStart/);
+  assert.match(dashboard, /selectionEnd/);
+  assert.match(dashboard, /misma-chat-plugin-option-logo/);
+  assert.match(dashboard, /misma-chat-plugin-option-select/);
+  assert.match(dashboard, /misma_try_plugin_prompt/);
+  assert.match(dashboard, /setCurrentConversationId\\(null\\)/);
   assert.match(dashboard, /misma-chat-plugin-popup/);
-  assert.match(dashboard, /aichat-composer-plus-menu/);
+  assert.match(dashboard, /user_plugins/);
+  assert.doesNotMatch(dashboard, /chatEnabledPlugins/);
+  assert.doesNotMatch(dashboard, /misma_chat_plugins_v1_/);
+  assert.doesNotMatch(dashboard, /misma-chat-plugin-chips/);
+  assert.doesNotMatch(dashboard, /migrateNewChatPluginPreferences/);
   assert.match(dashboard, /Upload files/);
   assert.match(dashboard, /Think harder/);
   assert.match(dashboard, /Create image/);
-  assert.match(dashboard, /misma-chat-plugins-open/);
-  assert.match(dashboard, /ChatPluginIcon/);
-  assert.match(dashboard, /misma_try_plugin_provider/);
-  assert.match(dashboard, /misma_chat_plugins_v1_/);
-  assert.match(dashboard, /pluginPreferencesLoadedKey/);
-  assert.match(dashboard, /migrateNewChatPluginPreferences/);
-  assert.match(dashboard, /misma-chat-plugin-chips/);
-  assert.match(dashboard, /Manage plugins/);
   assert.match(dashboard, /Connect your first plugin/);
-  assert.match(dashboard, /aichat-website-plugins/);
-  assert.match(dashboard, /\/dashboard\/plugins\?websiteId=/);
   assert.doesNotMatch(dashboard, /Create video/);
-  assert.doesNotMatch(dashboard, /setCreateMode\("video"\)/);
-  assert.doesNotMatch(dashboard, /@create\\s\+\(image\|video\)/);
+  assert.doesNotMatch(dashboard, /setCreateMode\\("video"\\)/);
+  assert.match(css, /misma-composer-inline-mention/);
+  assert.match(css, /color:#a9c9ff/);
+  assert.match(css, /width:min\\(258px,calc\\(100vw - 30px\\)\\)/);
+  assert.match(css, /width:38px !important/);
+  assert.match(css, /aichat-nav-btn\\[data-tooltip="Plugins"\\]/);
+});
+
+test("plugin settings and permission tiers are persisted per Misma account", async () => {
+  const page = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
+  const migration = await read("../supabase/migrations/20261121064158_user_plugins_permissions.sql");
+  assert.match(page, /createFileRoute\\("\\/dashboard\\/plugins\\/\\$pluginId\\/settings"\\)/);
+  assert.match(page, /permissionOptions/);
+  assert.match(page, /always_ask/);
+  assert.match(page, /"read"/);
+  assert.match(page, /low_risk/);
+  assert.match(page, /"all"/);
+  assert.match(page, /from\\("user_plugins"\\)/);
+  assert.match(page, /permission_mode/);
+  assert.match(page, /Rename account/);
+  assert.match(page, /Disconnect account/);
+  assert.match(page, /Uninstall/);
+  assert.match(page, /View plugin detail/);
+  assert.match(migration, /create table if not exists public\\.user_plugins/);
+  assert.match(migration, /enable row level security/i);
+  for (const operation of ["select", "insert", "update", "delete"]) {
+    assert.match(migration, new RegExp("for " + operation + " to authenticated", "i"));
+  }
+  assert.match(migration, /auth\\.uid\\(\\)\\) = user_id/);
+  assert.match(migration, /permission_mode text not null default 'low_risk'/);
 });
 
 test("plugin disconnect removes encrypted credentials and is workspace-authorized", async () => {
