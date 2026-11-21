@@ -5583,15 +5583,15 @@ function Dashboard() {
               )}
 
               {executionActivities.length > 0 && (
-                <section className="aichat-execution-activity" aria-label="GitHub activity" aria-live="polite">
+                <div className="aichat-execution-activity" aria-label="GitHub activity" aria-live="polite">
                   <ol>
                     {executionActivities.map((activity) => (
                       <li key={activity.key} data-status={activity.status}>
-                        <span>{activity.title}{activity.detail ? " · " + activity.detail : ""}</span>
+                        {activity.title}{activity.detail ? " · " + activity.detail : ""}
                       </li>
                     ))}
                   </ol>
-                </section>
+                </div>
               )}
 
               {/* Error Alert */}
