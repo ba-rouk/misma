@@ -1595,15 +1595,6 @@ function Dashboard() {
       });
     return () => { active = false; };
   }, [workspace?.id, token, staffMode]);
-  useEffect(() => {
-    const provider = window.sessionStorage.getItem("misma_try_plugin_provider");
-    if (!provider || !workspacePluginConnections.some((item) => item.provider === provider)) return;
-    window.sessionStorage.removeItem("misma_try_plugin_provider");
-    setChatEnabledPlugins((current) => current.includes(provider) ? current : [...current, provider]);
-    setPlusMenuOpen(false);
-    setPluginPickerOpen(true);
-    window.requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [workspacePluginConnections]);
   const [workspaceAssets, setWorkspaceAssets] = useState<any[]>([]);
   const [workspaceAssetsLoaded, setWorkspaceAssetsLoaded] = useState(false);
   const [workspaceAssetsLoading, setWorkspaceAssetsLoading] = useState(false);
@@ -1886,6 +1877,16 @@ function Dashboard() {
   const [workspacePluginConnections, setWorkspacePluginConnections] = useState<Array<{ id: string; provider: string; external_account_name: string | null }>>([]);
   const [chatEnabledPlugins, setChatEnabledPlugins] = useState<string[]>([]);
   const [thinkHarder, setThinkHarder] = useState(false);
+  useEffect(() => {
+    const provider = window.sessionStorage.getItem("misma_try_plugin_provider");
+    if (!provider || !workspacePluginConnections.some((item) => item.provider === provider)) return;
+    window.sessionStorage.removeItem("misma_try_plugin_provider");
+    setChatEnabledPlugins((current) => current.includes(provider) ? current : [...current, provider]);
+    setPlusMenuOpen(false);
+    setPluginPickerOpen(true);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [workspacePluginConnections]);
+
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
   const composerPreviewUrlsRef = useRef<Map<File, string>>(new Map());
