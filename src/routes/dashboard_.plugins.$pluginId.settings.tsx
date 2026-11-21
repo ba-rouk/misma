@@ -70,7 +70,7 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
     if (!manifest) { setLoading(false); return () => { active = false; }; }
     void (async () => {
       try {
-        const websiteId = new URLSearchParams(window.location.search).get("websiteId") || "";
+        const websiteId = new URLSearchParams(window.location.search).get("websiteId") || window.sessionStorage.getItem("misma_plugins_website_id") || "";
         const context = await getPluginWorkspaceContext(websiteId);
         const [connectionResult, pluginResult] = await Promise.all([
           supabase.from("platform_connections").select("id,provider,external_account_name,status,created_at,updated_at,workspace_id")
