@@ -380,24 +380,19 @@ function PluginsPage() {
           <button type="button" className="misma-plugin-modal-close" aria-label="Close details" onClick={() => setSelected(null)}>×</button>
           <div className="misma-plugin-modal-heading">
             <ProviderLogo provider={selectedPlugin.id} />
-            <div><span className="misma-marketplace-eyebrow">{selectedPlugin.publisher} · Verified publisher</span><h2 id="misma-plugin-modal-title">{selectedPlugin.name}</h2><p>{selectedPlugin.purpose}</p></div>
+            <div><h2 id="misma-plugin-modal-title">{selectedPlugin.name}</h2></div>
           </div>
-          <p className="misma-plugin-modal-description">{selectedPlugin.description}</p>
-          <div className="misma-plugin-permissions">
-            <h3>Permissions and scope</h3>
-            <ul>{selectedPlugin.permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul>
-            <p>Access is limited to the selected Misma workspace and the connected account's granted permissions. GitHub changes and production deployments must follow the approval flow.</p>
-            <p className="misma-plugin-storage-note">Misma validates provider access on the server and stores supported credentials encrypted in Supabase. Provider secrets are not stored in this browser.</p>
-          </div>
-          {selectedPlugin.availability === "coming" ? <div className="misma-plugin-coming-note">Netlify authorization and build actions are not enabled yet.</div> : selectedConnection
-            ? <div className="misma-plugin-connected-state"><span className="misma-plugin-status is-connected">Connected</span><strong>{selectedConnection.external_account_name || selectedPlugin.name + " account"}</strong><small>Connected to the selected workspace.</small></div>
-            : <div className="misma-plugin-coming-note">This plugin is not connected to the selected workspace.</div>}
-          {selectedPlugin.id === "render" && !selectedConnection && selectedPlugin.availability !== "coming" && (
-            <label className="misma-plugin-credential-field">
-              <span>Render API key</span>
-              <input type="password" autoComplete="off" value={renderApiKey} onChange={(event) => setRenderApiKey(event.target.value)} placeholder="Paste your Render API key" />
-              <small>The key is sent to Misma's Supabase Edge Function for validation and encrypted storage.</small>
-            </label>
+          {selectedPlugin.availability === "coming" ? (
+            <p className="misma-plugin-modal-description">This connection is not available yet.</p>
+          ) : selectedConnection ? (
+            <div className="misma-plugin-connected-state">
+              <span className="misma-plugin-status is-connected">Connected</span>
+              <strong>{selectedConnection.external_account_name || selectedPlugin.name + " account"}</strong>
+            </div>
+          ) : selectedPlugin.id === "render" ? (
+            <p className="misma-plugin-modal-description">Render sign-in for third-party apps requires a Render-issued OAuth client. Misma does not currently have one. You will not be asked to paste an API key.</p>
+          ) : (
+            <p className="misma-plugin-modal-description">Connect your {selectedPlugin.name} account to Misma.</p>
           )}
           {selectedPlugin.id === "render" && selectedConnection && (
             <div className="misma-plugin-render-config">
@@ -436,8 +431,8 @@ function PluginsPage() {
           {error && <p className="misma-plugin-modal-feedback is-error" role="alert">{error}</p>}
           {notice && <p className="misma-plugin-modal-feedback" role="status">{notice}</p>}
           <div className="misma-plugin-modal-actions">
-            {selectedPlugin.availability !== "coming" && !selectedConnection && <button type="button" className="misma-plugin-primary" disabled={busy === selectedPlugin.id || (selectedPlugin.id === "render" && !renderApiKey.trim())} onClick={() => void connectPlugin(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Connecting…" : selectedPlugin.id === "github" ? "Continue to GitHub" : selectedPlugin.id === "vercel" ? "Continue to Vercel" : "Connect Render"}</button>}
-            {selectedConnection && <button type="button" className="misma-plugin-danger" disabled={busy === selectedPlugin.id} onClick={() => void disconnect(selectedPlugin.id)}>{busy === selectedPlugin.id ? "Disconnecting…" : "Disconnect"}</button>}
+            {selectedPlugin.availability !== "coming" && !selectedConnection && selectedPlugin.id !== "render" && <button type="button" className="misma-plugin-primary" disabled={busy === selectedPlugin.id} onClick={() => void connectPlugin(selectedPlugin.id)}>Connect</button>}
+            {selectedConnection && <button type="button" className="misma-plugin-danger" disabled={busy === selectedPlugin.id} onClick={() => void disconnect(selectedPlugin.id)}>Uninstall</button>}
           </div>
         </section>
       </div>}
