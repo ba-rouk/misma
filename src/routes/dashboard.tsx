@@ -3717,6 +3717,24 @@ function Dashboard() {
     }
   };
 
+  const migrateNewChatPluginPreferences = (conversationId: number) => {
+    if (!dashboardUserId || !workspace?.id || !Number.isSafeInteger(conversationId) || conversationId < 1) return;
+    const base = "misma_chat_plugins_v1_" + dashboardUserId + "_" + workspace.id + "_";
+    const newChatKey = base + "new";
+    const conversationKey = base + String(conversationId);
+    try {
+      if (window.localStorage.getItem(conversationKey) !== null) return;
+      const saved = window.localStorage.getItem(newChatKey);
+      const providers = saved ? JSON.parse(saved) : chatEnabledPlugins;
+      const safeProviders = Array.isArray(providers)
+        ? providers.filter((provider): provider is string => typeof provider === "string" && workspacePluginConnections.some((item) => item.provider === provider))
+        : [];
+      window.localStorage.setItem(conversationKey, JSON.stringify(safeProviders));
+    } catch {
+      // Plugin chips remain active in component state for the current screen.
+    }
+  };
+
   const handleSend = async (
     customPrompt?: string,
     options: { retry?: boolean; signal?: AbortSignal; voice?: boolean } = {},
@@ -3801,6 +3819,7 @@ function Dashboard() {
           throw new Error("Misma could not create a conversation for this attachment.");
         }
         sendConversationId = createdId;
+        migrateNewChatPluginPreferences(createdId);
         activeConversationIdRef.current = createdId;
         setCurrentConversationId(createdId);
         loadData();
@@ -3879,7 +3898,9 @@ function Dashboard() {
       if (!res.aiMessage) throw new Error("Misma AI returned an empty response.");
 
       if (!sendConversationId && res.conversationId) {
-        activeConversationIdRef.current = Number(res.conversationId);
+        const createdConversationId = Number(res.conversationId);
+        migrateNewChatPluginPreferences(createdConversationId);
+        activeConversationIdRef.current = createdConversationId;
         setCurrentConversationId(res.conversationId);
       }
 
@@ -4052,6 +4073,7 @@ function Dashboard() {
         }
         // Only attach the new conversation to the screen when the user has not moved away.
         if (chatViewVersionRef.current === startViewVersion && activeConversationIdRef.current === null) {
+          migrateNewChatPluginPreferences(targetConversationId);
           activeConversationIdRef.current = targetConversationId;
           setCurrentConversationId(targetConversationId);
         }
