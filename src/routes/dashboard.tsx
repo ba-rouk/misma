@@ -1926,6 +1926,18 @@ function Dashboard() {
       return;
     }
     if (provider && !workspacePluginConnections.some((item) => item.provider.toLowerCase() === provider.toLowerCase())) return;
+    // This action always starts a new chat, not the conversation the user was previously viewing.
+    chatViewVersionRef.current += 1;
+    activeConversationIdRef.current = null;
+    setCurrentConversationId(null);
+    setPendingRestoreConversationId(null);
+    setMessages([]);
+    setChatError("");
+    setFailedPrompt("");
+    setFailedAction(null);
+    setFailedMessageId(null);
+    setEditingMessageId(null);
+    setEditingOriginalText(null);
     setPlusMenuOpen(false);
     setPluginPickerOpen(false);
     setActiveTab("workspace");
@@ -3495,7 +3507,7 @@ function Dashboard() {
 
   const extractActivePlugins = (value: string): string[] => {
     const connected = new Set(workspacePluginConnections.map((item) => item.provider.toLowerCase()));
-    const matches = Array.from(value.matchAll(/(?:^|[^A-Za-z0-9_])@(github|vercel|render|netlify)\\b/gi))
+    const matches = Array.from(value.matchAll(/(?:^|[^A-Za-z0-9_])@(github|vercel|render|netlify)\b/gi))
       .map((match) => String(match[1]).toLowerCase());
     return [...new Set(matches)].filter((provider) => connected.has(provider));
   };
