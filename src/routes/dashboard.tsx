@@ -4999,7 +4999,6 @@ function Dashboard() {
           {expandedNavGroups.manage && <div className="aichat-nav-submenu">
             <button type="button" className={`aichat-nav-subbtn${activeTab === "customers" ? " active" : ""}`} onClick={() => { setActiveTab("customers"); setMobileMenuOpen(false); }}>Customers {humanHandoffs.length > 0 && <span>{humanHandoffs.length}</span>}</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "notifications" ? " active" : ""}`} onClick={() => { refreshVisitorNotifications(); setActiveTab("notifications"); setMobileMenuOpen(false); }}>Notifications {unreadHumanRequestNotificationCount > 0 && <span>{unreadHumanRequestNotificationCount}</span>}</button>
-            <button type="button" className="aichat-nav-subbtn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/memory"); }}>Memory</button>
           </div>}
           <button type="button" className="aichat-nav-btn" onClick={() => setExpandedNavGroups((v) => ({ ...v, build: !v.build }))} aria-expanded={Boolean(expandedNavGroups.build)}>
             <span className="aichat-nav-icon"><DashboardNavIcon kind="build" /></span><span className="aichat-nav-label">Build</span><span className="aichat-nav-caret"><DashboardNavIcon kind={expandedNavGroups.build ? "chevron-down" : "chevron-right"} /></span>
