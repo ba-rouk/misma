@@ -137,3 +137,78 @@ async function requestExtraction(userText: string, assistantText: string): Promi
   }
   return null;
 }
+
+
+async function embedTexts(
+  texts: string[],
+  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY",
+  timeoutMs = 260,
+): Promise<{ vectors: number[][]; model: string } | null> {
+  const key = Deno.env.get("GEMINI_API_KEY");
+  if (!key || !texts.length) return null;
+  try {
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=" + encodeURIComponent(key),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(timeoutMs),
+        body: JSON.stringify({
+          requests: texts.map((text) => ({
+            model: "models/gemini-embedding-001",
+            content: { parts: [{ text: text.slice(0, 7000) }] },
+            taskType,
+            outputDimensionality: 768,
+          })),
+        }),
+      },
+    );
+    if (!response.ok) return null;
+    const payload: any = await response.json().catch(() => null);
+    const embeddings = payload && Array.isArray(payload.embeddings) ? payload.embeddings : null;
+    if (!embeddings || embeddings.length !== texts.length) return null;
+    const vectors = embeddings.map((item: any) => {
+      const values = item && Array.isArray(item.values) ? item.values : null;
+      if (!values || values.length !== 768 || !values.every((value: unknown) => typeof value === "number" && Number.isFinite(value))) return null;
+      return values as number[];
+    });
+    if (vectors.some((item: number[] | null) => item === null)) return null;
+    return { vectors: vectors as number[][], model: "gemini-embedding-001:768" };
+  } catch {
+    return null;
+  }
+}
+
+function vectorLiteral(vector: number[] | null): string | null {
+  return vector ? "[" + vector.join(",") + "]" : null;
+}
+
+function parseVector(value: unknown): number[] | null {
+  if (Array.isArray(value)) return value.map(Number);
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(Number) : null;
+  } catch {
+    const stripped = value.replace(/^\[/, "").replace(/\]$/, "");
+    const parts = stripped.split(",").map(Number);
+    return parts.length ? parts : null;
+  }
+}
+
+function cosineSimilarity(left: number[] | null, right: number[] | null): number {
+  if (!left || !right || left.length !== right.length || !left.length) return 0;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let i = 0; i < left.length; i++) {
+    dot += left[i] * right[i];
+    leftNorm += left[i] * left[i];
+    rightNorm += right[i] * right[i];
+  }
+  return leftNorm && rightNorm ? dot / Math.sqrt(leftNorm * rightNorm) : 0;
+}
+
+function safeFactKey(value: string): string {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 180) || "general_fact";
+}
