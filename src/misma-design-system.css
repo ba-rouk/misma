@@ -1222,3 +1222,39 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   .misma-memory-card-actions > div { width:100%; }
   .misma-memory-card-actions button { flex:1; }
 }
+
+
+/* Unified page canvas and shared back navigation across Misma standalone pages. */
+.misma-marketplace-page,
+.misma-plugin-detail-page,
+.misma-plugin-settings-page {
+  background: #090a0c !important;
+  background-image: none !important;
+  color: #f1f3f6;
+}
+.misma-page-back-button {
+  display: grid;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 50%;
+  background: rgba(255,255,255,.055);
+  color: #eef2f7;
+  cursor: pointer;
+}
+.misma-page-back-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.misma-memory-page .misma-plugin-header-title { display: flex; align-items: center; gap: 14px; }
+.misma-memory-page .misma-plugin-header-title p,
+.misma-memory-page .misma-memory-explanation,
+.misma-memory-page .misma-memory-add,
+.misma-memory-page .misma-memory-maintenance { display: none !important; }

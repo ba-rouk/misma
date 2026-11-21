@@ -40,13 +40,10 @@ function MemoryPage() {
   const [search, setSearch] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState("");
-  const [newFact, setNewFact] = useState("");
-  const [newType, setNewType] = useState("project");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [backfillState, setBackfillState] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -132,32 +129,6 @@ function MemoryPage() {
     } finally { setBusy(""); }
   }
 
-  async function addFact() {
-    const content = newFact.trim();
-    if (content.length < 4 || content.length > 1200) { setError("Enter a memory between 4 and 1,200 characters."); return; }
-    setBusy("new-fact");
-    setError("");
-    setNotice("");
-    try {
-      const auth = await supabase.auth.getUser();
-      if (auth.error || !auth.data.user) throw new Error("Your session has expired.");
-      const key = "manual_" + crypto.randomUUID().replace(/-/g, "");
-      const { error: insertError } = await supabase.from("memory_facts").insert({
-        user_id: auth.data.user.id,
-        type: newType,
-        fact_key: key,
-        content,
-        confidence: 1,
-        pinned: true,
-      });
-      if (insertError) throw insertError;
-      setNewFact("");
-      setNotice("Memory added.");
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not add this memory.");
-    } finally { setBusy(""); }
-  }
 
   async function togglePin(kind: MemoryTab, id: string, pinned: boolean) {
     setBusy(id);
@@ -257,33 +228,16 @@ function MemoryPage() {
     } finally { setBusy(""); }
   }
 
-  async function runBackfill() {
-    setBusy("backfill");
-    setError("");
-    setNotice("");
-    setBackfillState("Importing a small batch of earlier dashboard chats…");
-    try {
-      const { data, error: invokeError } = await supabase.functions.invoke("misma-memory-backfill", { body: { action: "run" } });
-      if (invokeError) throw invokeError;
-      setBackfillState(data?.hasMore ? "More chat history remains. Select Continue import to resume." : "Chat history import completed.");
-      setNotice("Imported " + Number(data?.processed || 0) + " chat exchanges in this batch.");
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not backfill chat history.");
-      setBackfillState("");
-    } finally { setBusy(""); }
-  }
 
   return (
     <main className="misma-marketplace-page misma-memory-page">
       <div className="misma-marketplace-shell misma-memory-shell">
-        <a className="misma-marketplace-back" href="/dashboard">← Back to Misma</a>
+        <button type="button" className="misma-page-back-button" aria-label="Go to previous page" onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.assign("/dashboard"); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg></button>
         <header className="misma-plugin-directory-header">
           <div className="misma-plugin-header-title">
             <div>
               <span className="misma-marketplace-eyebrow">Your account context</span>
               <h1>Misma Memory</h1>
-              <p>Useful details from your conversations can follow you into a new chat, even when you switch websites or workspaces.</p>
             </div>
           </div>
           <button type="button" className="misma-ui-button is-secondary" onClick={exportMemory}>Export</button>
@@ -292,7 +246,6 @@ function MemoryPage() {
         <section className="misma-glass-card misma-memory-settings">
           <div>
             <strong>Generate memory from chats</strong>
-            <p>When enabled, Misma privately summarizes eligible chats and saves durable facts. Secrets, trivial turns, incognito chats and plugin or web-tool turns are skipped.</p>
           </div>
           <label className="misma-memory-toggle">
             <input type="checkbox" checked={settings.enabled} disabled={busy === "settings"} onChange={(event) => void saveSettings({ ...settings, enabled: event.target.checked })} />
@@ -312,10 +265,6 @@ function MemoryPage() {
           </label>
         </section>
 
-        <section className="misma-glass-card misma-memory-explanation">
-          <strong>What is saved?</strong>
-          <p>Short summaries of eligible user/Misma exchanges, useful topics and entities, and durable facts such as project setup, repository and hosting relationships, preferences and decisions. Memory is private to your Misma account. It is context only; it never authorizes a merge, deployment, plugin connection or deletion.</p>
-        </section>
 
         {notice && <p className="misma-plugin-feedback" role="status">{notice}</p>}
         {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
@@ -330,22 +279,6 @@ function MemoryPage() {
 
         {loading ? <div className="misma-marketplace-skeleton">Loading your memory…</div> : tab === "facts" ? (
           <section className="misma-memory-list">
-            <div className="misma-glass-card misma-memory-add">
-              <div><strong>Add a fact</strong><p>Save a detail Misma should remember in future chats.</p></div>
-              <div className="misma-memory-add-controls">
-                <select value={newType} onChange={(event) => setNewType(event.target.value)}>
-                  <option value="project">Project</option>
-                  <option value="infrastructure">Infrastructure</option>
-                  <option value="preference">Preference</option>
-                  <option value="decision">Decision</option>
-                  <option value="workflow">Workflow</option>
-                  <option value="profile">Profile</option>
-                  <option value="general">General</option>
-                </select>
-                <textarea value={newFact} onChange={(event) => setNewFact(event.target.value)} maxLength={1200} placeholder="Example: My school website is hosted on Render and its source repository is school-site." />
-                <button type="button" className="misma-ui-button is-primary" disabled={busy === "new-fact"} onClick={() => void addFact()}>{busy === "new-fact" ? "Saving…" : "Save fact"}</button>
-              </div>
-            </div>
             {visibleFacts.length ? visibleFacts.map((item) => (
               <article className="misma-glass-card misma-memory-card" key={item.id}>
                 <div className="misma-memory-card-heading"><span>{item.type}</span><small>Updated {new Date(item.updated_at).toLocaleDateString()}</small></div>
@@ -390,10 +323,6 @@ function MemoryPage() {
           </section>
         )}
 
-        <section className="misma-glass-card misma-memory-maintenance">
-          <div><strong>Import earlier chats</strong><p>Resume a background import of existing dashboard conversations. Incognito chats are not imported.</p>{backfillState && <small role="status">{backfillState}</small>}</div>
-          <button type="button" className="misma-ui-button is-secondary" disabled={busy === "backfill" || !settings.enabled} onClick={() => void runBackfill()}>{busy === "backfill" ? "Importing…" : backfillState.includes("More chat history") ? "Continue import" : "Import chat history"}</button>
-        </section>
         <div className="misma-memory-danger-zone">
           <div><strong>Reset all memory</strong><p>Permanently delete all saved facts, conversation summaries and embeddings. Original chats are not deleted.</p></div>
           <button type="button" className="misma-ui-button is-destructive" disabled={busy === "reset"} onClick={() => void resetMemory()}>{busy === "reset" ? "Resetting…" : "Reset all memory"}</button>
