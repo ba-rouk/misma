@@ -19,13 +19,6 @@ export const Route = createFileRoute("/dashboard/plugins/$pluginId/settings")({ 
 
 function PluginSettingsRoute() {
   const { pluginId } = Route.useParams();
-  if (pluginId === "github") {
-    return (
-      <main className="misma-github-settings-empty-page">
-        <h1>GitHub plugin settings</h1>
-      </main>
-    );
-  }
   return <PluginSettingsPage pluginId={pluginId} />;
 }
 
