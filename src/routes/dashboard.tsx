@@ -4861,7 +4861,7 @@ function Dashboard() {
     }
   };
 
-  const showPluginSettingsChild = /^\/dashboard\/plugins\/[^/]+\/settings\/?$/.test(location.pathname);
+  const showPluginSettingsChild = /^\/dashboard\/plugins\/[^/]+\/(?:settings|description)\/?$/.test(location.pathname);
   return showPluginSettingsChild ? <Outlet /> : (
     <div className="aichat">
       {/* Mobile Translucent Backdrop */}
@@ -5654,7 +5654,7 @@ function Dashboard() {
                                       onClick={() => {
                                         setPluginPickerOpen(false);
                                         setPlusMenuOpen(false);
-                                        window.location.assign("/dashboard/plugins/" + plugin.provider);
+                                        window.location.assign("/dashboard/plugins/" + plugin.provider + "/description");
                                       }}
                                     >
                                       <ChatPluginIcon provider={plugin.provider} />
