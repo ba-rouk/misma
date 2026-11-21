@@ -31,7 +31,7 @@ create table if not exists public.memory_exchanges (
   embedding extensions.vector(768),
   embedding_model text null,
   search_tsv tsvector generated always as (
-    to_tsvector('simple', coalesce(user_text, '') || ' ' ||
+    to_tsvector('simple'::regconfig, coalesce(user_text, '') || ' ' ||
       coalesce(assistant_text, '') || ' ' || coalesce(summary, '') ||
       ' ' || array_to_string(topics, ' ') || ' ' || array_to_string(entities, ' '))
   ) stored,
@@ -58,7 +58,7 @@ create table if not exists public.memory_facts (
   source_exchange_id uuid null references public.memory_exchanges(id) on delete set null,
   pinned boolean not null default false,
   search_tsv tsvector generated always as (
-    to_tsvector('simple', coalesce(content, '') || ' ' || coalesce(fact_key, '') || ' ' || coalesce(type, ''))
+    to_tsvector('simple'::regconfig, coalesce(content, '') || ' ' || coalesce(fact_key, '') || ' ' || coalesce(type, ''))
   ) stored,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
