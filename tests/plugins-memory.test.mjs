@@ -34,7 +34,7 @@ test("plugin directory reuses workspace connections with installed and available
     assert.match(manifests, new RegExp(provider + ": \\{"));
   }
   assert.match(manifests, /oauth_pending/);
-  assert.match(manifests, /Coming later/);
+  assert.match(manifests, /status: "coming"/);
   assert.doesNotMatch(page, /Render API key/);
   assert.doesNotMatch(consent, /Paste your Render API key/);
   assert.doesNotMatch(connect, /RENDER_API_KEY/);
@@ -77,7 +77,7 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /Connect \{manifest\.name\}/);
   assert.match(page, /misma-plugin-skills-grid/);
   assert.match(page, /misma-plugin-detail-actionbar/);
-  assert.match(css, /scroll-snap-type: x mandatory/);
+  assert.match(css, /scroll-snap-type:\s*x mandatory/);
   assert.match(manifests, /authType: "oauth_pending"/);
   assert.match(manifests, /Coming later/);
   assert.doesNotMatch(manifests, /Trigger redeploy/);
