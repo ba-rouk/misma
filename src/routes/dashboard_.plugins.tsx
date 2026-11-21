@@ -69,13 +69,9 @@ function ProviderLogo({ provider }: { provider: Provider }) {
 
 function PluginsPage() {
   const supabase = getSupabaseClient();
-  const [loading, setLoading] = useState(true);
-  const [workspaceLoading, setWorkspaceLoading] = useState(true);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "Installed" | "Developer & Hosting">("All");
   const [selected, setSelected] = useState<Provider | null>(null);
   const [pluginMenuOpen, setPluginMenuOpen] = useState<Provider | null>(null);
   const [busy, setBusy] = useState("");
@@ -91,7 +87,6 @@ function PluginsPage() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      setWorkspaceLoading(true);
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) throw new Error("Sign in to manage plugins.");
@@ -107,7 +102,6 @@ function PluginsPage() {
           options = (data || []) as Workspace[];
         }
         if (alive) {
-          setWorkspaces(options);
           const saved = window.sessionStorage.getItem("misma_integrations_workspace");
           const initial = options.find((item) => item.id === saved) || options[0] || null;
           setWorkspaceId(initial?.id || "");
@@ -116,7 +110,6 @@ function PluginsPage() {
       } catch (cause) {
         if (alive) setError(cause instanceof Error ? cause.message : "Could not load your workspaces.");
       } finally {
-        if (alive) setWorkspaceLoading(false);
       }
     })();
     return () => { alive = false; };
@@ -126,10 +119,8 @@ function PluginsPage() {
     let alive = true;
     if (!workspaceId) {
       setConnections([]);
-      setLoading(false);
       return () => { alive = false; };
     }
-    setLoading(true);
     void (async () => {
       try {
         const { data, error: connectionError } = await supabase.from("platform_connections")
@@ -140,7 +131,6 @@ function PluginsPage() {
       } catch (cause) {
         if (alive) setError(cause instanceof Error ? cause.message : "Could not load installed plugins.");
       } finally {
-        if (alive) setLoading(false);
       }
     })();
     return () => { alive = false; };
@@ -155,13 +145,9 @@ function PluginsPage() {
   }, [connections]);
 
   const visiblePlugins = useMemo(() => plugins.filter((plugin) => {
-    const installed = installedByProvider.has(plugin.id);
     const searchable = [plugin.name, plugin.category].join(" ").toLowerCase();
-    if (query.trim() && !searchable.includes(query.trim().toLowerCase())) return false;
-    if (filter === "Installed" && !installed) return false;
-    if (filter === "Developer & Hosting" && !["Developer", "Hosting"].includes(plugin.category)) return false;
-    return true;
-  }), [filter, installedByProvider, query]);
+    return !query.trim() || searchable.includes(query.trim().toLowerCase());
+  }), [query]);
 
   async function disconnect(plugin: Provider) {
     const connection = installedByProvider.get(plugin);
