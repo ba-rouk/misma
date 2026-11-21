@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
 import { getSupabaseClient } from "../lib/supabase";
-import { getPluginAuthorizationUrl, openPluginInChat } from "../lib/plugin-connect";
+import { getPluginAuthorizationUrl, getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
 import { getPluginManifest, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
@@ -79,36 +79,27 @@ function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
   useEffect(() => {
     let active = true;
     if (!manifest) return () => { active = false; };
-    setWebsiteId(new URLSearchParams(window.location.search).get("websiteId") || window.sessionStorage.getItem("misma_plugins_website_id") || "");
+    const requestedWebsite = new URLSearchParams(window.location.search).get("websiteId") || window.sessionStorage.getItem("misma_plugins_website_id") || "";
+    setWebsiteId(requestedWebsite);
     void (async () => {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) { window.location.assign("/login"); return; }
-        const { data: memberships, error: membershipError } = await supabase.from("workspace_members").select("workspace_id,role").eq("user_id", user.id);
-        if (membershipError) throw membershipError;
-        const ids = [...new Set((memberships || []).filter((row) => ["owner", "admin"].includes(String(row.role))).map((row) => String(row.workspace_id)))];
-        const { data: workspaceRows, error: workspaceError } = await supabase.from("workspaces").select("id,name").in("id", ids).order("created_at", { ascending: true });
-        if (workspaceError) throw workspaceError;
-        const rows = workspaceRows || [];
-        const workspace = rows[0];
-        if (!workspace) throw new Error("Your Misma account does not yet have a provider connection target.");
+        const context = await getPluginWorkspaceContext(requestedWebsite);
         const [connectionResult, pluginResult] = await Promise.all([
           supabase.from("platform_connections")
-            .select("id,provider,external_account_name,status,updated_at,created_at")
-            .eq("workspace_id", workspace.id).eq("provider", manifest.id)
+            .select("id,provider,external_account_name,status,updated_at,created_at,workspace_id")
+            .in("workspace_id", context.workspaceIds).eq("provider", manifest.id)
             .order("updated_at", { ascending: false }),
           supabase.from("user_plugins")
-            .select("is_installed,account_label").eq("user_id", user.id).eq("provider", manifest.id).maybeSingle(),
+            .select("is_installed,account_label").eq("user_id", context.user.id).eq("provider", manifest.id).maybeSingle(),
         ]);
         if (connectionResult.error) throw connectionResult.error;
         if (pluginResult.error) throw pluginResult.error;
         if (!active) return;
-        setWorkspaceId(workspace.id);
+        const connectedRow = (connectionResult.data || []).find((item) => item.status === "connected");
+        setWorkspaceId(String((connectedRow as { workspace_id?: string } | undefined)?.workspace_id || context.workspaceId));
         setAccountLabel(String(pluginResult.data?.account_label || ""));
         const isInstalled = pluginResult.data?.is_installed === true;
-        setConnection(isInstalled
-          ? ((connectionResult.data || []) as PluginConnectionSummary[]).find((item) => item.status === "connected") || null
-          : null);
+        setConnection(isInstalled ? (connectedRow as PluginConnectionSummary | undefined) || null : null);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load plugin details.");
       }
@@ -182,6 +173,11 @@ function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
             </button>
           </header>
+          <div className="misma-plugin-identity">
+            <PluginProviderLogo provider={manifest.id} size="lg" />
+            <div><strong>{manifest.name}</strong><small>By {manifest.developer}</small></div>
+            <Badge tone={connection ? "success" : manifest.status === "coming" || manifest.authType === "oauth_pending" ? "warning" : "neutral"}>{connection ? "Connected" : manifest.status === "coming" || manifest.authType === "oauth_pending" ? "Unavailable" : "Not connected"}</Badge>
+          </div>
   
           <div className="misma-plugin-preview-scroller">
             {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id} title={card.title} description={card.description}/></div>)}
