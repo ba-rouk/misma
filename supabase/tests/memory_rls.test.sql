@@ -5,7 +5,7 @@ select extensions.plan(5);
 
 create temporary table _memory_rls_users (user_a uuid, user_b uuid, workspace_b uuid, conversation_b bigint);
 insert into _memory_rls_users (user_a, user_b, workspace_b)
-values (gen_random_uuid(), gen_random_uuid(), gen_random_uuid());
+select gen_random_uuid(), gen_random_uuid(), id from public.workspaces order by created_at desc limit 1;
 
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
 select user_a, 'authenticated', 'authenticated', user_a::text || '@memory-test.invalid', '', now(), now(), now()
@@ -14,11 +14,8 @@ union all
 select user_b, 'authenticated', 'authenticated', user_b::text || '@memory-test.invalid', '', now(), now(), now()
 from _memory_rls_users;
 
-insert into public.workspaces (id, owner_id, name)
-select workspace_b, user_b, 'Memory RLS test workspace' from _memory_rls_users;
-
 insert into public.workspace_members (workspace_id, user_id, role)
-select workspace_b, user_b, 'owner' from _memory_rls_users;
+select workspace_b, user_b, 'member' from _memory_rls_users;
 
 insert into public.conversations (workspace_id, channel, latest_text)
 select workspace_b, 'Dashboard', 'RLS test conversation' from _memory_rls_users
