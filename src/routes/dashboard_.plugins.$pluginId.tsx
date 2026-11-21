@@ -1,15 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, openPluginInChat } from "../lib/plugin-connect";
-import { getPluginManifest, pluginList, type PluginId } from "../lib/plugin-manifests";
+import { getPluginManifest, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Badge, Button, SectionHeader, StickyActionBar } from "../components/misma-glass";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
-type PlatformProject = { id: string; provider: PluginId; name: string; full_name: string | null; platform_connection_id: string };
 
 function ExamplePreview({ kind, provider, title, description }: { kind: string; provider: PluginId; title: string; description: string }) {
   const examples = kind === "repository"
@@ -83,7 +82,7 @@ function PluginDetailPage() {
         if (workspaceError) throw workspaceError;
         const rows = workspaceRows || [];
         const workspace = rows[0];
-        if (!workspace) throw new Error("No Misma workspace is available for this account.");
+        if (!workspace) throw new Error("Your Misma account does not yet have a provider connection target.");
         const { data: connectionRows, error: connectionError } = await supabase.from("platform_connections")
           .select("id,provider,external_account_name,status,updated_at,created_at")
           .eq("workspace_id", workspace.id).eq("provider", manifest.id)
@@ -161,7 +160,7 @@ function PluginDetailPage() {
           <header className="misma-plugin-detail-header">
             <button type="button" className="misma-plugin-detail-back" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
             <h1>{manifest.name}</h1>
-            <button type="button" className="misma-plugin-detail-settings" aria-label={connection ? "Plugin settings" : "Connection information"} onClick={() => window.location.assign("/dashboard/plugins/" + manifest.id + "/settings")}>
+            <button type="button" className="misma-plugin-detail-settings" aria-label="Plugin settings" onClick={() => window.location.assign("/dashboard/plugins/" + manifest.id + "/settings")}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
             </button>
           </header>
