@@ -227,6 +227,7 @@ function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
         </section>        <section className="misma-plugin-detail-section misma-plugin-information-section">
           <SectionHeader title="Information" />
           <dl className="misma-plugin-information">
+            <div><dt>Capabilities</dt><dd>{manifest.skills.map((skill) => skill.name).join(" · ")}</dd></div>
             <div><dt>Developer</dt><dd>{manifest.developer}</dd></div>
             <div><dt>Website</dt><dd><a href={manifest.website} target="_blank" rel="noreferrer">{manifest.website.replace(/^https?:\/\//, "")}</a></dd></div>
             <div><dt>Version</dt><dd>{manifest.version}</dd></div>
