@@ -67,7 +67,7 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /previewCards\.map/);
   assert.match(page, /ExamplePreview/);
   assert.match(page, /misma-plugin-description-section/);
-  assert.match(page, /Skills/);
+  assert.match(page, /Skill/);
   assert.match(page, /PluginConnectConsent/);
   assert.match(page, /Information/);
   assert.match(page, /Privacy Policy/);
