@@ -478,9 +478,14 @@ async function processExecutionRequest(request: Request, progress: (event: Row) 
       job = data;
     }
     const activePlugins = Array.isArray(input.activePlugins) ? input.activePlugins.map(x => String(x).toLowerCase()) : [];
-    const githubActive = activePlugins.includes("github");
-    const repositoryListIntent = githubActive && isRepositoryListIntent(message);
-    const repositoryReadApproved = githubActive && isReadApprovalMessage(message);
+    // An explicit @github mention is the user's intent signal. Do not require
+    // a client-side cached connection list: it can be stale during OAuth return
+    // or workspace hydration. Authorization and installation are still checked
+    // below on the server before any GitHub data is read.
+    const githubMentioned = /(?:^|[^a-z0-9_])@github\b/i.test(message);
+    const githubActive = githubMentioned || activePlugins.includes("github");
+    const repositoryListIntent = githubMentioned && isRepositoryListIntent(message);
+    const repositoryReadApproved = githubMentioned && isReadApprovalMessage(message);
     if (!job && (!githubActive || (!isInstallIntent(message) && !repositoryListIntent && !repositoryReadApproved))) {
       return json({ handled: false }, 200, origin);
     }
