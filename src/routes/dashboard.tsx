@@ -1883,7 +1883,7 @@ function Dashboard() {
     window.sessionStorage.removeItem("misma_try_plugin_provider");
     setChatEnabledPlugins((current) => current.includes(provider) ? current : [...current, provider]);
     setPlusMenuOpen(false);
-    setPluginPickerOpen(true);
+    setPluginPickerOpen(false);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   }, [workspacePluginConnections]);
 
@@ -5459,13 +5459,24 @@ function Dashboard() {
                                     className="misma-chat-plugin-option"
                                     role="menuitemcheckbox"
                                     aria-checked={chatEnabledPlugins.includes(plugin.provider)}
-                                    onClick={() => setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider])}
+                                    onClick={() => {
+                                      setChatEnabledPlugins((current) => current.includes(plugin.provider) ? current.filter((item) => item !== plugin.provider) : [...current, plugin.provider]);
+                                      setPluginPickerOpen(false);
+                                    }}
                                   >
                                     <ChatPluginIcon provider={plugin.provider} />
                                     <span>{plugin.provider[0].toUpperCase() + plugin.provider.slice(1)}</span>
                                     <span className={"misma-chat-plugin-check" + (chatEnabledPlugins.includes(plugin.provider) ? " is-on" : "")}>{chatEnabledPlugins.includes(plugin.provider) ? "✓" : ""}</span>
                                   </button>
-                                )) : <p>No connected plugins for this workspace.</p>}
+                                )) : (
+                                  <div className="misma-chat-plugin-empty">
+                                    <p>Connect your first plugin to use it in chat.</p>
+                                    <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Connect your first plugin</button>
+                                  </div>
+                                )}
+                                <div className="misma-chat-plugin-popup-footer">
+                                  <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Manage plugins</button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -5495,6 +5506,17 @@ function Dashboard() {
                       }
                     >
                       <>
+                        {chatEnabledPlugins.length > 0 && (
+                          <div className="misma-chat-plugin-chips" aria-label="Plugins enabled for this chat">
+                            {chatEnabledPlugins.map((provider) => (
+                              <span className="misma-chat-plugin-chip" key={provider}>
+                                <ChatPluginIcon provider={provider} />
+                                <strong>@{provider}</strong>
+                                <button type="button" aria-label={"Remove @" + provider} onClick={() => setChatEnabledPlugins((current) => current.filter((item) => item !== provider))}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {createMode ? (
                           <button type="button" className="aichat-mode-token is-create" onClick={() => setCreateMode(null)} aria-label={"Remove create " + createMode + " mode"}>
                             @create {createMode}<span aria-hidden="true">×</span>
@@ -6485,6 +6507,13 @@ function Dashboard() {
                       <span className={"aichat-status-pill is-" + site.status}>{site.status}</span>
                     </div>
                     <small title={site.website_url}>{site.website_url}</small>
+                    <button type="button" className="aichat-website-plugins" onClick={() => {
+                      try { window.sessionStorage.setItem("misma_plugins_website_id", site.id); } catch { /* The URL still carries the selection. */ }
+                      window.location.assign("/dashboard/plugins?websiteId=" + encodeURIComponent(site.id));
+                    }} aria-label={"Open plugins for " + (site.name || site.domain)} title="Plugins">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5m6-5v5M7 9h10v4a5 5 0 0 1-10 0V9Zm5 9v3m-3 0h6"/></svg>
+                      <span>Plugins</span>
+                    </button>
                   </div>
                   <button
                     type="button"
