@@ -236,11 +236,25 @@ export async function persistMemoryExchange(
     return { saved: false };
   }
 
+  const since = new Date(Date.now() - 60_000).toISOString();
+  const { count: recentWrites } = await db.from("memory_exchanges")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", input.userId)
+    .gte("created_at", since)
+    .is("deleted_at", null);
+  if (Number(recentWrites || 0) >= 8) return { saved: false };
+
   const extracted = await requestExtraction(userText, assistantText);
   if (!extracted) return { saved: false };
   const documentText = extracted.summary + "\n" + userText + "\n" + assistantText;
-  const embedded = await embedTexts([documentText], "RETRIEVAL_DOCUMENT", 350);
+  const factCandidates = extracted.facts.filter((fact) => fact.key && (fact.action === "delete" || fact.content.trim()));
+  const factsToEmbed = factCandidates.filter((fact) => fact.action !== "delete");
+  const batchTexts = [documentText].concat(factsToEmbed.map((fact) => fact.content));
+  const embedded = await embedTexts(batchTexts, "RETRIEVAL_DOCUMENT", 850);
   const exchangeEmbedding = embedded ? embedded.vectors[0] : null;
+  const factEmbeddings = embedded && factsToEmbed.length
+    ? { vectors: embedded.vectors.slice(1), model: embedded.model }
+    : null;
   const messageIds = [input.userMessageId, input.assistantMessageId]
     .filter((id) => Number.isSafeInteger(id) && Number(id) > 0);
 
@@ -263,13 +277,8 @@ export async function persistMemoryExchange(
   }).select("id").single();
   if (exchangeError || !exchange || !exchange.id) return { saved: false };
 
-  const factCandidates = extracted.facts.filter((fact) => fact.key && (fact.action === "delete" || fact.content.trim()));
   if (!factCandidates.length) return { saved: true, exchangeId: String(exchange.id) };
 
-  const factsToEmbed = factCandidates.filter((fact) => fact.action !== "delete");
-  const factEmbeddings = factsToEmbed.length
-    ? await embedTexts(factsToEmbed.map((fact) => fact.content), "RETRIEVAL_DOCUMENT", 700)
-    : null;
   const embeddingByKey = new Map<string, number[]>();
   if (factEmbeddings) {
     factsToEmbed.forEach((fact, index) => embeddingByKey.set(safeFactKey(fact.key), factEmbeddings.vectors[index]));
@@ -326,6 +335,12 @@ export async function persistMemoryExchange(
 }
 
 
+
+async function hashText(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export async function retrieveMemory(
   db: DbClient,
   input: {
@@ -340,8 +355,24 @@ export async function retrieveMemory(
   const queryText = input.queryText.trim().slice(0, 1800);
   if (!queryText) return { context: "", sources: [], found: false };
   try {
-    const embeddingResult = await embedTexts([queryText], "RETRIEVAL_QUERY", 190);
-    const embedding = embeddingResult ? embeddingResult.vectors[0] : null;
+    const queryHash = await hashText(queryText.toLowerCase().replace(/\s+/g, " "));
+    const cachedResult = await db.from("memory_embedding_cache").select("embedding,expires_at")
+      .eq("user_id", input.userId).eq("query_hash", queryHash)
+      .gt("expires_at", new Date().toISOString()).maybeSingle();
+    let embedding = cachedResult.data ? parseVector(cachedResult.data.embedding) : null;
+    if (!embedding) {
+      const embeddingResult = await embedTexts([queryText], "RETRIEVAL_QUERY", 190);
+      embedding = embeddingResult ? embeddingResult.vectors[0] : null;
+      if (embedding && embeddingResult) {
+        void db.from("memory_embedding_cache").upsert({
+          user_id: input.userId,
+          query_hash: queryHash,
+          embedding: vectorLiteral(embedding),
+          embedding_model: embeddingResult.model,
+          expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+        }, { onConflict: "user_id,query_hash" }).then(() => undefined).catch(() => undefined);
+      }
+    }
     const rpcPromise = db.rpc("match_memory", {
       p_query_embedding: vectorLiteral(embedding),
       p_query_text: queryText,
