@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginWorkspaceContext } from "../lib/plugin-connect";
@@ -14,7 +14,6 @@ type UserPlugin = { provider: PluginId; is_installed: boolean; permission_mode: 
 function PluginsPage() {
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState("");
-  const [filter, setFilter] = useState<"All" | "Installed" | "Developer tools" | "Hosting">("All");
   const [connections, setConnections] = useState<PluginConnectionSummary[]>([]);
   const [userPlugins, setUserPlugins] = useState<UserPlugin[]>([]);
   const [websites, setWebsites] = useState<Website[]>([]);
@@ -91,21 +90,8 @@ function PluginsPage() {
     const text = [plugin.name, plugin.description, plugin.tagline, plugin.role, plugin.developer].join(" ").toLowerCase();
     return !query.trim() || text.includes(query.trim().toLowerCase());
   }), [query]);
-  const filteredByCategory = filteredPlugins.filter((plugin) =>
-    filter === "All" ||
-    (filter === "Installed" && installedByProvider.has(plugin.id)) ||
-    (filter === "Developer tools" && plugin.category === "Code host") ||
-    (filter === "Hosting" && plugin.category === "Hosting")
-  );
-  const installedPlugins = visiblePlugins.filter((plugin) => {
-    if (!installedByProvider.has(plugin.id)) return false;
-    if (filter === "Developer tools" && plugin.category !== "Code host") return false;
-    if (filter === "Hosting" && plugin.category !== "Hosting") return false;
-    const searchText = [plugin.name, plugin.description, plugin.tagline, plugin.developer].join(" ").toLowerCase();
-    return !query.trim() || searchText.includes(query.trim().toLowerCase());
-  });
-  const popularPlugins = filteredByCategory.filter((plugin) => ["github", "vercel"].includes(plugin.id) && !installedByProvider.has(plugin.id));
-  const newPlugins = filteredByCategory.filter((plugin) => ["render", "netlify"].includes(plugin.id) && !installedByProvider.has(plugin.id));
+  const installedPlugins = filteredPlugins.filter((plugin) => installedByProvider.has(plugin.id));
+  const availablePlugins = filteredPlugins.filter((plugin) => !installedByProvider.has(plugin.id));
   const selectedWebsite = websites.find((website) => website.id === websiteId) || null;
   function openDetails(provider: PluginId) {
     setOpenPluginMenu(null);
@@ -179,14 +165,8 @@ function PluginsPage() {
             <button type="button" className="misma-page-back-button" aria-label="Go to dashboard" onClick={() => window.location.assign("/dashboard")}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
             </button>
-            <div><h1>Plugins</h1><p>Business AI, connected.</p></div>
+            <div><h1>Plugins</h1></div>
           </div>
-          <label className="misma-plugin-directory-filter-label">
-            <span className="misma-sr-only">Filter plugins</span>
-            <select className="misma-plugin-directory-filter" value={filter} onChange={(event) => setFilter(event.target.value as typeof filter)}>
-              <option>All</option><option>Installed</option><option>Developer tools</option><option>Hosting</option>
-            </select>
-          </label>
         </header>
 
         {selectedWebsite && <div className="misma-plugin-website-context"><span>Website context</span><strong>{selectedWebsite.name || selectedWebsite.domain}</strong><button type="button" onClick={() => { setWebsiteId(""); window.sessionStorage.removeItem("misma_plugins_website_id"); window.history.replaceState(null, "", "/dashboard/plugins"); }}>Clear</button></div>}
@@ -231,22 +211,11 @@ function PluginsPage() {
           ) : <GlassCard className="misma-plugin-empty-installed">No plugins connected yet. Add one from the directory below.</GlassCard>}
         </section>
 
-        {filter !== "Installed" && (
-          <>
-            {(filter === "All" || filter === "Developer tools") && <section className="misma-plugin-available-section" aria-labelledby="misma-popular-title">
-              <SectionHeader title="Popular" description="Connect the tools that power your development workflow." />
-              {loading ? <div className="misma-plugin-skeleton-list"><span/><span/></div> : popularPlugins.length ? (
-                <div className="misma-plugin-available-list">{popularPlugins.map(renderPluginRow)}</div>
-              ) : <GlassCard className="misma-plugin-empty-installed">{query ? "No matching popular plugins." : "All popular plugins are installed."}</GlassCard>}
-            </section>}
-            {(filter === "All" || filter === "Hosting") && <section className="misma-plugin-available-section" aria-labelledby="misma-new-title">
-              <SectionHeader title="New & noteworthy" description="More integrations are being prepared for Misma." />
-              {loading ? <div className="misma-plugin-skeleton-list"><span/><span/></div> : newPlugins.length ? (
-                <div className="misma-plugin-available-list">{newPlugins.map(renderPluginRow)}</div>
-              ) : <GlassCard className="misma-plugin-empty-installed">No matching new integrations.</GlassCard>}
-            </section>}
-          </>
-        )}
+        <section className="misma-plugin-available-section" aria-label="Available plugins">
+          {loading ? <div className="misma-plugin-skeleton-list"><span/><span/></div> : availablePlugins.length > 0 ? (
+            <div className="misma-plugin-available-list">{availablePlugins.map(renderPluginRow)}</div>
+          ) : null}
+        </section>
       </div>
 
       {openPluginMenu && (
@@ -257,12 +226,17 @@ function PluginsPage() {
           style={{ top: openPluginMenu.top, left: openPluginMenu.left }}
           onClick={(event) => event.stopPropagation()}
         >
-          <a
+          <Link
             role="menuitem"
-            href={"/dashboard/plugins/" + openPluginMenu.provider + "/settings" + (websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "")}
+            to="/dashboard/plugins/$pluginId/settings"
+            params={{ pluginId: openPluginMenu.provider }}
+            onClick={() => {
+              if (websiteId) window.sessionStorage.setItem("misma_plugins_website_id", websiteId);
+              setOpenPluginMenu(null);
+            }}
           >
             Settings
-          </a>
+          </Link>
         </div>
       )}
       <div className="misma-plugin-search-dock">
