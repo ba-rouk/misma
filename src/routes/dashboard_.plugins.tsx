@@ -89,7 +89,7 @@ function PluginsPage() {
     (async () => {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) throw new Error("Sign in to manage plugins.");
+        if (authError || !user) throw new Error("Sign in to view plugins.");
         const { data: memberships, error: membershipError } = await supabase
           .from("workspace_members").select("workspace_id,role").eq("user_id", user.id);
         if (membershipError) throw membershipError;
