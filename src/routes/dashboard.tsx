@@ -5572,6 +5572,7 @@ function Dashboard() {
                             type="button"
                             className="misma-memory-incognito-toggle"
                             aria-pressed={memoryIncognito}
+                            disabled={isSending || isGeneratingMedia}
                             title={memoryIncognito ? "Memory is disabled for this chat" : "Misma may remember useful details from this chat"}
                             onClick={() => void handleToggleMemoryIncognito()}
                           >
