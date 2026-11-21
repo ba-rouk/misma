@@ -56,6 +56,7 @@ export function getIntegrationSettingsHealth() {
     providers: {
       github,
       vercel,
+      netlify,
     },
     sharedCredentialVault: {
       settings: vaultSettings,
