@@ -49,7 +49,7 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
   const [notice, setNotice] = useState("");
 
   const connection = useMemo(() => connections.find((item) => item.status === "connected") || null, [connections]);
-  const canAuthorize = manifest?.authType === "github_app" || manifest?.authType === "vercel_marketplace_oauth";
+  const canAuthorize = manifest?.authType === "github_app" || manifest?.authType === "vercel_marketplace_oauth" || manifest?.authType === "netlify_oauth";
   const readActions = manifest?.id === "github"
     ? ["Check whether a repository is initialized", "List repositories granted to the GitHub App", "Compare commits and inspect selected repository files"]
     : manifest?.id === "vercel"
