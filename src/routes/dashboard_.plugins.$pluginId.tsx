@@ -176,7 +176,7 @@ function PluginDetailPage() {
           </header>
   
           <div className="misma-plugin-preview-scroller">
-            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><button type="button" className="misma-plugin-example-prompt-button" disabled={!connection} onClick={() => tryInChat(examplePrompts[manifest.previewCards.indexOf(card)] || "@" + manifest.id + " ")}><ExamplePreview kind={card.kind} provider={manifest.id} title={card.title} description={card.description}/></button></div>)}
+            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id} title={card.title} description={card.description}/></div>)}
           </div>
           <div className="misma-plugin-gallery-hint" aria-hidden="true"><span/><span/></div>
         </section>        <section className="misma-plugin-description-section">
@@ -188,7 +188,7 @@ function PluginDetailPage() {
           <h2>Try an example</h2>
           <div className="misma-plugin-prompt-list">
             {examplePrompts.map((prompt) => (
-              <button type="button" className="misma-plugin-prompt-card" key={prompt} onClick={() => tryInChat(prompt)}>
+              <button type="button" className="misma-plugin-prompt-card" key={prompt} disabled={!connection} onClick={() => tryInChat(prompt)}>
                 <span>{prompt}</span><b aria-hidden="true">→</b>
               </button>
             ))}
