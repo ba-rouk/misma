@@ -30,11 +30,7 @@ create table if not exists public.memory_exchanges (
   entities text[] not null default '{}',
   embedding extensions.vector(768),
   embedding_model text null,
-  search_tsv tsvector generated always as (
-    to_tsvector('simple'::regconfig, coalesce(user_text, '') || ' ' ||
-      coalesce(assistant_text, '') || ' ' || coalesce(summary, '') ||
-      ' ' || array_to_string(topics, ' ') || ' ' || array_to_string(entities, ' '))
-  ) stored,
+  search_tsv tsvector not null default ''::tsvector,
   importance numeric(3,2) not null default 0.50 check (importance between 0 and 1),
   pinned boolean not null default false,
   recall_count integer not null default 0 check (recall_count >= 0),
@@ -57,13 +53,48 @@ create table if not exists public.memory_facts (
   supersedes_id uuid null references public.memory_facts(id) on delete set null,
   source_exchange_id uuid null references public.memory_exchanges(id) on delete set null,
   pinned boolean not null default false,
-  search_tsv tsvector generated always as (
-    to_tsvector('simple'::regconfig, coalesce(content, '') || ' ' || coalesce(fact_key, '') || ' ' || coalesce(type, ''))
-  ) stored,
+  search_tsv tsvector not null default ''::tsvector,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz null
 );
+
+create or replace function public.set_memory_search_tsv()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
+begin
+  if tg_table_name = 'memory_exchanges' then
+    new.search_tsv := to_tsvector(
+      'simple'::regconfig,
+      coalesce(new.user_text, '') || ' ' ||
+      coalesce(new.assistant_text, '') || ' ' ||
+      coalesce(new.summary, '') || ' ' ||
+      array_to_string(new.topics, ' ') || ' ' ||
+      array_to_string(new.entities, ' ')
+    );
+  else
+    new.search_tsv := to_tsvector(
+      'simple'::regconfig,
+      coalesce(new.content, '') || ' ' ||
+      coalesce(new.fact_key, '') || ' ' ||
+      coalesce(new.type, '')
+    );
+  end if;
+  return new;
+end;
+$function$;
+
+create trigger memory_exchanges_search_tsv_trigger
+before insert or update of user_text, assistant_text, summary, topics, entities
+on public.memory_exchanges
+for each row execute function public.set_memory_search_tsv();
+
+create trigger memory_facts_search_tsv_trigger
+before insert or update of content, fact_key, type
+on public.memory_facts
+for each row execute function public.set_memory_search_tsv();
 
 create table if not exists public.memory_backfill_jobs (
   id uuid primary key default gen_random_uuid(),
