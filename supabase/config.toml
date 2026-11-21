@@ -19,3 +19,8 @@ verify_jwt = false
 
 [functions.misma-execution]
 verify_jwt = true
+
+
+# Memory backfill authenticates the Supabase access token inside the function.
+[functions.misma-memory-backfill]
+verify_jwt = false
