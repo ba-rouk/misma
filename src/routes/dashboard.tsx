@@ -5593,17 +5593,6 @@ function Dashboard() {
                     <VoiceInputBar
                       toolbarStart={
                         <>
-                          <button
-                            type="button"
-                            className="misma-memory-incognito-toggle"
-                            aria-pressed={memoryIncognito}
-                            disabled={isSending || isGeneratingMedia}
-                            title={memoryIncognito ? "Memory is disabled for this chat" : "Misma may remember useful details from this chat"}
-                            onClick={() => void handleToggleMemoryIncognito()}
-                          >
-                            <span aria-hidden="true">{memoryIncognito ? "◉" : "○"}</span>
-                            {memoryIncognito ? "Incognito on" : "Don't remember this chat"}
-                          </button>
                           <div className="aichat-composer-plus-wrap">
                             <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => { setPluginPickerOpen(false); setPlusMenuOpen((open) => !open); }}>
                               {plusMenuOpen ? (

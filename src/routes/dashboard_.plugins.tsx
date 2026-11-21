@@ -113,12 +113,6 @@ function PluginsPage() {
     window.location.assign("/dashboard/plugins/" + provider + suffix);
   }
 
-  function openPluginSettings(provider: PluginId) {
-    setOpenPluginMenu(null);
-    const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign("/dashboard/plugins/" + provider + "/settings" + suffix);
-  }
-
   function openConsent(provider: PluginId) {
     if (!pluginList.some((item) => item.id === provider) || !userId) return;
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
@@ -263,9 +257,12 @@ function PluginsPage() {
           style={{ top: openPluginMenu.top, left: openPluginMenu.left }}
           onClick={(event) => event.stopPropagation()}
         >
-          <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); if (openPluginMenu) openPluginSettings(openPluginMenu.provider); }}>
+          <a
+            role="menuitem"
+            href={"/dashboard/plugins/" + openPluginMenu.provider + "/settings" + (websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "")}
+          >
             Settings
-          </button>
+          </a>
         </div>
       )}
       <div className="misma-plugin-search-dock">

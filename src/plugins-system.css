@@ -1067,7 +1067,8 @@ button, input, textarea, select { font-size: inherit; }
   background: #0b1a2a;
   box-shadow: 0 16px 42px rgba(0,0,0,.42);
 }
-.misma-plugin-installed-popup button {
+.misma-plugin-installed-popup button,
+.misma-plugin-installed-popup a {
   display: block;
   width: 100%;
   min-height: 34px;
@@ -1078,9 +1079,11 @@ button, input, textarea, select { font-size: inherit; }
   color: #edf4fb;
   font: 500 13px/1.35 var(--font-sans, Inter, system-ui, sans-serif);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
-.misma-plugin-installed-popup button:hover {
+.misma-plugin-installed-popup button:hover,
+.misma-plugin-installed-popup a:hover {
   background: rgba(77,141,255,.15);
   color: #fff;
 }
