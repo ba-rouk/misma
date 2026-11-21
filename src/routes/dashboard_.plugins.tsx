@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { PluginBrand } from "../components/plugin-brand";
+import { PluginPermissionChoices } from "../components/plugin-permission-settings";
 import { PLUGIN_MANIFESTS, type PluginId } from "../lib/plugin-registry";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
