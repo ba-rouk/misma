@@ -414,8 +414,9 @@ async function main(request: Request): Promise<Response> {
       .select("permission_mode,is_installed")
       .eq("user_id", userId).eq("provider", "github").maybeSingle();
     if (preferenceError) throw new Error("Could not verify the GitHub plugin permission settings.");
-    const permissionMode = ["always_ask", "read", "low_risk", "all"].includes(String(githubPreference?.permission_mode))
-      ? String(githubPreference.permission_mode) : "low_risk";
+    const configuredPermissionMode = String(githubPreference?.permission_mode || "low_risk");
+    const permissionMode = ["always_ask", "read", "low_risk", "all"].includes(configuredPermissionMode)
+      ? configuredPermissionMode : "low_risk";
     const jobNeedsPluginAccess = !job || ["awaiting_website", "awaiting_repository", "awaiting_approval"].includes(String(job.status));
     if (jobNeedsPluginAccess && (!githubPreference || githubPreference.is_installed !== true)) {
       throw new Error("Install the GitHub plugin in your Misma account before continuing repository actions.");
