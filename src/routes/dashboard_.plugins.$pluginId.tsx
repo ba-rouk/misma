@@ -6,68 +6,55 @@ import { getPluginManifest, pluginList, type PluginId } from "../lib/plugin-mani
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import { PluginSettingsSheet, type PluginConnectionSummary } from "../components/plugin-settings-sheet";
-import { Badge, Button, GlassCard, SectionHeader, StickyActionBar } from "../components/misma-glass";
+import { Badge, Button, SectionHeader, StickyActionBar } from "../components/misma-glass";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
 type PlatformProject = { id: string; provider: PluginId; name: string; full_name: string | null; platform_connection_id: string };
 
-function ExamplePreview({ kind, provider }: { kind: string; provider: PluginId }) {
+function ExamplePreview({ kind, provider, title, description }: { kind: string; provider: PluginId; title: string; description: string }) {
   const examples = kind === "repository"
     ? [{ title: "src", detail: "Application code", icon: "folder" }, { title: "public", detail: "Static assets", icon: "folder" }, { title: "index.html", detail: "Widget installation point", icon: "file" }]
     : kind === "services"
       ? [{ title: "web-frontend", detail: "Web service", icon: "service" }, { title: "api-service", detail: "Web service", icon: "service" }, { title: "background-worker", detail: "Worker", icon: "service" }]
       : [{ title: "storefront-web", detail: "Production project", icon: "project" }, { title: "business-landing", detail: "Preview project", icon: "project" }, { title: "customer-portal", detail: "Preview project", icon: "project" }];
   return (
-    <div className={"misma-plugin-example-card is-" + provider}>
-      <div className="misma-plugin-example-card-brand"><PluginProviderLogo provider={provider} size="sm"/><span>{provider[0].toUpperCase() + provider.slice(1)}</span><Badge tone="neutral">Example</Badge></div>
-      <div className="misma-plugin-example-window">
-        <div className="misma-plugin-example-window-title">
-          <div className="misma-plugin-example-window-dots"><i/><i/><i/></div>
-          <strong>{kind === "repository" ? "website" : kind === "services" ? "Render services" : "Hosting projects"}</strong>
-        </div>
-        <div className="misma-plugin-example-window-content">
-          {kind === "repository" ? (
-            <div className="misma-plugin-example-repo-summary">
-              <div className="misma-plugin-example-repo-mark">⌘</div>
-              <div><strong>website</strong><small>Sample repository · main branch</small></div>
-            </div>
-          ) : (
-            <div className="misma-plugin-example-project-summary">
-              <strong>{kind === "services" ? "Services available" : "Projects available"}</strong>
-              <small>Sample account overview</small>
-            </div>
-          )}
-          <div className="misma-plugin-example-file-list">
-            {examples.map((item) => (
-              <div className="misma-plugin-example-file-row" key={item.title}>
-                <span className={"misma-plugin-example-file-glyph is-" + item.icon}>{item.icon === "folder" ? "▰" : item.icon === "file" ? "◇" : item.icon === "service" ? "▦" : "◫"}</span>
-                <strong>{item.title}</strong>
-                <small>{item.detail}</small>
-              </div>
-            ))}
+    <div className={"misma-plugin-example-slide is-" + provider}>
+      <div className="misma-plugin-example-art">
+        <div className="misma-plugin-example-card-brand"><PluginProviderLogo provider={provider} size="sm"/><span>{provider[0].toUpperCase() + provider.slice(1)}</span><Badge tone="neutral">Example</Badge></div>
+        <div className="misma-plugin-example-window">
+          <div className="misma-plugin-example-window-title">
+            <div className="misma-plugin-example-window-dots"><i/><i/><i/></div>
+            <strong>{kind === "repository" ? "website" : kind === "services" ? "Render services" : "Hosting projects"}</strong>
           </div>
-          <div className="misma-plugin-example-window-foot">{kind === "repository" ? "A preview of the files Misma can inspect." : kind === "services" ? "Sample services · not live account data" : "Sample projects · not live account data"}</div>
+          <div className="misma-plugin-example-window-content">
+            {kind === "repository" ? (
+              <div className="misma-plugin-example-repo-summary">
+                <div className="misma-plugin-example-repo-mark">⌘</div>
+                <div><strong>website</strong><small>Sample repository · main branch</small></div>
+              </div>
+            ) : (
+              <div className="misma-plugin-example-project-summary">
+                <strong>{kind === "services" ? "Services available" : "Projects available"}</strong>
+                <small>Sample account overview</small>
+              </div>
+            )}
+            <div className="misma-plugin-example-file-list">
+              {examples.map((item) => (
+                <div className="misma-plugin-example-file-row" key={item.title}>
+                  <span className={"misma-plugin-example-file-glyph is-" + item.icon}>{item.icon === "folder" ? "▰" : item.icon === "file" ? "◇" : item.icon === "service" ? "▦" : "◫"}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.detail}</small>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
+      <div className="misma-plugin-example-copy"><strong>{title}</strong><p>{description}</p></div>
     </div>
   );
 }
 
-function PluginSkillIcon({ name }: { name: string }) {
-  const paths: Record<string, string> = {
-    database: "M4 6c0-2 4-3 8-3s8 1 8 3-4 3-8 3-8-1-8-3Zm0 0v6c0 2 4 3 8 3s8-1 8-3V6M4 12v6c0 2 4 3 8 3s8-1 8-3v-6",
-    "git-branch": "M6 3v12a4 4 0 0 0 4 4h8M6 7a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 15V9a4 4 0 0 0-4-4h-2",
-    "file-code": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6M10 13l-2 2 2 2m4-4 2 2-2 2",
-    "git-pull-request": "M6 3v12m0 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm12-7v12m0 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM6 8h8a4 4 0 0 0 4-4",
-    layers: "m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5m-18 5 9 5 9-5",
-    link: "M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1",
-    activity: "M3 12h4l3-8 4 16 3-8h4",
-    rocket: "M5 15c-1 0-2 1-2 4 3 0 4-1 4-2m-2-2 5 5m-3-7 5-5c3-3 7-3 7-3s0 4-3 7l-5 5m-4-4-3 1 2-4 4-2m6 6-1 3-4 2 2-4",
-    server: "M4 4h16v6H4zM4 14h16v6H4zM7 7h.01M7 17h.01M11 7h6M11 17h6",
-    globe: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20",
-  };
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name] || paths.activity}/></svg>;
-}
 
 function PluginDetailPage() {
   const { pluginId: rawPluginId } = Route.useParams();
@@ -187,7 +174,7 @@ function PluginDetailPage() {
           </header>
   
           <div className="misma-plugin-preview-scroller">
-            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id}/></div>)}
+            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id} title={card.title} description={card.description}/></div>)}
           </div>
           <div className="misma-plugin-gallery-hint" aria-hidden="true"><span/><span/></div>
         </section>        <section className="misma-plugin-description-section">
@@ -203,7 +190,7 @@ function PluginDetailPage() {
           <div className="misma-plugin-skills-grid">
             {manifest.skills.map((skill) => <span className="misma-plugin-skill-chip" key={skill.id}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.8 8.2 4.6v9.2L12 21.2l-8.2-4.6V7.4L12 2.8Z"/><path d="m3.8 7.4 8.2 4.7 8.2-4.7M12 12.1v9.1M8 5l8.2 4.7"/></svg><span>{skill.name}</span></span>)}
           </div>
-        </section>        <section className="misma-plugin-detail-section stessa-plugin-information-section">
+        </section>        <section className="misma-plugin-detail-section misma-plugin-information-section">
           <SectionHeader title="Information" />
           <dl className="misma-plugin-information">
             <div><dt>Developer</dt><dd>{manifest.developer}</dd></div>
