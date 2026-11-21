@@ -11,7 +11,7 @@ test("plugin directory, onboarding, and settings use real account-owned provider
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const connect = await read("../src/lib/plugin-connect.ts");
   const consent = await read("../src/components/plugin-connect-consent.tsx");
-  const settings = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
+  const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
   assert.doesNotMatch(page, /Business AI, connected/);
   assert.match(page, /Search plugins/);
@@ -226,7 +226,7 @@ test("dashboard inserts inline plugin mentions at the caret and scopes tools to 
 });
 
 test("plugin settings and permission tiers are persisted per Misma account", async () => {
-  const page = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
+  const page = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const migration = await read("../supabase/migrations/20261121064158_user_plugins_permissions.sql");
   assert.ok(page.includes("createFileRoute("));
   assert.ok(page.includes("/settings"));
@@ -287,29 +287,20 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
 });
 
-test("Vercel settings has an explicit static route that renders the shared provider settings screen", async () => {
-  const route = await read("../src/routes/dashboard.plugins.vercel.settings.tsx");
-  const shared = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
-  assert.match(route, /createFileRoute\("\/dashboard\/plugins\/vercel\/settings"\)/);
-  assert.match(route, /PluginSettingsPage pluginId="vercel"/);
-  assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
-  assert.match(shared, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId\/settings"\)/);
+test("provider settings are nested routes rendered through the dashboard outlet", async () => {
+  const route = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const generatedRoutes = await read("../src/routeTree.gen.ts");
+  assert.match(route, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/settings"\)/);
+  assert.match(route, /const \{ pluginId \} = Route\.useParams\(\)/);
+  assert.match(route, /PluginSettingsPage pluginId=\{pluginId\}/);
+  assert.match(dashboard, /Outlet, useLocation/);
+  assert.match(dashboard, /showPluginSettingsChild/);
+  assert.match(dashboard, /return showPluginSettingsChild \? <Outlet \/>/);
+  assert.match(generatedRoutes, /dashboard\.plugins\.\$pluginId\.settings/);
+  assert.match(generatedRoutes, /getParentRoute: \(\) => DashboardRoute/);
+  assert.doesNotMatch(generatedRoutes, /dashboard_\.plugins\.\$pluginId\.settings/);
 });
-
-test("every plugin settings URL has an explicit static provider route", async () => {
-  const github = await read("../src/routes/dashboard.plugins.github.settings.tsx");
-  const render = await read("../src/routes/dashboard.plugins.render.settings.tsx");
-  const netlify = await read("../src/routes/dashboard.plugins.netlify.settings.tsx");
-  assert.match(github, /createFileRoute\("\/dashboard\/plugins\/github\/settings"\)/);
-  assert.match(github, /GitHub plugin settings/);
-  assert.match(github, /misma-github-settings-empty-page/);
-  assert.doesNotMatch(github, /PluginSettingsPage|useEffect|supabase/);
-  assert.match(render, /createFileRoute\("\/dashboard\/plugins\/render\/settings"\)/);
-  assert.match(render, /PluginSettingsPage pluginId="render"/);
-  assert.match(netlify, /createFileRoute\("\/dashboard\/plugins\/netlify\/settings"\)/);
-  assert.match(netlify, /PluginSettingsPage pluginId="netlify"/);
-});
-
 
 test("Netlify OAuth connects and discovers authorized sites", async () => {
   const manifests = await read("../src/lib/plugin-manifests.ts");

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   useEffect,
   useLayoutEffect,
@@ -1506,6 +1506,7 @@ function MarkdownContent({ content }: { content: string }) {
 
 function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [token, setToken] = useState<string | null>(null);
   const [dashboardUserId, setDashboardUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -4860,7 +4861,8 @@ function Dashboard() {
     }
   };
 
-  return (
+  const showPluginSettingsChild = /^\/dashboard\/plugins\/[^/]+\/settings\/?$/.test(location.pathname);
+  return showPluginSettingsChild ? <Outlet /> : (
     <div className="aichat">
       {/* Mobile Translucent Backdrop */}
       <button

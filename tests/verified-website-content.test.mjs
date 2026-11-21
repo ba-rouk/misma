@@ -32,7 +32,7 @@ test("plugin directory exposes configured providers and all management routes", 
   assert.match(plugins, /openDetails\(plugin\.id\)/);
   assert.match(plugins, /\/dashboard\/plugins\/.*\/connect/);
   assert.match(detail, /\/settings/);
-  assert.match(tree, /dashboard_\.plugins\.\$pluginId\.settings/);
+  assert.match(tree, /dashboard\.plugins\.\$pluginId\.settings/);
   assert.match(tree, /dashboard_\.plugins\.\$pluginId\.connect/);
 });
 
