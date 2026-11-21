@@ -1896,12 +1896,12 @@ function Dashboard() {
   const [composerUploadProgress, setComposerUploadProgress] = useState<Map<File, number>>(new Map());
   const [lightboxAttachment, setLightboxAttachment] = useState<MessageAttachment | null>(null);
   const [, setUploadingAttachments] = useState(false);
-  const [createMode, setCreateMode] = useState<"image" | "video" | null>(null);
+  const [createMode, setCreateMode] = useState<"image" | null>(null);
   const [mediaProgress, setMediaProgress] = useState("");
   const [mediaProgressPercent, setMediaProgressPercent] = useState(0);
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
   const [failedMediaRetry, setFailedMediaRetry] = useState<{
-    mode: "image" | "video";
+    mode: "image";
     prompt: string;
     conversationId: number;
     sourceUserMessageId: number;
@@ -3662,8 +3662,8 @@ function Dashboard() {
     }
 
     const implicitMediaMode = editingMessageId ? null : detectMediaIntent(textToSend);
-    if (implicitMediaMode) {
-      void handleCreateMedia(implicitMediaMode, textToSend);
+    if (implicitMediaMode === "image") {
+      void handleCreateMedia("image", textToSend);
       return null;
     }
 
@@ -3920,10 +3920,10 @@ function Dashboard() {
   };
 
   const handleCreateMedia = async (
-    requestedMode?: "image" | "video",
+    requestedMode?: "image",
     promptOverride?: string,
     reuse?: { sourceUserMessageId: number; replaceAiMessageId: number; attachments: MessageAttachment[] },
-    retrySaved?: { sourceUserMessageId: number; conversationId: number; prompt: string; mode: "image" | "video" },
+    retrySaved?: { sourceUserMessageId: number; conversationId: number; prompt: string; mode: "image" },
   ) => {
     const mode = requestedMode ?? retrySaved?.mode ?? createMode;
     if (!mode || !token || isSending || isGeneratingMedia) return;
@@ -3933,9 +3933,7 @@ function Dashboard() {
         ? failedMediaRetry
         : undefined
     );
-    const prompt = activeSavedRetry?.prompt || typedPrompt || (mode === "image"
-      ? "Create a high-quality image using the attached reference."
-      : "Create a short cinematic video using the attached reference.");
+    const prompt = activeSavedRetry?.prompt || typedPrompt || "Create a high-quality image using the attached reference.";
     const controller = new AbortController();
     mediaAbortControllerRef.current = controller;
     const startViewVersion = chatViewVersionRef.current;
@@ -3947,27 +3945,10 @@ function Dashboard() {
       if (!isTargetOpen()) return;
       setMessages((current) => isTargetOpen() ? updater(current) : current);
     };
-    const pause = (milliseconds: number) => new Promise<void>((resolve, reject) => {
-      if (controller.signal.aborted) {
-        reject(new DOMException("Stopped", "AbortError"));
-        return;
-      }
-      const timer = window.setTimeout(() => {
-        controller.signal.removeEventListener("abort", abort);
-        resolve();
-      }, milliseconds);
-      const abort = () => {
-        window.clearTimeout(timer);
-        controller.signal.removeEventListener("abort", abort);
-        reject(new DOMException("Stopped", "AbortError"));
-      };
-      controller.signal.addEventListener("abort", abort, { once: true });
-    });
-
     let imageProgressTimer: number | null = null;
     setChatError("");
-    setMediaProgress(mode === "image" ? "" : "Preparing your video with Agnes…");
-    setMediaProgressPercent(mode === "image" ? 5 : 0);
+    setMediaProgress("");
+    setMediaProgressPercent(5);
     setIsGeneratingMedia(true);
     if (mode === "image") {
       const startedAt = Date.now();
@@ -3990,7 +3971,7 @@ function Dashboard() {
     const pendingMessage: Message = {
       id: pendingMediaId,
       role: "ai",
-      text: mode === "image" ? "" : "Misma is preparing your video…",
+      text: "",
       pendingMedia: mode,
       created_at: new Date().toISOString(),
     };
@@ -4045,7 +4026,7 @@ function Dashboard() {
       }
 
       const result = await postChatAction({
-        action: mode === "image" ? "create-image" : "create-video",
+        action: "create-image",
         message: prompt,
         conversationId: targetConversationId,
         workspaceId: workspace?.id,
@@ -4074,141 +4055,19 @@ function Dashboard() {
         setSelectedFiles([]);
       }
 
-      if (mode === "image") {
-        if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
-        updateTargetMessages((current) => {
-          const withoutPending = current.filter((item) => item.id !== pendingMediaId);
-          return reuse
-            ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
-            : [...withoutPending, result.aiMessage];
-        });
-        if (isTargetOpen()) setMediaProgress("");
-        setFailedMediaRetry(null);
-        uploadedComposerAttachmentsRef.current.clear();
-        selectedComposerFilesRef.current = [];
-        loadData();
-        return;
-      }
-
-      const videoId = result.videoJob?.videoId;
-      const model = result.videoJob?.model;
-      if (typeof videoId !== "string" || typeof model !== "string") {
-        throw new Error("Agnes did not return a video generation job.");
-      }
-      updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
-        ...item,
-        text: "Agnes is generating your video…",
-        pendingMedia: "video",
-      } : item));
-
-      let completedUrl: string | null = null;
-      for (let attempt = 0; attempt < 120; attempt++) {
-        await pause(5000);
-        let status: Record<string, any> | null = null;
-        let pollError: unknown = null;
-        for (let retry = 0; retry < 3; retry++) {
-          try {
-            status = await postChatAction({
-              action: "poll-video",
-              workspaceId: workspace?.id,
-              conversationId: targetConversationId,
-              videoId,
-              model,
-            }, controller.signal);
-            pollError = null;
-            break;
-          } catch (error) {
-            pollError = error;
-            if (controller.signal.aborted) throw error;
-            const detail = error instanceof Error ? error.message : String(error);
-            if (!/agnes video status|temporar|network|failed to fetch|http (408|429|500|502|503|504)/i.test(detail) || retry === 2) break;
-            await pause(1200 * (retry + 1));
-          }
-        }
-        if (pollError || !status) throw pollError instanceof Error ? pollError : new Error("Agnes video status could not be retrieved.");
-        const progress = Number(status.progress) || 0;
-        if (isTargetOpen()) setMediaProgress(`Creating video… ${progress}%`);
-        updateTargetMessages((current) => current.map((item) => item.id === pendingMediaId ? {
-          ...item,
-          text: `Agnes is generating your video… ${progress}%`,
-          pendingMedia: "video",
-        } : item));
-        if (status.status === "completed" && typeof status.url === "string") {
-          completedUrl = status.url;
-          break;
-        }
-        if (status.status === "failed") {
-          throw new Error(typeof status.error === "string" ? status.error : "Agnes video generation failed.");
-        }
-      }
-      if (!completedUrl) throw new Error("Video generation is taking longer than expected. The job may still be running; you can try again later.");
-      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
-      if (isTargetOpen()) setMediaProgress("Checking video frames for safe content…");
-      const reviewConfig = getSupabaseConfig();
-      if (!reviewConfig || !completedUrl) throw new Error("Could not prepare the generated video for its safety review.");
-      const reviewDownload = await fetch(`${reviewConfig.url.replace(/\/$/, "")}/functions/v1/misma-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: reviewConfig.publishableKey,
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          action: "download-video-for-review",
-          workspaceId: workspace?.id,
-          conversationId: targetConversationId,
-          videoId,
-          url: completedUrl,
-        }),
-        signal: controller.signal,
-      });
-      if (!reviewDownload.ok) {
-        const detail = await reviewDownload.json().catch(() => ({})) as { error?: string };
-        throw new Error(detail.error || "Could not inspect the generated video safely.");
-      }
-      const reviewBlob = await reviewDownload.blob();
-      if (reviewBlob.size <= 0 || reviewBlob.size > 150 * 1024 * 1024) {
-        throw new Error("The generated video is empty or too large to run a safety review.");
-      }
-      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
-      const reviewFile = new File([reviewBlob], "misma-generated-video-review.mp4", {
-        type: reviewBlob.type.startsWith("video/") ? reviewBlob.type : "video/mp4",
-      });
-      const reviewFrames = await extractVideoKeyframes(reviewFile);
-      if (reviewFrames.length < 2) throw new Error("Misma could not sample enough frames to review this video safely.");
-      const reviewAttachments = await uploadSelectedAttachments(reviewFrames, true, controller.signal);
-      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
-      await postChatAction({
-        action: "review-video-frames",
-        workspaceId: workspace?.id,
-        conversationId: targetConversationId,
-        videoId,
-        url: completedUrl,
-        attachments: reviewAttachments,
-      }, controller.signal);
-      const saved = await postChatAction({
-        action: "save-generated-media",
-        workspaceId: workspace?.id,
-        conversationId: targetConversationId,
-        videoId,
-        url: completedUrl,
-        ...(reuse ? { replaceAiMessageId: reuse.replaceAiMessageId } : {}),
-      }, controller.signal);
-      if (!saved.aiMessage) throw new Error("The generated video could not be saved to this chat.");
+      if (!result.aiMessage) throw new Error("Agnes did not return a generated image.");
       updateTargetMessages((current) => {
         const withoutPending = current.filter((item) => item.id !== pendingMediaId);
         return reuse
-          ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? saved.aiMessage : item)
-          : [...withoutPending, saved.aiMessage];
+          ? withoutPending.map((item) => item.id === String(reuse.replaceAiMessageId) ? result.aiMessage : item)
+          : [...withoutPending, result.aiMessage];
       });
-      if (isTargetOpen()) {
-        setMediaProgress("Video created.");
-        window.setTimeout(() => setMediaProgress(""), 3500);
-      }
+      if (isTargetOpen()) setMediaProgress("");
       setFailedMediaRetry(null);
       uploadedComposerAttachmentsRef.current.clear();
       selectedComposerFilesRef.current = [];
       loadData();
+      return;
     } catch (cause) {
       const responseData = cause instanceof Error
         ? (cause as Error & { responseData?: Record<string, any> }).responseData
@@ -4459,7 +4318,11 @@ function Dashboard() {
       setChatError("The original media prompt is unavailable, so this item cannot be recreated.");
       return;
     }
-    await handleCreateMedia(generatedMedia.kind === "generated-video" ? "video" : "image", promptMessage.text, {
+    if (generatedMedia.kind === "generated-video") {
+      setChatError("Video generation is no longer available in Misma.");
+      return;
+    }
+    await handleCreateMedia("image", promptMessage.text, {
       sourceUserMessageId,
       replaceAiMessageId,
       attachments: promptMessage.attachments || [],
@@ -5648,9 +5511,9 @@ function Dashboard() {
                           value={draft}
                           onChange={(e) => {
                             const nextValue = e.target.value;
-                            const createMatch = nextValue.match(/^@create\s+(image|video)(?=\s|$)\s*/i);
+                            const createMatch = nextValue.match(/^@create\s+image(?=\s|$)\s*/i);
                             if (createMatch) {
-                              setCreateMode(createMatch[1].toLowerCase() as "image" | "video");
+                              setCreateMode("image");
                               setThinkHarder(false);
                               setDraft(nextValue.slice(createMatch[0].length));
                               return;
