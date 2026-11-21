@@ -7,7 +7,7 @@ export const Route = createFileRoute("/dashboard/plugins/github/settings")({
 function GitHubPluginSettingsRoute() {
   return (
     <main className="misma-github-settings-empty-page">
-      <h1>GitHub settings</h1>
+      <h1>GitHub plugin settings</h1>
     </main>
   );
 }
