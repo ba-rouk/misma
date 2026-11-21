@@ -4,45 +4,46 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("plugin directory uses account-owned install state and available provider connections", async () => {
+test("plugin directory, onboarding, and settings use real account-owned provider connections", async () => {
   const page = await read("../src/routes/dashboard_.plugins.tsx");
+  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const onboarding = await read("../src/routes/dashboard_.plugins.$pluginId.connect.tsx");
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const connect = await read("../src/lib/plugin-connect.ts");
   const consent = await read("../src/components/plugin-connect-consent.tsx");
   const settings = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
   assert.match(page, /createFileRoute\("\/dashboard_?\/plugins"\)/);
-  assert.match(page, /Connect plugins to let Misma work across your tools/);
+  assert.match(page, /Business AI, connected/);
   assert.match(page, /Search plugins/);
   assert.match(page, /Installed/);
-  assert.match(page, /Available/);
+  assert.match(page, /Popular/);
+  assert.match(page, /New & noteworthy/);
   assert.match(page, /misma-plugin-installed-strip/);
   assert.match(page, /misma-plugin-available-list/);
   assert.match(page, /misma-plugin-add/);
-  assert.match(page, /misma-plugin-overflow-menu/);
-  assert.match(page, /Try in chat/);
-  assert.match(page, /Settings/);
-  assert.match(page, /Uninstall/);
-  assert.match(page, /PluginConnectConsent/);
+  assert.match(page, /misma-plugin-search-dock/);
+  assert.match(page, /getPluginWorkspaceContext/);
+  assert.match(page, /context\.workspaceIds/);
   assert.match(page, /from\("user_plugins"\)/);
   assert.match(page, /is_installed: false/);
   assert.doesNotMatch(page, /misma_integrations_workspace/);
   assert.match(page, /platform_connections/);
-  assert.doesNotMatch(page, /platform-disconnect/);
   assert.match(page, /workspace_id/);
-  assert.match(page, /openPluginInChat/);
   assert.match(page, /websiteId/);
-  assert.match(manifests, /export interface PluginManifest/);
-  for (const provider of ["github", "vercel", "render", "netlify"]) {
-    assert.match(manifests, new RegExp(provider + ": \\{"));
-  }
-  assert.match(manifests, /oauth_pending/);
-  assert.match(manifests, /status: "coming"/);
+  assert.match(page, /\/dashboard\/plugins\/.*\/connect/);
+  assert.match(detail, /Try in chat/);
+  assert.match(detail, /SectionHeader title="Information"/);
+  assert.match(detail, /\/settings/);
+  assert.match(onboarding, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId\/connect"\)/);
+  assert.match(onboarding, /getPluginAuthorizationUrl/);
+  assert.match(onboarding, /getPluginWorkspaceContext/);
+  assert.match(onboarding, /Add & Connect/);
+  assert.match(onboarding, /authorization is not available yet/);
   assert.doesNotMatch(page, /Render API key/);
   assert.doesNotMatch(consent, /Paste your Render API key/);
   assert.doesNotMatch(connect, /RENDER_API_KEY/);
   assert.match(connect, /github-install-url/);
   assert.match(connect, /vercel-install-url/);
-  assert.match(connect, /Render account sign-in is not enabled yet/);
   assert.match(consent, /Use Misma to connect/);
   assert.match(consent, /getUser\(\)/);
   assert.match(consent, /avatar/);
@@ -58,9 +59,9 @@ test("plugin directory uses account-owned install state and available provider c
   assert.match(settings, /View plugin detail/);
   assert.match(settings, /Reset to default/);
   assert.match(settings, /is_installed: false/);
+  assert.match(settings, /getPluginWorkspaceContext/);
   assert.doesNotMatch(settings, /misma_integrations_workspace/);
   assert.doesNotMatch(page, /Misma ecosystem/);
-  assert.doesNotMatch(page, /Plugin directory/);
   assert.doesNotMatch(page, /Code & Repository Management/);
   assert.doesNotMatch(page, />Manage</);
   assert.doesNotMatch(page, /Back to Misma/);

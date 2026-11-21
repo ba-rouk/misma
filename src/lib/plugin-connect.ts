@@ -32,3 +32,62 @@ export function openPluginInChat(provider: PluginId, websiteId?: string | null, 
   }
   window.location.assign("/dashboard");
 }
+
+export type PluginWorkspaceContext = {
+  user: { id: string; email?: string };
+  workspaceId: string;
+  workspaceIds: string[];
+};
+
+/**
+ * Resolve the account's provider-connection context without asking the user
+ * to select a workspace. A website-scoped plugin flow stays in that
+ * website's owning workspace; otherwise use the account's oldest manageable
+ * workspace as the provider's default connection target.
+ */
+export async function getPluginWorkspaceContext(websiteId?: string | null): Promise<PluginWorkspaceContext> {
+  const supabase = getSupabaseClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const user = authData.user;
+  if (authError || !user) throw new Error("Sign in to Misma before managing plugins.");
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from("workspace_members")
+    .select("workspace_id,role")
+    .eq("user_id", user.id);
+  if (membershipError) throw new Error("Could not load your Misma account access.");
+
+  const manageableIds = [...new Set((memberships || [])
+    .filter((row) => ["owner", "admin"].includes(String(row.role)))
+    .map((row) => String(row.workspace_id))
+    .filter(Boolean))];
+  if (!manageableIds.length) {
+    throw new Error("Ask a Misma account owner or admin to manage provider connections.");
+  }
+
+  const { data: workspaces, error: workspaceError } = await supabase
+    .from("workspaces")
+    .select("id,created_at")
+    .in("id", manageableIds)
+    .order("created_at", { ascending: true });
+  if (workspaceError) throw new Error("Could not resolve your Misma provider account.");
+  const workspaceIds = (workspaces || []).map((row) => String(row.id));
+  let workspaceId = workspaceIds[0] || manageableIds[0];
+  if (!workspaceId) throw new Error("No manageable Misma workspace is available.");
+
+  if (websiteId) {
+    const { data: website, error: websiteError } = await supabase
+      .from("website_connections")
+      .select("workspace_id")
+      .eq("id", websiteId)
+      .is("widget_deleted_at", null)
+      .maybeSingle();
+    if (websiteError) throw new Error("Could not resolve the selected website's Misma account.");
+    const websiteWorkspaceId = String(website?.workspace_id || "");
+    if (websiteWorkspaceId && manageableIds.includes(websiteWorkspaceId)) {
+      workspaceId = websiteWorkspaceId;
+    }
+  }
+
+  return { user, workspaceId, workspaceIds };
+}
