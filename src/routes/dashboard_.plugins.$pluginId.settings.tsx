@@ -22,7 +22,7 @@ function PluginSettingsRoute() {
   if (pluginId === "github") {
     return (
       <main className="misma-github-settings-empty-page">
-        <h1>GitHub settings</h1>
+        <h1>GitHub plugin settings</h1>
       </main>
     );
   }
@@ -49,24 +49,28 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
   const [notice, setNotice] = useState("");
 
   const connection = useMemo(() => connections.find((item) => item.status === "connected") || null, [connections]);
-  const canAuthorize = manifest?.authType === "github_app" || manifest?.authType === "vercel_marketplace_oauth";
+  const canAuthorize = manifest?.authType === "github_app" || manifest?.authType === "vercel_marketplace_oauth" || manifest?.authType === "netlify_oauth";
   const readActions = manifest?.id === "github"
     ? ["Check whether a repository is initialized", "List repositories granted to the GitHub App", "Compare commits and inspect selected repository files"]
     : manifest?.id === "vercel"
       ? ["List accessible projects", "Read project metadata and deployment status"]
-      : manifest?.id === "render"
-        ? ["List services available through the connected provider adapter", "Read service metadata"]
-        : ["Site discovery and build-status access are planned."];
+      : manifest?.id === "netlify"
+        ? ["Discover sites accessible to the connected Netlify account", "Read site URLs, repository metadata and deployment details"]
+        : manifest?.id === "render"
+          ? ["List services available through the connected provider adapter", "Read service metadata"]
+          : [];
   const writeActions = manifest?.id === "github"
     ? ["Create a dedicated feature branch", "Commit an approved widget installation patch", "Open a pull request for review"]
-    : ["Project association is available where supported; direct provider deployment triggers are not enabled in this release."];
+    : manifest?.id === "netlify"
+      ? ["Associate a discovered Netlify site with a Misma website"]
+      : ["Project association is available where supported; direct provider deployment triggers are not enabled in this release."];
 
   useEffect(() => {
     let active = true;
     if (!manifest) { setLoading(false); return () => { active = false; }; }
     void (async () => {
       try {
-        const websiteId = new URLSearchParams(window.location.search).get("websiteId") || "";
+        const websiteId = new URLSearchParams(window.location.search).get("websiteId") || window.sessionStorage.getItem("misma_plugins_website_id") || "";
         const context = await getPluginWorkspaceContext(websiteId);
         const [connectionResult, pluginResult] = await Promise.all([
           supabase.from("platform_connections").select("id,provider,external_account_name,status,created_at,updated_at,workspace_id")
