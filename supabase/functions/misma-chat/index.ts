@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { loadSharedBusinessKnowledge } from "../_shared/business-knowledge.ts";
-import { persistMemoryExchange, retrieveMemory, scheduleMemoryWrite, containsSensitiveSecret } from "../_shared/memory.ts";
+import { persistMemoryExchange, retrieveMemory, scheduleMemoryWrite, containsSensitiveSecret, isTrivialExchange } from "../_shared/memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1871,7 +1871,7 @@ Deno.serve(async (request) => {
     const hasPluginOrExternalOutput = requestedPluginIds.size > 0 || requestedAttachments.length > 0 ||
       Boolean(liveSearch && liveSearch.results && liveSearch.results.length) || shouldSearchWeb(message);
     const explicitMemoryRecall = /\b(remember|last time|we talked about|we discussed|earlier|previous chat|that thing|what do you remember)\b/i.test(userVisibleMessage);
-    const memoryRetrieval = !voice && memoryEnabled && !chatIncognito && !hasPluginOrExternalOutput
+    const memoryRetrieval = !voice && memoryEnabled && !chatIncognito && !hasPluginOrExternalOutput && !isTrivialExchange(userVisibleMessage, "")
       ? await retrieveMemory(db, {
           userId: userData.user.id,
           queryText: memoryQueryText,
@@ -2076,8 +2076,9 @@ Deno.serve(async (request) => {
     // Save the completed user/assistant exchange asynchronously. The background task
     // cannot delay the chat response and is skipped for incognito, disabled, tool and web turns.
     if (!voice && action === "chat" && memoryEnabled && !chatIncognito &&
-      !retryExistingUserMessage && editMessageId === null && !hasPluginOrExternalOutput &&
-      !containsSensitiveSecret(userVisibleMessage)) {
+      !retryExistingUserMessage && !pivotMessage && editMessageId === null && !hasPluginOrExternalOutput &&
+      !isTrivialExchange(userVisibleMessage, answer) && !containsSensitiveSecret(userVisibleMessage) &&
+      !containsSensitiveSecret(answer)) {
       const memoryTask = persistMemoryExchange(db, {
         userId: userData.user.id,
         workspaceId,
@@ -2172,8 +2173,9 @@ Deno.serve(async (request) => {
       thinkHarder,
       memoryUsed: memoryRetrieval.sources,
       memoryRecallNotFound: explicitMemoryRecall && !memoryRetrieval.found,
-      memoryQueued: !voice && memoryEnabled && !chatIncognito && !retryExistingUserMessage &&
-        editMessageId === null && !hasPluginOrExternalOutput && !containsSensitiveSecret(userVisibleMessage),
+      memoryQueued: !voice && memoryEnabled && !chatIncognito && !retryExistingUserMessage && !pivotMessage &&
+        editMessageId === null && !hasPluginOrExternalOutput && !isTrivialExchange(userVisibleMessage, answer) &&
+        !containsSensitiveSecret(userVisibleMessage) && !containsSensitiveSecret(answer),
     });
   } catch (error) {
     console.error("[misma-chat] Request failed.", error instanceof Error ? error.message : "unknown error");
