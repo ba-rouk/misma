@@ -761,7 +761,8 @@ async function main(request: Request) {
         .eq("user_id", userId).is("consumed_at", null).gt("expires_at", new Date().toISOString()).maybeSingle();
       if (stateLookupError || !savedState) throw new Error("Netlify authorization expired or did not match this Misma account. Start again from Plugins.");
       const profile = await netlifyRequest("/user", accessToken);
-      const externalAccountId = safeText(profile?.uid || profile?.id || profile?.email, 180);
+      const rawAccountId = profile?.uid ?? profile?.id ?? profile?.email;
+      const externalAccountId = typeof rawAccountId === "string" || typeof rawAccountId === "number" ? String(rawAccountId).trim().slice(0, 180) : "";
       if (!externalAccountId) throw new Error("Netlify did not return an account identifier.");
       const accountName = safeText(profile?.full_name || profile?.email, 160) || "Netlify account";
       const normalized = normalizeCredentialPayload("netlify", { accessToken });
