@@ -287,32 +287,15 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
 });
 
-test("Vercel settings has an explicit static route that renders the shared provider settings screen", async () => {
-  const route = await read("../src/routes/dashboard_.plugins.vercel.settings.tsx");
-  const shared = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
-  assert.match(route, /createFileRoute\("\/dashboard\/plugins\/vercel\/settings"\)/);
-  assert.match(route, /PluginSettingsPage pluginId="vercel"/);
-  assert.match(shared, /export function PluginSettingsPage\(\{ pluginId \}/);
-  assert.match(shared, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId\/settings"\)/);
+test("provider settings use one registered root-level dynamic route, not nested dashboard child routes", async () => {
+  const route = await read("../src/routes/dashboard_.plugins.$pluginId.settings.tsx");
   const generatedRoutes = await read("../src/routeTree.gen.ts");
-  assert.match(generatedRoutes, /'\/dashboard\/plugins\/vercel\/settings'/);
-  assert.match(generatedRoutes, /'\/dashboard\/plugins\/vercel\/settings': typeof/);
+  assert.match(route, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/settings"\)/);
+  assert.match(route, /const \{ pluginId \} = Route\.useParams\(\)/);
+  assert.match(route, /PluginSettingsPage pluginId=\{pluginId\}/);
+  assert.match(generatedRoutes, /id: '\/dashboard\/plugins\/\$pluginId\/settings', path: '\/dashboard\/plugins\/\$pluginId\/settings', getParentRoute: \(\) => rootRouteImport/);
+  assert.doesNotMatch(generatedRoutes, /routes\/dashboard\.plugins\.(?:github|vercel|netlify|render)\.settings/);
 });
-
-test("every plugin settings URL has an explicit static provider route", async () => {
-  const github = await read("../src/routes/dashboard_.plugins.github.settings.tsx");
-  const render = await read("../src/routes/dashboard_.plugins.render.settings.tsx");
-  const netlify = await read("../src/routes/dashboard_.plugins.netlify.settings.tsx");
-  assert.match(github, /createFileRoute\("\/dashboard\/plugins\/github\/settings"\)/);
-  assert.match(github, /GitHub plugin settings/);
-  assert.match(github, /misma-github-settings-empty-page/);
-  assert.doesNotMatch(github, /PluginSettingsPage|useEffect|supabase/);
-  assert.match(render, /createFileRoute\("\/dashboard\/plugins\/render\/settings"\)/);
-  assert.match(render, /PluginSettingsPage pluginId="render"/);
-  assert.match(netlify, /createFileRoute\("\/dashboard\/plugins\/netlify\/settings"\)/);
-  assert.match(netlify, /PluginSettingsPage pluginId="netlify"/);
-});
-
 
 test("Netlify OAuth connects and discovers authorized sites", async () => {
   const manifests = await read("../src/lib/plugin-manifests.ts");
