@@ -237,7 +237,7 @@ as $function$
       coalesce(nullif(conversation.latest_text, ''), 'Past conversation') as chat_title,
       (
         (case when p_query_embedding is null or exchange.embedding is null then 0
-          else greatest(0, 1 - (exchange.embedding <=> p_query_embedding)) end) * 0.62
+          else greatest(0, 1 - (exchange.embedding OPERATOR(extensions.<=>) p_query_embedding)) end) * 0.62
         + coalesce(ts_rank_cd(exchange.search_tsv, query_data.tsq), 0) * 0.24
         + (1.0 / (1.0 + greatest(0, extract(epoch from (now() - exchange.created_at)) / 2592000))) * 0.08
         + (case when exchange.pinned then 0.14 else 0 end)
@@ -265,7 +265,7 @@ as $function$
       coalesce(nullif(conversation.latest_text, ''), 'Saved memory') as chat_title,
       (
         (case when p_query_embedding is null or fact.embedding is null then 0
-          else greatest(0, 1 - (fact.embedding <=> p_query_embedding)) end) * 0.62
+          else greatest(0, 1 - (fact.embedding OPERATOR(extensions.<=>) p_query_embedding)) end) * 0.62
         + coalesce(ts_rank_cd(fact.search_tsv, query_data.tsq), 0) * 0.24
         + (1.0 / (1.0 + greatest(0, extract(epoch from (now() - fact.updated_at)) / 2592000))) * 0.08
         + (case when fact.pinned then 0.14 else 0 end)
