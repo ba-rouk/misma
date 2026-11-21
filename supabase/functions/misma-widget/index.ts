@@ -1206,12 +1206,12 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       await new Promise((resolve) => setTimeout(resolve, 650));
       const previous = previousPages.get(parsed.href);
       const pageHeaders: Record<string,string> = { "User-Agent": "MismaBot/1.0 (+https://misma.onrender.com)" };
-      if (previous?.etag) pageHeaders["If-None-Match"] = String(previous.etag);
-      if (previous?.last_modified) pageHeaders["If-Modified-Since"] = String(previous.last_modified);
+      if (previous?.structured_data_scanned === true && previous?.etag) pageHeaders["If-None-Match"] = String(previous.etag);
+      if (previous?.structured_data_scanned === true && previous?.last_modified) pageHeaders["If-Modified-Since"] = String(previous.last_modified);
       const response = await fetchWebsiteWithRetry(parsed.href, {
         redirect: "manual", headers: pageHeaders, signal: websiteScanSignal(scanSignal, 9000),
       });
-      if (response.status === 304 && previous?.content_text) {
+      if (response.status === 304 && previous?.content_text && previous?.structured_data_scanned === true) {
         pages.push({
           url: parsed.href, title: safeString(previous.title, 240), text: safeString(previous.content_text, 18000),
           platform: "Unchanged", themeSuggestions: {}, structuredContent: Array.isArray(previous.structured_data) ? previous.structured_data : [], etag: previous.etag || null,
@@ -1547,7 +1547,7 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
   const scanSignal = parentSignal || AbortSignal.timeout(100_000);
   try {
     const previousResult = await db.from("website_scan_pages")
-      .select("canonical_url,title,content_text,etag,last_modified,content_type,content_hash,structured_data")
+      .select("canonical_url,title,content_text,etag,last_modified,content_type,content_hash,structured_data,structured_data_scanned")
       .eq("website_id", website.id).limit(Math.max(maxPages, 100));
     const previousPages = new Map<string, AnyRecord>((previousResult.data || []).map((page: AnyRecord) => [String(page.canonical_url), page]));
     const jobResult = jobId
@@ -1555,13 +1555,13 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
       : { data: null, error: null };
     const seedUrls = Array.isArray(jobResult.data?.discovered_urls) ? jobResult.data.discovered_urls.filter((url: unknown): url is string => typeof url === "string").slice(0, 100) : [];
     const currentJobPages = jobId
-      ? await db.from("website_scan_pages").select("canonical_url,title,content_text,etag,last_modified,content_type,structured_data")
+      ? await db.from("website_scan_pages").select("canonical_url,title,content_text,etag,last_modified,content_type,structured_data,structured_data_scanned")
         .eq("website_id", website.id).eq("job_id", jobId).order("scanned_at", { ascending: true }).limit(maxPages)
       : { data: [] as AnyRecord[], error: null };
-    const processedPages = (currentJobPages.data || []).map((row: AnyRecord) => ({
+    const processedPages = (currentJobPages.data || []).filter((row: AnyRecord) => row.structured_data_scanned === true).map((row: AnyRecord) => ({
       url: String(row.canonical_url), title: safeString(row.title, 240), text: safeString(row.content_text, 18000),
       platform: "Previously scanned", themeSuggestions: extractThemeSuggestions(safeString(row.content_text, 18000)),
-      structuredContent: Array.isArray(row.structured_data) ? row.structured_data : [], etag: row.etag || null, lastModified: row.last_modified || null, contentType: safeString(row.content_type, 100) || "text/html",
+      structuredContent: Array.isArray(row.structured_data) ? row.structured_data : [], structuredDataScanned: row.structured_data_scanned === true, etag: row.etag || null, lastModified: row.last_modified || null, contentType: safeString(row.content_type, 100) || "text/html",
     }));
     const processedUrls = new Set<string>(processedPages.map((page: AnyRecord) => page.url));
     const remainingPages = Math.max(0, maxPages - processedPages.length);
@@ -1577,7 +1577,7 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
       const savedPage = await db.from("website_scan_pages").upsert({
         workspace_id: website.workspace_id, website_id: website.id, job_id: jobId || null,
         canonical_url: page.url, content_hash: contentHash, title: page.title,
-        content_text: page.text, content_type: page.contentType, structured_data: page.structuredContent || [], etag: page.etag,
+        content_text: page.text, content_type: page.contentType, structured_data: page.structuredContent || [], structured_data_scanned: true, etag: page.etag,
         last_modified: page.lastModified, scanned_at: new Date().toISOString(),
       }, { onConflict: "website_id,canonical_url" });
       if (savedPage.error) console.warn("[misma-widget] Could not persist a scanned page checkpoint.", savedPage.error.code);
