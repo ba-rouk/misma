@@ -8,7 +8,7 @@ test("verified website content is parsed from JSON-LD and returned as recommenda
   const widget = await read("supabase/functions/misma-widget/index.ts");
   const migration = await read("supabase/migrations/20261121100000_verified_website_content_items.sql");
   const runtime = await read("src/assets/misma-widget-runtime.js");
-  assert.ok(widget.includes('application\\/ld+json'));
+  assert.match(widget, /extractStructuredContent/);
   assert.match(widget, /source_verified:\s*true/);
   assert.match(widget, /findWebsiteRecommendations/);
   assert.match(widget, /eq\("source_verified",true\)/);
