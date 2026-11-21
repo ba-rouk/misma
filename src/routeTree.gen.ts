@@ -16,6 +16,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as DashboardPluginsRouteImport } from './routes/dashboard_.plugins'
+import { Route as DashboardPluginDetailRouteImport } from './routes/dashboard_.plugins.$pluginId'
+import { Route as DashboardPluginSettingsRouteImport } from './routes/dashboard_.plugins.$pluginId.settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -61,6 +64,9 @@ export interface FileRoutesByFullPath {
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/dashboard/plugins/$pluginId/settings': typeof DashboardPluginSettingsRoute
+  '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
+  '/dashboard/plugins': typeof DashboardPluginsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -91,6 +97,9 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/sitemap.xml'
     | '/auth/callback'
+    | '/dashboard/plugins/$pluginId/settings'
+    | '/dashboard/plugins/$pluginId'
+    | '/dashboard/plugins'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -119,6 +128,9 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  DashboardPluginsRoute: typeof DashboardPluginsRoute
+  DashboardPluginDetailRoute: typeof DashboardPluginDetailRoute
+  DashboardPluginSettingsRoute: typeof DashboardPluginSettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,8 +184,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/plugins': {
+      id: '/dashboard/plugins'
+      path: '/dashboard/plugins'
+      fullPath: '/dashboard/plugins'
+      preLoaderRoute: typeof DashboardPluginsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/plugins/$pluginId': {
+      id: '/dashboard/plugins/$pluginId'
+      path: '/dashboard/plugins/$pluginId'
+      fullPath: '/dashboard/plugins/$pluginId'
+      preLoaderRoute: typeof DashboardPluginDetailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/plugins/$pluginId/settings': {
+      id: '/dashboard/plugins/$pluginId/settings'
+      path: '/dashboard/plugins/$pluginId/settings'
+      fullPath: '/dashboard/plugins/$pluginId/settings'
+      preLoaderRoute: typeof DashboardPluginSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+const DashboardPluginsRoute = DashboardPluginsRouteImport.update({ id: '/dashboard/plugins', path: '/dashboard/plugins', getParentRoute: () => rootRouteImport } as any)
+const DashboardPluginDetailRoute = DashboardPluginDetailRouteImport.update({ id: '/dashboard/plugins/$pluginId', path: '/dashboard/plugins/$pluginId', getParentRoute: () => rootRouteImport } as any)
+const DashboardPluginSettingsRoute = DashboardPluginSettingsRouteImport.update({ id: '/dashboard/plugins/$pluginId/settings', path: '/dashboard/plugins/$pluginId/settings', getParentRoute: () => rootRouteImport } as any)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -183,6 +220,9 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  DashboardPluginsRoute: DashboardPluginsRoute,
+  DashboardPluginDetailRoute: DashboardPluginDetailRoute,
+  DashboardPluginSettingsRoute: DashboardPluginSettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
