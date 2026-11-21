@@ -54,9 +54,11 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
     ? ["Check whether a repository is initialized", "List repositories granted to the GitHub App", "Compare commits and inspect selected repository files"]
     : manifest?.id === "vercel"
       ? ["List accessible projects", "Read project metadata and deployment status"]
-      : manifest?.id === "render"
-        ? ["List services available through the connected provider adapter", "Read service metadata"]
-        : ["Site discovery and build-status access are planned."];
+      : manifest?.id === "netlify"
+        ? ["Discover sites accessible to the connected Netlify account", "Read site URLs, repository metadata and deployment details"]
+        : manifest?.id === "render"
+          ? ["List services available through the connected provider adapter", "Read service metadata"]
+          : [];
   const writeActions = manifest?.id === "github"
     ? ["Create a dedicated feature branch", "Commit an approved widget installation patch", "Open a pull request for review"]
     : ["Project association is available where supported; direct provider deployment triggers are not enabled in this release."];
