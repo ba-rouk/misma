@@ -88,7 +88,8 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(css, /scroll-snap-type:\s*x mandatory/);
   assert.match(css, /\.misma-plugin-hero-gallery/);
   assert.match(css, /\.misma-plugin-information>div/);
-  assert.match(css, /\.misma-plugin-detail-primary[\\s\\S]*background:#f7f7f8/);
+  assert.ok(css.includes(".misma-plugin-detail-primary {"));
+  assert.ok(css.includes("background:#f7f7f8;"));
   assert.match(manifests, /authType: "oauth_pending"/);
   assert.match(manifests, /Coming later/);
   assert.doesNotMatch(manifests, /Trigger redeploy/);
@@ -170,7 +171,7 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.match(root, /misma-design-system\.css\?url/);
   assert.match(root, /href: mismaDesignSystemCss/);
   assert.match(css, /--misma-glass-surface:\s*rgba\(255, 255, 255, \.05\)/);
-  assert.match(css, /--misma-glass-blur:\s*blur\(22px\) saturate\(140%\)/);
+  assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
   assert.match(css, /--misma-glass-border:\s*rgba\(255, 255, 255, \.10\)/);
   assert.match(css, /--misma-green:\s*#10b981/i);
   assert.match(css, /rgba\(5,7,10,\.60\)/);
@@ -187,9 +188,9 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.match(css, /\.aichat-side \.aichat-recent-item/);
   assert.match(css, /@media \(max-width: 767px\)/);
   assert.match(css, /\.misma-plugin-settings-permissions fieldset/);
-  assert.match(css, /\.aichat-composer-plus-menu,[\\s\\S]*\.misma-chat-plugin-popup/);
+  assert.ok(css.includes(".aichat-composer-plus-menu,\n.misma-chat-plugin-popup {"));
   assert.match(css, /--misma-popover-bg/);
   assert.match(css, /\.aichat-plus-menu-icon/);
-  assert.match(css, /blur\\(22px\\) saturate\\(140%\\)/);
+  assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
 });
 
