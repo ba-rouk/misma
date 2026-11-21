@@ -56,8 +56,6 @@ function ExamplePreview({ kind, provider, title, description }: { kind: string; 
 
 
 export function PluginDetailPage({ pluginIdOverride }: { pluginIdOverride?: string } = {}) {
-  const { pluginId: routePluginId } = Route.useParams({ strict: false });
-  const rawPluginId = pluginIdOverride || String(routePluginId || "");
   const manifest = getPluginManifest(rawPluginId);
   const supabase = getSupabaseClient();
   const [workspaceId, setWorkspaceId] = useState("");

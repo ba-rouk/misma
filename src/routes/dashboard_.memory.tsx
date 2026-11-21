@@ -129,32 +129,6 @@ function MemoryPage() {
     } finally { setBusy(""); }
   }
 
-  async function addFact() {
-    const content = newFact.trim();
-    if (content.length < 4 || content.length > 1200) { setError("Enter a memory between 4 and 1,200 characters."); return; }
-    setBusy("new-fact");
-    setError("");
-    setNotice("");
-    try {
-      const auth = await supabase.auth.getUser();
-      if (auth.error || !auth.data.user) throw new Error("Your session has expired.");
-      const key = "manual_" + crypto.randomUUID().replace(/-/g, "");
-      const { error: insertError } = await supabase.from("memory_facts").insert({
-        user_id: auth.data.user.id,
-        type: newType,
-        fact_key: key,
-        content,
-        confidence: 1,
-        pinned: true,
-      });
-      if (insertError) throw insertError;
-      setNewFact("");
-      setNotice("Memory added.");
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not add this memory.");
-    } finally { setBusy(""); }
-  }
 
   async function togglePin(kind: MemoryTab, id: string, pinned: boolean) {
     setBusy(id);
