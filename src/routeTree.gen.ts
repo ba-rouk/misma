@@ -76,6 +76,9 @@ export interface FileRoutesByTo {
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/dashboard/plugins': typeof DashboardPluginsRoute
+  '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
+  '/dashboard/plugins/$pluginId/settings': typeof DashboardPluginSettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +89,9 @@ export interface FileRoutesById {
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/dashboard/plugins': typeof DashboardPluginsRoute
+  '/dashboard/plugins/$pluginId': typeof DashboardPluginDetailRoute
+  '/dashboard/plugins/$pluginId/settings': typeof DashboardPluginSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -109,6 +115,9 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/sitemap.xml'
     | '/auth/callback'
+    | '/dashboard/plugins'
+    | '/dashboard/plugins/$pluginId'
+    | '/dashboard/plugins/$pluginId/settings'
   id:
     | '__root__'
     | '/'
@@ -118,6 +127,9 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/sitemap.xml'
     | '/auth/callback'
+    | '/dashboard/plugins'
+    | '/dashboard/plugins/$pluginId'
+    | '/dashboard/plugins/$pluginId/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
