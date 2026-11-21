@@ -196,6 +196,7 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
           <h1>{manifest.name}</h1>
           <button type="button" className="misma-plugin-detail-settings" aria-label="Plugin settings" onClick={() => window.location.assign("/dashboard/plugins/" + manifest.id + "/settings")}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+        </button>
         </header>
         <section className={"misma-plugin-hero misma-plugin-hero-gallery is-" + manifest.id} aria-label={manifest.name + " example previews"}>
           <div className="misma-plugin-preview-scroller">
