@@ -67,8 +67,8 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /previewCards\.map/);
   assert.match(page, /ExamplePreview/);
   assert.match(page, /misma-plugin-description-section/);
-  assert.match(page, /Skills/);
-  assert.match(page, /Permissions/);
+  assert.match(page, /Skill/);
+  assert.match(page, /PluginConnectConsent/);
   assert.match(page, /Information/);
   assert.match(page, /Privacy Policy/);
   assert.match(page, /Terms of Service/);
@@ -77,7 +77,19 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /Connect \{manifest\.name\}/);
   assert.match(page, /misma-plugin-skills-grid/);
   assert.match(page, /misma-plugin-detail-actionbar/);
+  assert.match(page, /misma-plugin-hero-gallery/);
+  assert.match(page, /misma-plugin-example-slide/);
+  assert.match(page, /SectionHeader title="App"/);
+  assert.match(page, /SectionHeader title="Skill"/);
+  assert.match(page, /SectionHeader title="Information"/);
+  assert.match(page, /misma-plugin-skill-chip/);
+  assert.match(page, /misma-plugin-information/);
+  assert.doesNotMatch(page, /SectionHeader title="Permissions"/);
   assert.match(css, /scroll-snap-type:\s*x mandatory/);
+  assert.match(css, /\.misma-plugin-hero-gallery/);
+  assert.match(css, /\.misma-plugin-information>div/);
+  assert.ok(css.includes(".misma-plugin-detail-page .misma-plugin-detail-primary {"));
+  assert.ok(css.includes("background:#f7f7f8;"));
   assert.match(manifests, /authType: "oauth_pending"/);
   assert.match(manifests, /Coming later/);
   assert.doesNotMatch(manifests, /Trigger redeploy/);
@@ -122,6 +134,10 @@ test("dashboard exposes Plugins and Memory and passes explicit chat plugin selec
   assert.match(dashboard, /chatEnabledPlugins/);
   assert.match(dashboard, /activePlugins: chatEnabledPlugins/);
   assert.match(dashboard, /misma-chat-plugin-popup/);
+  assert.match(dashboard, /aichat-composer-plus-menu/);
+  assert.match(dashboard, /Upload files/);
+  assert.match(dashboard, /Think harder/);
+  assert.match(dashboard, /Create image/);
   assert.match(dashboard, /misma-chat-plugins-open/);
   assert.match(dashboard, /ChatPluginIcon/);
   assert.match(dashboard, /misma_try_plugin_provider/);
@@ -155,7 +171,7 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.match(root, /misma-design-system\.css\?url/);
   assert.match(root, /href: mismaDesignSystemCss/);
   assert.match(css, /--misma-glass-surface:\s*rgba\(255, 255, 255, \.05\)/);
-  assert.match(css, /--misma-glass-blur:\s*blur\(22px\) saturate\(140%\)/);
+  assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
   assert.match(css, /--misma-glass-border:\s*rgba\(255, 255, 255, \.10\)/);
   assert.match(css, /--misma-green:\s*#10b981/i);
   assert.match(css, /rgba\(5,7,10,\.60\)/);
@@ -172,5 +188,9 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
   assert.match(css, /\.aichat-side \.aichat-recent-item/);
   assert.match(css, /@media \(max-width: 767px\)/);
   assert.match(css, /\.misma-plugin-settings-permissions fieldset/);
+  assert.ok(css.includes(".aichat-composer-plus-menu,\n.misma-chat-plugin-popup {"));
+  assert.match(css, /--misma-popover-bg/);
+  assert.match(css, /\.aichat-plus-menu-icon/);
+  assert.ok(css.includes("backdrop-filter:blur(22px) saturate(140%) !important;"));
 });
 
