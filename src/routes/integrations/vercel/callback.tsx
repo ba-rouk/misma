@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../../../lib/supabase";
 
-type Workspace = { id: string; name: string };
 type Website = { id: string; name: string; domain: string };
 type VercelProject = {
   id: string;
@@ -58,7 +57,6 @@ function VercelMarketplaceCallback() {
   const [callback, setCallback] = useState<{ code: string; configurationId: string; teamId: string; next: string }>({
     code: "", configurationId: "", teamId: "", next: "",
   });
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [websites, setWebsites] = useState<Website[]>([]);
   const [projects, setProjects] = useState<VercelProject[]>([]);
@@ -124,12 +122,15 @@ function VercelMarketplaceCallback() {
         .select("id,name").in("id", ids).order("name");
       if (workspaceError) throw new Error("Could not load your Misma workspaces.");
       const options = (data || []).map((row: any) => ({ id: String(row.id), name: String(row.name || "Misma workspace") }));
-      setWorkspaces(options);
-      if (options.length === 1) {
-        setWorkspaceId(options[0].id);
-        await loadWebsites(options[0].id);
-      }
-      setNotice(options.length > 1 ? "Choose which Misma workspace should own this Vercel connection." : "Choose a website to associate with your Vercel project.");
+      const rememberedWorkspaceId = (() => {
+        try { return sessionStorage.getItem("misma_vercel_workspace_id") || ""; } catch { return ""; }
+      })();
+      const selected = options.find((workspace: { id: string }) => workspace.id === rememberedWorkspaceId) || options[0];
+      if (!selected) throw new Error("No manageable Misma account is available for this Vercel connection.");
+      setWorkspaceId(selected.id);
+      await loadWebsites(selected.id);
+      try { sessionStorage.removeItem("misma_vercel_workspace_id"); } catch { /* Callback can finish without storage. */ }
+      setNotice("Misma account context selected automatically. Choose the website and Vercel project to link.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not prepare the Vercel connection.");
     }
@@ -148,7 +149,7 @@ function VercelMarketplaceCallback() {
 
   async function completeConnection() {
     if (!workspaceId || !callback.code) {
-      setError("Choose a workspace and restart the Vercel connection if the authorization code is missing.");
+      setError("The Misma account context is unavailable. Return to Misma and start the Vercel connection again.");
       return;
     }
     setBusy(true); setError(""); setNotice("Exchanging the Marketplace authorization and discovering Vercel projects…");
@@ -249,12 +250,6 @@ function VercelMarketplaceCallback() {
         {notice && <div role="status" className="misma-integrations-message is-notice">{notice}</div>}
 
         {!connected && <>
-          <label style={fieldLabel}>Misma workspace
-            <select value={workspaceId} onChange={(event) => { setWorkspaceId(event.target.value); void loadWebsites(event.target.value).catch((cause) => setError(cause.message)); }} style={fieldStyle}>
-              <option value="">Choose a workspace</option>
-              {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-            </select>
-          </label>
           <button type="button" onClick={() => void completeConnection()} disabled={busy || !workspaceId || !callback.code} style={primaryButton}>{busy ? "Connecting…" : "Complete Vercel connection"}</button>
           {!callback.code && !connected && <p style={{ color: "#667085", fontSize: 13 }}>If you signed in after returning from Vercel, go back to Misma and start Connect Vercel again.</p>}
         </>}

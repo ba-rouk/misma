@@ -19,6 +19,9 @@ export async function getPluginAuthorizationUrl(workspaceId: string, provider: P
       ? url.startsWith("https://vercel.com/integrations/")
       : url.startsWith("https://app.netlify.com/authorize?");
   if (!allowed) throw new Error("Misma did not return a valid " + provider + " authorization link.");
+  if (provider === "vercel") {
+    try { sessionStorage.setItem("misma_vercel_workspace_id", workspaceId); } catch { /* Callback falls back to the account default. */ }
+  }
   if (provider === "netlify") {
     try { sessionStorage.setItem("misma_netlify_oauth_workspace_id", workspaceId); } catch { /* callback can show a restart message */ }
   }
