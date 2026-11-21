@@ -480,11 +480,11 @@ async function loadBusinessContext(db: Db, workspaceId: string, voice = false, w
     fallbackRoomId: roomId,
   });
 }
-async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId?: string, roomId?: number, websiteInfo?: AnyRecord): Promise<string> {
+async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId?: string, roomId?: number, websiteInfo?: AnyRecord): Promise<{ answer: string; recommendations: AnyRecord[] }> {
   const liveSearchPromise = shouldSearchWeb(message) ? searchLiveWeb(message, voice) : Promise.resolve(null);
-  const [context, liveSearch] = await Promise.all([
-    loadBusinessContext(db, workspaceId, voice, websiteConnectionId, roomId, websiteInfo),
-    liveSearchPromise,
+  const recommendationPromise = websiteConnectionId && !voice ? findWebsiteRecommendations(db, workspaceId, websiteConnectionId, message) : Promise.resolve([]);
+  const [context, liveSearch, recommendations] = await Promise.all([
+    loadBusinessContext(db, workspaceId, voice, websiteConnectionId, roomId, websiteInfo), liveSearchPromise, recommendationPromise,
   ]);
   const system = [
     "You are Misma, the business's website and messaging assistant.",
@@ -508,9 +508,10 @@ async function answerCustomer(db: Db, workspaceId: string, message: string, voic
       "LIVE SEARCH RESULTS: " + JSON.stringify(liveSearch.results),
     ] : []),
     "Business context: " + JSON.stringify(context),
+    ...(recommendations.length ? ["VERIFIED WEBSITE CONTENT MATCHES: " + JSON.stringify(recommendations), "These matches are taken from structured data published on the connected website. Do not alter their names, prices, images or links."] : []),
   ].join("\n");
   const answer = await generateText(system, message, undefined, undefined, voice);
-  return normalizeAssistantText(answer) || answer.trim();
+  return { answer: normalizeAssistantText(answer) || answer.trim(), recommendations };
 }
 
 function sanitizeWidgetTheme(value: unknown): AnyRecord | null {
@@ -844,6 +845,100 @@ function extractEmbeddedData(html: string): string {
   }
   return parts.join("\n").slice(0, 24000);
 }
+
+function extractStructuredContent(html: string, pageUrl: string): AnyRecord[] {
+  const entries: AnyRecord[] = [], seen = new Set<string>();
+  const safeHttps = (value: unknown, base: string, sameOrigin = false): string | null => {
+    if (typeof value !== "string" || !value.trim()) return null;
+    try {
+      const parsed = new URL(value.trim(), base), baseUrl = new URL(base);
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
+      if (sameOrigin && parsed.origin !== baseUrl.origin) return null;
+      if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(parsed.hostname)) return null;
+      return parsed.href.slice(0, 2048);
+    } catch { return null; }
+  };
+  const nodes: AnyRecord[] = [];
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) { for (const child of value) visit(child); return; }
+    if (!isRecord(value)) return;
+    if (Array.isArray(value["@graph"])) visit(value["@graph"]);
+    const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
+    if (types.some((type) => typeof type === "string")) nodes.push(value);
+  };
+  for (const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { visit(JSON.parse(match[1].replace(/^\uFEFF/, "").trim())); } catch { /* Ignore invalid JSON-LD. */ }
+  }
+  const typeMap: Record<string, string> = {
+    product:"product", service:"service", movie:"movie", musicrecording:"music",
+    musicalbum:"music", musicgroup:"music", person:"profile", profilepage:"profile",
+    article:"article", blogposting:"article", newsarticle:"article",
+    socialmediaposting:"post", videoobject:"video", event:"event",
+    book:"book", recipe:"recipe", course:"course",
+  };
+  for (const node of nodes) {
+    const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+    const type = types.map((v) => String(v || "").split("/").pop().toLowerCase()).map((v) => typeMap[v]).find(Boolean);
+    const name = safeString(node.name || node.headline, 240);
+    if (!type || name.length < 2) continue;
+    const description = safeString(node.description || node.abstract, 1800);
+    const imageValue = Array.isArray(node.image) ? node.image[0] : node.image;
+    const imageCandidate = typeof imageValue === "string" ? imageValue : isRecord(imageValue) ? imageValue.url || imageValue.contentUrl : "";
+    const imageUrl = safeHttps(imageCandidate, pageUrl, false);
+    const rawUrl = typeof node.url === "string" ? node.url : isRecord(node.url) && typeof node.url["@id"] === "string" ? node.url["@id"] : typeof node["@id"] === "string" ? node["@id"] : pageUrl;
+    const itemUrl = safeHttps(rawUrl, pageUrl, true) || safeHttps(pageUrl, pageUrl, true);
+    const offersValue = Array.isArray(node.offers) ? node.offers[0] : node.offers;
+    const offer = isRecord(offersValue) ? offersValue : {};
+    const priceValue = offer.price ?? offer.priceSpecification?.price;
+    const currency = safeString(offer.priceCurrency || offer.priceSpecification?.priceCurrency, 8);
+    const priceText = priceValue == null || String(priceValue).trim() === "" ? "" : (currency ? currency + " " : "") + String(priceValue).slice(0, 100);
+    const key = [type, name.toLowerCase(), itemUrl].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({ item_type:type, name, description, image_url:imageUrl, item_url:itemUrl, price_text:priceText, source_page_url:pageUrl, source_verified:true });
+    if (entries.length >= 40) break;
+  }
+  return entries;
+}
+
+async function persistStructuredContent(db: Db, website: AnyRecord, pages: AnyRecord[]): Promise<number> {
+  const byKey = new Map<string, AnyRecord>();
+  for (const page of pages) for (const item of Array.isArray(page.structuredContent) ? page.structuredContent : []) {
+    if (!isRecord(item) || !safeString(item.name, 240) || !safeString(item.source_page_url, 2048)) continue;
+    const key = [item.item_type, item.name.toLowerCase(), item.source_page_url].join("|");
+    byKey.set(key, {
+      workspace_id:website.workspace_id, website_id:website.id, item_type:safeString(item.item_type,40),
+      name:safeString(item.name,240), description:safeString(item.description,1800),
+      image_url:safeString(item.image_url,2048)||null, item_url:safeString(item.item_url,2048)||null,
+      price_text:safeString(item.price_text,120)||null, source_page_url:safeString(item.source_page_url,2048),
+      source_verified:true, updated_at:new Date().toISOString(),
+    });
+  }
+  const rows = Array.from(byKey.values()).slice(0,500);
+  if (!rows.length) return 0;
+  const saved = await db.from("website_content_items").upsert(rows,{onConflict:"website_id,item_type,name,source_page_url"});
+  if (saved.error) throw new Error("Could not save verified structured website content.");
+  return rows.length;
+}
+
+async function findWebsiteRecommendations(db: Db, workspaceId: string, websiteId: string, message: string): Promise<AnyRecord[]> {
+  const stop = new Set(["the","and","for","with","that","this","from","you","your","are","can","show","find","looking","want","need","some","about","what","which","where","best","please","have","has","does","there","into","price","prices"]);
+  const terms = Array.from(new Set(message.toLowerCase().match(/[a-z0-9][a-z0-9-]{2,}/g)||[])).filter((t)=>!stop.has(t)).slice(0,12);
+  if (!terms.length) return [];
+  const result = await db.from("website_content_items").select("id,item_type,name,description,image_url,item_url,price_text,source_page_url")
+    .eq("workspace_id",workspaceId).eq("website_id",websiteId).eq("source_verified",true).limit(300);
+  if (result.error) { console.warn("[misma-widget] Verified website recommendations unavailable:",result.error.code||"unknown"); return []; }
+  return (result.data||[]).map((row:AnyRecord)=>{
+    const name=safeString(row.name,240), hay=[name,row.description,row.item_type].join(" ").toLowerCase();
+    const score=terms.reduce((sum,t)=>sum+(hay.includes(t)?(name.toLowerCase().includes(t)?3:1):0),0);
+    return {row,score};
+  }).filter((v)=>v.score>0).sort((a,b)=>b.score-a.score).slice(0,3).map(({row})=>({
+    id:String(row.id),type:safeString(row.item_type,40),name:safeString(row.name,240),
+    description:safeString(row.description,500),imageUrl:safeString(row.image_url,2048),
+    price:safeString(row.price_text,120),url:safeString(row.item_url,2048)||safeString(row.source_page_url,2048),
+  }));
+}
+
 function detectWebsitePlatform(html: string, url: string, headers?: Headers): string {
   const lower = html.toLowerCase();
   const powered = (headers?.get("x-powered-by") || "").toLowerCase();
@@ -968,7 +1063,7 @@ function websiteScanSignal(parent: AbortSignal | undefined, timeoutMs: number): 
   const timeout = AbortSignal.timeout(timeoutMs);
   return parent ? AbortSignal.any([parent, timeout]) : timeout;
 }
-async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3, skipUrls: Set<string> = new Set()): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }>> {
+async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortSignal, onProgress?: (scanned: number, discovered: number) => Promise<void>, previousPages: Map<string, AnyRecord> = new Map(), seedUrls: string[] = [], onDiscover?: (url: string) => Promise<void>, onPage?: (page: { url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; structuredContent: AnyRecord[]; etag: string | null; lastModified: string | null; contentType: string }) => Promise<void>, onSkip?: (url: string, reason: string) => Promise<void>, maxDepth = 3, skipUrls: Set<string> = new Set()): Promise<Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; structuredContent: AnyRecord[]; etag: string | null; lastModified: string | null; contentType: string }>> {
   const first = isSafeWebsiteUrl(startUrl);
   if (!first) throw new Error("This website URL is not eligible for safe scanning.");
   // Restrict discovery and redirects to the same registrable domain (eTLD+1).
@@ -979,7 +1074,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
   const redirectHops = new Map<string, number>();
   const seen = new Set<string>();
   if (onDiscover) for (const seed of queue) await onDiscover(seed);
-  const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; etag: string | null; lastModified: string | null; contentType: string }> = [];
+  const pages: Array<{ url: string; title: string; text: string; platform: string; themeSuggestions: AnyRecord; structuredContent: AnyRecord[]; etag: string | null; lastModified: string | null; contentType: string }> = [];
   const registrableDomain = getDomain(first.hostname);
   if (!registrableDomain) throw new Error("The website host does not have a valid registrable domain.");
   const sameRegistrableDomain = (url: URL) => getDomain(url.hostname) === registrableDomain;
@@ -1119,7 +1214,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       if (response.status === 304 && previous?.content_text) {
         pages.push({
           url: parsed.href, title: safeString(previous.title, 240), text: safeString(previous.content_text, 18000),
-          platform: "Unchanged", themeSuggestions: {}, etag: previous.etag || null,
+          platform: "Unchanged", themeSuggestions: {}, structuredContent: Array.isArray(previous.structured_data) ? previous.structured_data : [], etag: previous.etag || null,
           lastModified: previous.last_modified || null, contentType: previous.content_type || "text/html",
         });
         if (onPage) await onPage(pages[pages.length - 1]);
@@ -1180,6 +1275,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
               : raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ").replace(/\s+/g, " ").trim().slice(0, 18000);
       const platform = isPdf ? "PDF document" : isJavaScript ? "JavaScript asset" : isCss ? "CSS stylesheet" : detectWebsitePlatform(raw, parsed.href, response.headers);
       const themeSuggestions = isPdf ? {} : extractThemeSuggestions(raw);
+      const structuredContent = isHtml ? extractStructuredContent(raw, parsed.href) : [];
       if (text.length < 120 && /text\/html|application\/xhtml\+xml/.test(contentType) && getEnv("BROWSERLESS_API_KEY")) {
         try {
           const rendered = await fetch("https://production-sfo.browserless.io/content?token=" + encodeURIComponent(getEnv("BROWSERLESS_API_KEY")), {
@@ -1195,7 +1291,7 @@ async function crawlWebsite(startUrl: string, maxPages = 25, scanSignal?: AbortS
       }
       if (text.length > 120) {
         pages.push({
-          url: parsed.href, title, text, platform, themeSuggestions,
+          url: parsed.href, title, text, platform, themeSuggestions, structuredContent,
           etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified"), contentType,
         });
         if (onPage) await onPage(pages[pages.length - 1]);
@@ -1451,7 +1547,7 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
   const scanSignal = parentSignal || AbortSignal.timeout(100_000);
   try {
     const previousResult = await db.from("website_scan_pages")
-      .select("canonical_url,title,content_text,etag,last_modified,content_type,content_hash")
+      .select("canonical_url,title,content_text,etag,last_modified,content_type,content_hash,structured_data")
       .eq("website_id", website.id).limit(Math.max(maxPages, 100));
     const previousPages = new Map<string, AnyRecord>((previousResult.data || []).map((page: AnyRecord) => [String(page.canonical_url), page]));
     const jobResult = jobId
@@ -1459,13 +1555,13 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
       : { data: null, error: null };
     const seedUrls = Array.isArray(jobResult.data?.discovered_urls) ? jobResult.data.discovered_urls.filter((url: unknown): url is string => typeof url === "string").slice(0, 100) : [];
     const currentJobPages = jobId
-      ? await db.from("website_scan_pages").select("canonical_url,title,content_text,etag,last_modified,content_type")
+      ? await db.from("website_scan_pages").select("canonical_url,title,content_text,etag,last_modified,content_type,structured_data")
         .eq("website_id", website.id).eq("job_id", jobId).order("scanned_at", { ascending: true }).limit(maxPages)
       : { data: [] as AnyRecord[], error: null };
     const processedPages = (currentJobPages.data || []).map((row: AnyRecord) => ({
       url: String(row.canonical_url), title: safeString(row.title, 240), text: safeString(row.content_text, 18000),
       platform: "Previously scanned", themeSuggestions: extractThemeSuggestions(safeString(row.content_text, 18000)),
-      etag: row.etag || null, lastModified: row.last_modified || null, contentType: safeString(row.content_type, 100) || "text/html",
+      structuredContent: Array.isArray(row.structured_data) ? row.structured_data : [], etag: row.etag || null, lastModified: row.last_modified || null, contentType: safeString(row.content_type, 100) || "text/html",
     }));
     const processedUrls = new Set<string>(processedPages.map((page: AnyRecord) => page.url));
     const remainingPages = Math.max(0, maxPages - processedPages.length);
@@ -1475,13 +1571,13 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
       discovered.add(url);
       await db.from("scan_jobs").update({ discovered_urls: Array.from(discovered).slice(0, 100), updated_at: new Date().toISOString() }).eq("id", jobId);
     };
-    const persistScannedPage = async (page: { url: string; title: string; text: string; contentType: string; etag: string | null; lastModified: string | null }) => {
+    const persistScannedPage = async (page: { url: string; title: string; text: string; contentType: string; structuredContent: AnyRecord[]; etag: string | null; lastModified: string | null }) => {
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(page.text));
       const contentHash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2,"0")).join("");
       const savedPage = await db.from("website_scan_pages").upsert({
         workspace_id: website.workspace_id, website_id: website.id, job_id: jobId || null,
         canonical_url: page.url, content_hash: contentHash, title: page.title,
-        content_text: page.text, content_type: page.contentType, etag: page.etag,
+        content_text: page.text, content_type: page.contentType, structured_data: page.structuredContent || [], etag: page.etag,
         last_modified: page.lastModified, scanned_at: new Date().toISOString(),
       }, { onConflict: "website_id,canonical_url" });
       if (savedPage.error) console.warn("[misma-widget] Could not persist a scanned page checkpoint.", savedPage.error.code);
@@ -1504,6 +1600,7 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
     );
     const pages = [...processedPages, ...crawledPages];
     if (!pages.length) throw new Error("No readable public HTML pages were found.");
+    const structuredItemsSaved = await persistStructuredContent(db, website, pages);
     const sourceText = pages
       .map((page) => "PAGE: " + page.title + "\nURL: " + page.url + "\n" + page.text)
       .join("\n\n")
@@ -1544,7 +1641,7 @@ async function performWebsiteScan(db: Db, website: AnyRecord, scanId: string, ma
     if (runUpdate.error || websiteUpdate.error) {
       throw new Error("Website knowledge was extracted, but the scan status could not be finalized.");
     }
-    return { pagesScanned: pages.length, pagesSkipped, scanErrors: extractionWarning ? [...scanErrors, { message: "Structured AI extraction is pending: " + extractionWarning }] : scanErrors, detectedPlatform, themeSuggestions, summary, extractionPending: Boolean(extractionWarning), ...saved };
+    return { pagesScanned: pages.length, pagesSkipped, scanErrors: extractionWarning ? [...scanErrors, { message: "Structured AI extraction is pending: " + extractionWarning }] : scanErrors, detectedPlatform, themeSuggestions, summary, extractionPending: Boolean(extractionWarning), structuredItemsSaved, ...saved };
   } catch (error) {
     const message = scanSignal.aborted ? "Website scan timed out before it could finish." :
       error instanceof Error ? error.message : "Website scanning failed.";
@@ -2064,8 +2161,12 @@ Deno.serve(async (request: Request) => {
         });
       }
       let answer = "";
-      try { answer = await answerCustomer(db, site.workspace_id, message, input.voice === true, String(site.id), Number(site.core_room_id) || undefined, site); }
-      catch { answer = "I cannot access that business information right now. You can ask to speak with a member of the team."; }
+      let recommendations: AnyRecord[] = [];
+      try {
+        const generated = await answerCustomer(db, site.workspace_id, message, input.voice === true, String(site.id), Number(site.core_room_id) || undefined, site);
+        answer = generated.answer;
+        recommendations = generated.recommendations;
+      } catch { answer = "I cannot access that business information right now. You can ask to speak with a member of the team."; }
       const aiMessage = await db.from("messages").insert({
         conversation_id: conversation.id,
         role: "ai",
@@ -2107,7 +2208,7 @@ Deno.serve(async (request: Request) => {
       }).eq("id", conversation.id);
       return respond(200, {
         ok: true, visitorId, conversationId: Number(conversation.id),
-        userMessageId: Number(userMessage.data?.id), aiMessageId: Number(aiMessage.data?.id), answer,
+        userMessageId: Number(userMessage.data?.id), aiMessageId: Number(aiMessage.data?.id), answer, recommendations,
       });
     }
 
