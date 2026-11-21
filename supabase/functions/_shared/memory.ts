@@ -303,6 +303,9 @@ export async function persistMemoryExchange(
       ) || null;
     }
     if (previous && normalizeText(previous.content) === normalizeText(nextContent)) continue;
+    if (previous && previous.fact_key !== factKey) {
+      await db.from("memory_facts").update({ fact_key: factKey }).eq("id", previous.id).eq("user_id", input.userId);
+    }
 
     const { error: factError } = await db.from("memory_facts").insert({
       user_id: input.userId,
