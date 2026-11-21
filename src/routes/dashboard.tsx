@@ -1943,7 +1943,7 @@ function Dashboard() {
   }, [chatPluginPreferenceKey, pluginPreferencesLoadedKey, workspacePluginConnectionsLoaded, workspacePluginConnections, chatEnabledPlugins]);
 
   useEffect(() => {
-    if (!workspacePluginConnectionsLoaded || !pluginPreferencesLoadedKey || pluginPreferencesLoadedKey !== chatPluginPreferenceKey) return;
+    if (!viewStateRestored || !workspacePluginConnectionsLoaded || !pluginPreferencesLoadedKey || pluginPreferencesLoadedKey !== chatPluginPreferenceKey) return;
     const provider = window.sessionStorage.getItem("misma_try_plugin_provider");
     if (!provider || !workspacePluginConnections.some((item) => item.provider === provider)) return;
     window.sessionStorage.removeItem("misma_try_plugin_provider");
@@ -1951,7 +1951,7 @@ function Dashboard() {
     setPlusMenuOpen(false);
     setPluginPickerOpen(false);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [workspacePluginConnectionsLoaded, workspacePluginConnections, pluginPreferencesLoadedKey, chatPluginPreferenceKey]);
+  }, [viewStateRestored, workspacePluginConnectionsLoaded, workspacePluginConnections, pluginPreferencesLoadedKey, chatPluginPreferenceKey]);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const selectedComposerFilesRef = useRef<File[]>([]);
