@@ -22,7 +22,7 @@ select workspace_b, user_b, 'owner' from _memory_rls_users;
 
 insert into public.conversations (workspace_id, channel, latest_text)
 select workspace_b, 'Dashboard', 'RLS test conversation' from _memory_rls_users
-returning id;
+;
 
 update _memory_rls_users
 set conversation_b = (
