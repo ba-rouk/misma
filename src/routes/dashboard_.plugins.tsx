@@ -107,11 +107,12 @@ function PluginsPage() {
     }
     return map;
   }, [connections, userPlugins]);
-  const filteredPlugins = useMemo(() => pluginList.filter((plugin) => {
+  const visiblePlugins = pluginList.filter((plugin) => plugin.id !== "render");
+  const filteredPlugins = useMemo(() => visiblePlugins.filter((plugin) => {
     const text = [plugin.name, plugin.description, plugin.role, plugin.developer].join(" ").toLowerCase();
     return !query.trim() || text.includes(query.trim().toLowerCase());
   }), [query]);
-  const installedPlugins = pluginList.filter((plugin) => installedByProvider.has(plugin.id));
+  const installedPlugins = visiblePlugins.filter((plugin) => installedByProvider.has(plugin.id));
   const selectedWebsite = websites.find((website) => website.id === websiteId) || null;
   function openDetails(provider: PluginId) {
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
