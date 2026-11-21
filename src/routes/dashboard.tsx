@@ -1846,6 +1846,7 @@ function Dashboard() {
   }, [activeTab, currentConversationId, viewStateRestored]);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [executionActivities, setExecutionActivities] = useState<Array<{ key: string; title: string; status: string; detail?: string }>>([]);
   const [chatError, setChatError] = useState("");
   const [failedPrompt, setFailedPrompt] = useState("");
   const [failedAction, setFailedAction] = useState<"send" | "regenerate" | "edit" | null>(null);
@@ -3840,6 +3841,7 @@ function Dashboard() {
     setChatError("");
     setFailedPrompt("");
     setFailedAction(null);
+    setExecutionActivities([]);
     setIsSending(true);
     shouldAutoScrollRef.current = true;
     const requestController = new AbortController();
@@ -3918,8 +3920,61 @@ function Dashboard() {
           }),
           signal: requestController.signal,
         });
-        const executionResult = await executionResponse.json().catch(() => ({})) as Record<string, any>;
-        if (!executionResponse.ok) {
+        let executionResult: Record<string, any> = {};
+        let executionStatus = executionResponse.status;
+        if (executionResponse.headers.get("content-type")?.includes("text/event-stream") && executionResponse.body) {
+          const reader = executionResponse.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let receivedResult = false;
+          const applyExecutionEvent = (raw: string) => {
+            if (!raw.trim()) return;
+            let event: Record<string, any>;
+            try { event = JSON.parse(raw) as Record<string, any>; } catch { return; }
+            if (event.type === "activity") {
+              const key = String(event.step || event.key || "github_action");
+              setExecutionActivities((current) => {
+                const next = [...current];
+                const index = next.findIndex((item) => item.key === key);
+                const activity = {
+                  key,
+                  title: String(event.title || key.replace(/_/g, " ")),
+                  status: String(event.status || "running"),
+                  ...(event.detail ? { detail: String(event.detail) } : {}),
+                };
+                if (index < 0) next.push(activity);
+                else next[index] = activity;
+                return next;
+              });
+            } else if (event.type === "result") {
+              executionResult = event.body && typeof event.body === "object" ? event.body as Record<string, any> : {};
+              executionStatus = Number(event.status || 200);
+              receivedResult = true;
+            }
+          };
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const frames = buffer.split(/\\r?\\n\\r?\\n/);
+            buffer = frames.pop() || "";
+            for (const frame of frames) {
+              const data = frame.split(/\\r?\\n/).filter((line) => line.startsWith("data:"))
+                .map((line) => line.slice(5).trim()).join("\\n");
+              applyExecutionEvent(data);
+            }
+          }
+          buffer += decoder.decode();
+          if (buffer.trim()) {
+            const data = buffer.split(/\\r?\\n/).filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trim()).join("\\n");
+            applyExecutionEvent(data);
+          }
+          if (!receivedResult) throw new Error("The GitHub action stream ended before Misma returned a result.");
+        } else {
+          executionResult = await executionResponse.json().catch(() => ({})) as Record<string, any>;
+        }
+        if (!executionResponse.ok || executionStatus >= 400) {
           throw new Error(typeof executionResult.error === "string"
             ? executionResult.error
             : "Misma could not process the execution request.");
@@ -5523,6 +5578,32 @@ function Dashboard() {
                     <span />
                   </div>
                 </div>
+              )}
+
+              {executionActivities.length > 0 && (
+                <section className="aichat-execution-activity" aria-label="Misma action activity" aria-live="polite">
+                  <div className="aichat-execution-activity-title">
+                    <span className="aichat-execution-activity-provider">GH</span>
+                    <strong>GitHub activity</strong>
+                    {isSending && <span className="aichat-execution-activity-live">Live</span>}
+                  </div>
+                  <ol>
+                    {executionActivities.map((activity) => (
+                      <li key={activity.key} data-status={activity.status}>
+                        <span className="aichat-execution-activity-mark" aria-hidden="true">
+                          {activity.status === "running" ? <i /> : activity.status === "failed" ? "!" : "✓"}
+                        </span>
+                        <span className="aichat-execution-activity-copy">
+                          <strong>{activity.title}</strong>
+                          {activity.detail && <small>{activity.detail}</small>}
+                        </span>
+                        <small className="aichat-execution-activity-status">
+                          {activity.status === "running" ? "In progress" : activity.status === "failed" ? "Failed" : "Done"}
+                        </small>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
               )}
 
               {/* Error Alert */}
