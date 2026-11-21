@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(4);
+select extensions.plan(5);
 
 create temporary table _memory_rls_users (user_a uuid, user_b uuid, workspace_b uuid, conversation_b bigint);
 insert into _memory_rls_users (user_a, user_b, workspace_b)
@@ -45,6 +45,12 @@ from _memory_rls_users;
 insert into public.memory_backfill_jobs (user_id, status)
 select user_b, 'queued' from _memory_rls_users;
 
+insert into public.memory_embedding_cache (user_id, query_hash, embedding, embedding_model, expires_at)
+select user_b, repeat('a', 64),
+  ('[' || array_to_string(array_fill(0::real, ARRAY[768]), ',') || ']')::extensions.vector,
+  'rls-test-vector', now() + interval '10 minutes'
+from _memory_rls_users;
+
 grant select on _memory_rls_users to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', (select user_a::text from _memory_rls_users), true);
@@ -68,6 +74,12 @@ select extensions.is(
   (select count(*) from public.memory_backfill_jobs where user_id = (select user_b from _memory_rls_users)),
   0::bigint,
   'User A cannot read User B backfill jobs'
+);
+
+select extensions.is(
+  (select count(*) from public.memory_embedding_cache where user_id = (select user_b from _memory_rls_users)),
+  0::bigint,
+  'User A cannot read User B embedding cache'
 );
 
 select * from extensions.finish();
