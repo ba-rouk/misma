@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { PLUGIN_MANIFESTS, type PluginId } from "../lib/plugin-registry";
 import { PluginBrand } from "../components/plugin-brand";
@@ -12,7 +13,7 @@ type Project = { id: string; name: string; full_name: string | null; dashboard_u
 
 function PluginSkillIcon({ name }: { name: string }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  const paths: Record<string, React.ReactNode> = {
+  const paths: Record<string, ReactNode> = {
     "book-open": <><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H12v17H5.5A2.5 2.5 0 0 0 3 22Z"/><path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H12v17h6.5A2.5 2.5 0 0 1 21 22Z"/></>,
     code: <><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></>,
     "git-pull-request": <><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v9M18 15.5V9a3 3 0 0 0-3-3h-2"/></>,
