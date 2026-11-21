@@ -561,7 +561,7 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
   assert.match(widget, /var widgetInstance=initWidget\(\{\}\)/);
   assert.ok(widget.includes('window.speechSynthesis.speak(new SpeechSynthesisUtterance(""))'));
   assert.match(widget, /if\(!speakReply\)\{bubble\(text,"user"\);showTyping\(\);\}/);
-  assert.match(widget, /if\(!speakReply\)bubble\(answer,"ai"\)/);
+  assert.match(widget, /if\(!speakReply\)\{bubble\(answer,"ai"\);renderRecommendations\(data\.recommendations\);\}/);
 });
 
 test("speech turns are retained for AI context but excluded from visible chat history and Core.01 learning", async () => {
@@ -1556,7 +1556,7 @@ test("website chat widget uses live news search and clean plain-text business re
   assert.match(widget, /LIVE SEARCH RESULTS:/);
   assert.match(widget, /PLAIN-TEXT OUTPUT:/);
   assert.match(widget, /function normalizeAssistantText\(/);
-  assert.match(widget, /return normalizeAssistantText\(answer\) \|\| answer\.trim\(\)/);
+  assert.match(widget, /return \{ answer: normalizeAssistantText\(answer\) \|\| answer\.trim\(\), recommendations \}/);
   assert.match(widget, /Promise\.all\(\[/);
 });
 

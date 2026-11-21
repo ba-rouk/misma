@@ -909,7 +909,7 @@ function extractAccountMemoryFacts(
   sourceConversationId: number,
 ): JsonRecord[] {
   const text = message.trim();
-  if (!text || text.length > 4_000 || /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:api[_ -]?key|password|client[_ -]?secret|access[_ -]?token)\s*[:=]\s*\S{8,}/i.test(text)) {
+  if (!text || text.length > 4_000 || /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:api[_ -]?key|password|client[_ -]?secret|access[_ -]?token)\s*[:=]\s*\S{8,}/i.test(text) || /\b(?:diagnosed with|my medical|my health|my religion|my political|my sexual|my criminal|my bank|my credit card|my passport|my national id)\b/i.test(text)) {
     return [];
   }
   const facts: JsonRecord[] = [];
@@ -958,12 +958,16 @@ function extractAccountMemoryFacts(
     if (stack) add("technology." + workspaceId, "technology", "Project technology stack: " + stack + ".", { workspace_id: workspaceId });
   }
 
-  const preference = text.match(/\b(?:i prefer|my preference is|please always use|always use)\s+([^.!?\n]{3,180})/i)?.[1];
-  if (preference) {
-    add("preference.coding", "preference", "Coding/workflow preference: " + preference.trim() + ".", { workspace_id: workspaceId });
-  }
+  const preference = text.match(/\b(?:i prefer|my preference is|please always use|always use|please keep|i want you to always)\s+([^.!?\n]{3,180})/i)?.[1];
+  if (preference) add("preference.general", "preference", "User preference: " + preference.trim() + ".", { workspace_id: workspaceId });
+  const business = text.match(/\b(?:my business|my company|our business|our company)\s+(?:is|called|named)\s+([^.!?\n]{2,120})/i)?.[1];
+  if (business) add("business.identity", "business", "Business name: " + business.trim() + ".", { workspace_id: workspaceId });
+  const currentProject = text.match(/\b(?:i am working on|i'm working on|i am building|i'm building|my current project is|the project is)\s+([^.!?\n]{3,140})/i)?.[1];
+  if (currentProject) add("project.current", "project", "Current project: " + currentProject.trim() + ".", { workspace_id: workspaceId });
+  const role = text.match(/\b(?:i work as|my role is|i am a|i'm a)\s+(developer|founder|owner|designer|engineer|manager|student|teacher|consultant)\b/i)?.[1];
+  if (role) add("profile.role", "profile", "User role: " + role.toLowerCase() + ".", { workspace_id: workspaceId });
 
-  return facts.slice(0, 8);
+  return facts.slice(0, 12);
 }
 
 Deno.serve(async (request) => {
