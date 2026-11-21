@@ -4016,8 +4016,8 @@ function Dashboard() {
         const sourceUserMessageId = Number(res.userMessage.id);
         const sourceAiMessageId = String(res.aiMessage.id);
         void (async () => {
-          for (let attempt = 0; attempt < 7; attempt++) {
-            await new Promise((resolve) => window.setTimeout(resolve, 650));
+          for (let attempt = 0; attempt < 20; attempt++) {
+            await new Promise((resolve) => window.setTimeout(resolve, 700));
             const { data } = await getSupabaseClient().from("memory_exchanges").select("id")
               .eq("source_user_message_id", sourceUserMessageId).maybeSingle();
             if (data) {
