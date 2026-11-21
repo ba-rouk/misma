@@ -12,46 +12,44 @@ export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component
 type PlatformProject = { id: string; provider: PluginId; name: string; full_name: string | null; platform_connection_id: string };
 
 function ExamplePreview({ kind, provider }: { kind: string; provider: PluginId }) {
-  if (kind === "repository") {
-    return (
-      <GlassCard className="misma-plugin-example-card">
-        <Badge tone="neutral">Example</Badge>
-        <div className="misma-plugin-example-repo-head"><span className="misma-plugin-example-file-icon">⌘</span><div><strong>website</strong><small>Sample repository · main branch</small></div><Badge tone="success">Connected flow</Badge></div>
-        <div className="misma-plugin-example-file-row"><span>▸</span><strong>src</strong><small>Folder</small></div>
-        <div className="misma-plugin-example-file-row"><span>▸</span><strong>public</strong><small>Folder</small></div>
-        <div className="misma-plugin-example-file-row"><span>◇</span><strong>index.html</strong><small>HTML</small></div>
-        <div className="misma-plugin-example-file-row"><span>◇</span><strong>package.json</strong><small>JSON</small></div>
-        <p className="misma-plugin-example-caption">A sample of the repository structure Misma can inspect.</p>
-      </GlassCard>
-    );
-  }
-  if (kind === "projects") {
-    return (
-      <GlassCard className="misma-plugin-example-card">
-        <Badge tone="neutral">Example</Badge>
-        <div className="misma-plugin-example-repo-head"><PluginProviderLogo provider={provider} size="md"/><div><strong>Hosting projects</strong><small>Example project list</small></div></div>
-        {["storefront-web", "business-landing", "customer-portal"].map((name, index) => <div className="misma-plugin-example-project" key={name}><span className="misma-plugin-example-project-dot"/><span><strong>{name}</strong><small>{index === 0 ? "Production website" : "Preview project"}</small></span><Badge tone="neutral">Example</Badge></div>)}
-        <p className="misma-plugin-example-caption">Real project names appear only after you authorize your hosting account.</p>
-      </GlassCard>
-    );
-  }
-  if (kind === "services") {
-    return (
-      <GlassCard className="misma-plugin-example-card">
-        <Badge tone="neutral">Example</Badge>
-        <div className="misma-plugin-example-repo-head"><PluginProviderLogo provider={provider} size="md"/><div><strong>Render services</strong><small>Example service list · not live account data</small></div></div>
-        {["web-frontend", "api-service", "background-worker"].map((name, index) => <div className="misma-plugin-example-project" key={name}><span className="misma-plugin-example-project-dot"/><span><strong>{name}</strong><small>{index === 0 ? "Web service" : index === 1 ? "Web service" : "Background worker"}</small></span><Badge tone="neutral">Example</Badge></div>)}
-        <p className="misma-plugin-example-caption">Render account discovery will appear here once Misma's OAuth client is approved.</p>
-      </GlassCard>
-    );
-  }
+  const examples = kind === "repository"
+    ? [{ title: "src", detail: "Application code", icon: "folder" }, { title: "public", detail: "Static assets", icon: "folder" }, { title: "index.html", detail: "Widget installation point", icon: "file" }]
+    : kind === "services"
+      ? [{ title: "web-frontend", detail: "Web service", icon: "service" }, { title: "api-service", detail: "Web service", icon: "service" }, { title: "background-worker", detail: "Worker", icon: "service" }]
+      : [{ title: "storefront-web", detail: "Production project", icon: "project" }, { title: "business-landing", detail: "Preview project", icon: "project" }, { title: "customer-portal", detail: "Preview project", icon: "project" }];
   return (
-    <GlassCard className="misma-plugin-example-card">
-      <Badge tone="warning">Coming later</Badge>
-      <div className="misma-plugin-example-repo-head"><PluginProviderLogo provider={provider} size="md"/><div><strong>Netlify sites</strong><small>Site discovery preview</small></div></div>
-      <div className="misma-plugin-example-project"><span className="misma-plugin-example-project-dot"/><span><strong>business-site</strong><small>Example site · not connected</small></span></div>
-      <p className="misma-plugin-example-caption">This is a design preview only. Netlify authorization is not enabled yet.</p>
-    </GlassCard>
+    <div className={"misma-plugin-example-card is-" + provider}>
+      <div className="misma-plugin-example-card-brand"><PluginProviderLogo provider={provider} size="sm"/><span>{provider[0].toUpperCase() + provider.slice(1)}</span><Badge tone="neutral">Example</Badge></div>
+      <div className="misma-plugin-example-window">
+        <div className="misma-plugin-example-window-title">
+          <div className="misma-plugin-example-window-dots"><i/><i/><i/></div>
+          <strong>{kind === "repository" ? "website" : kind === "services" ? "Render services" : "Hosting projects"}</strong>
+        </div>
+        <div className="misma-plugin-example-window-content">
+          {kind === "repository" ? (
+            <div className="misma-plugin-example-repo-summary">
+              <div className="misma-plugin-example-repo-mark">⌘</div>
+              <div><strong>website</strong><small>Sample repository · main branch</small></div>
+            </div>
+          ) : (
+            <div className="misma-plugin-example-project-summary">
+              <strong>{kind === "services" ? "Services available" : "Projects available"}</strong>
+              <small>Sample account overview</small>
+            </div>
+          )}
+          <div className="misma-plugin-example-file-list">
+            {examples.map((item) => (
+              <div className="misma-plugin-example-file-row" key={item.title}>
+                <span className={"misma-plugin-example-file-glyph is-" + item.icon}>{item.icon === "folder" ? "▰" : item.icon === "file" ? "◇" : item.icon === "service" ? "▦" : "◫"}</span>
+                <strong>{item.title}</strong>
+                <small>{item.detail}</small>
+              </div>
+            ))}
+          </div>
+          <div className="misma-plugin-example-window-foot">{kind === "repository" ? "A preview of the files Misma can inspect." : kind === "services" ? "Sample services · not live account data" : "Sample projects · not live account data"}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -178,56 +176,43 @@ function PluginDetailPage() {
   return (
     <main className="misma-plugin-detail-page" style={{ "--plugin-brand": manifest.brandColor } as CSSProperties}>
       <div className="misma-plugin-detail-shell">
-        <header className="misma-plugin-detail-header">
-          <button type="button" className="misma-plugin-detail-back" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
-          <h1>{manifest.name}</h1>
-          <button type="button" className="misma-plugin-detail-settings" aria-label={connection ? "Plugin settings" : "Connection information"} onClick={() => connection ? setSettingsOpen(true) : connectAction()}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
-          </button>
-        </header>
 
-        <section className="misma-plugin-hero">
-          <div className="misma-plugin-hero-topline"><PluginProviderLogo provider={manifest.id} size="hero"/><Badge tone={connection ? "success" : manifest.status === "coming" ? "warning" : "neutral"}>{connection ? "Connected" : manifest.status === "coming" ? "Coming later" : "Not connected"}</Badge></div>
-          <p className="misma-plugin-tagline">{manifest.tagline}</p>
-          <div className="misma-plugin-preview-scroller" aria-label={manifest.name + " example previews"}>
-            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id}/><div className="misma-plugin-preview-caption"><strong>{card.title}</strong><span>{card.description}</span></div></div>)}
+        <section className={"misma-plugin-hero misma-plugin-hero-gallery is-" + manifest.id} aria-label={manifest.name + " example previews"}>
+          <header className="misma-plugin-detail-header">
+            <button type="button" className="misma-plugin-detail-back" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
+            <h1>{manifest.name}</h1>
+            <button type="button" className="misma-plugin-detail-settings" aria-label={connection ? "Plugin settings" : "Connection information"} onClick={() => connection ? setSettingsOpen(true) : connectAction()}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+            </button>
+          </header>
+  
+          <div className="misma-plugin-preview-scroller">
+            {manifest.previewCards.map((card) => <div className="misma-plugin-preview-item" key={card.id}><ExamplePreview kind={card.kind} provider={manifest.id}/></div>)}
           </div>
-        </section>
-
-        <section className="misma-plugin-description-section">
+          <div className="misma-plugin-gallery-hint" aria-hidden="true"><span/><span/></div>
+        </section>        <section className="misma-plugin-description-section">
           <p className={"misma-plugin-detail-description" + (expandedDescription ? " is-expanded" : "")}>{manifest.description}</p>
           <button type="button" className="misma-plugin-more-link" aria-expanded={expandedDescription} onClick={() => setExpandedDescription((value) => !value)}>{expandedDescription ? "Less" : "More"}</button>
         </section>
 
-        <section className="misma-plugin-detail-section">
+        <section className="misma-plugin-detail-section misma-plugin-app-section">
           <SectionHeader title="App" />
-          <GlassCard className="misma-plugin-app-row"><PluginProviderLogo provider={manifest.id} size="lg"/><div><strong>{manifest.name}</strong><small>{manifest.role}</small></div><Badge tone={connection ? "success" : manifest.status === "coming" ? "warning" : "neutral"}>{connection ? "Connected" : manifest.status === "coming" ? "Coming later" : "Not connected"}</Badge></GlassCard>
-        </section>
-
-        <section className="misma-plugin-detail-section">
-          <SectionHeader title="Skills" description="What this plugin can do in Misma today." />
+          <div className="misma-plugin-app-row"><PluginProviderLogo provider={manifest.id} size="lg"/><div><strong>{manifest.name}</strong><small>{manifest.role === "Code host" ? "Code host" : "Primary"}</small></div></div>
+        </section>        <section className="misma-plugin-detail-section misma-plugin-skill-section">
+          <SectionHeader title="Skill" />
           <div className="misma-plugin-skills-grid">
-            {manifest.skills.map((skill) => <GlassCard className="misma-plugin-skill" key={skill.id}><span className="misma-plugin-skill-icon"><PluginSkillIcon name={skill.icon}/></span><div><strong>{skill.name}</strong><small>{skill.description}</small></div></GlassCard>)}
+            {manifest.skills.map((skill) => <span className="misma-plugin-skill-chip" key={skill.id}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.8 8.2 4.6v9.2L12 21.2l-8.2-4.6V7.4L12 2.8Z"/><path d="m3.8 7.4 8.2 4.7 8.2-4.7M12 12.1v9.1M8 5l8.2 4.7"/></svg><span>{skill.name}</span></span>)}
           </div>
-        </section>
-
-        <section className="misma-plugin-detail-section">
-          <SectionHeader title="Permissions" description="Access is limited to the provider account you authorize and this Misma workspace." />
-          <GlassCard className="misma-plugin-permissions-card"><ul>{manifest.permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul></GlassCard>
-        </section>
-
-        <section className="misma-plugin-detail-section">
+        </section>        <section className="misma-plugin-detail-section stessa-plugin-information-section">
           <SectionHeader title="Information" />
-          <GlassCard className="misma-plugin-information">
-            <div><span>Developer</span><strong>{manifest.developer}</strong></div>
-            <div><span>Website</span><a href={manifest.website} target="_blank" rel="noreferrer">{manifest.website.replace(/^https?:\/\//, "")}</a></div>
-            <div><span>Version</span><strong>{manifest.version}</strong></div>
-            <div><span>Privacy Policy</span><a href={manifest.privacyUrl} target="_blank" rel="noreferrer">Read privacy policy ↗</a></div>
-            <div><span>Terms of Service</span><a href={manifest.termsUrl} target="_blank" rel="noreferrer">Read terms ↗</a></div>
-          </GlassCard>
-        </section>
-
-        {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
+          <dl className="misma-plugin-information">
+            <div><dt>Developer</dt><dd>{manifest.developer}</dd></div>
+            <div><dt>Website</dt><dd><a href={manifest.website} target="_blank" rel="noreferrer">{manifest.website.replace(/^https?:\/\//, "")}</a></dd></div>
+            <div><dt>Version</dt><dd>{manifest.version}</dd></div>
+            <div><dt>Privacy Policy</dt><dd><a href={manifest.privacyUrl} target="_blank" rel="noreferrer">{manifest.privacyUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a></dd></div>
+            <div><dt>Terms of Service</dt><dd><a href={manifest.termsUrl} target="_blank" rel="noreferrer">{manifest.termsUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a></dd></div>
+          </dl>
+        </section>        {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
       </div>
       <StickyActionBar className="misma-plugin-detail-actionbar">
         <div className="misma-plugin-detail-action-inner">{primaryAction}
