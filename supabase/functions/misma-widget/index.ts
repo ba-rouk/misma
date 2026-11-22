@@ -955,9 +955,9 @@ async function findWebsiteRecommendations(db: Db, workspaceId: string, websiteId
     let verifiedImage=false;
     try { const parsed=new URL(imageUrl); verifiedImage=parsed.protocol==="https:"&&!parsed.username&&!parsed.password; } catch { verifiedImage=false; }
     return {row,score,name,imageUrl,price,verifiedImage,type:safeString(row.item_type,40)};
-  }).filter((item)=>item.verifiedImage&&(item.score>0||browseIntent))
-    .sort((a,b)=>b.score-a.score||Number(Boolean(b.price))-Number(Boolean(a.price))||
-      Number(b.type==="product")-Number(a.type==="product")||a.name.localeCompare(b.name))
+  }).filter((item)=>item.verifiedImage&&["product","service"].includes(item.type)&&(item.score>0||browseIntent))
+    .sort((a,b)=>b.score-a.score||Number(b.type==="product")-Number(a.type==="product")||
+      Number(Boolean(b.price))-Number(Boolean(a.price))||a.name.localeCompare(b.name))
     .slice(0,3).map((item)=>({
       id:String(item.row.id),type:item.type,name:item.name,
       description:safeString(item.row.description,500),imageUrl:item.imageUrl,
