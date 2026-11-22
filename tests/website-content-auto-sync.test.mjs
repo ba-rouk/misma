@@ -23,6 +23,7 @@ test("customer widget syncs newly rendered products and media after hydration an
   assert.match(runtime, /data-misma-widget-root/);
 
   assert.match(edge, /input\.action === "content-sync"/);
+  assert.match(edge, /input\.action !== "typing" && input\.action !== "content-sync"/);
   assert.match(edge, /request\.headers\.get\("origin"\)/);
   assert.match(edge, /pageUrl\.origin !== origin\.origin/);
   assert.match(edge, /supportedTypes = new Set\(\["product","service","movie","video","music","post","article","event","book","recipe","course"\]\)/);

@@ -2170,7 +2170,7 @@ Deno.serve(async (request: Request) => {
         }
         return respond(200, { ok: true, historyDeleted: deleted === true });
       }
-      if (input.action !== "typing") {
+      if (input.action !== "typing" && input.action !== "content-sync") {
         await db.from("website_connections").update({
           status: "connected", last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         }).eq("id", site.id);
