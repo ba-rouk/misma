@@ -3,6 +3,7 @@ import { z } from "npm:zod@4.4.3";
 import { getDomain } from "npm:tldts@6.1.86";
 import webpush from "npm:web-push@3.6.7";
 import { loadSharedBusinessKnowledge } from "../_shared/business-knowledge.ts";
+import { deduplicateWebsiteContentRows } from "./website-content-sync.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -2125,14 +2126,23 @@ Deno.serve(async (request: Request) => {
             updated_at: new Date().toISOString(),
           });
         }
-        if (rows.length) {
-          const saved = await db.from("website_content_items").upsert(rows, { onConflict: "website_id,item_type,name,source_page_url" });
-          if (saved.error) throw new Error("Misma could not update this website's live content index.");
+        const uniqueRows = deduplicateWebsiteContentRows(rows);
+        if (uniqueRows.length) {
+          const saved = await db.from("website_content_items").upsert(uniqueRows, { onConflict: "website_id,item_type,name,source_page_url" });
+          if (saved.error) {
+            console.error("[misma-widget] Content index upsert rejected:", {
+              code: saved.error.code || "unknown",
+              message: safeString(saved.error.message, 500),
+              details: safeString(saved.error.details, 500),
+              itemCount: uniqueRows.length,
+            });
+            throw new Error("Misma could not update this website's live content index.");
+          }
         }
         await db.from("website_connections").update({
           status: "connected", last_seen_at: new Date().toISOString(),
         }).eq("id", site.id);
-        return respond(200, { ok: true, syncedCount: rows.length, sourcePage: pageUrl.href });
+        return respond(200, { ok: true, syncedCount: uniqueRows.length, sourcePage: pageUrl.href });
       }
       if (input.action === "widget-config") {
         // last_seen_at is operational activity, not an owner edit. Keep updated_at
