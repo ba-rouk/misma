@@ -2070,24 +2070,6 @@ Deno.serve(async (request: Request) => {
     }
     if (input.action === "heartbeat" || input.action === "page-view" || input.action === "content-sync" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
-      if (input.action === "widget-config") {
-        // last_seen_at is operational activity, not an owner edit. Keep updated_at
-        // stable here so the config ETag changes only when saved settings change.
-        await db.from("website_connections").update({
-          status: "connected", last_seen_at: new Date().toISOString(),
-        }).eq("id", site.id);
-        const themeEtag = '"misma-widget-config-' + safeString(site.theme_updated_at, 80) + '-' + safeString(site.updated_at, 80) + '"';
-        const cacheHeaders = { ...cors, "Cache-Control": "public, max-age=60, stale-while-revalidate=30", "ETag": themeEtag };
-        if (request.headers.get("if-none-match") === themeEtag) return new Response(null, { status: 304, headers: cacheHeaders });
-        const businessResult = await db.from("workspaces").select("name").eq("id", site.workspace_id).maybeSingle();
-        return respond(200, {
-          ok: true,
-          ...getWebsiteWidgetSocialLinks(site),
-          business_name: safeString(businessResult.data?.name, 120) || safeString(site.name, 120),
-          website_url: safeString(site.website_url, 180),
-          website_domain: safeString(site.domain, 180),
-        }, cacheHeaders);
-      }
       if (input.action === "content-sync") {
         const originHeader = request.headers.get("origin") || "";
         let origin: URL;
@@ -2151,6 +2133,24 @@ Deno.serve(async (request: Request) => {
           status: "connected", last_seen_at: new Date().toISOString(),
         }).eq("id", site.id);
         return respond(200, { ok: true, syncedCount: rows.length, sourcePage: pageUrl.href });
+      }
+      if (input.action === "widget-config") {
+        // last_seen_at is operational activity, not an owner edit. Keep updated_at
+        // stable here so the config ETag changes only when saved settings change.
+        await db.from("website_connections").update({
+          status: "connected", last_seen_at: new Date().toISOString(),
+        }).eq("id", site.id);
+        const themeEtag = '"misma-widget-config-' + safeString(site.theme_updated_at, 80) + '-' + safeString(site.updated_at, 80) + '"';
+        const cacheHeaders = { ...cors, "Cache-Control": "public, max-age=60, stale-while-revalidate=30", "ETag": themeEtag };
+        if (request.headers.get("if-none-match") === themeEtag) return new Response(null, { status: 304, headers: cacheHeaders });
+        const businessResult = await db.from("workspaces").select("name").eq("id", site.workspace_id).maybeSingle();
+        return respond(200, {
+          ok: true,
+          ...getWebsiteWidgetSocialLinks(site),
+          business_name: safeString(businessResult.data?.name, 120) || safeString(site.name, 120),
+          website_url: safeString(site.website_url, 180),
+          website_domain: safeString(site.domain, 180),
+        }, cacheHeaders);
       }
       if (input.action === "close") {
         const visitorId = safeString(input.visitorId, 120);
