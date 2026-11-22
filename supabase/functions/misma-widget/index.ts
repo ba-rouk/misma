@@ -3,7 +3,7 @@ import { z } from "npm:zod@4.4.3";
 import { getDomain } from "npm:tldts@6.1.86";
 import webpush from "npm:web-push@3.6.7";
 import { loadSharedBusinessKnowledge } from "../_shared/business-knowledge.ts";
-import { deduplicateWebsiteContentRows } from "./website-content-sync.ts";
+import { deduplicateWebsiteContentRows, deduplicateWebsiteRecommendationRows } from "./website-content-sync.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -964,7 +964,8 @@ async function findWebsiteRecommendations(db: Db, workspaceId: string, websiteId
   const result = await db.from("website_content_items").select("id,item_type,name,description,image_url,item_url,price_text,source_page_url")
     .eq("workspace_id",workspaceId).eq("website_id",websiteId).eq("source_verified",true).order("updated_at",{ascending:false}).limit(300);
   if (result.error) { console.warn("[misma-widget] Verified website recommendations unavailable:",result.error.code||"unknown"); return []; }
-  return (result.data||[]).map((row:AnyRecord)=>{
+  const uniqueRows = deduplicateWebsiteRecommendationRows(result.data || []);
+  return uniqueRows.map((row:AnyRecord)=>{
     const name=safeString(row.name,240), imageUrl=safeString(row.image_url,2048), price=safeString(row.price_text,120);
     const hay=[name,row.description,row.item_type].join(" ").toLowerCase();
     const score=terms.reduce((sum,term)=>sum+(hay.includes(term)?(name.toLowerCase().includes(term)?3:1):0),0);
