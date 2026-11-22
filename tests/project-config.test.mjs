@@ -560,8 +560,9 @@ test("dashboard and widget Speech Talk starts without duplicate microphone prefl
   assert.match(dashboard, /misma_active_chat_messages_v2_/);
   assert.match(widget, /var widgetInstance=initWidget\(\{\}\)/);
   assert.ok(widget.includes('window.speechSynthesis.speak(new SpeechSynthesisUtterance(""))'));
-  assert.match(widget, /if\(!speakReply\)\{bubble\(text,"user"\);showTyping\(\);\}/);
-  assert.match(widget, /if\(!speakReply\)\{bubble\(answer,"ai"\);renderRecommendations\(data\.recommendations\);\}/);
+  assert.match(widget, /if\(!speakReply\)\{userBubble=bubble\(text,"user"\);showTyping\(\);\}/);
+  assert.match(widget, /var answerBubble=bubble\(answer,"ai",data\.aiMessageId\);/);
+  assert.match(widget, /renderRecommendations\(data\.recommendations\)/);
 });
 
 test("speech turns are retained for AI context but excluded from visible chat history and Core.01 learning", async () => {
@@ -1362,7 +1363,7 @@ test("website human handoff sends customer typing and new replies to the open bu
   assert.match(widget, /function reportVisitorTyping\(\)/);
   assert.match(widget, /call\(\{action:"typing",isTyping:next\}\)/);
   assert.match(widget, /conversationStatus==="Needs you"\?1400:5000/);
-  assert.match(widget, /item\.role==="human"\?"Assistant: "\+item\.text/);
+  assert.match(widget, /item\.role==="human"\?"Assistant: "\+String\(item\.text\|\|""\)/);
   assert.doesNotMatch(widget, /"Business team: "\+item\.text/);
   assert.doesNotMatch(widget, /business team will follow up/i);
   assert.match(edge, /An assistant will follow up here/);
