@@ -928,9 +928,9 @@ async function persistStructuredContent(db: Db, website: AnyRecord, pages: AnyRe
 
 function isWebsiteProductIntent(message: string): boolean {
   const text = message.toLowerCase();
-  return /\\b(?:products?|items?|menu|catalog(?:ue)?|shop(?:ping)?|store)\\b/.test(text) ||
-    /\\b(?:what do you sell|what can i buy|what can i order|what'?s available|what is available|recommend(?: me)? (?:some )?(?:products?|items?)|best (?:products?|items?|things to buy)|show (?:me )?(?:your )?(?:products?|items?|menu))\\b/.test(text) ||
-    /\\b(?:buy|purchase|order)\\b.{0,50}\\b(?:here|website|site|online)\\b/.test(text);
+  return /\b(?:products?|items?|menu|catalog(?:ue)?|shop(?:ping)?|store)\b/.test(text) ||
+    /\b(?:what do you sell|what can i buy|what can i order|what'?s available|what is available|recommend(?: me)? (?:some )?(?:products?|items?)|best (?:products?|items?|things to buy)|show (?:me )?(?:your )?(?:products?|items?|menu))\b/.test(text) ||
+    /\b(?:buy|purchase|order)\b.{0,50}\b(?:here|website|site|online)\b/.test(text);
 }
 
 async function findWebsiteRecommendations(db: Db, workspaceId: string, websiteId: string, message: string): Promise<AnyRecord[]> {
