@@ -68,10 +68,10 @@ export async function ensureWorkspace(
     };
   }
 
-  if (allowSupportAccess) {
-    throw new Error("No accessible Misma workspace was found for this account.");
-  }
-
+  // A missing membership is a first-use/recovery state for a normal signed-in
+  // account, not a reason to block dashboard bootstrap. Support users are
+  // identified by an existing workspace_staff_access row above; otherwise
+  // provision (or recover) the user's own default workspace.
   const { data: workspaceId, error: createWorkspaceError } = await db.rpc("create_misma_workspace");
   if (createWorkspaceError || !workspaceId) {
     throw new Error(`Could not create your workspace: ${createWorkspaceError?.message || "No workspace returned"}`);
