@@ -30,7 +30,8 @@ test("customer widget shows up to three compact image-backed product cards", asy
   assert.match(runtime, /Price on request/);
   assert.match(runtime, /items\.slice\(0,3\)/);
   assert.match(edge, /function isWebsiteProductIntent\(message: string\): boolean/);
-  assert.match(edge, /item\.verifiedImage&&\(item\.score>0\|\|browseIntent\)/);
+  assert.match(edge, /item\.verifiedImage&&\["product","service"\]\.includes\(item\.type\)/);
+  assert.match(edge, /item\.score>0\|\|browseIntent/);
   assert.match(edge, /\.slice\(0,3\)\.map\(\(item\)=>/);
   assert.match(edge, /PRODUCT DISCOVERY:/);
 });
