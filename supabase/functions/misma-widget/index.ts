@@ -482,6 +482,7 @@ async function loadBusinessContext(db: Db, workspaceId: string, voice = false, w
 }
 async function answerCustomer(db: Db, workspaceId: string, message: string, voice = false, websiteConnectionId?: string, roomId?: number, websiteInfo?: AnyRecord): Promise<{ answer: string; recommendations: AnyRecord[] }> {
   const productQuestion = !voice && isWebsiteProductIntent(message);
+  const mediaQuestion = !voice && isWebsiteMediaIntent(message);
   const liveSearchPromise = shouldSearchWeb(message) ? searchLiveWeb(message, voice) : Promise.resolve(null);
   const recommendationPromise = websiteConnectionId && !voice ? findWebsiteRecommendations(db, workspaceId, websiteConnectionId, message) : Promise.resolve([]);
   const [context, liveSearch, recommendations] = await Promise.all([
@@ -509,10 +510,14 @@ async function answerCustomer(db: Db, workspaceId: string, message: string, voic
       "LIVE SEARCH RESULTS: " + JSON.stringify(liveSearch.results),
     ] : []),
     "Business context: " + JSON.stringify(context),
-    ...(recommendations.length ? ["VERIFIED WEBSITE CONTENT MATCHES: " + JSON.stringify(recommendations), "These matches are taken from structured data published on the connected website. Do not alter their names, prices, images or links."] : []),
+    ...(recommendations.length ? ["VERIFIED WEBSITE CONTENT MATCHES: " + JSON.stringify(recommendations), "These matches come from verified structured metadata or the live rendered content of the connected first-party website. Do not alter their names, prices, images or links."] : []),
     ...(productQuestion ? [
-      "PRODUCT DISCOVERY: Keep the text reply to one short sentence because the product cards below show the product photos, names and prices. Suggest that the visitor browse the website menu/categories or ask for another category to see more options.",
-      ...(recommendations.length ? [] : ["No verified image-backed product listings were found in this website's scanned content. Say that clearly and suggest browsing the website's published menu/categories or contacting the business. Do not invent product names, photos or prices."])
+      "PRODUCT DISCOVERY: Keep the text reply to one short sentence because the product cards below show published product photos, names and prices. Suggest that the visitor browse the website menu/categories or ask for another category to see more options.",
+      ...(recommendations.length ? [] : ["No verified image-backed product listings were found in the current website content index. Suggest browsing the published menu/categories or contacting the business. Do not invent product names, photos or prices."])
+    ] : []),
+    ...(mediaQuestion ? [
+      "MEDIA DISCOVERY: Keep the text reply to one short sentence because the cards below show photos, posters or video previews from this website. Suggest browsing the gallery/media sections or asking for a genre, title or category.",
+      ...(recommendations.length ? [] : ["No verified image-backed media entries were found in the current website content index. Suggest browsing the site's gallery or media pages. Do not invent titles, posters or images."])
     ] : []),
   ].join("\n");
   const answer = await generateText(system, message, undefined, undefined, voice);
@@ -932,21 +937,31 @@ function isWebsiteProductIntent(message: string): boolean {
     /\b(?:what do you sell|what can i buy|what can i order|what'?s available|what is available|recommend(?: me)? (?:some )?(?:products?|items?)|best (?:products?|items?|things to buy)|show (?:me )?(?:your )?(?:products?|items?|menu))\b/.test(text) ||
     /\b(?:buy|purchase|order)\b.{0,50}\b(?:here|website|site|online)\b/.test(text);
 }
+function isWebsiteMediaIntent(message: string): boolean {
+  const text = message.toLowerCase();
+  return /\b(?:movies?|films?|videos?|trailers?|gallery|galleries|images?|pictures?|photos?|posters?|media|watch|view)\b/.test(text) ||
+    /\b(?:show|find|browse|see)\b.{0,35}\b(?:latest|new|uploaded|available)\b.{0,25}\b(?:media|movies?|films?|videos?|images?|pictures?|photos?)\b/.test(text);
+}
 
 async function findWebsiteRecommendations(db: Db, workspaceId: string, websiteId: string, message: string): Promise<AnyRecord[]> {
-  const browseIntent = isWebsiteProductIntent(message);
+  const productIntent = isWebsiteProductIntent(message);
+  const mediaIntent = isWebsiteMediaIntent(message);
+  const browseIntent = productIntent || mediaIntent;
+  const preferredTypes = productIntent && !mediaIntent ? new Set(["product","service"])
+    : mediaIntent && !productIntent ? new Set(["movie","video","music","post","article","event","book","recipe","course"])
+      : new Set(["product","service","movie","video","music","post","article","event","book","recipe","course"]);
   const stop = new Set([
     "the","and","for","with","that","this","from","you","your","are","can","show","find","looking","want","need",
     "some","about","what","which","where","best","please","have","has","does","there","into","price","prices",
     "product","products","item","items","buy","purchase","order","here","website","site","menu","catalog","catalogue",
     "shop","shopping","store","recommend","recommendations","suggest","suggestions","available","sell","selling",
-    "other","more","options","top","good","popular","get","on"
+    "other","more","options","top","good","popular","get","on","movie","movies","film","films","video","videos","gallery","galleries","image","images","picture","pictures","photo","photos","media","poster","trailers","trailer","watch","view","latest","new","uploaded"
   ]);
   const terms = Array.from(new Set(message.toLowerCase().match(/[a-z0-9][a-z0-9-]{2,}/g)||[]))
     .filter((term)=>!stop.has(term)).slice(0,12);
   if (!terms.length && !browseIntent) return [];
   const result = await db.from("website_content_items").select("id,item_type,name,description,image_url,item_url,price_text,source_page_url")
-    .eq("workspace_id",workspaceId).eq("website_id",websiteId).eq("source_verified",true).limit(300);
+    .eq("workspace_id",workspaceId).eq("website_id",websiteId).eq("source_verified",true).order("updated_at",{ascending:false}).limit(300);
   if (result.error) { console.warn("[misma-widget] Verified website recommendations unavailable:",result.error.code||"unknown"); return []; }
   return (result.data||[]).map((row:AnyRecord)=>{
     const name=safeString(row.name,240), imageUrl=safeString(row.image_url,2048), price=safeString(row.price_text,120);
@@ -955,7 +970,7 @@ async function findWebsiteRecommendations(db: Db, workspaceId: string, websiteId
     let verifiedImage=false;
     try { const parsed=new URL(imageUrl); verifiedImage=parsed.protocol==="https:"&&!parsed.username&&!parsed.password; } catch { verifiedImage=false; }
     return {row,score,name,imageUrl,price,verifiedImage,type:safeString(row.item_type,40)};
-  }).filter((item)=>item.verifiedImage&&["product","service"].includes(item.type)&&(item.score>0||browseIntent))
+  }).filter((item)=>item.verifiedImage&&preferredTypes.has(item.type)&&(item.score>0||browseIntent))
     .sort((a,b)=>b.score-a.score||Number(b.type==="product")-Number(a.type==="product")||
       Number(Boolean(b.price))-Number(Boolean(a.price))||a.name.localeCompare(b.name))
     .slice(0,3).map((item)=>({
@@ -2053,8 +2068,72 @@ Deno.serve(async (request: Request) => {
       const result = await processQueuedWebsiteScan(db);
       return respond(200, { ok: true, ...result });
     }
-    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
+    if (input.action === "heartbeat" || input.action === "page-view" || input.action === "content-sync" || input.action === "history" || input.action === "chat" || input.action === "human-request" || input.action === "typing" || input.action === "widget-config" || input.action === "close") {
       const site = await allowedSite(db, safeString(input.siteKey, 100), request);
+      if (input.action === "content-sync") {
+        const originHeader = request.headers.get("origin") || "";
+        let origin: URL;
+        let pageUrl: URL;
+        try {
+          origin = new URL(originHeader);
+          pageUrl = new URL(safeString(input.pageUrl, 2048));
+        } catch {
+          return respond(400, { error: "A valid first-party page URL is required." });
+        }
+        if (pageUrl.origin !== origin.origin || origin.hostname.toLowerCase().replace(/^www\./, "") !== String(site.domain || "").toLowerCase().replace(/^www\./, "")) {
+          return respond(403, { error: "Rendered content can only be synced from this connected website." });
+        }
+        if (pageUrl.protocol !== "https:" || pageUrl.username || pageUrl.password) {
+          return respond(400, { error: "The source page must use HTTPS." });
+        }
+        pageUrl.hash = "";
+        pageUrl.search = "";
+        const supportedTypes = new Set(["product","service","movie","video","music","post","article","event","book","recipe","course"]);
+        const suppliedItems = Array.isArray(input.items) ? input.items.slice(0, 30) : [];
+        const rows: AnyRecord[] = [];
+        for (const raw of suppliedItems) {
+          if (!isRecord(raw)) continue;
+          const type = safeString(raw.type, 24).toLowerCase();
+          const name = safeString(raw.name, 180);
+          if (!supportedTypes.has(type) || name.length < 2) continue;
+          let imageUrl: URL;
+          try {
+            imageUrl = new URL(safeString(raw.imageUrl, 1400));
+          } catch { continue; }
+          if (imageUrl.protocol !== "https:" || imageUrl.username || imageUrl.password ||
+            imageUrl.hostname === "localhost" || imageUrl.hostname.endsWith(".localhost") ||
+            /^127\.|^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(imageUrl.hostname)) continue;
+          let itemUrl = pageUrl.href;
+          try {
+            const target = new URL(safeString(raw.url, 1400) || pageUrl.href, pageUrl.href);
+            if (target.protocol === "https:" && target.origin === pageUrl.origin && !target.username && !target.password) {
+              target.hash = "";
+              itemUrl = target.href;
+            }
+          } catch { /* Link falls back to the verified page URL. */ }
+          rows.push({
+            workspace_id: site.workspace_id,
+            website_id: site.id,
+            item_type: type,
+            name,
+            description: safeString(raw.description, 350),
+            image_url: imageUrl.href,
+            item_url: itemUrl,
+            price_text: safeString(raw.price, 100) || null,
+            source_page_url: pageUrl.href,
+            source_verified: true,
+            updated_at: new Date().toISOString(),
+          });
+        }
+        if (rows.length) {
+          const saved = await db.from("website_content_items").upsert(rows, { onConflict: "website_id,item_type,name,source_page_url" });
+          if (saved.error) throw new Error("Misma could not update this website's live content index.");
+        }
+        await db.from("website_connections").update({
+          status: "connected", last_seen_at: new Date().toISOString(),
+        }).eq("id", site.id);
+        return respond(200, { ok: true, syncedCount: rows.length, sourcePage: pageUrl.href });
+      }
       if (input.action === "widget-config") {
         // last_seen_at is operational activity, not an owner edit. Keep updated_at
         // stable here so the config ETag changes only when saved settings change.

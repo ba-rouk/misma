@@ -20,7 +20,7 @@ var store="misma_visitor_"+siteSessionKey,conversationStore="misma_conversation_
 var visitor="",conversation=null,pendingClose=null;
 try{visitor=sessionStorage.getItem(store)||crypto.randomUUID();sessionStorage.setItem(store,visitor);conversation=sessionStorage.getItem(conversationStore)||null;}
 catch(error){visitor="v-"+Date.now()+"-"+Math.random().toString(36).slice(2);}
-var host=document.createElement("div");
+var host=document.createElement("div");host.setAttribute("data-misma-widget-root","true");
 host.style.cssText="position:fixed;left:20px;bottom:20px;z-index:2147483647";
 var mobileWidgetViewport=window.matchMedia("(max-width:520px)");
 function positionWidgetHost(){
@@ -171,7 +171,11 @@ function renderRecommendations(items){
     var image=document.createElement("img");image.src=parsedImage.href;image.alt=item.name;image.loading="lazy";image.decoding="async";image.referrerPolicy="no-referrer";card.appendChild(image);
     var body=document.createElement("div");body.className="misma-recommendation-copy";
     var name=document.createElement("strong");name.textContent=item.name;body.appendChild(name);
-    var price=document.createElement("span");price.className="misma-recommendation-price";price.textContent=typeof item.price==="string"&&item.price.trim()?item.price:"Price on request";body.appendChild(price);
+    var type=typeof item.type==="string"?item.type:"product";
+    var labels={product:"Product",service:"Service",movie:"Movie",video:"Video",music:"Music",post:"Image",article:"Article",event:"Event",book:"Book",recipe:"Recipe",course:"Course"};
+    var price=document.createElement("span");price.className="misma-recommendation-price";
+    price.textContent=typeof item.price==="string"&&item.price.trim()?item.price:(type==="product"||type==="service"?"Price on request":(labels[type]||"Media"));
+    body.appendChild(price);
     if(typeof item.url==="string"&&item.url.trim()){try{var target=new URL(item.url);if(target.protocol==="https:"){var link=document.createElement("a");link.href=target.href;link.target="_blank";link.rel="noopener noreferrer";link.textContent="View details";body.appendChild(link);}}catch(error){}}
     card.appendChild(body);wrap.appendChild(card);
   });
@@ -218,6 +222,207 @@ function call(payload,signal){
       return data;
     });
 }
+function pageContentText(node){
+  if(!node)return "";
+  return String(node.textContent||"").replace(/\s+/g," ").trim().slice(0,500);
+}
+function pageContentUrl(value,sameOrigin){
+  if(typeof value!=="string"||!value.trim())return "";
+  try{
+    var parsed=new URL(value.trim(),location.href);
+    if(parsed.protocol!=="https:"||parsed.username||parsed.password)return "";
+    if(sameOrigin&&parsed.origin!==location.origin)return "";
+    if(/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(parsed.hostname))return "";
+    return parsed.href.slice(0,1400);
+  }catch(error){return "";}
+}
+function extractWebsiteContentFromDom(){
+  var pageUrl=new URL(location.href);pageUrl.hash="";pageUrl.search="";
+  var items=[],seen=new Set();
+  function add(item){
+    if(!item||typeof item.name!=="string"||item.name.trim().length<2)return;
+    var imageUrl=pageContentUrl(item.imageUrl||"",false);
+    if(!imageUrl)return;
+    var name=String(item.name).replace(/\s+/g," ").trim().slice(0,180);
+    var type=String(item.type||"product").toLowerCase();
+    if(!/^(product|service|movie|video|music|post|article|event|book|recipe|course)$/.test(type))return;
+    var itemUrl=pageContentUrl(item.url||pageUrl.href,true)||pageUrl.href;
+    var key=[type,name.toLowerCase(),imageUrl,itemUrl].join("|");
+    if(seen.has(key))return;
+    seen.add(key);
+    items.push({
+      type:type,name:name,
+      description:String(item.description||"").replace(/\s+/g," ").trim().slice(0,350),
+      imageUrl:imageUrl,url:itemUrl,
+      price:String(item.price||"").replace(/\s+/g," ").trim().slice(0,100)
+    });
+  }
+  var typeMap={
+    product:"product",service:"service",movie:"movie",videoobject:"video",
+    musicrecording:"music",musicalbum:"music",musicgroup:"music",
+    imageobject:"post",creativework:"post",article:"article",blogposting:"article",
+    newsarticle:"article",socialmediaposting:"post",event:"event",book:"book",
+    recipe:"recipe",course:"course"
+  };
+  function visitStructured(value){
+    if(Array.isArray(value)){value.forEach(visitStructured);return;}
+    if(!value||typeof value!=="object")return;
+    if(Array.isArray(value["@graph"]))visitStructured(value["@graph"]);
+    var types=Array.isArray(value["@type"])?value["@type"]:[value["@type"]];
+    var type="";
+    types.forEach(function(raw){
+      var key=String(raw||"").split("/").pop().toLowerCase();
+      if(!type&&typeMap[key])type=typeMap[key];
+    });
+    if(type){
+      var image=value.image||value.thumbnailUrl||value.contentUrl;
+      if(Array.isArray(image))image=image[0];
+      if(image&&typeof image==="object")image=image.url||image.contentUrl;
+      var offers=Array.isArray(value.offers)?value.offers[0]:value.offers||{};
+      var specification=offers.priceSpecification||{};
+      var numericPrice=offers.price??specification.price??value.price;
+      var currency=offers.priceCurrency||specification.priceCurrency||"";
+      var price=numericPrice==null?"":(currency?currency+" ":"")+String(numericPrice);
+      add({
+        type:type,name:value.name||value.headline||value.title,
+        description:value.description||value.abstract,
+        imageUrl:image,
+        url:typeof value.url==="string"?value.url:typeof value["@id"]==="string"?value["@id"]:pageUrl.href,
+        price:price
+      });
+    }
+    Object.keys(value).forEach(function(key){
+      if(key==="offers"||key==="image"||key==="thumbnailUrl"||key==="contentUrl")return;
+      var child=value[key];
+      if(child&&typeof child==="object")visitStructured(child);
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('script[type="application/ld+json"]'),function(script){
+    try{visitStructured(JSON.parse(script.textContent||""));}catch(error){}
+  });
+  function classifyCard(card,forcedType){
+    if(!card||card.closest("[data-misma-widget-root]"))return;
+    var classes=typeof card.className==="string"?card.className.toLowerCase():"";
+    var type=forcedType||(/movie|film/.test(classes)?"movie":/video/.test(classes)?"video":/gallery|photo|image/.test(classes)?"post":"product");
+    var titleNode=card.querySelector('[itemprop="name"],[data-product-name],[data-title],h1,h2,h3,h4,[class*="product-title" i],[class*="card-title" i],[class*="movie-title" i],[class*="title" i]');
+    var imageNode=card.querySelector("img");
+    var name=pageContentText(titleNode)||String(card.getAttribute("data-product-name")||card.getAttribute("data-title")||"").trim();
+    if(!name&&imageNode)name=String(imageNode.alt||imageNode.getAttribute("title")||"").trim();
+    if(!name||!imageNode)return;
+    var imageUrl=imageNode.currentSrc||imageNode.src||imageNode.getAttribute("data-src")||imageNode.getAttribute("data-lazy-src")||imageNode.getAttribute("data-original")||"";
+    var priceNode=card.querySelector('[itemprop="price"],[data-price],[class*="price" i]');
+    var price=priceNode?(priceNode.getAttribute("content")||priceNode.getAttribute("data-price")||pageContentText(priceNode)):"";
+    var descriptionNode=card.querySelector('[itemprop="description"],[class*="description" i],p');
+    var link=card.matches("a[href]")?card:card.querySelector("a[href]");
+    add({
+      type:type,name:name,description:pageContentText(descriptionNode),
+      imageUrl:imageUrl,url:link?link.href:pageUrl.href,price:price
+    });
+  }
+  var cardSelector=[
+    '[itemtype*="Product" i]','[itemtype*="Movie" i]','[itemtype*="VideoObject" i]',
+    '[class*="product-card" i]','[class*="product-item" i]','[data-product-id]','[data-product-name]',
+    '[class*="movie-card" i]','[class*="film-card" i]','[data-movie-id]',
+    '[class*="video-card" i]','[class*="gallery-item" i]','[class*="media-card" i]'
+  ].join(",");
+  Array.prototype.forEach.call(document.querySelectorAll(cardSelector),function(card){classifyCard(card);});
+  Array.prototype.forEach.call(document.querySelectorAll("figure"),function(figure){
+    var image=figure.querySelector("img");
+    var caption=figure.querySelector("figcaption");
+    if(!image)return;
+    classifyCard(figure,"post");
+    if(items.length>=30)return;
+    if(caption&&!pageContentText(figure.querySelector("h1,h2,h3,h4")))add({
+      type:"post",name:pageContentText(caption)||image.alt,
+      description:image.alt,imageUrl:image.currentSrc||image.src,
+      url:figure.querySelector("a[href]")?.href||pageUrl.href
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("img[alt]"),function(image){
+    if(items.length>=30)return;
+    var alt=String(image.alt||image.getAttribute("title")||"").replace(/\s+/g," ").trim();
+    if(alt.length<3||/^(image|photo|picture|logo|icon|avatar|thumbnail|placeholder)$/i.test(alt))return;
+    var scope=image.closest('figure,[class*="gallery" i],[class*="portfolio" i],[class*="movie" i],[class*="film" i],[class*="product" i],[class*="media" i]')||image.parentElement;
+    if(scope&&scope.closest&&scope.closest("[data-misma-widget-root]"))return;
+    if(image.naturalWidth>0&&image.naturalWidth<100)return;
+    var parentClass=scope&&typeof scope.className==="string"?scope.className.toLowerCase():"";
+    var pageContext=(pageUrl.pathname+" "+document.title).toLowerCase();
+    var type=/movie|film/.test(parentClass+" "+pageContext)?"movie":
+      /video/.test(parentClass+" "+pageContext)?"video":
+      /music|album|artist/.test(parentClass+" "+pageContext)?"music":
+      /product/.test(parentClass+" "+pageContext)?"product":"post";
+    var heading=scope&&scope.querySelector?scope.querySelector("h1,h2,h3,h4,[class*='title' i],figcaption") : null;
+    var name=pageContentText(heading)||alt;
+    var anchor=image.closest("a[href]");
+    add({type:type,name:name,description:alt,imageUrl:image.currentSrc||image.src||image.getAttribute("data-src"),
+      url:anchor?anchor.href:pageUrl.href});
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("video"),function(video){
+    var parent=video.closest('[class*="movie" i],[class*="film" i],[class*="video" i],[class*="media" i]')||video.parentElement;
+    var heading=parent&&parent.querySelector("h1,h2,h3,h4,[class*='title' i]");
+    var title=(video.getAttribute("aria-label")||video.getAttribute("title")||"").trim()||pageContentText(heading)||document.title;
+    var poster=video.getAttribute("poster")||"";
+    var anchor=parent&&parent.querySelector("a[href]");
+    add({type:/movie|film/i.test(parent&&parent.className||"")?"movie":"video",name:title,imageUrl:poster,url:anchor?anchor.href:pageUrl.href});
+  });
+  var ogTitle=document.querySelector('meta[property="og:title"],meta[name="twitter:title"]');
+  var ogImage=document.querySelector('meta[property="og:image"],meta[name="twitter:image"]');
+  var ogType=document.querySelector('meta[property="og:type"]');
+  if(ogTitle&&ogImage){
+    var socialType=String(ogType&&ogType.content||"").toLowerCase();
+    add({type:/video|movie/.test(socialType)?"video":/product/.test(socialType)?"product":"post",
+      name:ogTitle.content,imageUrl:ogImage.content,url:pageUrl.href,
+      description:(document.querySelector('meta[name="description"]')||{}).content||""});
+  }
+  return items.slice(0,30);
+}
+function syncRenderedWebsiteContent(){
+  if(widgetDestroyed||document.visibilityState==="hidden")return;
+  var items=extractWebsiteContentFromDom();
+  if(!items.length)return;
+  var pageUrl=new URL(location.href);pageUrl.hash="";pageUrl.search="";
+  var payload=JSON.stringify(items);
+  var hash=2166136261;
+  for(var i=0;i<payload.length;i++){hash^=payload.charCodeAt(i);hash=Math.imul(hash,16777619);}
+  var fingerprint=(hash>>>0).toString(36);
+  var storageKey="misma_content_sync_v1_"+key+"_"+pageUrl.pathname;
+  try{if(localStorage.getItem(storageKey)===fingerprint)return;}catch(error){}
+  call({action:"content-sync",pageUrl:pageUrl.href,pageTitle:document.title,items:items}).then(function(result){
+    if(result&&result.syncedCount>=0){try{localStorage.setItem(storageKey,fingerprint);}catch(error){}}
+  }).catch(function(error){
+    console.warn("[Misma] Live website content sync will retry after the page changes:",error&&error.message?error.message:"unknown");
+  });
+}
+function startRenderedWebsiteContentSync(){
+  var timer=null,lastRun=0;
+  function schedule(delay){
+    if(timer)window.clearTimeout(timer);
+    timer=window.setTimeout(function(){
+      timer=null;
+      if(Date.now()-lastRun<1200){schedule(1300);return;}
+      lastRun=Date.now();syncRenderedWebsiteContent();
+    },delay||1600);
+  }
+  schedule(1800);
+  window.setTimeout(function(){schedule(1000);},6500);
+  window.addEventListener("pageshow",function(){schedule(800);});
+  window.addEventListener("scroll",function(){schedule(1800);},{passive:true});
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")schedule(700);});
+  if(typeof MutationObserver==="function"&&document.body){
+    var observer=new MutationObserver(function(records){
+      var relevant=records.some(function(record){
+        var target=record.target&&record.target.nodeType===1?record.target:null;
+        if(target&&target.closest&&target.closest("[data-misma-widget-root]"))return false;
+        return Array.prototype.some.call(record.addedNodes||[],function(node){
+          return !(node.nodeType===1&&node.closest&&node.closest("[data-misma-widget-root]"));
+        })||record.type==="attributes";
+      });
+      if(relevant)schedule(1700);
+    });
+    observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["src","srcset","data-src","data-lazy-src","poster"]});
+  }
+}
+
 function closeWidget(){
   panel.classList.remove("open");
   stopVoiceSession();
@@ -744,6 +949,7 @@ function scheduleHistoryPoll(){
 }
 scheduleHistoryPoll();
 refreshMicPermission();
+  startRenderedWebsiteContentSync();
   call({action:"page-view"}).catch(function(error){console.warn("[Misma] Page refresh check failed:",error.message);});
   return {
     applyConfig:function(config){applyWebsiteSocialLinks(config||{});},
