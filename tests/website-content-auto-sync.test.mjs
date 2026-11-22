@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { deduplicateWebsiteContentRows } from "../supabase/functions/misma-widget/website-content-sync.ts";
+import { deduplicateWebsiteContentRows, deduplicateWebsiteRecommendationRows } from "../supabase/functions/misma-widget/website-content-sync.ts";
 
 const read = (path) => readFile(resolve(import.meta.dirname, "..", path), "utf8");
 
@@ -100,4 +100,54 @@ test("live website content sync removes duplicate database conflict keys before 
   assert.equal(unique[0].description, "Vanilla sponge cake");
   assert.equal(unique[0].price_text, "RWF 30,000 per unit");
   assert.equal(unique[0].image_url, "https://cdn.example.com/vanilla-1.webp");
+});
+
+
+test("customer product recommendations show one card per product across multiple pages", () => {
+  const rows = [
+    {
+      item_type: "product",
+      name: "Vanilla cake",
+      description: "Vanilla cream cake",
+      image_url: "https://cdn.example.com/vanilla.webp",
+      item_url: "https://shop.example.com/order?product=vanilla-cake-a1",
+      price_text: "RWF 25,000 per unit",
+      source_page_url: "https://shop.example.com/",
+    },
+    {
+      item_type: "product",
+      name: "Vanilla cake",
+      description: "Vanilla cream cake",
+      image_url: "https://cdn.example.com/vanilla.webp",
+      item_url: "https://shop.example.com/order?product=vanilla-cake-a1",
+      price_text: "RWF 25,000 per unit",
+      source_page_url: "https://shop.example.com/categories",
+    },
+    {
+      item_type: "product",
+      name: "Vanilla cake photo",
+      description: "Vanilla cake photo",
+      image_url: "https://cdn.example.com/vanilla.webp",
+      item_url: "https://shop.example.com/order?product=vanilla-cake-a1",
+      price_text: null,
+      source_page_url: "https://shop.example.com/",
+    },
+    {
+      item_type: "product",
+      name: "Chocolate cake",
+      description: "Chocolate cake",
+      image_url: "https://cdn.example.com/chocolate.webp",
+      item_url: "https://shop.example.com/order?product=chocolate-cake-b2",
+      price_text: "RWF 25,000 per unit",
+      source_page_url: "https://shop.example.com/categories",
+    },
+  ];
+
+  const unique = deduplicateWebsiteRecommendationRows(rows);
+  assert.equal(unique.length, 2);
+  assert.equal(unique[0].name, "Vanilla cake");
+  assert.equal(unique[0].price_text, "RWF 25,000 per unit");
+  assert.equal(unique[0].image_url, "https://cdn.example.com/vanilla.webp");
+  assert.equal(unique[0].item_url, "https://shop.example.com/order?product=vanilla-cake-a1");
+  assert.equal(unique[1].name, "Chocolate cake");
 });
