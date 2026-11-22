@@ -1855,3 +1855,12 @@ test("dashboard bootstrap provisions a default workspace when an authenticated u
   assert.ok(migration.includes("ON CONFLICT (workspace_id, user_id) DO NOTHING"));
   assert.ok(migration.includes("INSERT INTO public.workspace_members"));
 });
+
+
+test("Core.01 workspace seed trigger targets its partial unique topic index", async () => {
+  const migration = await read("../supabase/migrations/20261122103000_fix_core01_workspace_seed_trigger.sql");
+  assert.ok(migration.includes("ON CONFLICT (workspace_id, room_key) WHERE room_type = 'topic' DO NOTHING"));
+  assert.ok(migration.includes("CREATE OR REPLACE FUNCTION public.core_01_seed_workspace_rooms()"));
+  assert.ok(migration.includes("CREATE OR REPLACE FUNCTION public.create_misma_workspace()"));
+  assert.ok(migration.includes("ON CONFLICT DO NOTHING"));
+});
