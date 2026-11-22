@@ -44,6 +44,7 @@ test("generic product discovery queries are not rejected for having only stop wo
   const finder = edge.slice(start, end);
 
   assert.match(finder, /if \(!terms\.length && !browseIntent\) return \[\]/);
-  assert.match(finder, /item\.verifiedImage&&\(item\.score>0\|\|browseIntent\)/);
+  assert.match(finder, /item\.verifiedImage&&\["product","service"\]\.includes\(item\.type\)/);
+  assert.match(finder, /item\.score>0\|\|browseIntent/);
   assert.match(finder, /\.eq\("source_verified",true\)/);
 });
