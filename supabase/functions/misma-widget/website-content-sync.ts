@@ -35,10 +35,10 @@ export function normalizeWebsiteRecommendationName(value: unknown): string {
   return String(value ?? "")
     .normalize("NFKC")
     .replace(/&/g, " and ")
-    .replace(/\\b(?:photo|image|picture|thumbnail|thumb)(?:\\s*#?\\d+)?$/i, "")
+    .replace(/\b(?:photo|image|picture|thumbnail|thumb)(?:\s*#?\d+)?$/i, "")
     .toLocaleLowerCase()
-    .replace(/[^\\p{L}\\p{N}]+/gu, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -50,7 +50,7 @@ export function deduplicateWebsiteRecommendationRows(rows: WebsiteContentIndexRo
     const name = normalizeWebsiteRecommendationName(row.name);
     if (!type || !name) continue;
 
-    const identity = type + "\\u001f" + name;
+    const identity = type + "\u001f" + name;
     const existing = unique.get(identity);
     if (!existing) {
       unique.set(identity, { ...row });
@@ -68,8 +68,8 @@ export function deduplicateWebsiteRecommendationRows(rows: WebsiteContentIndexRo
     // "Vanilla cake photo" without creating another recommendation card.
     const currentName = String(existing.name ?? "").trim();
     const nextName = String(row.name ?? "").trim();
-    if (/\\b(?:photo|image|picture|thumbnail|thumb)(?:\\s*#?\\d+)?$/i.test(currentName) &&
-        !/\\b(?:photo|image|picture|thumbnail|thumb)(?:\\s*#?\\d+)?$/i.test(nextName)) {
+    if (/\b(?:photo|image|picture|thumbnail|thumb)(?:\s*#?\d+)?$/i.test(currentName) &&
+        !/\b(?:photo|image|picture|thumbnail|thumb)(?:\s*#?\d+)?$/i.test(nextName)) {
       existing.name = row.name;
     }
   }
