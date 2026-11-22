@@ -1841,3 +1841,17 @@ test("new and changed AI-extracted knowledge stays unpublished until owner appro
   assert.match(widget, /update\(\{ answer: item\.answer, approved: false \}\)/);
   assert.match(api, /\.eq\("approved", false\)/);
 });
+
+
+test("dashboard bootstrap provisions a default workspace when an authenticated user has no membership", async () => {
+  const context = await read("../src/lib/api/workspace-context.server.ts");
+  const migration = await read("../supabase/migrations/20261122120000_recover_default_workspace_membership.sql");
+
+  assert.match(context, /create_misma_workspace/);
+  assert.match(context, /otherwise\\s+provision|provision \\(or recover\\)/i);
+  assert.doesNotMatch(context, /if \\(allowSupportAccess\\) \\{\\s*throw new Error\\("No accessible Misma workspace/);
+  assert.match(context, /workspace_staff_access/);
+  assert.match(migration, /WHERE workspace\\.owner_id = current_user_id/);
+  assert.match(migration, /ON CONFLICT \\(workspace_id, user_id\\) DO NOTHING/);
+  assert.match(migration, /INSERT INTO public\\.workspace_members/);
+});
