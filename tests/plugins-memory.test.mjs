@@ -106,7 +106,7 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /Connect \{manifest\.name\}/);
   assert.match(page, /misma-plugin-skills-grid/);
   assert.match(page, /misma-plugin-detail-actionbar/);
-  assert.match(page, /misma-plugin-detail-header-row/);
+  assert.match(page, /misma-plugin-detail-topline/);
   assert.match(page, /misma-plugin-detail-body/);
   assert.match(page, /misma-plugin-detail-back-button/);
   assert.match(page, /misma-plugin-hero-gallery/);
