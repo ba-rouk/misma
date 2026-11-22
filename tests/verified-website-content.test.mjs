@@ -20,7 +20,7 @@ test("verified website content is parsed from JSON-LD and returned as recommenda
   assert.match(migration, /enable row level security/i);
   assert.match(scanStateMigration, /structured_data_scanned boolean not null default false/);
   assert.match(runtime, /renderRecommendations\(data\.recommendations\)/);
-  assert.match(runtime, /parsedImage\.protocol==="https:"/);
+  assert.match(runtime, /parsedImage\.protocol!=="https:"/);
 });
 
 test("plugin directory exposes configured providers and all management routes", async () => {
