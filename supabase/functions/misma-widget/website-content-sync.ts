@@ -42,8 +42,8 @@ export function normalizeWebsiteRecommendationName(value: unknown): string {
     .trim();
 }
 
-export function deduplicateWebsiteRecommendationRows<T extends WebsiteContentIndexRow>(rows: T[]): T[] {
-  const unique = new Map<string, T>();
+export function deduplicateWebsiteRecommendationRows(rows: WebsiteContentIndexRow[]): WebsiteContentIndexRow[] {
+  const unique = new Map<string, WebsiteContentIndexRow>();
 
   for (const row of rows) {
     const type = String(row.item_type ?? "").trim().toLocaleLowerCase();
