@@ -171,7 +171,11 @@ function renderRecommendations(items){
     var image=document.createElement("img");image.src=parsedImage.href;image.alt=item.name;image.loading="lazy";image.decoding="async";image.referrerPolicy="no-referrer";card.appendChild(image);
     var body=document.createElement("div");body.className="misma-recommendation-copy";
     var name=document.createElement("strong");name.textContent=item.name;body.appendChild(name);
-    var price=document.createElement("span");price.className="misma-recommendation-price";price.textContent=typeof item.price==="string"&&item.price.trim()?item.price:"Price on request";body.appendChild(price);
+    var type=typeof item.type==="string"?item.type:"product";
+    var labels={product:"Product",service:"Service",movie:"Movie",video:"Video",music:"Music",post:"Image",article:"Article",event:"Event",book:"Book",recipe:"Recipe",course:"Course"};
+    var price=document.createElement("span");price.className="misma-recommendation-price";
+    price.textContent=typeof item.price==="string"&&item.price.trim()?item.price:(type==="product"||type==="service"?"Price on request":(labels[type]||"Media"));
+    body.appendChild(price);
     if(typeof item.url==="string"&&item.url.trim()){try{var target=new URL(item.url);if(target.protocol==="https:"){var link=document.createElement("a");link.href=target.href;link.target="_blank";link.rel="noopener noreferrer";link.textContent="View details";body.appendChild(link);}}catch(error){}}
     card.appendChild(body);wrap.appendChild(card);
   });
