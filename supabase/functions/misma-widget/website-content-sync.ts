@@ -1,7 +1,7 @@
 type WebsiteContentIndexRow = Record<string, unknown>;
 
-export function deduplicateWebsiteContentRows<T extends WebsiteContentIndexRow>(rows: T[]): T[] {
-  const unique = new Map<string, T>();
+export function deduplicateWebsiteContentRows(rows: WebsiteContentIndexRow[]): WebsiteContentIndexRow[] {
+  const unique = new Map<string, WebsiteContentIndexRow>();
 
   for (const row of rows) {
     const normalizedName = String(row.name ?? "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
