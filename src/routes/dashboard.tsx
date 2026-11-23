@@ -7061,7 +7061,7 @@ function Dashboard() {
                   </details>
                   <details>
                     <summary>How do I manage privacy and account security?</summary>
-                    <p>Review Privacy &amp; Security and History &amp; Data in Settings. Keep your sign-in details private, disconnect integrations you no longer use and remove account data only when you intend to.</p>
+                    <p>Review Data controls in Settings to export workspace data, manage conversation context, and understand which privacy options Misma currently supports. Keep your sign-in details private and disconnect integrations you no longer use.</p>
                     <button type="button" className="aichat-action-btn secondary" onClick={() => setSelectedSettingsSection("settings-data-controls")}>Open Data controls</button>
                   </details>
                 </div>
