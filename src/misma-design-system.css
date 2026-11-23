@@ -1492,3 +1492,73 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 .misma-plugin-settings-page .misma-plugin-settings-topbar h1 {
   color: #fff;
 }
+
+
+/* Unified plugin directory, provider description and provider settings headers. */
+.misma-plugin-directory-header,
+.misma-plugin-detail-header,
+.misma-plugin-settings-topbar.misma-plugin-unified-header {
+  box-sizing: border-box !important;
+  min-height: 64px !important;
+  height: 64px !important;
+  margin-top: 0 !important;
+  margin-bottom: 22px !important;
+  padding: 0 0 12px !important;
+  display: grid !important;
+  grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+  align-items: center !important;
+  gap: 12px !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+}
+.misma-plugin-directory-header .misma-plugin-directory-back,
+.misma-plugin-detail-header .misma-plugin-detail-back-button,
+.misma-plugin-settings-topbar.misma-plugin-unified-header > .misma-page-back-button {
+  align-self: center !important;
+  justify-self: start !important;
+  margin: 0 !important;
+}
+.misma-plugin-directory-header .misma-plugin-directory-heading,
+.misma-plugin-detail-header .misma-plugin-detail-heading {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  align-self: center;
+}
+.misma-plugin-directory-header .misma-plugin-directory-heading h1,
+.misma-plugin-detail-header .misma-plugin-detail-heading h1,
+.misma-plugin-settings-topbar.misma-plugin-unified-header h1 {
+  margin: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 21px/1.2 var(--font-sans,Inter,system-ui,sans-serif) !important;
+  text-align: center !important;
+}
+.misma-plugin-detail-header .misma-plugin-detail-topline {
+  display: contents !important;
+}
+.misma-plugin-detail-header .misma-plugin-detail-settings {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+}
+.misma-plugin-settings-topbar.misma-plugin-unified-header > span {
+  display: block;
+  grid-column: 3;
+}
+.misma-plugin-settings-topbar.misma-plugin-unified-header h1 {
+  grid-column: 2;
+  grid-row: 1;
+}
+.misma-plugin-directory-page .misma-plugin-search-dock {
+  margin-top: 0;
+}
+@media (max-width: 767px) {
+  .misma-plugin-directory-header,
+  .misma-plugin-detail-header,
+  .misma-plugin-settings-topbar.misma-plugin-unified-header {
+    min-height: 64px !important;
+    height: 64px !important;
+  }
+}
