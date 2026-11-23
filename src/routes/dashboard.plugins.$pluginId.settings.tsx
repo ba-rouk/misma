@@ -189,11 +189,11 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
   return (
     <main className="misma-plugin-settings-page">
       <div className="misma-plugin-settings-shell">
-        <header className="misma-plugin-settings-topbar">
+        <header className="misma-plugin-settings-topbar misma-plugin-shared-topbar">
           <button type="button" className="misma-page-back-button" onClick={backToDetail} aria-label="Back to plugin detail">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg>
           </button>
-          <h1>{manifest.name}</h1><span />
+          <div className="misma-plugin-topbar-title"><img className="misma-plugin-topbar-brand" src="/misma-favicon.png" alt="Misma" /><h1>{manifest.name}</h1></div><span />
         </header>
 
         {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
