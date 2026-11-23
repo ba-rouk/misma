@@ -1967,3 +1967,13 @@ body .misma-integrations-page :where(h3, h4, h5, h6) {
   font-size: 18px !important;
   line-height: 1.35 !important;
 }
+
+
+/* Remaining page-level headers follow their owning page background as well. */
+.misma-guest-header,
+.misma-theme-toolbar {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
