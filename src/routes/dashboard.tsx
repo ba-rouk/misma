@@ -5280,7 +5280,6 @@ function Dashboard() {
               <span>{profileEmail || "Signed in"}</span>
               <button type="button" onClick={() => {
                 setSelectedSettingsSection("settings-profile");
-                setSelectedSettingsSection("settings-profile");
                 setActiveTab("settings");
                 setProfileMenuOpen(false);
                 setMobileMenuOpen(false);
