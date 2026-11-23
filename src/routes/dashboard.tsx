@@ -1807,16 +1807,17 @@ function Dashboard() {
   const [visitorIsTyping, setVisitorIsTyping] = useState(false);
 
   // Restore the last dashboard section and selected chat after a full browser refresh.
+  // A sidebar tab link takes precedence over the previously saved section.
   useEffect(() => {
     try {
+      const validTabs: TabId[] = [
+        "workspace", "website-statistics", "websites", "customers", "notifications",
+        "products", "build", "knowledge", "connect", "phone", "website-connect",
+        "whatsapp", "images", "library", "manage", "settings",
+      ];
       const saved = localStorage.getItem("misma_dashboard_view_v1");
       if (saved) {
         const parsed = JSON.parse(saved) as { activeTab?: unknown; conversationId?: unknown };
-        const validTabs: TabId[] = [
-          "workspace", "website-statistics", "websites", "customers", "notifications",
-          "products", "build", "knowledge", "connect", "phone", "website-connect",
-          "whatsapp", "images", "library", "manage", "settings",
-        ];
         if (typeof parsed.activeTab === "string" && validTabs.includes(parsed.activeTab as TabId)) {
           setActiveTab(parsed.activeTab as TabId);
         }
@@ -1825,6 +1826,10 @@ function Dashboard() {
           setCurrentConversationId(conversationId);
           setPendingRestoreConversationId(conversationId);
         }
+      }
+      const requestedTab = new URLSearchParams(window.location.search).get("tab");
+      if (requestedTab && validTabs.includes(requestedTab as TabId)) {
+        setActiveTab(requestedTab as TabId);
       }
     } catch {
       // Ignore malformed or unavailable browser storage and use the default dashboard view.

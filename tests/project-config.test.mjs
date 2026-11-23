@@ -1470,6 +1470,7 @@ test("Misma publishes a PNG favicon supported by browser and Google Search forma
   assert.match(root, /title: "Misma \| Business AI, connected"/);
   assert.match(root, /property: "og:title", content: "Misma \| Business AI, connected"/);
   assert.match(root, /property: "og:site_name", content: "Misma"/);
+  assert.match(root, /rel: "icon", href: "\/misma-logo\.svg", type: "image\/svg\+xml"/);
   assert.equal(icon.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
 });
 
