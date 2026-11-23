@@ -1683,7 +1683,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 }
 .misma-plugin-dashboard-sidebar .aichat-newchat-wrap {
   flex: none;
-  padding: 10px 14px 12px;
+  padding: 10px 14px 4px;
 }
 .misma-plugin-dashboard-sidebar .aichat-newchat {
   display: flex;
@@ -1713,6 +1713,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 }
 .misma-plugin-dashboard-sidebar .aichat-primary-nav {
   flex: 1;
+  padding-top: 4px;
 }
 .misma-plugin-dashboard-sidebar .misma-plugin-sidebar-link {
   display: flex;
