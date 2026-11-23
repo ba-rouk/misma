@@ -121,20 +121,7 @@ function PluginsPage() {
     }
   }
 
-  function navigateBack() {
-    const referrer = document.referrer;
-    if (referrer) {
-      try {
-        if (new URL(referrer).origin === window.location.origin) {
-          window.history.back();
-          return;
-        }
-      } catch {
-        // Use the dashboard fallback when the referrer is not a valid URL.
-      }
-    }
-    window.location.assign("/dashboard");
-  }
+  function navigateBack() { window.location.assign("/dashboard"); }
 
   async function uninstall(provider: PluginId) {
     if (!userId || busy) return;
@@ -231,11 +218,11 @@ function PluginsPage() {
   return (
     <main className="misma-marketplace-page misma-plugin-directory-page" onClick={() => setOpenPluginMenu(null)}>
       <div className="misma-marketplace-shell misma-plugin-directory-shell">
-        <header className="misma-marketplace-header misma-plugin-directory-header">
+        <header className="misma-marketplace-header misma-plugin-directory-header misma-plugin-shared-topbar">
           <button type="button" className="misma-page-back-button misma-plugin-directory-back" aria-label="Go to previous page" onClick={navigateBack}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
           </button>
-          <div className="misma-plugin-directory-heading"><h1>Plugins</h1></div>
+          <div className="misma-plugin-directory-heading"><img className="misma-plugin-topbar-brand" src="/misma-favicon.png" alt="Misma" /><h1>Plugins</h1></div>
         </header>
         <div className="misma-plugin-search-dock">
           <label className="misma-marketplace-search" htmlFor="misma-plugin-search">
