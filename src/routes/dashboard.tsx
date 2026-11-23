@@ -6572,8 +6572,6 @@ function Dashboard() {
                 </header>
                 <div className="aichat-settings-detail-content">
               <section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
-
-<section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
                 <div className="aichat-settings-profile-head">
                   <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
                     {profileImage ? <img src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
