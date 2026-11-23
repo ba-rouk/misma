@@ -1881,3 +1881,36 @@ body :where(*:not(svg):not(svg *):not(code):not(code *):not(pre):not(pre *):not(
   font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
   font-size: inherit !important;
 }
+
+
+/* Final specificity pass: keep app typography consistent even where older component rules use !important. */
+body :not(svg):not(svg *):not(code):not(code *):not(pre):not(pre *):not(kbd):not(samp):not(.misma-widget-preview):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+}
+body .aichat :where(h1) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 22px !important;
+}
+body .aichat :where(h2) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 20px !important;
+}
+body .aichat :where(h3, h4, h5, h6) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 18px !important;
+}
+:where(.aichat, .misma-marketplace-page, .misma-plugin-detail-page, .misma-plugin-settings-page, .misma-plugin-connect-page, .misma-integrations-page) :where(span, strong, b, em, label, li, td, th, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-font-size, 16px) !important;
+  line-height: 1.45 !important;
+}
+:where(.aichat, .misma-marketplace-page, .misma-plugin-detail-page, .misma-plugin-settings-page, .misma-plugin-connect-page, .misma-integrations-page) :where(small, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-helper-size, 14px) !important;
+}
+.misma-site .nav {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
