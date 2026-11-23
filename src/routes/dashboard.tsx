@@ -184,7 +184,9 @@ function SettingsNavIcon({ kind }: { kind: string }) {
         : kind === "voice" ? <><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M9 21.5h6" /></>
         : kind === "privacy" ? <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" /></>
         : kind === "history" ? <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>
+        : kind === "manage" ? <><circle cx="9" cy="8" r="3.25" /><path d="M3 20a6 6 0 0 1 12 0M16 5.5a3 3 0 0 1 0 5.8M18 14a5 5 0 0 1 3 4.5" /></>
         : kind === "about" ? <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7h.01" /></>
+        : kind === "help" ? <><circle cx="12" cy="12" r="9" /><path d="M9.6 9a2.5 2.5 0 1 1 4.6 1.3c-.9 1.1-2.2 1.4-2.2 3M12 17h.01" /></>
         : <><path d="M10 17l5-5-5-5M15 12H3" /><path d="M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" /></>}
     </svg>
   );
@@ -1662,6 +1664,12 @@ function Dashboard() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [accentColor, setAccentColor] = useState("#8ab4ff");
   const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
+  const [selectedSettingsSection, setSelectedSettingsSection] = useState("settings-profile");
+  const [helpRequestEmail, setHelpRequestEmail] = useState("");
+  const [helpRequestMessage, setHelpRequestMessage] = useState("");
+  const [helpRequestBusy, setHelpRequestBusy] = useState(false);
+  const [helpRequestStatus, setHelpRequestStatus] = useState("");
+  const [helpRequestError, setHelpRequestError] = useState("");
   const [appearanceLoaded, setAppearanceLoaded] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState({
     productUpdates: true,
@@ -1681,6 +1689,51 @@ function Dashboard() {
   const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  async function sendHelpCenterRequest() {
+    const email = (helpRequestEmail || profileEmail).trim().toLowerCase();
+    const message = helpRequestMessage.trim();
+    setHelpRequestStatus("");
+    setHelpRequestError("");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      setHelpRequestError("Enter a valid email address.");
+      return;
+    }
+    if (message.length < 5 || message.length > 4000) {
+      setHelpRequestError("Describe the issue in 5 to 4,000 characters.");
+      return;
+    }
+    setHelpRequestBusy(true);
+    try {
+      const { error } = await getSupabaseClient().functions.invoke("misma-feedback", {
+        body: {
+          email,
+          comment: message,
+          website: window.location.origin,
+          websiteTrap: "",
+        },
+      });
+      if (error) {
+        let message = error.message || "Could not send your request.";
+        const context = (error as { context?: unknown }).context;
+        if (context instanceof Response) {
+          try {
+            const result = await context.clone().json() as { error?: string };
+            if (result.error) message = result.error;
+          } catch {
+            // Keep the function client's original message.
+          }
+        }
+        throw new Error(message);
+      }
+      setHelpRequestMessage("");
+      setHelpRequestStatus("Your message was sent to Misma support.");
+    } catch (cause) {
+      setHelpRequestError(cause instanceof Error ? cause.message : "Could not send your request.");
+    } finally {
+      setHelpRequestBusy(false);
+    }
+  }
 
   useEffect(() => {
     try {
@@ -4739,10 +4792,29 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
-  const settingsNavItems = [{"id":"settings-profile","label":"Profile","icon":"profile"},{"id":"settings-accent","label":"Accent color","icon":"accent"},{"id":"settings-notifications","label":"Notifications","icon":"notifications"},{"id":"settings-voice","label":"Voice","icon":"voice"},{"id":"settings-privacy","label":"Privacy & Security","icon":"privacy"},{"id":"settings-history","label":"History & Data","icon":"history"},{"id":"settings-memory","label":"Memory","icon":"history"},{"id":"settings-about","label":"About","icon":"about"},{"id":"settings-logout","label":"Log out","icon":"logout"}];
+  const settingsGroups = [
+    { label: "Profile", items: [{ id: "settings-profile", label: "Profile", icon: "profile" }] },
+    { label: "Business", items: [{ id: "settings-business", label: "Business profile & team", icon: "manage" }] },
+    { label: "Account", items: [
+      { id: "settings-account", label: "Account", icon: "profile" },
+      { id: "settings-privacy", label: "Privacy & Security", icon: "privacy" },
+      { id: "settings-history", label: "History & Data", icon: "history" },
+      { id: "settings-memory", label: "Misma Memory", icon: "history" },
+      { id: "settings-logout", label: "Log out", icon: "logout" },
+    ] },
+    { label: "App", items: [
+      { id: "settings-accent", label: "Appearance", icon: "accent" },
+      { id: "settings-notifications", label: "Notifications", icon: "notifications" },
+      { id: "settings-voice", label: "Voice", icon: "voice" },
+      { id: "settings-about", label: "About Misma", icon: "about" },
+    ] },
+    { label: "Support", items: [{ id: "settings-help-center", label: "Help Center", icon: "help" }] },
+  ];
+  const settingsNavItems = settingsGroups.flatMap((group) => group.items);
   const filteredSettingsNavItems = settingsNavItems.filter((item) =>
     !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
   );
+  const selectedSettingsNavItem = settingsNavItems.find((item) => item.id === selectedSettingsSection) || settingsNavItems[0];
   const activeConversation = conversations.find(
     (item: any) => Number(item.id) === Number(currentConversationId),
   );
@@ -4925,7 +4997,7 @@ function Dashboard() {
 
   const showPluginSettingsChild = /^\/dashboard\/plugins\/[^/]+\/(?:settings|description)\/?$/.test(location.pathname);
   return showPluginSettingsChild ? <Outlet /> : (
-    <div className="aichat">
+    <div className={`aichat${activeTab === "settings" && !staffMode ? " is-settings-page" : ""}`}>
       {/* Mobile Translucent Backdrop */}
       <button
         type="button"
@@ -5207,16 +5279,28 @@ function Dashboard() {
             <div className="aichat-profile-menu">
               <span>{profileEmail || "Signed in"}</span>
               <button type="button" onClick={() => {
+                setSelectedSettingsSection("settings-profile");
                 setActiveTab("settings");
                 setProfileMenuOpen(false);
                 setMobileMenuOpen(false);
               }}>
                 Settings
               </button>
+              <button type="button" onClick={() => {
+                setSelectedSettingsSection("settings-help-center");
+                setSettingsSearchQuery("");
+                setHelpRequestStatus("");
+                setHelpRequestError("");
+                setActiveTab("settings");
+                setProfileMenuOpen(false);
+                setMobileMenuOpen(false);
+              }}>
+                Help Center
+              </button>
               {profileError && (
                 <span className="aichat-profile-error">{profileError}</span>
               )}
-              <button type="button" onClick={() => void signOut()}>
+              <button type="button" className="is-danger" onClick={() => void signOut()}>
                 Sign out
               </button>
             </div>
@@ -5225,6 +5309,7 @@ function Dashboard() {
             type="button"
             className={`aichat-user-profile${activeTab === "settings" ? " active" : ""}`}
             onClick={() => {
+              setSelectedSettingsSection("settings-profile");
               setActiveTab("settings");
               setProfileMenuOpen(false);
               setMobileMenuOpen(false);
@@ -6430,21 +6515,63 @@ function Dashboard() {
 
         {/* ── View 5: AI Settings for business and website assistants ── */}
         {!staffMode && activeTab === "settings" && (
-          <div className="aichat-tab-view">
-            <div className="aichat-tab-content aichat-settings-content">
-              <div className="aichat-tab-header">
-                <h2>Settings</h2>
-                <p>Configure how Misma represents your business, supports website visitors, and hands conversations to your team.</p>
-              </div>
-              <div className="aichat-settings-nav" aria-label="Settings sections">
-                {settingsNavItems.filter((item) => item.icon !== "logout").map((item) => (
-                  <button key={item.id} type="button" className="aichat-settings-nav-button" onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
-                    <span className="aichat-settings-nav-icon"><SettingsNavIcon kind={item.icon} /></span>
-                    <span>{item.label}</span>
+          <div className="aichat-tab-view aichat-settings-tab-view">
+            <div className="aichat-settings-layout">
+              <aside className="aichat-settings-sidebar" aria-label="Settings navigation">
+                <div className="aichat-settings-sidebar-top">
+                  <button type="button" className="aichat-settings-back-app" onClick={() => {
+                    setActiveTab("workspace");
+                    setSettingsSearchQuery("");
+                  }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7-7-7 7 7 7" /></svg>
+                    Back to app
                   </button>
-                ))}
-              </div>
-              <section id="settings-profile" className="aichat-card aichat-settings-card aichat-profile-settings">
+                </div>
+                <label className="aichat-settings-sidebar-search">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
+                  <input type="search" value={settingsSearchQuery} onChange={(event) => setSettingsSearchQuery(event.target.value)} placeholder="Search settings" aria-label="Search settings" />
+                  {settingsSearchQuery && <button type="button" onClick={() => setSettingsSearchQuery("")} aria-label="Clear settings search">×</button>}
+                </label>
+                <div className="aichat-settings-sidebar-identity">
+                  {profileImage ? <img src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} /> : <span>{profileName[0]?.toUpperCase() || "M"}</span>}
+                  <div><strong>{profileName}</strong><small>{profileEmail || "Your Misma account"}</small></div>
+                </div>
+                <nav className="aichat-settings-sidebar-nav">
+                  {settingsGroups.map((group) => {
+                    const items = group.items.filter((item) => filteredSettingsNavItems.some((filtered) => filtered.id === item.id));
+                    if (!items.length) return null;
+                    return (
+                      <section className="aichat-settings-sidebar-group" key={group.label}>
+                        <h3>{group.label}</h3>
+                        {items.map((item) => (
+                          <button
+                            type="button"
+                            key={item.id}
+                            className={`aichat-settings-sidebar-item${selectedSettingsSection === item.id ? " is-active" : ""}`}
+                            aria-current={selectedSettingsSection === item.id ? "page" : undefined}
+                            onClick={() => {
+                              setSelectedSettingsSection(item.id);
+                              setHelpRequestError("");
+                              setHelpRequestStatus("");
+                            }}
+                          >
+                            <span className="aichat-settings-sidebar-icon"><SettingsNavIcon kind={item.icon} /></span>
+                            <span>{item.label}</span>
+                          </button>
+                        ))}
+                      </section>
+                    );
+                  })}
+                  {!filteredSettingsNavItems.length && <p className="aichat-settings-no-results">No matching settings.</p>}
+                </nav>
+              </aside>
+              <div className="aichat-settings-detail" role="region" aria-label="Settings details">
+                <header className="aichat-settings-detail-header">
+                  <h2>Details</h2>
+                  <p>{selectedSettingsNavItem.label}</p>
+                </header>
+                <div className="aichat-settings-detail-content">
+              <section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
                 <div className="aichat-settings-profile-head">
                   <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
                     {profileImage ? <img src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
@@ -6491,7 +6618,18 @@ function Dashboard() {
                     {profileSaving ? "Saving…" : profileAvatarPreparing ? "Preparing photo…" : "Save changes"}
                   </button>
                 </div>
-                <div className="aichat-profile-edit-row">
+
+                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
+                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
+                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
+                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
+              </section>
+
+<section id="settings-business" hidden={selectedSettingsSection !== "settings-business"} className="aichat-card aichat-settings-card aichat-business-settings">
+                <div className="aichat-settings-section-heading">
+                  <span><h3>Business profile &amp; team</h3><p>Manage the business name shown in Misma and the staff accounts that help with customer requests.</p></span>
+                </div>
+<div className="aichat-profile-edit-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-business-name">Business name</label>
                     <input id="misma-business-name" className="aichat-input" value={businessNameDraft} maxLength={120} onChange={(event) => setBusinessNameDraft(event.target.value)} placeholder="Your business name" />
@@ -6532,18 +6670,21 @@ function Dashboard() {
                   </button>
                 </form>
               </section>
-                <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
+              </section>
+
+              <section id="settings-account" hidden={selectedSettingsSection !== "settings-account"} className="aichat-card aichat-settings-card aichat-account-settings">
+                <div className="aichat-settings-section-heading">
+                  <span><h3>Account</h3><p>Manage account-level actions and permanent account removal.</p></span>
+                </div>
+<button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
                   Delete account
                 </button>
-                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
-                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
-                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
-                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
               </section>
-              <section id="settings-accent" className="aichat-card aichat-settings-card">
+
+<section id="settings-accent" hidden={selectedSettingsSection !== "settings-accent"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">◐</span>
-                  <span><h3>Accent color</h3><p>Choose the background color of your sent messages in chat.</p></span>
+                  <span><h3>Appearance</h3><p>Personalize the colors used by Misma on this device.</p></span>
                 </div>
                 <div className="aichat-accent-options">
                   {[
@@ -6562,7 +6703,7 @@ function Dashboard() {
                 </div>
               </section>
 
-              <section id="settings-notifications" className="aichat-card aichat-settings-card">
+              <section id="settings-notifications" hidden={selectedSettingsSection !== "settings-notifications"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">♧</span>
                   <span><h3>Notifications</h3><p>Choose which Misma activity reminders you want enabled in this browser.</p></span>
@@ -6579,7 +6720,7 @@ function Dashboard() {
                 <p className="aichat-settings-hint">Product update and security alert preferences are saved here. Their notification feeds will appear when those services are connected.</p>
               </section>
 
-              <section id="settings-voice" className="aichat-card aichat-settings-card">
+              <section id="settings-voice" hidden={selectedSettingsSection !== "settings-voice"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">♫</span>
                   <span><h3>Voice</h3><p>Choose the read-aloud voice. Live Speech Talk uses the same Siri-first woman voice, English accent selection, and speaking style as the Misma website widget.</p></span>
@@ -6631,7 +6772,7 @@ function Dashboard() {
                 <p className="aichat-settings-hint">Misma uses your browser's speech recognition to turn microphone input into editable text. Only the transcript is sent when you submit your message; no audio recording is uploaded.</p>
               </section>
 
-              <section id="settings-privacy" className="aichat-card aichat-settings-card">
+              <section id="settings-privacy" hidden={selectedSettingsSection !== "settings-privacy"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">◇</span>
                   <span><h3>Privacy &amp; Security</h3><p>Review how Misma handles your account and conversation data.</p></span>
@@ -6654,7 +6795,7 @@ function Dashboard() {
                 </div>
               </section>
 
-              <section id="settings-history" className="aichat-card aichat-settings-card">
+              <section id="settings-history" hidden={selectedSettingsSection !== "settings-history"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">◷</span>
                   <span><h3>History &amp; Data</h3><p>Export the open conversation or manage saved chats from Recent chats.</p></span>
@@ -6668,7 +6809,7 @@ function Dashboard() {
                 </div>
               </section>
 
-              <section id="settings-memory" className="aichat-card aichat-settings-card">
+              <section id="settings-memory" hidden={selectedSettingsSection !== "settings-memory"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">✦</span>
                   <span><h3>Misma Memory</h3><p>Review the useful details Misma has saved from your conversations.</p></span>
@@ -6679,7 +6820,78 @@ function Dashboard() {
                 </div>
               </section>
 
-              <section id="settings-about" className="aichat-card aichat-settings-card">
+              <section id="settings-help-center" className="aichat-card aichat-settings-card aichat-help-center-card" hidden={selectedSettingsSection !== "settings-help-center"}>
+                <div className="aichat-settings-section-heading">
+                  <span className="aichat-settings-section-icon" aria-hidden="true"><SettingsNavIcon kind="help" /></span>
+                  <span><h3>Misma Help Center</h3><p>Guides, answers and support for your business workspace.</p></span>
+                </div>
+                <div className="aichat-help-center-shortcuts">
+                  <button type="button" onClick={() => setActiveTab("workspace")}><strong>Ask Misma</strong><small>Open your business AI workspace</small></button>
+                  <button type="button" onClick={() => setActiveTab("websites")}><strong>Website &amp; widget</strong><small>Manage website connections and installation</small></button>
+                  <button type="button" onClick={() => setActiveTab("knowledge")}><strong>Business knowledge</strong><small>Review the information Misma uses to answer</small></button>
+                  <button type="button" onClick={() => setActiveTab("connect")}><strong>Channels</strong><small>Connect customer communication channels</small></button>
+                  <button type="button" onClick={() => window.location.assign("/dashboard/plugins")}><strong>Plugins</strong><small>Connect and manage external tools</small></button>
+                  <button type="button" onClick={() => window.location.assign("/dashboard/memory")}><strong>Misma Memory</strong><small>Review saved facts and past context</small></button>
+                </div>
+                <div className="aichat-help-center-articles">
+                  <h3>Popular help topics</h3>
+                  <details>
+                    <summary>How do I get started with Misma?</summary>
+                    <p>Complete your business profile, add products and services, review Business Knowledge, then connect your website or customer channels. Send a test message in your workspace before inviting customers to use the assistant.</p>
+                  </details>
+                  <details>
+                    <summary>How do I install the Misma website widget?</summary>
+                    <p>Open Workspace and choose Websites. Add your website, then open its customization page to copy the installation script. Add the script to your website so Misma can greet visitors and answer using your business information.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("websites")}>Open Websites</button>
+                  </details>
+                  <details>
+                    <summary>How can I improve the answers Misma gives?</summary>
+                    <p>Keep your Business Knowledge, FAQs, policies, products, services and prices accurate. Add missing information and test common customer questions in the workspace. Do not rely on the assistant to invent details that are not in your business information.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("knowledge")}>Open Business Knowledge</button>
+                  </details>
+                  <details>
+                    <summary>How do I connect tools such as GitHub, Vercel or Netlify?</summary>
+                    <p>Open Plugins, select the provider, review its permissions and connect the account. You can change action permissions or disconnect it later from that provider's settings page.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/plugins")}>Browse Plugins</button>
+                  </details>
+                  <details>
+                    <summary>Where do customer messages and human requests appear?</summary>
+                    <p>Use Customers and Notifications in your dashboard. Enable browser notifications in Settings when you want this device to alert you about new customer activity or requests for a person.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => setActiveTab("notifications")}>Open Notifications</button>
+                  </details>
+                  <details>
+                    <summary>What does Misma Memory save?</summary>
+                    <p>Misma Memory lets you review useful facts and context retained from eligible conversations. You can inspect, export, pin or delete saved memory from its management page.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/memory")}>Manage Memory</button>
+                  </details>
+                  <details>
+                    <summary>How do I manage privacy and account security?</summary>
+                    <p>Review Privacy &amp; Security and History &amp; Data in Settings. Keep your sign-in details private, disconnect integrations you no longer use and remove account data only when you intend to.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => setSelectedSettingsSection("settings-privacy")}>Open Privacy &amp; Security</button>
+                  </details>
+                </div>
+                <div className="aichat-help-center-contact">
+                  <div className="aichat-settings-section-heading">
+                    <span><h3>Contact Misma support</h3><p>Describe what happened and include the email address where we can reply.</p></span>
+                  </div>
+                  <form onSubmit={(event) => { event.preventDefault(); void sendHelpCenterRequest(); }}>
+                    <div className="aichat-input-group">
+                      <label htmlFor="misma-help-email">Your email</label>
+                      <input id="misma-help-email" className="aichat-input" type="email" value={helpRequestEmail || profileEmail} onChange={(event) => setHelpRequestEmail(event.target.value)} maxLength={254} autoComplete="email" required />
+                    </div>
+                    <div className="aichat-input-group">
+                      <label htmlFor="misma-help-message">How can we help?</label>
+                      <textarea id="misma-help-message" className="aichat-textarea" value={helpRequestMessage} onChange={(event) => setHelpRequestMessage(event.target.value)} placeholder="Tell us what you were trying to do and what went wrong…" rows={5} maxLength={4000} required />
+                      <small className="aichat-settings-hint">{helpRequestMessage.length}/4,000 characters</small>
+                    </div>
+                    {helpRequestError && <p className="aichat-profile-error" role="alert">{helpRequestError}</p>}
+                    {helpRequestStatus && <p className="aichat-settings-status" role="status">{helpRequestStatus}</p>}
+                    <button type="submit" className="aichat-action-btn" disabled={helpRequestBusy || helpRequestMessage.trim().length < 5}>{helpRequestBusy ? "Sending…" : "Send support request"}</button>
+                  </form>
+                </div>
+              </section>
+
+              <section id="settings-about" hidden={selectedSettingsSection !== "settings-about"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">ⓘ</span>
                   <span><h3>About Misma</h3><p>Business AI workspace.</p></span>
@@ -6688,25 +6900,13 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Version</strong><span>1.0.0</span></div>
               </section>
 
-              <section id="settings-logout" className="aichat-card aichat-settings-card aichat-settings-logout">
+              <section id="settings-logout" hidden={selectedSettingsSection !== "settings-logout"} className="aichat-card aichat-settings-card aichat-settings-logout">
                 <div><h3>Log out</h3><p>Sign out of your Misma account on this device.</p></div>
                 <button type="button" className="aichat-settings-logout-button" onClick={() => void signOut()}>Log out</button>
               </section>
 
-              <section id="settings-search" className="aichat-card aichat-settings-card aichat-settings-search">
-                <label htmlFor="misma-settings-search">Search settings</label>
-                <div className="aichat-settings-search-control">
-                  <span aria-hidden="true">⌕</span>
-                  <input id="misma-settings-search" type="search" value={settingsSearchQuery} onChange={(event) => setSettingsSearchQuery(event.target.value)} placeholder="Search for a setting…" />
                 </div>
-                {settingsSearchQuery.trim() && (
-                  <div className="aichat-settings-search-results">
-                    {filteredSettingsNavItems.length ? filteredSettingsNavItems.map((item) => (
-                      <button key={item.id} type="button" onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{item.label}<span>↗</span></button>
-                    )) : <p>No matching settings found.</p>}
-                  </div>
-                )}
-              </section>
+              </div>
             </div>
           </div>
         )}
