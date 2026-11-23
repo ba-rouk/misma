@@ -769,9 +769,9 @@ export const deleteConversation = createServerFn({ method: "POST" })
   });
 
 export const deleteAllDashboardConversations = createServerFn({ method: "POST" })
-  .validator(z.object({ token: auth }))
+  .validator(z.object({ token: auth, workspaceId: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const { db, workspaceId, isSupport } = await ensureWorkspace(data.token);
+    const { db, workspaceId, isSupport } = await ensureWorkspace(data.token, data.workspaceId);
     if (isSupport) throw new Error("Only a workspace owner can delete all Dashboard chats.");
     const { data: deleted, error } = await db
       .from("conversations")
