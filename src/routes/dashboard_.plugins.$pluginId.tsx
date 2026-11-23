@@ -7,6 +7,7 @@ import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Badge, Button, SectionHeader, StickyActionBar } from "../components/misma-glass";
+import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
 
@@ -108,7 +109,7 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
   }, [supabase, manifest?.id]);
 
   if (!manifest) {
-    return <main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => window.location.assign("/dashboard/plugins")}>Back to Plugins</Button></div></main>;
+    return <PluginDashboardLayout><main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => window.location.assign("/dashboard/plugins")}>Back to Plugins</Button></div></main></PluginDashboardLayout>;
   }
 
   const activeManifest = manifest;
@@ -188,6 +189,7 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
   );
 
   return (
+    <PluginDashboardLayout>
     <main className="misma-plugin-detail-page" style={{ "--plugin-brand": manifest.brandColor } as CSSProperties}>
       <div className="misma-plugin-detail-shell">
 
@@ -202,7 +204,7 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
             </button>
           </div>
           <div className="misma-plugin-detail-heading">
-            <h1>{manifest.name}</h1>
+            <h1><img className="misma-plugin-page-title-mark" src="/misma-logo.svg" alt="" />{manifest.name}</h1>
           </div>
         </header>
         <div className="misma-plugin-detail-body">
@@ -266,5 +268,6 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
       <PluginConnectConsent manifest={manifest} workspaceId={workspaceId} open={consentOpen} onClose={() => setConsentOpen(false)} />
 
     </main>
+    </PluginDashboardLayout>
   );
 }
