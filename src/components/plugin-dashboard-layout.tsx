@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { MismaIcon } from "./misma-icon";
 
 type SidebarIconKind = "workspace" | "images" | "library" | "manage" | "build" | "connect";
@@ -43,7 +43,11 @@ function readCollapsedPreference() {
 }
 
 export function PluginDashboardLayout({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(readCollapsedPreference);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(readCollapsedPreference());
+  }, []);
 
   function toggleSidebar() {
     setCollapsed((current) => {
@@ -73,7 +77,7 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
         <div className="aichat-newchat-wrap">
-          <button type="button" className="aichat-newchat" onClick={() => { window.location.assign("/dashboard"); }} title="New chat">
+          <button type="button" className="aichat-newchat" onClick={() => { window.location.assign("/dashboard?tab=workspace"); }} title="New chat">
             <span className="aichat-newchat-plus" aria-hidden="true">+</span>
             <span className="aichat-newchat-text">New chat</span>
           </button>
