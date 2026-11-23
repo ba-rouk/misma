@@ -1878,6 +1878,9 @@ test("Misma settings is a grouped single-section workspace with an in-app Help C
   assert.match(dashboard, /Back to app/);
   assert.match(dashboard, /settingsGroups = \[/);
   assert.match(dashboard, /label: "Profile"/);
+  assert.match(dashboard, /label: "Business"/);
+  assert.match(dashboard, /id: "settings-business"/);
+  assert.match(dashboard, /id: "settings-account"/);
   assert.match(dashboard, /label: "Account"/);
   assert.match(dashboard, /label: "App"/);
   assert.match(dashboard, /label: "Support"/);
