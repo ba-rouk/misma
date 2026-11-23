@@ -3207,7 +3207,7 @@ footer {
 
 /* Collapsed Desktop State (Icon Rail) */
 .aichat-side.is-collapsed {
-  width: 68px;
+  width: 56px;
 }
 .aichat-side.is-collapsed .aichat-side-brand,
 .aichat-side.is-collapsed .aichat-newchat-text,
@@ -3726,7 +3726,7 @@ body:has(.aichat-main) {
     margin-left: 260px;
   }
   .aichat-main.sidebar-closed {
-    margin-left: 68px;
+    margin-left: 56px;
   }
 }
 
