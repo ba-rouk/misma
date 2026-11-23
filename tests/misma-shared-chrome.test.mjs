@@ -12,8 +12,10 @@ test("Misma pages share page-colored headers, a compact collapsed rail, and cons
   assert.match(design, /\.aichat-main\.sidebar-closed\s*\{\s*margin-left:\s*56px !important/);
   assert.match(design, /\.misma-plugin-dashboard-layout\.is-sidebar-collapsed\s*\{\s*--misma-plugin-sidebar-width:\s*56px !important/);
   assert.match(design, /\.aichat \.aichat-topbar[\s\S]*?background:\s*var\(--misma-app-background/);
-  assert.match(design, /\.misma-plugin-detail-page \.misma-plugin-detail-header[\s\S]*?background:\s*transparent !important/);
-  assert.match(design, /\.misma-plugin-settings-page \.misma-plugin-settings-topbar[\s\S]*?background:\s*transparent !important/);
+  const sharedHeaderOverrides = design.slice(design.lastIndexOf("/* Page title bars inherit"));
+  assert.match(sharedHeaderOverrides, /\.misma-plugin-detail-page \.misma-plugin-detail-header/);
+  assert.match(sharedHeaderOverrides, /\.misma-plugin-settings-page \.misma-plugin-settings-topbar/);
+  assert.match(sharedHeaderOverrides, /background:\s*transparent !important/);
   assert.match(design, /body :not\(svg\):not\(svg \*\)[\s\S]*?font-family:\s*var\(--font-sans/);
   assert.match(design, /--misma-consistent-font-size:\s*var\(--misma-ui-font-size, 16px\)/);
   assert.match(design, /\.misma-site \.nav\s*\{\s*background:\s*transparent !important/);
