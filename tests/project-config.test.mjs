@@ -1898,3 +1898,49 @@ test("Misma settings is a grouped single-section workspace with an in-app Help C
   assert.match(styles, /\.aichat-settings-layout\s*\{\s*display: grid;\s*grid-template-columns:/);
   assert.match(styles, /@media \(max-width: 767px\)[\s\S]*?\.aichat-settings-layout\s*\{\s*grid-template-columns: minmax\(0,1fr\)/);
 });
+
+
+test("Misma Data controls replace the old privacy/history navigation and expose only supported actions", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const api = await read("../src/lib/api/misma.functions.ts");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /label: "Data controls"/);
+  assert.match(dashboard, /id: "settings-data-controls"/);
+  assert.doesNotMatch(dashboard, /settings-privacy|settings-history|settings-logout/);
+  assert.match(dashboard, /Use recent conversation context/);
+  assert.match(dashboard, /Export workspace data/);
+  assert.match(dashboard, /getConversationMessages\(/);
+  assert.match(dashboard, /deleteAllDashboardConversations/);
+  assert.match(dashboard, /Shared links/);
+  assert.match(dashboard, /Archived chats/);
+  assert.match(dashboard, /Model improvement/);
+  assert.match(dashboard, /Contact information/);
+  assert.match(dashboard, /Cookies and marketing privacy/);
+  assert.match(api, /export const deleteAllDashboardConversations/);
+  assert.match(api, /if \(isSupport\) throw new Error/);
+  assert.match(api, /\.eq\("channel", "Dashboard"\)/);
+  assert.match(dashboard, /aichat-data-danger-button/);
+  assert.match(dashboard, /deleteAllDashboardChatsOpen/);
+  assert.match(styles, /--misma-app-background: #0f1724/);
+  assert.match(styles, /linear-gradient\(110deg, #f3f5f7, #b9c3cf\)/);
+  assert.match(styles, /\.aichat-settings-tab-view \.aichat-action-btn:not\(\.secondary\)/);
+});
+
+test("Misma Appearance controls persist color mode, contrast, colors, typography and reduced motion", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /misma_appearance_preferences/);
+  assert.match(dashboard, /value: "system", label: "System"/);
+  assert.match(dashboard, /value: "light", label: "Light"/);
+  assert.match(dashboard, /Dark background color/);
+  assert.match(dashboard, /Dark foreground color/);
+  assert.match(dashboard, /UI font size/);
+  assert.match(dashboard, /Code font size/);
+  assert.match(dashboard, /Reduce motion/);
+  assert.match(dashboard, /value: "increased", label: "Increased"/);
+  assert.match(styles, /data-misma-color-mode="light"/);
+  assert.match(styles, /data-misma-contrast="increased"/);
+  assert.match(styles, /data-misma-reduce-motion="true"/);
+});
