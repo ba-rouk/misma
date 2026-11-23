@@ -43,9 +43,9 @@ async function recordAudit(
 }
 
 export const getMismaData = createServerFn({ method: "POST" })
-  .validator(z.object({ token: auth }))
+  .validator(z.object({ token: auth, workspaceId: z.string().uuid().optional() }))
   .handler(async ({ data }) => {
-    const { db, workspaceId, isSupport, staffTitle } = await ensureWorkspace(data.token, undefined, true);
+    const { db, workspaceId, isSupport, staffTitle } = await ensureWorkspace(data.token, data.workspaceId, true);
     if (isSupport) {
       const [workspaceResult, customersResult, handoffsResult, notificationsResult] = await Promise.all([
         db.from("workspaces").select("id,name").eq("id", workspaceId).single(),
@@ -567,9 +567,9 @@ export const saveWorkspaceProfile = createServerFn({ method: "POST" })
   });
 
 export const getConversationMessages = createServerFn({ method: "POST" })
-  .validator(z.object({ token: auth, conversationId: z.number().int().positive() }))
+  .validator(z.object({ token: auth, conversationId: z.number().int().positive(), workspaceId: z.string().uuid().optional() }))
   .handler(async ({ data }) => {
-    const { db, workspaceId } = await ensureWorkspace(data.token);
+    const { db, workspaceId } = await ensureWorkspace(data.token, data.workspaceId);
     const { data: conv, error: convErr } = await db
       .from("conversations")
       .select("id,channel,latest_text,status,created_at,updated_at")
@@ -766,6 +766,21 @@ export const deleteConversation = createServerFn({ method: "POST" })
       .eq("workspace_id", workspaceId);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export const deleteAllDashboardConversations = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth, workspaceId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId, isSupport } = await ensureWorkspace(data.token, data.workspaceId);
+    if (isSupport) throw new Error("Only a workspace owner can delete all Dashboard chats.");
+    const { data: deleted, error } = await db
+      .from("conversations")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("channel", "Dashboard")
+      .select("id");
+    if (error) throw new Error(error.message);
+    return { deletedCount: deleted?.length ?? 0 };
   });
 
 

@@ -17,6 +17,7 @@ import {
   getConversationActivity,
   createConversation,
   deleteConversation,
+  deleteAllDashboardConversations,
   setConversationGroup,
   addKnowledge,
   reviewKnowledge,
@@ -1671,6 +1672,20 @@ function Dashboard() {
   const [helpRequestStatus, setHelpRequestStatus] = useState("");
   const [helpRequestError, setHelpRequestError] = useState("");
   const [appearanceLoaded, setAppearanceLoaded] = useState(false);
+  const [colorMode, setColorMode] = useState<"dark" | "light" | "system">("dark");
+  const [contrastLevel, setContrastLevel] = useState<"system" | "medium" | "increased">("medium");
+  const [uiFontSize, setUiFontSize] = useState(16);
+  const [codeFontSize, setCodeFontSize] = useState(13);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [backgroundColor, setBackgroundColor] = useState("#0f1724");
+  const [foregroundColor, setForegroundColor] = useState("#eef3fb");
+  const [dataExportBusy, setDataExportBusy] = useState(false);
+  const [dataExportStatus, setDataExportStatus] = useState("");
+  const [dataExportError, setDataExportError] = useState("");
+  const [deleteAllDashboardChatsOpen, setDeleteAllDashboardChatsOpen] = useState(false);
+  const [deleteAllDashboardChatsBusy, setDeleteAllDashboardChatsBusy] = useState(false);
+  const [dataControlsMessage, setDataControlsMessage] = useState("");
+  const [dataControlsError, setDataControlsError] = useState("");
   const [notificationPreferences, setNotificationPreferences] = useState({
     productUpdates: true,
     securityAlerts: true,
@@ -1765,6 +1780,17 @@ function Dashboard() {
       const savedVoice = localStorage.getItem("misma_voice_preset") || localStorage.getItem("misma_voice_uri");
       const savedAutoSpeak = localStorage.getItem("misma_auto_speak_replies");
       const savedPrivacy = localStorage.getItem("misma_privacy_preferences");
+      const savedAppearance = localStorage.getItem("misma_appearance_preferences");
+      if (savedAppearance) {
+        const parsed = JSON.parse(savedAppearance) as Record<string, unknown>;
+        if (parsed.colorMode === "dark" || parsed.colorMode === "light" || parsed.colorMode === "system") setColorMode(parsed.colorMode);
+        if (parsed.contrastLevel === "system" || parsed.contrastLevel === "medium" || parsed.contrastLevel === "increased") setContrastLevel(parsed.contrastLevel);
+        if (typeof parsed.uiFontSize === "number" && Number.isFinite(parsed.uiFontSize)) setUiFontSize(Math.min(20, Math.max(14, Math.round(parsed.uiFontSize))));
+        if (typeof parsed.codeFontSize === "number" && Number.isFinite(parsed.codeFontSize)) setCodeFontSize(Math.min(18, Math.max(11, Math.round(parsed.codeFontSize))));
+        if (typeof parsed.reduceMotion === "boolean") setReduceMotion(parsed.reduceMotion);
+        if (typeof parsed.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.backgroundColor)) setBackgroundColor(parsed.backgroundColor);
+        if (typeof parsed.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.foregroundColor)) setForegroundColor(parsed.foregroundColor);
+      }
       if (savedPrivacy) {
         const parsed = JSON.parse(savedPrivacy) as Partial<typeof privacyPreferences>;
         setPrivacyPreferences((current) => ({ ...current, ...parsed }));
@@ -1799,10 +1825,19 @@ function Dashboard() {
       localStorage.setItem("misma_voice_preset", selectedVoicePreset);
       localStorage.setItem("misma_auto_speak_replies", String(autoSpeakReplies));
       localStorage.setItem("misma_privacy_preferences", JSON.stringify(privacyPreferences));
+      localStorage.setItem("misma_appearance_preferences", JSON.stringify({
+        colorMode,
+        contrastLevel,
+        uiFontSize,
+        codeFontSize,
+        reduceMotion,
+        backgroundColor,
+        foregroundColor,
+      }));
     } catch {
       // Preferences remain active for this session when storage is unavailable.
     }
-  }, [accentColor, notificationPreferences, selectedVoicePreset, autoSpeakReplies, privacyPreferences, appearanceLoaded]);
+  }, [accentColor, notificationPreferences, selectedVoicePreset, autoSpeakReplies, privacyPreferences, colorMode, contrastLevel, uiFontSize, codeFontSize, reduceMotion, backgroundColor, foregroundColor, appearanceLoaded]);
 
   useEffect(() => {
     try {
@@ -1815,6 +1850,28 @@ function Dashboard() {
       // Keep privacy-preserving defaults when saved preferences cannot be read.
     }
   }, []);
+
+  useEffect(() => {
+    if (!appearanceLoaded) return;
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const applyAppearance = () => {
+      const resolvedMode = colorMode === "system" ? (media.matches ? "light" : "dark") : colorMode;
+      const shell = document.querySelector<HTMLElement>(".aichat");
+      if (shell) {
+        shell.dataset.mismaColorMode = resolvedMode;
+        shell.dataset.mismaContrast = contrastLevel;
+        shell.style.setProperty("--misma-app-background", resolvedMode === "dark" ? backgroundColor : "#f3f6fb");
+        shell.style.setProperty("--misma-app-foreground", resolvedMode === "dark" ? foregroundColor : "#172235");
+        shell.style.setProperty("--misma-ui-font-size", uiFontSize + "px");
+        shell.style.setProperty("--misma-code-font-size", codeFontSize + "px");
+        shell.style.setProperty("--misma-accent-color", accentColor);
+      }
+      document.documentElement.dataset.mismaReduceMotion = reduceMotion ? "true" : "false";
+    };
+    applyAppearance();
+    if (colorMode === "system") media.addEventListener("change", applyAppearance);
+    return () => media.removeEventListener("change", applyAppearance);
+  }, [appearanceLoaded, colorMode, contrastLevel, uiFontSize, codeFontSize, reduceMotion, backgroundColor, foregroundColor, accentColor]);
 
   useEffect(() => {
     if (!("speechSynthesis" in window)) return;
@@ -3395,6 +3452,111 @@ function Dashboard() {
   };
 
 
+  const exportWorkspaceData = async () => {
+    if (!token || dataExportBusy) return;
+    setDataExportBusy(true);
+    setDataExportError("");
+    setDataExportStatus("");
+    try {
+      if (!workspace?.id) throw new Error("Select a workspace before exporting its data.");
+      const workspaceSnapshot = await getMismaData({ data: { token, workspaceId: workspace.id } });
+      const snapshot = workspaceSnapshot as any;
+      const conversationsToExport: any[] = Array.isArray(snapshot.conversations) ? snapshot.conversations : [];
+      const exportedConversations: any[] = [];
+      for (let offset = 0; offset < conversationsToExport.length; offset += 5) {
+        const batch = conversationsToExport.slice(offset, offset + 5);
+        const results = await Promise.all(batch.map(async (conversation) => {
+          try {
+            const record = await getConversationMessages({
+              data: { token, workspaceId: workspace.id, conversationId: Number(conversation.id) },
+            });
+            return {
+              conversation: record.conversation,
+              messages: record.messages.map((message) => ({
+                id: message.id,
+                role: message.role,
+                text: message.text,
+                created_at: message.created_at,
+                attachments: (message.attachments || []).map((attachment: any) => ({
+                  name: attachment.name || "Attachment",
+                  mimeType: attachment.mimeType || "application/octet-stream",
+                  size: Number(attachment.size) || 0,
+                })),
+              })),
+            };
+          } catch (cause) {
+            return {
+              conversation,
+              messages: [],
+              exportWarning: cause instanceof Error ? cause.message : "Conversation messages could not be exported.",
+            };
+          }
+        }));
+        exportedConversations.push(...results);
+      }
+      const payload = {
+        application: "Misma",
+        exportType: "Workspace data snapshot",
+        exportedAt: new Date().toISOString(),
+        scope: "Workspace records plus the latest 200 conversations returned by Misma. Media files themselves are not bundled; attachment names, types and sizes are included.",
+        account: { name: profileName, email: profileEmail },
+        workspace: snapshot.workspace || null,
+        conversations: exportedConversations,
+        customers: snapshot.customers || [],
+        orders: snapshot.orders || [],
+        approvedKnowledge: snapshot.knowledge || [],
+        pendingKnowledge: snapshot.pendingKnowledge || [],
+        websites: snapshot.websites || [],
+        products: snapshot.products || [],
+        channelConnections: snapshot.channelConnections || [],
+        humanRequests: snapshot.handoffs || [],
+        notifications: snapshot.notifications || [],
+      };
+      const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = "misma-workspace-export-" + new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setDataExportStatus("Export downloaded: " + exportedConversations.length + " conversations and workspace records.");
+    } catch (cause) {
+      setDataExportError(cause instanceof Error ? cause.message : "Could not export Misma workspace data.");
+    } finally {
+      setDataExportBusy(false);
+    }
+  };
+
+  const handleDeleteAllDashboardChats = async () => {
+    if (!token || !workspace?.id || deleteAllDashboardChatsBusy) return;
+    setDeleteAllDashboardChatsBusy(true);
+    setDataControlsError("");
+    setDataControlsMessage("");
+    try {
+      const currentWasDashboardChat = conversations.some((item: any) =>
+        Number(item.id) === Number(currentConversationId) && String(item.channel || "").toLowerCase() === "dashboard"
+      );
+      const result = await deleteAllDashboardConversations({ data: { token, workspaceId: workspace.id } });
+      setDeleteAllDashboardChatsOpen(false);
+      if (currentWasDashboardChat) {
+        activeConversationIdRef.current = null;
+        setCurrentConversationId(null);
+        setMessages([]);
+        setDraft("");
+      }
+      setConversations((current: any[]) => current.filter((item) => String(item.channel || "").toLowerCase() !== "dashboard"));
+      await loadData();
+      setDataControlsMessage(result.deletedCount
+        ? result.deletedCount + " Dashboard conversation(s) permanently deleted. Customer conversations from connected channels were left untouched."
+        : "There were no Dashboard conversations to delete.");
+    } catch (cause) {
+      setDataControlsError(cause instanceof Error ? cause.message : "Could not delete Dashboard conversations.");
+    } finally {
+      setDeleteAllDashboardChatsBusy(false);
+    }
+  };
+
   const handleRateMessage = (messageId: string, rating: "up" | "down") => {
     const nextRating = messageFeedback[messageId] === rating ? undefined : rating;
     setMessageFeedback((current) => ({ ...current, [messageId]: nextRating }));
@@ -4797,10 +4959,10 @@ function Dashboard() {
     { label: "Business", items: [{ id: "settings-business", label: "Business profile & team", icon: "manage" }] },
     { label: "Account", items: [
       { id: "settings-account", label: "Account", icon: "profile" },
-      { id: "settings-privacy", label: "Privacy & Security", icon: "privacy" },
-      { id: "settings-history", label: "History & Data", icon: "history" },
+    ] },
+    { label: "Data controls", items: [
+      { id: "settings-data-controls", label: "Data controls", icon: "privacy" },
       { id: "settings-memory", label: "Misma Memory", icon: "history" },
-      { id: "settings-logout", label: "Log out", icon: "logout" },
     ] },
     { label: "App", items: [
       { id: "settings-accent", label: "Appearance", icon: "accent" },
@@ -6674,8 +6836,11 @@ function Dashboard() {
 
               <section id="settings-account" hidden={selectedSettingsSection !== "settings-account"} className="aichat-card aichat-settings-card aichat-account-settings">
                 <div className="aichat-settings-section-heading">
-                  <span><h3>Account</h3><p>Manage account-level actions and permanent account removal.</p></span>
+                  <span><h3>Account</h3><p>Review the account details connected to this Misma workspace.</p></span>
                 </div>
+                <div className="aichat-settings-info-row"><strong>Name</strong><span>{profileName}</span></div>
+                <div className="aichat-settings-info-row"><strong>Email</strong><span>{profileEmail || "Not available"}</span></div>
+                <div className="aichat-settings-info-row"><strong>Workspace</strong><span>{workspace?.name || "Your workspace"}</span></div>
 <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
                   Delete account
                 </button>
@@ -6701,6 +6866,39 @@ function Dashboard() {
                     </button>
                   ))}
                 </div>
+                <div className="aichat-appearance-control-block">
+                  <div className="aichat-appearance-control-copy"><strong>Color mode</strong><small>Choose dark, light, or follow your device appearance.</small></div>
+                  <div className="aichat-settings-segment-group" role="group" aria-label="Color mode">
+                    {([{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }, { value: "system", label: "System" }] as const).map((mode) => (
+                      <button key={mode.value} type="button" className={`aichat-settings-segment${colorMode === mode.value ? " is-selected" : ""}`} aria-pressed={colorMode === mode.value} onClick={() => setColorMode(mode.value)}>{mode.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="aichat-appearance-control-block">
+                  <div className="aichat-appearance-control-copy"><strong>Dark background color</strong><small>Set the shared background used by the Misma dashboard and sidebar.</small></div>
+                  <input className="aichat-settings-color-input" type="color" value={backgroundColor} onChange={(event) => setBackgroundColor(event.target.value)} aria-label="Dark background color" />
+                </div>
+                <div className="aichat-appearance-control-block">
+                  <div className="aichat-appearance-control-copy"><strong>Dark foreground color</strong><small>Set the main text color used on dark surfaces.</small></div>
+                  <input className="aichat-settings-color-input" type="color" value={foregroundColor} onChange={(event) => setForegroundColor(event.target.value)} aria-label="Dark foreground color" />
+                </div>
+                <div className="aichat-appearance-control-block is-stacked">
+                  <div className="aichat-appearance-control-copy"><strong>UI font size</strong><small>Adjust the base text size used across Misma. <b>{uiFontSize}px</b></small></div>
+                  <input type="range" min="14" max="20" step="1" value={uiFontSize} onChange={(event) => setUiFontSize(Number(event.target.value))} aria-label="UI font size" />
+                </div>
+                <div className="aichat-appearance-control-block is-stacked">
+                  <div className="aichat-appearance-control-copy"><strong>Code font size</strong><small>Adjust code and preformatted text size. <b>{codeFontSize}px</b></small></div>
+                  <input type="range" min="11" max="18" step="1" value={codeFontSize} onChange={(event) => setCodeFontSize(Number(event.target.value))} aria-label="Code font size" />
+                </div>
+                <div className="aichat-appearance-control-block">
+                  <div className="aichat-appearance-control-copy"><strong>Contrast</strong><small>Choose how strongly interface text and borders stand out.</small></div>
+                  <div className="aichat-settings-segment-group" role="group" aria-label="Contrast">
+                    {([{ value: "system", label: "System" }, { value: "medium", label: "Medium" }, { value: "increased", label: "Increased" }] as const).map((level) => (
+                      <button key={level.value} type="button" className={`aichat-settings-segment${contrastLevel === level.value ? " is-selected" : ""}`} aria-pressed={contrastLevel === level.value} onClick={() => setContrastLevel(level.value)}>{level.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <SettingsToggle title="Reduce motion" description="Reduce interface transitions and animations." checked={reduceMotion} onToggle={() => setReduceMotion((current) => !current)} />
               </section>
 
               <section id="settings-notifications" hidden={selectedSettingsSection !== "settings-notifications"} className="aichat-card aichat-settings-card">
@@ -6772,40 +6970,37 @@ function Dashboard() {
                 <p className="aichat-settings-hint">Misma uses your browser's speech recognition to turn microphone input into editable text. Only the transcript is sent when you submit your message; no audio recording is uploaded.</p>
               </section>
 
-              <section id="settings-privacy" hidden={selectedSettingsSection !== "settings-privacy"} className="aichat-card aichat-settings-card">
+              <section id="settings-data-controls" hidden={selectedSettingsSection !== "settings-data-controls"} className="aichat-card aichat-settings-card aichat-data-controls-card">
                 <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true">◇</span>
-                  <span><h3>Privacy &amp; Security</h3><p>Review how Misma handles your account and conversation data.</p></span>
+                  <span><h3>Data controls</h3><p>Manage the Misma conversation data and workspace information available to your account.</p></span>
                 </div>
-                <div className="aichat-settings-info-row"><strong>Account access</strong><span>Workspace data is accessed using your signed-in Supabase session.</span></div>
-                <div className="aichat-settings-info-row"><strong>Profile photo</strong><span>Stored in your Misma media bucket and displayed with a signed URL.</span></div>
-                <div className="aichat-settings-info-row"><strong>Microphone test</strong><span>Settings microphone testing is analysed locally and is never recorded or uploaded.</span></div>
-                <SettingsToggle title="Use recent conversation context" description="When enabled, Misma can use earlier messages in this chat for follow-up questions. Turn it off to send only the current request and workspace context." checked={privacyPreferences.useConversationHistory} onToggle={() => setPrivacyPreferences((current) => ({ ...current, useConversationHistory: !current.useConversationHistory }))} />
+                <SettingsToggle
+                  title="Use recent conversation context"
+                  description="When enabled, Misma can use earlier messages in this chat to answer follow-up questions. Turn it off to send only the current request and workspace context."
+                  checked={privacyPreferences.useConversationHistory}
+                  onToggle={() => setPrivacyPreferences((current) => ({ ...current, useConversationHistory: !current.useConversationHistory }))}
+                />
                 <div className="aichat-settings-action-row">
-                  <div><strong>Reset preferences on this device</strong><small>Restore the default voice, appearance, notifications, privacy, and assistant choices.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={() => {
-                    ["misma_ai_settings", "misma_accent_color", "misma_notification_preferences", "misma_voice_preset", "misma_voice_uri", "misma_auto_speak_replies", "misma_privacy_preferences"].forEach((key) => localStorage.removeItem(key));
-                    setAiSettings(DEFAULT_MISMA_AI_SETTINGS);
-                    setAccentColor("#8ab4ff");
-                    setNotificationPreferences({ productUpdates: true, securityAlerts: true, chatActivity: true });
-                    setSelectedVoicePreset("woman");
-                    setAutoSpeakReplies(false);
-                    setPrivacyPreferences({ useConversationHistory: true });
-                  }}>Reset preferences</button>
+                  <div><strong>Export workspace data</strong><small>Download workspace profile, customer and business records, plus the latest 200 conversations and their text transcripts. Media files are not bundled.</small></div>
+                  <button type="button" className="aichat-action-btn" onClick={() => void exportWorkspaceData()} disabled={dataExportBusy || !token}>{dataExportBusy ? "Preparing export…" : "Export data"}</button>
                 </div>
-              </section>
-
-              <section id="settings-history" hidden={selectedSettingsSection !== "settings-history"} className="aichat-card aichat-settings-card">
-                <div className="aichat-settings-section-heading">
-                  <span className="aichat-settings-section-icon" aria-hidden="true">◷</span>
-                  <span><h3>History &amp; Data</h3><p>Export the open conversation or manage saved chats from Recent chats.</p></span>
-                </div>
+                {dataExportStatus && <p className="aichat-settings-status" role="status">{dataExportStatus}</p>}
+                {dataExportError && <p className="aichat-profile-error" role="alert">{dataExportError}</p>}
                 <div className="aichat-settings-action-row">
-                  <div><strong>Export current conversation</strong><small>Download the visible conversation as a JSON file.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={exportCurrentChat} disabled={!messages.length}>Export chat</button>
+                  <div><strong>Delete Dashboard chats</strong><small>Permanently delete all Dashboard chats in this workspace. Customer conversations from your website and other connected channels are kept.</small></div>
+                  <button type="button" className="aichat-data-danger-button" onClick={() => setDeleteAllDashboardChatsOpen(true)} disabled={!workspace?.id || deleteAllDashboardChatsBusy}>Delete all Dashboard chats</button>
                 </div>
+                {dataControlsMessage && <p className="aichat-settings-status" role="status">{dataControlsMessage}</p>}
+                {dataControlsError && <p className="aichat-profile-error" role="alert">{dataControlsError}</p>}
+                <div className="aichat-settings-info-row"><strong>Shared links</strong><span>Misma does not currently create shareable conversation links, so there are no shared links to manage.</span></div>
+                <div className="aichat-settings-info-row"><strong>Archived chats</strong><span>Chat archiving is not yet available. Individual Dashboard chats can be permanently deleted from Recents.</span></div>
+                <div className="aichat-settings-info-row"><strong>Model improvement</strong><span>Misma does not currently provide a model-training opt-out switch. Requests are sent to configured AI providers; their data handling is governed by each provider’s own terms and controls.</span></div>
+                <div className="aichat-settings-info-row"><strong>Location</strong><span>Misma does not request your device location. Your business location is managed under Business profile.</span></div>
+                <div className="aichat-settings-info-row"><strong>Contact information</strong><span>Misma does not request access to your device address book. Customer contact records received through connected business channels are managed in Customers.</span></div>
+                <div className="aichat-settings-info-row"><strong>Cookies and marketing privacy</strong><span>Misma does not currently provide a separate cookie or marketing preference centre.</span></div>
                 <div className="aichat-settings-action-row">
-                  <div><strong>Manage saved conversations</strong><small>Long-press any chat in Recents to delete it.</small></div>
+                  <div><strong>Connected apps and services</strong><small>Review the providers and channels you have connected to this workspace.</small></div>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/plugins")}>Manage connected apps</button>
                 </div>
               </section>
 
@@ -6866,8 +7061,8 @@ function Dashboard() {
                   </details>
                   <details>
                     <summary>How do I manage privacy and account security?</summary>
-                    <p>Review Privacy &amp; Security and History &amp; Data in Settings. Keep your sign-in details private, disconnect integrations you no longer use and remove account data only when you intend to.</p>
-                    <button type="button" className="aichat-action-btn secondary" onClick={() => setSelectedSettingsSection("settings-privacy")}>Open Privacy &amp; Security</button>
+                    <p>Review Data controls in Settings to export workspace data, manage conversation context, and understand which privacy options Misma currently supports. Keep your sign-in details private and disconnect integrations you no longer use.</p>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => setSelectedSettingsSection("settings-data-controls")}>Open Data controls</button>
                   </details>
                 </div>
                 <div className="aichat-help-center-contact">
@@ -6900,10 +7095,7 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Version</strong><span>1.0.0</span></div>
               </section>
 
-              <section id="settings-logout" hidden={selectedSettingsSection !== "settings-logout"} className="aichat-card aichat-settings-card aichat-settings-logout">
-                <div><h3>Log out</h3><p>Sign out of your Misma account on this device.</p></div>
-                <button type="button" className="aichat-settings-logout-button" onClick={() => void signOut()}>Log out</button>
-              </section>
+              
 
                 </div>
               </div>
@@ -7383,6 +7575,19 @@ function Dashboard() {
           </div>
         )}
 
+        {deleteAllDashboardChatsOpen && (
+          <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleteAllDashboardChatsBusy) setDeleteAllDashboardChatsOpen(false); }}>
+            <section className="aichat-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-all-dashboard-title">
+              <div className="aichat-confirm-icon is-danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-.8 13H6.8L6 7m3 3v7m6-7v7" /></svg></div>
+              <h2 id="misma-delete-all-dashboard-title">Delete all Dashboard chats?</h2>
+              <p>This permanently deletes all Dashboard conversations in the selected workspace and their messages. Website, WhatsApp, Instagram and other connected-channel customer conversations are not affected. This action cannot be undone.</p>
+              <div className="aichat-confirm-actions">
+                <button type="button" className="aichat-action-btn secondary" disabled={deleteAllDashboardChatsBusy} onClick={() => setDeleteAllDashboardChatsOpen(false)}>Cancel</button>
+                <button type="button" className="aichat-confirm-danger" disabled={deleteAllDashboardChatsBusy} onClick={() => void handleDeleteAllDashboardChats()}>{deleteAllDashboardChatsBusy ? "Deleting…" : "Delete Dashboard chats"}</button>
+              </div>
+            </section>
+          </div>
+        )}
         {deleteChatTarget && (
           <div className="aichat-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingChat) setDeleteChatTarget(null); }}>
             <section className="aichat-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-chat-title">
