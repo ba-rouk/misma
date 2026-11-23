@@ -3528,7 +3528,7 @@ function Dashboard() {
   };
 
   const handleDeleteAllDashboardChats = async () => {
-    if (!token || deleteAllDashboardChatsBusy) return;
+    if (!token || !workspace?.id || deleteAllDashboardChatsBusy) return;
     setDeleteAllDashboardChatsBusy(true);
     setDataControlsError("");
     setDataControlsMessage("");
@@ -3536,7 +3536,7 @@ function Dashboard() {
       const currentWasDashboardChat = conversations.some((item: any) =>
         Number(item.id) === Number(currentConversationId) && String(item.channel || "").toLowerCase() === "dashboard"
       );
-      const result = await deleteAllDashboardConversations({ data: { token } });
+      const result = await deleteAllDashboardConversations({ data: { token, workspaceId: workspace.id } });
       setDeleteAllDashboardChatsOpen(false);
       if (currentWasDashboardChat) {
         activeConversationIdRef.current = null;
@@ -4953,9 +4953,6 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
-  const dashboardConversationCount = conversations.filter((item: any) =>
-    String(item.channel || "").toLowerCase() === "dashboard"
-  ).length;
   const settingsGroups = [
     { label: "Profile", items: [{ id: "settings-profile", label: "Profile", icon: "profile" }] },
     { label: "Business", items: [{ id: "settings-business", label: "Business profile & team", icon: "manage" }] },
@@ -6989,8 +6986,8 @@ function Dashboard() {
                 {dataExportStatus && <p className="aichat-settings-status" role="status">{dataExportStatus}</p>}
                 {dataExportError && <p className="aichat-profile-error" role="alert">{dataExportError}</p>}
                 <div className="aichat-settings-action-row">
-                  <div><strong>Delete Dashboard chats</strong><small>Permanently delete {dashboardConversationCount} Dashboard chat(s). Customer conversations from your website and other connected channels are kept.</small></div>
-                  <button type="button" className="aichat-data-danger-button" onClick={() => setDeleteAllDashboardChatsOpen(true)} disabled={!dashboardConversationCount || deleteAllDashboardChatsBusy}>Delete all Dashboard chats</button>
+                  <div><strong>Delete Dashboard chats</strong><small>Permanently delete all Dashboard chats in this workspace. Customer conversations from your website and other connected channels are kept.</small></div>
+                  <button type="button" className="aichat-data-danger-button" onClick={() => setDeleteAllDashboardChatsOpen(true)} disabled={!workspace?.id || deleteAllDashboardChatsBusy}>Delete all Dashboard chats</button>
                 </div>
                 {dataControlsMessage && <p className="aichat-settings-status" role="status">{dataControlsMessage}</p>}
                 {dataControlsError && <p className="aichat-profile-error" role="alert">{dataControlsError}</p>}
@@ -7582,7 +7579,7 @@ function Dashboard() {
             <section className="aichat-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="misma-delete-all-dashboard-title">
               <div className="aichat-confirm-icon is-danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-.8 13H6.8L6 7m3 3v7m6-7v7" /></svg></div>
               <h2 id="misma-delete-all-dashboard-title">Delete all Dashboard chats?</h2>
-              <p>This permanently deletes {dashboardConversationCount} Dashboard conversation(s) and their messages. Website, WhatsApp, Instagram and other connected-channel customer conversations are not affected. This action cannot be undone.</p>
+              <p>This permanently deletes all Dashboard conversations in the selected workspace and their messages. Website, WhatsApp, Instagram and other connected-channel customer conversations are not affected. This action cannot be undone.</p>
               <div className="aichat-confirm-actions">
                 <button type="button" className="aichat-action-btn secondary" disabled={deleteAllDashboardChatsBusy} onClick={() => setDeleteAllDashboardChatsOpen(false)}>Cancel</button>
                 <button type="button" className="aichat-confirm-danger" disabled={deleteAllDashboardChatsBusy} onClick={() => void handleDeleteAllDashboardChats()}>{deleteAllDashboardChatsBusy ? "Deleting…" : "Delete Dashboard chats"}</button>
