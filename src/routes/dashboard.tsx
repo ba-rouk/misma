@@ -6572,6 +6572,7 @@ function Dashboard() {
                 </header>
                 <div className="aichat-settings-detail-content">
               <section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
+
 <section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
                 <div className="aichat-settings-profile-head">
                   <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
@@ -6630,6 +6631,16 @@ function Dashboard() {
                 <div className="aichat-settings-section-heading">
                   <span><h3>Business profile &amp; team</h3><p>Manage the business name shown in Misma and the staff accounts that help with customer requests.</p></span>
                 </div>
+                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
+                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
+                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
+                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
+              </section>
+
+<section id="settings-business" hidden={selectedSettingsSection !== "settings-business"} className="aichat-card aichat-settings-card aichat-business-settings">
+                <div className="aichat-settings-section-heading">
+                  <span><h3>Business profile &amp; team</h3><p>Manage the business name shown in Misma and the staff accounts that help with customer requests.</p></span>
+                </div>
                 <div className="aichat-profile-edit-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-business-name">Business name</label>
@@ -6678,14 +6689,15 @@ function Dashboard() {
                 <div className="aichat-settings-section-heading">
                   <span><h3>Account</h3><p>Manage account-level actions and permanent account removal.</p></span>
                 </div>
+              </section>
+
+<section id="settings-account" hidden={selectedSettingsSection !== "settings-account"} className="aichat-card aichat-settings-card aichat-account-settings">
+                <div className="aichat-settings-section-heading">
+                  <span><h3>Account</h3><p>Manage account-level actions and permanent account removal.</p></span>
+                </div>
 <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
                   Delete account
                 </button>
-                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
-                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
-                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
-                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
-              
               </section>
 
 <section id="settings-accent" hidden={selectedSettingsSection !== "settings-accent"} className="aichat-card aichat-settings-card">
