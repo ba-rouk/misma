@@ -1770,3 +1770,210 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
     margin-left: 0;
   }
 }
+
+
+/* Unified page chrome, collapsed rail sizing, and cross-page typography. */
+@media (min-width: 768px) {
+  .aichat-side.is-collapsed {
+    width: 56px !important;
+  }
+  .aichat-main.sidebar-closed {
+    margin-left: 56px !important;
+  }
+  .misma-plugin-dashboard-layout.is-sidebar-collapsed {
+    --misma-plugin-sidebar-width: 56px !important;
+  }
+}
+
+/* Keep the chat dashboard canvas, main pane, navigation rail and mobile header on one surface. */
+html:has(.aichat-main),
+body:has(.aichat-main) {
+  background: #0f1724 !important;
+}
+html:has(.aichat[data-misma-color-mode="light"]),
+body:has(.aichat[data-misma-color-mode="light"]) {
+  background: #f3f6fb !important;
+}
+.aichat .aichat-topbar,
+.aichat .aichat-side,
+.aichat .aichat-main,
+.aichat .aichat-scroll-area,
+.aichat .aichat-settings-tab-view,
+.aichat .aichat-settings-layout,
+.aichat .aichat-settings-sidebar,
+.aichat .aichat-settings-detail,
+.aichat .aichat-settings-detail-header {
+  background: var(--misma-app-background, #0f1724) !important;
+}
+.aichat .aichat-topbar {
+  border-bottom-color: rgba(151, 177, 211, .16) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.aichat .aichat-scroll-area {
+  scrollbar-color: #34455d var(--misma-app-background, #0f1724);
+}
+.aichat .aichat-scroll-area::-webkit-scrollbar-track {
+  background: var(--misma-app-background, #0f1724) !important;
+}
+
+/* Page title bars inherit the actual page surface instead of painting a separate black strip. */
+.misma-marketplace-page .misma-marketplace-header,
+.misma-marketplace-page .misma-plugin-directory-header,
+.misma-plugin-detail-page .misma-plugin-detail-header,
+.misma-plugin-settings-page .misma-plugin-settings-topbar,
+.misma-plugin-connect-topbar {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.misma-marketplace-page .misma-plugin-directory-header,
+.misma-plugin-detail-page .misma-plugin-detail-header,
+.misma-plugin-settings-page .misma-plugin-settings-topbar {
+  border-bottom-color: rgba(255, 255, 255, .10) !important;
+}
+
+/* One typeface and one size scale for all Misma application surfaces.
+   The user's Dashboard font-size preference remains the source of the base size. */
+body,
+body :where(*:not(svg):not(svg *):not(code):not(code *):not(pre):not(pre *):not(kbd):not(samp):not(.misma-widget-preview):not(.misma-widget-preview *)) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+}
+:where(.aichat, .misma-site, .misma-marketplace-page, .misma-plugin-detail-page, .misma-plugin-settings-page, .misma-plugin-connect-page, .misma-integrations-page) {
+  --misma-consistent-font-size: var(--misma-ui-font-size, 16px);
+  --misma-consistent-helper-size: 14px;
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+}
+:where(.aichat, .misma-site, .misma-marketplace-page, .misma-plugin-detail-page, .misma-plugin-settings-page, .misma-plugin-connect-page, .misma-integrations-page) :where(p, li, label, td, th, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-font-size, 16px) !important;
+  line-height: 1.45 !important;
+}
+:where(.aichat, .misma-site, .misma-marketplace-page, .misma-plugin-detail-page, .misma-plugin-settings-page, .misma-plugin-connect-page, .misma-integrations-page) :where(small, .aichat-hint, .aichat-settings-hint, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-helper-size, 14px) !important;
+  line-height: 1.45 !important;
+}
+.aichat :where(h1) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 22px !important;
+  line-height: 1.25 !important;
+}
+.aichat :where(h2) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 20px !important;
+  line-height: 1.3 !important;
+}
+.aichat :where(h3, h4, h5, h6) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 18px !important;
+  line-height: 1.35 !important;
+}
+
+/* Menus and dialogs use the same readable application text size as the rest of the UI. */
+.aichat :where([role="dialog"], [role="menu"], .aichat-profile-menu, .aichat-composer-plus-menu, .aichat-chat-context-menu, .aichat-confirm-dialog, .aichat-crop-dialog, .misma-glass-modal, .misma-plugin-overflow-menu):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-font-size, 16px) !important;
+}
+.aichat :where([role="dialog"], [role="menu"], .aichat-profile-menu, .aichat-composer-plus-menu, .aichat-chat-context-menu, .aichat-confirm-dialog, .aichat-crop-dialog, .misma-glass-modal, .misma-plugin-overflow-menu):not(.misma-widget-preview *) :where(span, strong, b, em, p, label, li, button) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: inherit !important;
+}
+
+
+/* Final specificity pass: keep app typography consistent even where older component rules use !important. */
+body :not(svg):not(svg *):not(code):not(code *):not(pre):not(pre *):not(kbd):not(samp):not(.misma-widget-preview):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+}
+body .aichat :where(h1) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 22px !important;
+}
+body .aichat :where(h2) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 20px !important;
+}
+body .aichat :where(h3, h4, h5, h6) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 18px !important;
+}
+:where(.aichat, .misma-marketplace-page, .misma-plugin-detail-page, .misma-plugin-settings-page, .misma-plugin-connect-page, .misma-integrations-page) :where(span, strong, b, em, label, li, td, th, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-font-size, 16px) !important;
+  line-height: 1.45 !important;
+}
+:where(.aichat, .misma-marketplace-page, .misma-plugin-detail-page, .misma-plugin-settings-page, .misma-plugin-connect-page, .misma-integrations-page) :where(small, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-helper-size, 14px) !important;
+}
+.misma-site .nav {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+
+/* Shared interface scale with enough specificity to supersede legacy page-local !important sizes. */
+body .aichat :where(p, li, label, td, th, span, strong, b, em, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *) ,
+body .misma-marketplace-page :where(p, li, label, td, th, span, strong, b, em, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *),
+body .misma-plugin-detail-page :where(p, li, label, td, th, span, strong, b, em, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *),
+body .misma-plugin-settings-page :where(p, li, label, td, th, span, strong, b, em, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *),
+body .misma-plugin-connect-page :where(p, li, label, td, th, span, strong, b, em, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *),
+body .misma-integrations-page :where(p, li, label, td, th, span, strong, b, em, button, [role="button"], [role="menuitem"], input, textarea, select):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-font-size, 16px) !important;
+  line-height: 1.45 !important;
+}
+body .aichat :where(small, .aichat-hint, .aichat-settings-hint, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *),
+body .misma-marketplace-page :where(small, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *),
+body .misma-plugin-detail-page :where(small, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *),
+body .misma-plugin-settings-page :where(small, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *),
+body .misma-plugin-connect-page :where(small, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *),
+body .misma-integrations-page :where(small, [class*="helper"], [class*="caption"], [class*="eyebrow"]):not(.misma-widget-preview *) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: var(--misma-consistent-helper-size, 14px) !important;
+  line-height: 1.45 !important;
+}
+body .aichat :where(h1),
+body .misma-marketplace-page :where(h1),
+body .misma-plugin-detail-page :where(h1),
+body .misma-plugin-settings-page :where(h1),
+body .misma-plugin-connect-page :where(h1),
+body .misma-integrations-page :where(h1) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 22px !important;
+  line-height: 1.25 !important;
+}
+body .aichat :where(h2),
+body .misma-marketplace-page :where(h2),
+body .misma-plugin-detail-page :where(h2),
+body .misma-plugin-settings-page :where(h2),
+body .misma-plugin-connect-page :where(h2),
+body .misma-integrations-page :where(h2) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 20px !important;
+  line-height: 1.3 !important;
+}
+body .aichat :where(h3, h4, h5, h6),
+body .misma-marketplace-page :where(h3, h4, h5, h6),
+body .misma-plugin-detail-page :where(h3, h4, h5, h6),
+body .misma-plugin-settings-page :where(h3, h4, h5, h6),
+body .misma-plugin-connect-page :where(h3, h4, h5, h6),
+body .misma-integrations-page :where(h3, h4, h5, h6) {
+  font-family: var(--font-sans, Inter, system-ui, sans-serif) !important;
+  font-size: 18px !important;
+  line-height: 1.35 !important;
+}
+
+
+/* Remaining page-level headers follow their owning page background as well. */
+.misma-guest-header,
+.misma-theme-toolbar {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
