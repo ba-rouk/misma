@@ -10320,3 +10320,18 @@ body:has(.misma-vercel-callback-page) {
     flex-direction: column;
   }
 }
+
+
+/* Profile overflow menu actions: regular navigation is neutral, sign-out is destructive. */
+.aichat-profile-menu > button:not(.is-danger) {
+  color: #e7e7e7;
+}
+.aichat-profile-menu > button:not(.is-danger):hover {
+  background: #242424;
+}
+.aichat-profile-menu > button.is-danger {
+  color: #ff7b72;
+}
+.aichat-profile-menu > button.is-danger:hover {
+  background: rgba(255,123,114,.12);
+}
