@@ -1492,3 +1492,13 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 .misma-plugin-settings-page .misma-plugin-settings-topbar h1 {
   color: #fff;
 }
+
+/* Shared sticky chrome for the plugin directory, description and settings. */
+.misma-plugin-shared-topbar{box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:14px!important;height:68px!important;min-height:68px!important;max-height:68px!important;flex:0 0 68px!important;padding:0 max(16px,calc((100vw - 760px)/2))!important;margin:0!important;border:0!important;border-bottom:1px solid rgba(255,255,255,.10)!important;border-radius:0!important;background:rgba(0,0,0,.96)!important;box-shadow:0 10px 28px rgba(0,0,0,.28)!important;position:sticky!important;top:0!important;z-index:140!important;width:100vw!important;margin-left:calc(50% - 50vw)!important}
+.misma-plugin-topbar-title,.misma-plugin-directory-heading{display:flex!important;align-items:center!important;gap:10px!important;min-width:0;flex:1}
+.misma-plugin-topbar-title h1,.misma-plugin-directory-heading h1{margin:0!important;color:#f6f7f9!important;font:650 18px/1.2 var(--font-sans,Inter,system-ui,sans-serif)!important;text-align:left!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.misma-plugin-topbar-brand{display:block;width:28px;height:28px;flex:0 0 28px;object-fit:contain;border-radius:7px}
+.misma-plugin-shared-topbar .misma-page-back-button,.misma-plugin-shared-topbar .misma-plugin-detail-settings{flex:0 0 40px!important;width:40px!important;height:40px!important;align-self:center!important}
+.misma-plugin-detail-page .misma-plugin-detail-header{padding-top:env(safe-area-inset-top,0px)!important;padding-bottom:0!important}
+.misma-plugin-settings-page,.misma-plugin-directory-page{padding-top:0!important}.misma-plugin-settings-shell{width:min(100%,760px)!important}.misma-plugin-settings-topbar{grid-template-columns:40px minmax(0,1fr) 40px!important}
+@media(max-width:560px){.misma-plugin-shared-topbar{height:64px!important;min-height:64px!important;max-height:64px!important;flex-basis:64px!important;padding-left:14px!important;padding-right:14px!important}.misma-plugin-topbar-title h1,.misma-plugin-directory-heading h1{font-size:17px!important}}
