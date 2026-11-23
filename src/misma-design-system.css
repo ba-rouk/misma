@@ -1977,3 +1977,42 @@ body .misma-integrations-page :where(h3, h4, h5, h6) {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+
+/* Plugin pages and their sidebar inherit the background selected in Settings. */
+html:has(.misma-plugin-dashboard-layout),
+body:has(.misma-plugin-dashboard-layout) {
+  background: var(--misma-plugin-page-background, #0f1724) !important;
+  color: var(--misma-plugin-page-foreground, #eef3fb);
+}
+.aichat.misma-plugin-dashboard-layout {
+  background: var(--misma-app-background, #0f1724) !important;
+  color: var(--misma-app-foreground, #eef3fb) !important;
+}
+.aichat.misma-plugin-dashboard-layout > .misma-plugin-dashboard-sidebar,
+.aichat.misma-plugin-dashboard-layout > .misma-plugin-dashboard-content,
+.aichat.misma-plugin-dashboard-layout .misma-marketplace-page,
+.aichat.misma-plugin-dashboard-layout .misma-plugin-detail-page,
+.aichat.misma-plugin-dashboard-layout .misma-plugin-settings-page {
+  background: var(--misma-app-background, #0f1724) !important;
+  background-image: none !important;
+  color: var(--misma-app-foreground, #eef3fb);
+}
+.aichat.misma-plugin-dashboard-layout > .misma-plugin-dashboard-sidebar {
+  border-right-color: color-mix(in srgb, var(--misma-app-foreground, #eef3fb) 14%, transparent) !important;
+}
+
+/* Keep the plugin navigation legible when Settings switches the app to light mode. */
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar .misma-plugin-sidebar-link {
+  color: #526175 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar .misma-plugin-sidebar-link:hover,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar .misma-plugin-sidebar-link.active {
+  background: #e8eef6 !important;
+  color: #172235 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar .aichat-newchat {
+  border-color: #cbd5e1;
+  background: #e8eef6;
+  color: #172235;
+}
