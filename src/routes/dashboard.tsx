@@ -6875,7 +6875,7 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="aichat-appearance-control-block">
-                  <div className="aichat-appearance-control-copy"><strong>Dark background color</strong><small>Set the shared background used by the Misma dashboard and sidebar.</small></div>
+                  <div className="aichat-appearance-control-copy"><strong>Dark background color</strong><small>Set the shared background used by the dashboard, plugin pages and their sidebars.</small></div>
                   <input className="aichat-settings-color-input" type="color" value={backgroundColor} onChange={(event) => setBackgroundColor(event.target.value)} aria-label="Dark background color" />
                 </div>
                 <div className="aichat-appearance-control-block">

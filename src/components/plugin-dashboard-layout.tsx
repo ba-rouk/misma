@@ -49,6 +49,68 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
     setCollapsed(readCollapsedPreference());
   }, []);
 
+  // Plugin routes have their own dashboard shell, so rehydrate the same Settings
+  // appearance preference that the main dashboard applies to its own shell.
+  useEffect(() => {
+    const shell = document.querySelector<HTMLElement>(".misma-plugin-dashboard-layout");
+    if (!shell) return;
+
+    type SavedAppearance = {
+      colorMode?: "dark" | "light" | "system";
+      contrastLevel?: "system" | "medium" | "increased";
+      uiFontSize?: number;
+      reduceMotion?: boolean;
+      backgroundColor?: string;
+      foregroundColor?: string;
+    };
+
+    const systemAppearance = window.matchMedia("(prefers-color-scheme: light)");
+    const applyAppearance = () => {
+      let saved: SavedAppearance = {};
+      try {
+        const raw = window.localStorage.getItem("misma_appearance_preferences");
+        if (raw) saved = JSON.parse(raw) as SavedAppearance;
+      } catch {
+        // Keep the same dark defaults as the dashboard if preferences cannot be read.
+      }
+
+      const colorMode = saved.colorMode === "light" || saved.colorMode === "system" ? saved.colorMode : "dark";
+      const resolvedColorMode = colorMode === "system" ? (systemAppearance.matches ? "light" : "dark") : colorMode;
+      const isDark = resolvedColorMode === "dark";
+      const backgroundColor = isDark
+        ? (typeof saved.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.backgroundColor) ? saved.backgroundColor : "#0f1724")
+        : "#f3f6fb";
+      const foregroundColor = isDark
+        ? (typeof saved.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb")
+        : "#172235";
+
+      shell.dataset.mismaColorMode = resolvedColorMode;
+      shell.dataset.mismaContrast = saved.contrastLevel === "system" || saved.contrastLevel === "increased" ? saved.contrastLevel : "medium";
+      shell.style.setProperty("--misma-app-background", backgroundColor);
+      shell.style.setProperty("--misma-app-foreground", foregroundColor);
+      document.documentElement.style.setProperty("--misma-plugin-page-background", backgroundColor);
+      document.documentElement.style.setProperty("--misma-plugin-page-foreground", foregroundColor);
+
+      if (typeof saved.uiFontSize === "number" && Number.isFinite(saved.uiFontSize)) {
+        shell.style.setProperty("--misma-ui-font-size", Math.min(20, Math.max(14, Math.round(saved.uiFontSize))) + "px");
+      }
+      document.documentElement.dataset.mismaReduceMotion = saved.reduceMotion === true ? "true" : "false";
+    };
+
+    applyAppearance();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === "misma_appearance_preferences") applyAppearance();
+    };
+    systemAppearance.addEventListener("change", applyAppearance);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      systemAppearance.removeEventListener("change", applyAppearance);
+      window.removeEventListener("storage", handleStorage);
+      document.documentElement.style.removeProperty("--misma-plugin-page-background");
+      document.documentElement.style.removeProperty("--misma-plugin-page-foreground");
+    };
+  }, []);
+
   function toggleSidebar() {
     setCollapsed((current) => {
       const next = !current;
