@@ -35,6 +35,7 @@ export const Route = createRootRoute({
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: pluginSystemCss },
       { rel: "stylesheet", href: mismaDesignSystemCss },
+      { rel: "icon", href: "/misma-logo.svg", type: "image/svg+xml", sizes: "any" },
       { rel: "icon", href: "/misma-favicon.png", type: "image/png", sizes: "48x48" },
       { rel: "shortcut icon", href: "/misma-favicon.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/misma-favicon.png", sizes: "180x180" },
