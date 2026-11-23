@@ -3458,7 +3458,8 @@ function Dashboard() {
     setDataExportError("");
     setDataExportStatus("");
     try {
-      const workspaceSnapshot = await getMismaData({ data: { token } });
+      if (!workspace?.id) throw new Error("Select a workspace before exporting its data.");
+      const workspaceSnapshot = await getMismaData({ data: { token, workspaceId: workspace.id } });
       const snapshot = workspaceSnapshot as any;
       const conversationsToExport: any[] = Array.isArray(snapshot.conversations) ? snapshot.conversations : [];
       const exportedConversations: any[] = [];
@@ -3467,7 +3468,7 @@ function Dashboard() {
         const results = await Promise.all(batch.map(async (conversation) => {
           try {
             const record = await getConversationMessages({
-              data: { token, conversationId: Number(conversation.id) },
+              data: { token, workspaceId: workspace.id, conversationId: Number(conversation.id) },
             });
             return {
               conversation: record.conversation,
