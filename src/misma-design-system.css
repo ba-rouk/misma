@@ -2234,3 +2234,40 @@ body .aichat .aichat-composer-container::after {
     box-shadow: none !important;
   }
 }
+
+
+/* Apply the compact popup scale to plugin and integrations routes as well as chat. */
+body .misma-marketplace-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]),
+body .misma-plugin-detail-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]),
+body .misma-plugin-settings-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]),
+body .misma-plugin-connect-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]),
+body .misma-integrations-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]) {
+  max-width: min(360px, calc(100vw - 28px)) !important;
+  padding: 7px !important;
+}
+body .misma-marketplace-page :is(.misma-glass-modal, [role="dialog"]),
+body .misma-plugin-detail-page :is(.misma-glass-modal, [role="dialog"]),
+body .misma-plugin-settings-page :is(.misma-glass-modal, [role="dialog"]),
+body .misma-plugin-connect-page :is(.misma-glass-modal, [role="dialog"]),
+body .misma-integrations-page :is(.misma-glass-modal, [role="dialog"]) {
+  width: min(360px, calc(100vw - 28px)) !important;
+  padding: 16px !important;
+  border-radius: 14px !important;
+}
+body .misma-marketplace-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]) :where(span, strong, b, em, p, label, li, button, small),
+body .misma-plugin-detail-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]) :where(span, strong, b, em, p, label, li, button, small),
+body .misma-plugin-settings-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]) :where(span, strong, b, em, p, label, li, button, small),
+body .misma-plugin-connect-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]) :where(span, strong, b, em, p, label, li, button, small),
+body .misma-integrations-page :is(.misma-plugin-overflow-menu, .misma-glass-modal, [role="menu"], [role="dialog"]) :where(span, strong, b, em, p, label, li, button, small) {
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  font-weight: 400 !important;
+}
+body .misma-marketplace-page :is(.misma-glass-modal, [role="dialog"]) :where(h1, h2, h3, h4),
+body .misma-plugin-detail-page :is(.misma-glass-modal, [role="dialog"]) :where(h1, h2, h3, h4),
+body .misma-plugin-settings-page :is(.misma-glass-modal, [role="dialog"]) :where(h1, h2, h3, h4),
+body .misma-plugin-connect-page :is(.misma-glass-modal, [role="dialog"]) :where(h1, h2, h3, h4),
+body .misma-integrations-page :is(.misma-glass-modal, [role="dialog"]) :where(h1, h2, h3, h4) {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
