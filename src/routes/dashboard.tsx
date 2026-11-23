@@ -6629,17 +6629,7 @@ function Dashboard() {
                 <div className="aichat-settings-section-heading">
                   <span><h3>Business profile &amp; team</h3><p>Manage the business name shown in Misma and the staff accounts that help with customer requests.</p></span>
                 </div>
-                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
-                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
-                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
-                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
-              </section>
-
-<section id="settings-business" hidden={selectedSettingsSection !== "settings-business"} className="aichat-card aichat-settings-card aichat-business-settings">
-                <div className="aichat-settings-section-heading">
-                  <span><h3>Business profile &amp; team</h3><p>Manage the business name shown in Misma and the staff accounts that help with customer requests.</p></span>
-                </div>
-                <div className="aichat-profile-edit-row">
+<div className="aichat-profile-edit-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-business-name">Business name</label>
                     <input id="misma-business-name" className="aichat-input" value={businessNameDraft} maxLength={120} onChange={(event) => setBusinessNameDraft(event.target.value)} placeholder="Your business name" />
@@ -6680,16 +6670,9 @@ function Dashboard() {
                   </button>
                 </form>
               </section>
-                
               </section>
 
-<section id="settings-account" hidden={selectedSettingsSection !== "settings-account"} className="aichat-card aichat-settings-card aichat-account-settings">
-                <div className="aichat-settings-section-heading">
-                  <span><h3>Account</h3><p>Manage account-level actions and permanent account removal.</p></span>
-                </div>
-              </section>
-
-<section id="settings-account" hidden={selectedSettingsSection !== "settings-account"} className="aichat-card aichat-settings-card aichat-account-settings">
+              <section id="settings-account" hidden={selectedSettingsSection !== "settings-account"} className="aichat-card aichat-settings-card aichat-account-settings">
                 <div className="aichat-settings-section-heading">
                   <span><h3>Account</h3><p>Manage account-level actions and permanent account removal.</p></span>
                 </div>
