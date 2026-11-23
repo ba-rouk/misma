@@ -5,6 +5,7 @@ import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plu
 import { getPluginManifest } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { Badge, Button, GlassCard, GlassModal } from "../components/misma-glass";
+import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 type PermissionMode = "always_ask" | "read" | "low_risk" | "all";
 type Connection = { id: string; provider: string; external_account_name: string | null; status: string; created_at: string; updated_at: string; workspace_id: string };
@@ -188,16 +189,17 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
     } finally { setBusy(false); setMenuOpen(false); }
   }
 
-  if (!manifest) return <main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main>;
+  if (!manifest) return <PluginDashboardLayout><main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main></PluginDashboardLayout>;
 
   return (
+    <PluginDashboardLayout>
     <main className="misma-plugin-settings-page">
       <div className="misma-plugin-settings-shell">
         <header className="misma-plugin-settings-topbar misma-plugin-unified-header">
           <button type="button" className="misma-page-back-button" onClick={backToDetail} aria-label="Back to plugin detail">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg>
           </button>
-          <h1>{manifest.name}</h1><span />
+          <h1><img className="misma-plugin-page-title-mark" src="/misma-logo.svg" alt="" />{manifest.name}</h1><span />
         </header>
 
         {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
@@ -272,5 +274,6 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
       </GlassModal>
       {loading && <div className="misma-plugin-settings-loading">Loading account settings…</div>}
     </main>
+    </PluginDashboardLayout>
   );
 }
