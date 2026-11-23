@@ -19,6 +19,10 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Misma | Business AI, connected" },
+      { name: "application-name", content: "Misma" },
+      { property: "og:site_name", content: "Misma" },
+      { property: "og:title", content: "Misma | Business AI, connected" },
+      { property: "og:type", content: "website" },
       {
         name: "description",
         content:
