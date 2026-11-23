@@ -1694,7 +1694,7 @@ function Dashboard() {
     const message = helpRequestMessage.trim();
     setHelpRequestStatus("");
     setHelpRequestError("");
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
       setHelpRequestError("Enter a valid email address.");
       return;
     }
@@ -4793,7 +4793,9 @@ function Dashboard() {
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
   const settingsGroups = [
     { label: "Profile", items: [{ id: "settings-profile", label: "Profile", icon: "profile" }] },
+    { label: "Business", items: [{ id: "settings-business", label: "Business profile & team", icon: "manage" }] },
     { label: "Account", items: [
+      { id: "settings-account", label: "Account", icon: "profile" },
       { id: "settings-privacy", label: "Privacy & Security", icon: "privacy" },
       { id: "settings-history", label: "History & Data", icon: "history" },
       { id: "settings-memory", label: "Misma Memory", icon: "history" },
@@ -5298,7 +5300,7 @@ function Dashboard() {
               {profileError && (
                 <span className="aichat-profile-error">{profileError}</span>
               )}
-              <button type="button" onClick={() => void signOut()}>
+              <button type="button" className="is-danger" onClick={() => void signOut()}>
                 Sign out
               </button>
             </div>
@@ -6563,13 +6565,14 @@ function Dashboard() {
                   {!filteredSettingsNavItems.length && <p className="aichat-settings-no-results">No matching settings.</p>}
                 </nav>
               </aside>
-              <main className="aichat-settings-detail">
+              <div className="aichat-settings-detail" role="region" aria-label="Settings details">
                 <header className="aichat-settings-detail-header">
                   <h2>Details</h2>
                   <p>{selectedSettingsNavItem.label}</p>
                 </header>
                 <div className="aichat-settings-detail-content">
               <section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
+<section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
                 <div className="aichat-settings-profile-head">
                   <button type="button" className="aichat-settings-avatar-button" onClick={() => profileAvatarInputRef.current?.click()} aria-label="Change profile picture" title="Change profile picture">
                     {profileImage ? <img src={profileImage} alt="" onError={() => { if (!profileImage.startsWith("blob:")) void refreshProfileAvatar(); }} /> : <span>{profileNameDraft[0]?.toUpperCase() || "M"}</span>}
@@ -6616,6 +6619,17 @@ function Dashboard() {
                     {profileSaving ? "Saving…" : profileAvatarPreparing ? "Preparing photo…" : "Save changes"}
                   </button>
                 </div>
+
+                {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
+                {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
+                {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
+                {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
+              </section>
+
+<section id="settings-business" hidden={selectedSettingsSection !== "settings-business"} className="aichat-card aichat-settings-card aichat-business-settings">
+                <div className="aichat-settings-section-heading">
+                  <span><h3>Business profile &amp; team</h3><p>Manage the business name shown in Misma and the staff accounts that help with customer requests.</p></span>
+                </div>
                 <div className="aichat-profile-edit-row">
                   <div className="aichat-input-group">
                     <label htmlFor="misma-business-name">Business name</label>
@@ -6657,15 +6671,24 @@ function Dashboard() {
                   </button>
                 </form>
               </section>
-                <button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
+                
+              </section>
+
+<section id="settings-account" hidden={selectedSettingsSection !== "settings-account"} className="aichat-card aichat-settings-card aichat-account-settings">
+                <div className="aichat-settings-section-heading">
+                  <span><h3>Account</h3><p>Manage account-level actions and permanent account removal.</p></span>
+                </div>
+<button type="button" className="aichat-settings-delete-account" onClick={() => { setAccountDeleteConfirmation(""); setAccountDeleteError(""); setAccountDeleteOpen(true); }}>
                   Delete account
                 </button>
                 {profileError && <p className="aichat-profile-error" role="alert">{profileError}</p>}
                 {profileSaved && <p className="aichat-settings-status" role="status">Profile changes saved.</p>}
                 {profileAvatarPreparing && <p className="aichat-settings-hint" role="status">Preparing profile photo…</p>}
                 {profileAvatarFile && <p className="aichat-settings-hint">Profile photo ready. Save changes to upload it.</p>}
+              
               </section>
-              <section id="settings-accent" hidden={selectedSettingsSection !== "settings-accent"} className="aichat-card aichat-settings-card">
+
+<section id="settings-accent" hidden={selectedSettingsSection !== "settings-accent"} className="aichat-card aichat-settings-card">
                 <div className="aichat-settings-section-heading">
                   <span className="aichat-settings-section-icon" aria-hidden="true">◐</span>
                   <span><h3>Appearance</h3><p>Personalize the colors used by Misma on this device.</p></span>
@@ -6890,7 +6913,7 @@ function Dashboard() {
               </section>
 
                 </div>
-              </main>
+              </div>
             </div>
           </div>
         )}
