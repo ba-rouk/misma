@@ -1650,3 +1650,122 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 .misma-plugin-directory-page .misma-plugin-search-dock {
   margin-top: 0;
 }
+
+
+/* Desktop dashboard sidebar shared by plugin directory, description and settings routes. */
+.misma-plugin-dashboard-layout {
+  --misma-plugin-sidebar-width: 260px;
+  display: block;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: visible;
+  background: #090a0c;
+}
+.misma-plugin-dashboard-layout.is-sidebar-collapsed {
+  --misma-plugin-sidebar-width: 68px;
+}
+.misma-plugin-dashboard-sidebar {
+  display: flex;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.misma-plugin-dashboard-sidebar .aichat-side-top {
+  flex: none;
+}
+.misma-plugin-dashboard-sidebar .aichat-brand-icon {
+  padding: 0;
+  overflow: hidden;
+}
+.misma-plugin-dashboard-sidebar .aichat-brand-icon svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+.misma-plugin-dashboard-sidebar .aichat-newchat-wrap {
+  flex: none;
+  padding: 10px 14px 12px;
+}
+.misma-plugin-dashboard-sidebar .aichat-newchat {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 10px;
+  background: #1c2128;
+  color: #fff;
+  text-align: left;
+}
+.misma-plugin-dashboard-sidebar .aichat-newchat:hover {
+  background: #252b34;
+}
+.misma-plugin-dashboard-sidebar .aichat-newchat-plus {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+}
+.misma-plugin-dashboard-sidebar .aichat-primary-nav {
+  flex: 1;
+}
+.misma-plugin-dashboard-sidebar .misma-plugin-sidebar-link {
+  display: flex;
+  color: #8b949e !important;
+  text-decoration: none !important;
+}
+.misma-plugin-dashboard-sidebar .misma-plugin-sidebar-link:hover {
+  color: #fff !important;
+  text-decoration: none !important;
+}
+.misma-plugin-dashboard-sidebar .misma-plugin-sidebar-link.active {
+  color: #fff !important;
+}
+.misma-plugin-dashboard-content {
+  box-sizing: border-box;
+  min-width: 0;
+  width: calc(100% - var(--misma-plugin-sidebar-width));
+  min-height: 100dvh;
+  margin-left: var(--misma-plugin-sidebar-width);
+  transition: width .18s ease, margin-left .18s ease;
+}
+.misma-plugin-page-title-mark {
+  display: inline-block;
+  flex: none;
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+.misma-plugin-directory-heading h1,
+.misma-plugin-detail-heading h1,
+.misma-plugin-settings-topbar.misma-plugin-unified-header h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+@media (min-width: 768px) {
+  .misma-plugin-dashboard-content .misma-marketplace-page .misma-plugin-directory-header,
+  .misma-plugin-dashboard-content .misma-plugin-detail-page .misma-plugin-detail-header,
+  .misma-plugin-dashboard-content .misma-plugin-settings-page .misma-plugin-settings-topbar {
+    width: calc(100vw - var(--misma-plugin-sidebar-width)) !important;
+    margin-left: calc(50% - (100vw - var(--misma-plugin-sidebar-width)) / 2) !important;
+    padding-right: max(16px, calc((100vw - var(--misma-plugin-sidebar-width) - 760px) / 2)) !important;
+    padding-left: max(16px, calc((100vw - var(--misma-plugin-sidebar-width) - 760px) / 2)) !important;
+  }
+}
+@media (max-width: 767px) {
+  .misma-plugin-dashboard-sidebar {
+    display: none !important;
+  }
+  .misma-plugin-dashboard-content {
+    width: 100%;
+    margin-left: 0;
+  }
+}
