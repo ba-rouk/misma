@@ -19,7 +19,8 @@ test("Misma popups are compact, lighter, and use the page background without sha
   assert.match(css, /--misma-popup-surface:\s*var\(--misma-app-background/);
   assert.match(css, /--misma-popup-surface:\s*var\(--misma-bg/);
   assert.match(css, /background:\s*var\(--misma-popup-surface, #0f1724\) !important/);
-  assert.match(css, /font-size:\s*13px !important;\s*font-weight:\s*400 !important/);\n  assert.match(css, /\.aichat-chat-context-menu[\\s\\S]*?font-weight:\\s*400 !important/);
+  assert.match(css, /font-size:\s*13px !important;\s*font-weight:\s*400 !important/);
+  assert.match(css, /\.aichat-chat-context-menu[\s\S]*?font-weight:\s*400 !important/);
   assert.match(css, /width:\s*min\(244px, calc\(100vw - 28px\)\) !important/);
   assert.match(css, /padding:\s*16px !important;\s*border-radius:\s*14px !important/);
   assert.match(css, /box-shadow:\s*none !important/);
