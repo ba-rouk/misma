@@ -1885,7 +1885,11 @@ test("Misma settings is a grouped single-section workspace with an in-app Help C
   assert.match(dashboard, /label: "App"/);
   assert.match(dashboard, /label: "Support"/);
   assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-profile"\}/);
+  assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-business"\}/);
+  assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-account"\}/);
   assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-help-center"\}/);
+  assert.match(dashboard, /Send support request/);
+  assert.match(dashboard, /Your email/);
   assert.match(dashboard, /Help Center/);
   assert.match(dashboard, /functions\.invoke\("misma-feedback"/);
   assert.match(dashboard, /Popular help topics/);
