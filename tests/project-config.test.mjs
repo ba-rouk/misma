@@ -1867,3 +1867,27 @@ test("Core.01 workspace seed trigger targets its partial unique topic index", as
   assert.ok(migration.includes("CREATE OR REPLACE FUNCTION public.create_misma_workspace()"));
   assert.ok(migration.includes("ON CONFLICT DO NOTHING"));
 });
+
+
+test("Misma settings is a grouped single-section workspace with an in-app Help Center", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const styles = await read("../src/styles.css");
+
+  assert.match(dashboard, /aichat-settings-layout/);
+  assert.match(dashboard, /aichat-settings-sidebar/);
+  assert.match(dashboard, /Back to app/);
+  assert.match(dashboard, /settingsGroups = \[/);
+  assert.match(dashboard, /label: "Profile"/);
+  assert.match(dashboard, /label: "Account"/);
+  assert.match(dashboard, /label: "App"/);
+  assert.match(dashboard, /label: "Support"/);
+  assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-profile"\}/);
+  assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-help-center"\}/);
+  assert.match(dashboard, /Help Center/);
+  assert.match(dashboard, /functions\.invoke\("misma-feedback"/);
+  assert.match(dashboard, /Popular help topics/);
+  assert.match(dashboard, /aichat-profile-menu[\s\S]*?Help Center/);
+  assert.match(styles, /\.aichat\.is-settings-page > \.aichat-side\s*\{\s*display: none !important/);
+  assert.match(styles, /\.aichat-settings-layout\s*\{\s*display: grid;\s*grid-template-columns:/);
+  assert.match(styles, /@media \(max-width: 767px\)[\s\S]*?\.aichat-settings-layout\s*\{\s*grid-template-columns: minmax\(0,1fr\)/);
+});
