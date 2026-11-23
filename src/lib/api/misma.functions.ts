@@ -768,6 +768,21 @@ export const deleteConversation = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteAllDashboardConversations = createServerFn({ method: "POST" })
+  .validator(z.object({ token: auth }))
+  .handler(async ({ data }) => {
+    const { db, workspaceId, isSupport } = await ensureWorkspace(data.token);
+    if (isSupport) throw new Error("Only a workspace owner can delete all Dashboard chats.");
+    const { data: deleted, error } = await db
+      .from("conversations")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("channel", "Dashboard")
+      .select("id");
+    if (error) throw new Error(error.message);
+    return { deletedCount: deleted?.length ?? 0 };
+  });
+
 
 export const setConversationGroup = createServerFn({ method: "POST" })
   .validator(z.object({
