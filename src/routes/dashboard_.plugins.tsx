@@ -6,6 +6,7 @@ import { pluginList, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Input, SectionHeader } from "../components/misma-glass";
+import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
 type Website = { id: string; name: string | null; domain: string; website_url: string | null; workspace_id: string };
@@ -218,13 +219,14 @@ function PluginsPage() {
   };
 
   return (
+    <PluginDashboardLayout>
     <main className="misma-marketplace-page misma-plugin-directory-page" onClick={() => setOpenPluginMenu(null)}>
       <div className="misma-marketplace-shell misma-plugin-directory-shell">
         <header className="misma-marketplace-header misma-plugin-directory-header">
           <button type="button" className="misma-page-back-button misma-plugin-directory-back" aria-label="Go to previous page" onClick={navigateBack}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
           </button>
-          <div className="misma-plugin-directory-heading"><h1>Plugins</h1></div>
+          <div className="misma-plugin-directory-heading"><h1><img className="misma-plugin-page-title-mark" src="/misma-logo.svg" alt="" />Plugins</h1></div>
           <span className="misma-plugin-header-spacer" aria-hidden="true" />
         </header>
         <div className="misma-plugin-search-dock">
@@ -289,5 +291,6 @@ function PluginsPage() {
         </div>
       )}
     </main>
+    </PluginDashboardLayout>
   );
 }
