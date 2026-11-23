@@ -23,4 +23,13 @@ test("Misma pages share page-colored headers, a compact collapsed rail, and cons
   // Keep the separate website widget preview's user-selected styling isolated.
   assert.match(design, /:not\(\.misma-widget-preview \*\)/);
   assert.match(styles, /\.aichat\[data-misma-color-mode="light"\]/);
+
+  const pluginLayout = await read("../src/components/plugin-dashboard-layout.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(pluginLayout, /localStorage\.getItem\("misma_appearance_preferences"\)/);
+  assert.match(pluginLayout, /shell\.dataset\.mismaColorMode = resolvedColorMode/);
+  assert.match(pluginLayout, /--misma-app-background", backgroundColor/);
+  assert.match(design, /\.aichat\.misma-plugin-dashboard-layout[\s\S]*?background: var\(--misma-app-background/);
+  assert.match(design, /\.misma-plugin-dashboard-sidebar[\s\S]*?background: var\(--misma-app-background/);
+  assert.match(dashboard, /Set the shared background used by the dashboard, plugin pages and their sidebars\./);
 });
