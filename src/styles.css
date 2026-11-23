@@ -10344,7 +10344,8 @@ body:has(.misma-vercel-callback-page) {
   --misma-accent-color: #8ab4ff;
   background: var(--misma-app-background) !important;
   color: var(--misma-app-foreground);
-  font-size: var(--misma-ui-font-size, var(--text-base));
+  --text-base: var(--misma-ui-font-size, 16px);
+  font-size: var(--misma-ui-font-size, 16px);
 }
 .aichat > .aichat-side,
 .aichat > .aichat-main,
