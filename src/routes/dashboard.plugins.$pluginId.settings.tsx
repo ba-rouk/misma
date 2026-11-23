@@ -93,7 +93,11 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
   }, [supabase, manifest?.id]);
 
   function backToDetail() {
-    window.location.assign(manifest ? "/dashboard/plugins/" + manifest.id : "/dashboard/plugins");
+    const websiteId = new URLSearchParams(window.location.search).get("websiteId")
+      || window.sessionStorage.getItem("misma_plugins_website_id")
+      || "";
+    const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
+    window.location.assign(manifest ? "/dashboard/plugins/" + manifest.id + suffix : "/dashboard/plugins");
   }
 
   async function savePluginRow(fields: Record<string, unknown>) {
