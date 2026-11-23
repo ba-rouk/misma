@@ -189,7 +189,7 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
   return (
     <main className="misma-plugin-settings-page">
       <div className="misma-plugin-settings-shell">
-        <header className="misma-plugin-settings-topbar">
+        <header className="misma-plugin-settings-topbar misma-plugin-unified-header">
           <button type="button" className="misma-page-back-button" onClick={backToDetail} aria-label="Back to plugin detail">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg>
           </button>
