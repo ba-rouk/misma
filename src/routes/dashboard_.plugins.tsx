@@ -122,17 +122,6 @@ function PluginsPage() {
   }
 
   function navigateBack() {
-    const referrer = document.referrer;
-    if (referrer) {
-      try {
-        if (new URL(referrer).origin === window.location.origin) {
-          window.history.back();
-          return;
-        }
-      } catch {
-        // Use the dashboard fallback when the referrer is not a valid URL.
-      }
-    }
     window.location.assign("/dashboard");
   }
 
