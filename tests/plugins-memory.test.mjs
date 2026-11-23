@@ -367,3 +367,21 @@ test("plugin directory, description and provider settings share header sizing an
   assert.match(css, /\.misma-plugin-directory-header,[\s\S]*\.misma-plugin-detail-header,[\s\S]*\.misma-plugin-settings-topbar\.misma-plugin-unified-header/);
   assert.match(css, /height: 64px !important/);
 });
+
+
+test("plugin directory, provider description and settings share a header and deterministic back routes", async () => {
+  const directory = await read("../src/routes/dashboard_.plugins.tsx");
+  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
+  const css = await read("../src/misma-design-system.css");
+
+  assert.match(directory, /window\.location\.assign\("\/dashboard"\)/);
+  assert.match(directory, /misma-plugin-header-spacer/);
+  assert.match(detail, /function backToPlugins\(\)/);
+  assert.match(detail, /onClick=\{backToPlugins\}/);
+  assert.match(detail, /\/settings" \+ suffix/);
+  assert.match(settings, /function backToDetail\(\)/);
+  assert.match(settings, /window\.location\.assign\(manifest \? "\/dashboard\/plugins\/" \+ manifest\.id \+ suffix/);
+  assert.match(css, /\.misma-marketplace-page \.misma-plugin-directory-header,[\s\S]*?height: calc\(64px \+ env\(safe-area-inset-top, 0px\)\)/);
+  assert.match(css, /\.misma-plugin-detail-page \.misma-plugin-detail-header \.misma-plugin-detail-topline\s*\{\s*display: contents/);
+});

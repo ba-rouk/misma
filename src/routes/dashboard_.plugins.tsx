@@ -225,6 +225,7 @@ function PluginsPage() {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
           </button>
           <div className="misma-plugin-directory-heading"><h1>Plugins</h1></div>
+          <span className="misma-plugin-header-spacer" aria-hidden="true" />
         </header>
         <div className="misma-plugin-search-dock">
           <label className="misma-marketplace-search" htmlFor="misma-plugin-search">

@@ -1562,3 +1562,91 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
     height: 64px !important;
   }
 }
+
+
+/* Final shared geometry for the plugin list, provider description and provider settings top bars. */
+.misma-plugin-directory-page,
+.misma-plugin-detail-page,
+.misma-plugin-settings-page {
+  padding-top: 0 !important;
+}
+.misma-marketplace-page .misma-plugin-directory-header,
+.misma-plugin-detail-page .misma-plugin-detail-header,
+.misma-plugin-settings-page .misma-plugin-settings-topbar {
+  position: sticky !important;
+  top: 0;
+  z-index: 120;
+  display: grid !important;
+  grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+  align-items: center !important;
+  justify-content: initial !important;
+  gap: 12px !important;
+  box-sizing: border-box !important;
+  width: 100vw;
+  height: calc(64px + env(safe-area-inset-top, 0px)) !important;
+  min-height: calc(64px + env(safe-area-inset-top, 0px)) !important;
+  margin: 0 0 18px calc(50% - 50vw) !important;
+  padding: env(safe-area-inset-top, 0px) max(16px, calc((100vw - 760px) / 2)) 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.32);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.misma-marketplace-page .misma-plugin-directory-header .misma-plugin-directory-back,
+.misma-plugin-detail-page .misma-plugin-detail-header .misma-plugin-detail-back-button,
+.misma-plugin-settings-page .misma-plugin-settings-topbar > .misma-page-back-button {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center !important;
+  justify-self: start !important;
+  width: 42px;
+  height: 42px;
+  margin: 0 !important;
+}
+.misma-marketplace-page .misma-plugin-directory-header .misma-plugin-directory-heading,
+.misma-plugin-detail-page .misma-plugin-detail-header .misma-plugin-detail-heading,
+.misma-plugin-settings-page .misma-plugin-settings-topbar > h1 {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+}
+.misma-marketplace-page .misma-plugin-directory-header .misma-plugin-directory-heading h1,
+.misma-plugin-detail-page .misma-plugin-detail-header .misma-plugin-detail-heading h1,
+.misma-plugin-settings-page .misma-plugin-settings-topbar > h1 {
+  overflow: hidden;
+  margin: 0 !important;
+  color: #fff !important;
+  font: 600 21px/1.2 var(--font-sans, Inter, system-ui, sans-serif) !important;
+  letter-spacing: -.02em;
+  text-align: center !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.misma-marketplace-page .misma-plugin-directory-header .misma-plugin-header-spacer,
+.misma-plugin-detail-page .misma-plugin-detail-header .misma-plugin-detail-settings,
+.misma-plugin-settings-page .misma-plugin-settings-topbar > span {
+  display: block;
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  width: 42px;
+  height: 42px;
+}
+.misma-plugin-detail-page .misma-plugin-detail-header .misma-plugin-detail-topline {
+  display: contents !important;
+  width: auto;
+  min-height: 0;
+}
+.misma-plugin-detail-page .misma-plugin-detail-header .misma-plugin-detail-settings {
+  align-self: center;
+}
+.misma-plugin-directory-page .misma-plugin-search-dock {
+  margin-top: 0;
+}
