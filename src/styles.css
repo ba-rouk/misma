@@ -10335,3 +10335,335 @@ body:has(.misma-vercel-callback-page) {
 .aichat-profile-menu > button.is-danger:hover {
   background: rgba(255,123,114,.12);
 }
+
+
+/* Unified Misma dark-blue surface across the dashboard, sidebar and Settings workspace. */
+.aichat {
+  --misma-app-background: #0f1724;
+  --misma-app-foreground: #eef3fb;
+  --misma-accent-color: #8ab4ff;
+  background: var(--misma-app-background) !important;
+  color: var(--misma-app-foreground);
+  font-size: var(--misma-ui-font-size, var(--text-base));
+}
+.aichat > .aichat-side,
+.aichat > .aichat-main,
+.aichat-settings-tab-view,
+.aichat-settings-layout,
+.aichat-settings-sidebar,
+.aichat-settings-detail {
+  background: var(--misma-app-background) !important;
+  color: var(--misma-app-foreground);
+}
+.aichat > .aichat-side {
+  border-right-color: rgba(151, 177, 211, .16);
+}
+.aichat-settings-sidebar {
+  border-right-color: rgba(151, 177, 211, .16);
+  scrollbar-color: #34455d var(--misma-app-background);
+}
+.aichat-settings-detail {
+  scrollbar-color: #34455d var(--misma-app-background);
+}
+.aichat-settings-detail-header {
+  border-bottom-color: rgba(151, 177, 211, .18);
+}
+.aichat-settings-detail-header h2,
+.aichat-settings-detail-content .aichat-settings-section-heading h3,
+.aichat-settings-detail-content .aichat-settings-profile-head h3 {
+  color: var(--misma-app-foreground);
+}
+.aichat-settings-detail-content .aichat-settings-action-row,
+.aichat-settings-detail-content .aichat-settings-info-row,
+.aichat-settings-detail-content > .aichat-settings-card {
+  border-color: rgba(151, 177, 211, .16);
+}
+.aichat-settings-sidebar-group h3,
+.aichat-settings-sidebar-identity small,
+.aichat-settings-detail-header p,
+.aichat-settings-detail-content .aichat-settings-section-heading p,
+.aichat-settings-detail-content .aichat-settings-profile-head p {
+  color: #aab9cd;
+}
+
+/* Settings actions match the light silver/charcoal controls used on Website connections. */
+.aichat-settings-tab-view .aichat-action-btn:not(.secondary) {
+  min-height: 42px;
+  padding: 0 20px;
+  border: 1px solid #e2e6eb !important;
+  border-radius: 9px;
+  background: linear-gradient(110deg, #f3f5f7, #b9c3cf) !important;
+  color: #101820 !important;
+  font: 700 var(--text-sm)/1.4 var(--font-sans);
+  box-shadow: none;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.aichat-settings-tab-view .aichat-action-btn:not(.secondary):hover:not(:disabled) {
+  border-color: #fff !important;
+  background: linear-gradient(110deg, #fff, #c8d0da) !important;
+  color: #101820 !important;
+}
+.aichat-settings-tab-view .aichat-action-btn.secondary {
+  min-height: 40px;
+  border: 1px solid #303743 !important;
+  border-radius: 9px;
+  background: #21262d !important;
+  color: #f0f3f8 !important;
+}
+.aichat-settings-tab-view .aichat-action-btn.secondary:hover:not(:disabled) {
+  border-color: #465263 !important;
+  background: #303743 !important;
+  color: #fff !important;
+}
+.aichat-data-danger-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid rgba(248, 81, 73, .44);
+  border-radius: 9px;
+  background: rgba(248, 81, 73, .13);
+  color: #ffaaa4;
+  font: 650 var(--text-sm)/1.35 var(--font-sans);
+  cursor: pointer;
+}
+.aichat-data-danger-button:hover:not(:disabled) {
+  border-color: rgba(248, 81, 73, .68);
+  background: rgba(248, 81, 73, .22);
+  color: #ffc0bb;
+}
+.aichat-data-danger-button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* Appearance controls */
+.aichat-appearance-control-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 2px;
+  border-top: 1px solid rgba(151, 177, 211, .16);
+}
+.aichat-appearance-control-block.is-stacked {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+}
+.aichat-appearance-control-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.aichat-appearance-control-copy strong {
+  color: var(--misma-app-foreground);
+  font: 600 var(--text-sm)/1.4 var(--font-sans);
+}
+.aichat-appearance-control-copy small {
+  color: #aab9cd;
+  font: 400 var(--text-xs)/1.5 var(--font-sans);
+}
+.aichat-appearance-control-copy small b {
+  color: var(--misma-app-foreground);
+  font-weight: 650;
+}
+.aichat-settings-segment-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid #34445b;
+  border-radius: 10px;
+  background: #0b1422;
+}
+.aichat-settings-segment {
+  min-height: 32px;
+  padding: 6px 11px;
+  border: 1px solid transparent !important;
+  border-radius: 7px;
+  background: transparent !important;
+  color: #bcc9d9 !important;
+  font: 550 var(--text-xs)/1.3 var(--font-sans);
+  white-space: nowrap;
+}
+.aichat-settings-segment:hover {
+  background: rgba(255,255,255,.07) !important;
+  color: #fff !important;
+}
+.aichat-settings-segment.is-selected {
+  border-color: #dfe6ee !important;
+  background: linear-gradient(110deg, #f3f5f7, #b9c3cf) !important;
+  color: #101820 !important;
+  font-weight: 700;
+}
+.aichat-settings-color-input {
+  width: 44px;
+  height: 34px;
+  flex: none;
+  padding: 3px;
+  border: 1px solid #3b4b61;
+  border-radius: 8px;
+  background: #101b2b;
+  cursor: pointer;
+}
+.aichat-appearance-control-block input[type="range"] {
+  width: 100%;
+  accent-color: var(--misma-accent-color);
+}
+.aichat-settings-detail-content .aichat-setting-row {
+  border-top-color: rgba(151,177,211,.16);
+}
+.aichat-settings-detail-content .aichat-setting-copy strong {
+  color: var(--misma-app-foreground);
+}
+.aichat-settings-detail-content .aichat-setting-copy small {
+  color: #aab9cd;
+}
+.aichat-settings-detail-content .aichat-setting-switch.is-on {
+  background: var(--misma-accent-color);
+}
+
+/* Accent color now applies to the chat bubble and selected Settings controls. */
+.aichat-settings-detail-content .aichat-settings-sidebar-item.is-active,
+.aichat-settings-detail-content .aichat-accent-option.is-selected {
+  border-color: var(--misma-accent-color);
+}
+.aichat-settings-tab-view input:focus-visible,
+.aichat-settings-tab-view button:focus-visible,
+.aichat-settings-tab-view textarea:focus-visible,
+.aichat-settings-tab-view select:focus-visible {
+  outline: 2px solid var(--misma-accent-color);
+  outline-offset: 2px;
+}
+
+/* Increased contrast is available independently of Dark/Light appearance. */
+.aichat[data-misma-contrast="increased"] .aichat-settings-sidebar-group h3,
+.aichat[data-misma-contrast="increased"] .aichat-settings-sidebar-identity small,
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-header p,
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-content .aichat-settings-section-heading p,
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-content .aichat-settings-info-row span,
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-content .aichat-setting-copy small {
+  color: #d0dced !important;
+}
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-header,
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-content > .aichat-settings-card,
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-content .aichat-settings-action-row,
+.aichat[data-misma-contrast="increased"] .aichat-settings-detail-content .aichat-settings-info-row {
+  border-color: rgba(196, 216, 243, .38) !important;
+}
+@media (prefers-contrast: more) {
+  .aichat[data-misma-contrast="system"] .aichat-settings-sidebar-group h3,
+  .aichat[data-misma-contrast="system"] .aichat-settings-detail-header p,
+  .aichat[data-misma-contrast="system"] .aichat-settings-detail-content .aichat-settings-info-row span,
+  .aichat[data-misma-contrast="system"] .aichat-settings-detail-content .aichat-setting-copy small {
+    color: #d0dced !important;
+  }
+}
+
+/* Light mode keeps a coherent theme across the dashboard and Settings columns. */
+.aichat[data-misma-color-mode="light"] {
+  --misma-app-background: #f3f6fb !important;
+  --misma-app-foreground: #172235 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-side,
+.aichat[data-misma-color-mode="light"] .aichat-main,
+.aichat[data-misma-color-mode="light"] .aichat-settings-tab-view,
+.aichat[data-misma-color-mode="light"] .aichat-settings-layout,
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail {
+  background: #f3f6fb !important;
+  color: #172235 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-side {
+  border-right-color: #d8e0eb;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar {
+  border-right-color: #d8e0eb;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-search,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-input,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-textarea {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #172235;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-search input,
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-identity strong,
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-item,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-header h2,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-settings-section-heading h3,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-settings-profile-head h3,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-settings-info-row strong,
+.aichat[data-misma-color-mode="light"] .aichat-appearance-control-copy strong {
+  color: #172235 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-group h3,
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-identity small,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-header p,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-settings-section-heading p,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-settings-profile-head p,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-settings-info-row span,
+.aichat[data-misma-color-mode="light"] .aichat-appearance-control-copy small {
+  color: #526175 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-item.is-active {
+  background: #e0e8f2 !important;
+  color: #172235 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-sidebar-item:hover {
+  background: #e8eef6 !important;
+  color: #172235 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-segment-group {
+  border-color: #cbd5e1;
+  background: #e8eef6;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-segment {
+  color: #526175 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-segment.is-selected {
+  border-color: #64748b !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content > .aichat-settings-card,
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-header {
+  border-color: #d1dae6;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-setting-copy strong {
+  color: #172235 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-settings-detail-content .aichat-setting-copy small {
+  color: #526175 !important;
+}
+
+/* Reduce motion applies to the dashboard and Settings page without disabling controls. */
+html[data-misma-reduce-motion="true"] *,
+html[data-misma-reduce-motion="true"] *::before,
+html[data-misma-reduce-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
+}
+.aichat pre,
+.aichat code,
+.aichat kbd,
+.aichat samp {
+  font-size: var(--misma-code-font-size, 13px);
+}
+@media (max-width: 767px) {
+  .aichat-appearance-control-block {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .aichat-settings-segment-group {
+    max-width: 100%;
+  }
+  .aichat-data-danger-button {
+    width: 100%;
+  }
+}
