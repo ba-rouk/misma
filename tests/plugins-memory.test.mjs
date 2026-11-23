@@ -354,3 +354,16 @@ test("Netlify OAuth connects and discovers authorized sites", async () => {
   assert.match(config, /NETLIFY_CLIENT_SECRET/);
   assert.match(health, /netlify/);
 });
+
+
+test("plugin directory, description and provider settings share header sizing and deterministic back navigation", async () => {
+  const directory = await read("../src/routes/dashboard_.plugins.tsx");
+  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
+  const css = await read("../src/misma-design-system.css");
+  assert.match(directory, /function navigateBack\(\)\s*\{\s*window\.location\.assign\("\/dashboard"\)/);
+  assert.match(detail, /onClick=\{\(\) => window\.location\.assign\("\/dashboard\/plugins"\)\}/);
+  assert.match(settings, /misma-plugin-unified-header/);
+  assert.match(css, /\.misma-plugin-directory-header,[\s\S]*\.misma-plugin-detail-header,[\s\S]*\.misma-plugin-settings-topbar\.misma-plugin-unified-header/);
+  assert.match(css, /height: 64px !important/);
+});
