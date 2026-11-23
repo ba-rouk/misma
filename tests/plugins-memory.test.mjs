@@ -408,5 +408,7 @@ test("plugin management pages use the desktop dashboard sidebar and Misma page-t
   assert.match(settings, /src="\/misma-logo\.svg"/);
   assert.match(dashboard, /new URLSearchParams\(window\.location\.search\)\.get\("tab"\)/);
   assert.match(css, /\.misma-plugin-dashboard-content\s*\{[\s\S]*?margin-left: var\(--misma-plugin-sidebar-width\)/);
+  assert.match(css, /\.misma-plugin-dashboard-sidebar \.aichat-newchat-wrap\s*\{[\s\S]*?padding: 10px 14px 4px/);
+  assert.match(css, /\.misma-plugin-dashboard-sidebar \.aichat-primary-nav\s*\{\s*flex: 1;\s*padding-top: 4px/);
   assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.misma-plugin-dashboard-sidebar\s*\{\s*display: none !important/);
 });
