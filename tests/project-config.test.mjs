@@ -1920,6 +1920,10 @@ test("Misma Data controls replace the old privacy/history navigation and expose 
   assert.match(api, /export const deleteAllDashboardConversations/);
   assert.match(api, /if \(isSupport\) throw new Error/);
   assert.match(api, /\.eq\("channel", "Dashboard"\)/);
+  assert.match(api, /export const getMismaData[\s\S]*?workspaceId: z\.string\(\)\.uuid\(\)\.optional\(\)/);
+  assert.match(api, /export const getConversationMessages[\s\S]*?workspaceId: z\.string\(\)\.uuid\(\)\.optional\(\)/);
+  assert.match(dashboard, /getMismaData\(\{ data: \{ token, workspaceId: workspace\.id \} \}\)/);
+  assert.match(dashboard, /conversationId: Number\(conversation\.id\), workspaceId: workspace\.id/);
   assert.match(dashboard, /aichat-data-danger-button/);
   assert.match(dashboard, /deleteAllDashboardChatsOpen/);
   assert.match(styles, /--misma-app-background: #0f1724/);
