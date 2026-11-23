@@ -1677,8 +1677,8 @@ function Dashboard() {
   const [uiFontSize, setUiFontSize] = useState(16);
   const [codeFontSize, setCodeFontSize] = useState(13);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState("#0f1724");
-  const [foregroundColor, setForegroundColor] = useState("#eef3fb");
+  const [backgroundColor, setBackgroundColor] = useState("#090a0c");
+  const [foregroundColor, setForegroundColor] = useState("#ececf1");
   const [dataExportBusy, setDataExportBusy] = useState(false);
   const [dataExportStatus, setDataExportStatus] = useState("");
   const [dataExportError, setDataExportError] = useState("");
@@ -1788,8 +1788,13 @@ function Dashboard() {
         if (typeof parsed.uiFontSize === "number" && Number.isFinite(parsed.uiFontSize)) setUiFontSize(Math.min(20, Math.max(14, Math.round(parsed.uiFontSize))));
         if (typeof parsed.codeFontSize === "number" && Number.isFinite(parsed.codeFontSize)) setCodeFontSize(Math.min(18, Math.max(11, Math.round(parsed.codeFontSize))));
         if (typeof parsed.reduceMotion === "boolean") setReduceMotion(parsed.reduceMotion);
-        if (typeof parsed.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.backgroundColor)) setBackgroundColor(parsed.backgroundColor);
-        if (typeof parsed.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.foregroundColor)) setForegroundColor(parsed.foregroundColor);
+        if (typeof parsed.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.backgroundColor)) {
+          // Migrate the prior global-theme defaults back to the dashboard's original surface.
+          setBackgroundColor(parsed.backgroundColor.toLowerCase() === "#0f1724" ? "#090a0c" : parsed.backgroundColor);
+        }
+        if (typeof parsed.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.foregroundColor)) {
+          setForegroundColor(parsed.foregroundColor.toLowerCase() === "#eef3fb" ? "#ececf1" : parsed.foregroundColor);
+        }
       }
       if (savedPrivacy) {
         const parsed = JSON.parse(savedPrivacy) as Partial<typeof privacyPreferences>;
@@ -1866,7 +1871,7 @@ function Dashboard() {
         shell.style.setProperty("--misma-code-font-size", codeFontSize + "px");
         shell.style.setProperty("--misma-accent-color", accentColor);
       }
-      document.documentElement.dataset.mismaReduceMotion = reduceMotion ? "true" : "false";
+      if (shell) shell.dataset.mismaReduceMotion = reduceMotion ? "true" : "false";
     };
     applyAppearance();
     if (colorMode === "system") media.addEventListener("change", applyAppearance);
@@ -6875,8 +6880,8 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="aichat-appearance-control-block">
-                  <div className="aichat-appearance-control-copy"><strong>Dark background color</strong><small>Set the shared background used by the Misma dashboard and sidebar.</small></div>
-                  <input className="aichat-settings-color-input" type="color" value={backgroundColor} onChange={(event) => setBackgroundColor(event.target.value)} aria-label="Dark background color" />
+                  <div className="aichat-appearance-control-copy"><strong>Settings background color</strong><small>Change the Settings content background only. The Settings sidebar keeps Misma's original sidebar color.</small></div>
+                  <input className="aichat-settings-color-input" type="color" value={backgroundColor} onChange={(event) => setBackgroundColor(event.target.value)} aria-label="Settings background color" />
                 </div>
                 <div className="aichat-appearance-control-block">
                   <div className="aichat-appearance-control-copy"><strong>Dark foreground color</strong><small>Set the main text color used on dark surfaces.</small></div>
