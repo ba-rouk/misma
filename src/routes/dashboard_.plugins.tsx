@@ -6,7 +6,6 @@ import { pluginList, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Input, SectionHeader } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
 type Website = { id: string; name: string | null; domain: string; website_url: string | null; workspace_id: string };
@@ -311,6 +310,5 @@ function PluginsPage() {
         </div>
       )}
     </main>
-    </PluginDashboardLayout>
   );
 }
