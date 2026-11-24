@@ -403,9 +403,11 @@ test("plugin management pages use the desktop dashboard sidebar and Misma page-t
   assert.match(layout, /href="\/dashboard\?tab=images"/);
   assert.match(layout, /href="\/dashboard\?tab=library"/);
   assert.match(layout, /href="\/dashboard\/plugins"/);
-  assert.match(directory, /PluginDashboardLayout/);
-  assert.match(detail, /PluginDashboardLayout/);
-  assert.match(settings, /PluginDashboardLayout/);
+  const root = await read("../src/routes/__root.tsx");
+  assert.match(root, /location\.pathname\.startsWith\("\/dashboard\/"\)/);
+  assert.doesNotMatch(directory, /PluginDashboardLayout/);
+  assert.doesNotMatch(detail, /PluginDashboardLayout/);
+  assert.doesNotMatch(settings, /PluginDashboardLayout/);
   assert.match(directory, /src="\/misma-logo\.svg"/);
   assert.match(detail, /src="\/misma-logo\.svg"/);
   assert.match(settings, /src="\/misma-logo\.svg"/);
