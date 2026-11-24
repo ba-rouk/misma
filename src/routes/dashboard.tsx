@@ -1723,9 +1723,19 @@ function Dashboard() {
       const owner = root?.dataset.mismaPopoverRoot || "";
 
       if (owner !== "recents-filter") setChatGroupMenuOpen(false);
-      if (owner !== "chat-action") setChatActionMenuId(null);
+      if (owner === "chat-action") {
+        const clickedId = Number(root?.dataset.chatActionId || 0);
+        setChatActionMenuId((current) => current === clickedId ? current : null);
+      } else {
+        setChatActionMenuId(null);
+      }
       if (owner !== "profile") setProfileMenuOpen(false);
-      if (owner !== "library") setLibraryAssetMenuId(null);
+      if (owner === "library") {
+        const clickedId = root?.dataset.libraryAssetId || "";
+        setLibraryAssetMenuId((current) => current === clickedId ? current : null);
+      } else {
+        setLibraryAssetMenuId(null);
+      }
       if (owner !== "voice") setVoiceMenuOpen(false);
       if (owner !== "plus") setPlusMenuOpen(false);
       if (owner !== "plugins") setPluginPickerOpen(false);
@@ -5425,7 +5435,7 @@ function Dashboard() {
                 <div className="aichat-chats-widget-empty">No chats in this group.</div>
               ) : (
                 filteredRecentChats.slice(0, 5).map((c) => (
-                  <div className="aichat-chat-list-item" data-misma-popover-root="chat-action" key={c.id}>
+                  <div className="aichat-chat-list-item" data-misma-popover-root="chat-action" data-chat-action-id={c.id} key={c.id}>
                     <button
                       type="button"
                       className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
@@ -6279,7 +6289,7 @@ function Dashboard() {
                               </span>
                             </button>
                             <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Download ${asset.name || "file"}`} title="Download file"><ActionIcon name="download" /></a>
-                            <div className="aichat-library-item-menu" data-misma-popover-root="library">
+                            <div className="aichat-library-item-menu" data-misma-popover-root="library" data-library-asset-id={String(asset.id)}>
                               <button type="button" className="aichat-library-more" aria-label={`More actions for ${asset.name || "file"}`} aria-expanded={libraryAssetMenuId === asset.id} onClick={() => setLibraryAssetMenuId((current) => current === asset.id ? null : asset.id)}>⋯</button>
                               {libraryAssetMenuId === asset.id && (
                                 <div className="aichat-library-item-menu-popover" role="menu">
