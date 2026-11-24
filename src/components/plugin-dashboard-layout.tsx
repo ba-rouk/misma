@@ -175,7 +175,7 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className={"aichat misma-plugin-dashboard-layout" + (collapsed ? " is-sidebar-collapsed" : "")}>
-      <button type="button" className={"aichat-backdrop misma-plugin-sidebar-backdrop" + (mobileOpen ? " is-mobile-open" : "")} aria-label="Close sidebar" onClick={closeMobile} />
+      <button type="button" className={"aichat-backdrop misma-plugin-sidebar-backdrop" + (mobileOpen ? " is-mobile-open" : "")} aria-label="Close sidebar" />
       <aside className={sidebarClass} aria-label="Primary navigation">
         <div className="aichat-side-top">
           <a href="/dashboard" className="aichat-brand-link" aria-label="Misma dashboard" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard"); }}>
@@ -200,13 +200,13 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
             <SidebarCaret expanded={workspaceExpanded} />
           </button>
           {workspaceExpanded && <div className="aichat-nav-submenu">
-            <a href="/dashboard?tab=website-statistics" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=website-statistics"); }} className="aichat-nav-subbtn" onClick={closeMobile}>Website statistics</a>
-            <a href="/dashboard?tab=websites" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=websites"); }} className="aichat-nav-subbtn" onClick={closeMobile}>Websites</a>
+            <a href="/dashboard?tab=website-statistics" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=website-statistics"); }} className="aichat-nav-subbtn">Website statistics</a>
+            <a href="/dashboard?tab=websites" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=websites"); }} className="aichat-nav-subbtn">Websites</a>
           </div>}
-          <a className="aichat-nav-btn" href="/dashboard?tab=images" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=images"); }} data-tooltip="Images" onClick={closeMobile}>
+          <a className="aichat-nav-btn" href="/dashboard?tab=images" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=images"); }} data-tooltip="Images">
             <span className="aichat-nav-icon"><SidebarIcon kind="images" /></span><span className="aichat-nav-label">Images</span>
           </a>
-          <a className="aichat-nav-btn" href="/dashboard?tab=library" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=library"); }} data-tooltip="Library" onClick={closeMobile}>
+          <a className="aichat-nav-btn" href="/dashboard?tab=library" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=library"); }} data-tooltip="Library">
             <span className="aichat-nav-icon"><SidebarIcon kind="library" /></span><span className="aichat-nav-label">Library</span>
           </a>
           <button type="button" className="aichat-nav-btn" onClick={() => setManageExpanded((value) => !value)} aria-expanded={manageExpanded} data-tooltip="Manage">
@@ -214,21 +214,21 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
             <SidebarCaret expanded={manageExpanded} />
           </button>
           {manageExpanded && <div className="aichat-nav-submenu">
-            <a href="/dashboard?tab=customers" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=customers"); }} className="aichat-nav-subbtn" onClick={closeMobile}>Customers</a>
-            <a href="/dashboard?tab=notifications" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=notifications"); }} className="aichat-nav-subbtn" onClick={closeMobile}>Notifications</a>
+            <a href="/dashboard?tab=customers" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=customers"); }} className="aichat-nav-subbtn">Customers</a>
+            <a href="/dashboard?tab=notifications" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=notifications"); }} className="aichat-nav-subbtn">Notifications</a>
           </div>}
           <button type="button" className="aichat-nav-btn" onClick={() => setBuildExpanded((value) => !value)} aria-expanded={buildExpanded} data-tooltip="Build">
             <span className="aichat-nav-icon"><SidebarIcon kind="build" /></span><span className="aichat-nav-label">Build</span>
             <SidebarCaret expanded={buildExpanded} />
           </button>
           {buildExpanded && <div className="aichat-nav-submenu">
-            <a href="/dashboard?tab=products" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=products"); }} className="aichat-nav-subbtn" onClick={closeMobile}>Products &amp; services</a>
-            <a href="/dashboard?tab=knowledge" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=knowledge"); }} className="aichat-nav-subbtn" onClick={closeMobile}>Business knowledge</a>
+            <a href="/dashboard?tab=products" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=products"); }} className="aichat-nav-subbtn">Products &amp; services</a>
+            <a href="/dashboard?tab=knowledge" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=knowledge"); }} className="aichat-nav-subbtn">Business knowledge</a>
           </div>}
-          <a className="aichat-nav-btn misma-plugin-sidebar-link active" href="/dashboard/plugins" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard/plugins"); }} aria-current="page" data-tooltip="Plugins" onClick={closeMobile}>
+          <a className="aichat-nav-btn misma-plugin-sidebar-link active" href="/dashboard/plugins" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard/plugins"); }} aria-current="page" data-tooltip="Plugins">
             <span className="aichat-nav-icon"><SidebarIcon kind="connect" /></span><span className="aichat-nav-label">Plugins</span>
           </a>
-          <a className="aichat-nav-btn" href="/dashboard/memory" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard/memory"); }} data-tooltip="Memory" onClick={closeMobile}>
+          <a className="aichat-nav-btn" href="/dashboard/memory" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard/memory"); }} data-tooltip="Memory">
             <span className="aichat-nav-icon"><SidebarIcon kind="library" /></span><span className="aichat-nav-label">Memory</span>
           </a>
         </nav>
@@ -238,8 +238,8 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
             <span className="aichat-user-info"><b>{profileEmail ? profileEmail.split("@")[0] : "Your account"}</b><small>{profileEmail || "Misma account"}</small></span>
           </div>
           <div className="misma-plugin-sidebar-profile-actions">
-            <a href="/dashboard?tab=settings" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=settings"); }} onClick={closeMobile}><SidebarIcon kind="settings" />Settings</a>
-            <a href="/dashboard?tab=settings&section=help-center" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=settings&section=help-center"); }} onClick={closeMobile}><SidebarIcon kind="help" />Help Center</a>
+            <a href="/dashboard?tab=settings" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=settings"); }}><SidebarIcon kind="settings" />Settings</a>
+            <a href="/dashboard?tab=settings&section=help-center" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=settings&section=help-center"); }}><SidebarIcon kind="help" />Help Center</a>
             <button type="button" onClick={() => void signOut()}><span aria-hidden="true">↗</span>Sign out</button>
           </div>
           {profileActionError && <small className="misma-plugin-profile-error" role="alert">{profileActionError}</small>}
