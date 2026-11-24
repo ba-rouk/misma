@@ -5,7 +5,6 @@ import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plu
 import { getPluginManifest, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { Badge, Button, GlassCard } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 type PermissionMode = "always_ask" | "read" | "low_risk" | "all";
 type ConnectedRow = { id: string; status: string; workspace_id: string };
@@ -122,7 +121,6 @@ function PluginConnectPage() {
       : permission === "all" ? "Allow all actions" : "Allow low-risk actions";
 
   return (
-    <PluginDashboardLayout>
     <main className="misma-plugin-connect-page">
       <div className="misma-plugin-connect-shell">
         <header className="misma-plugin-connect-topbar">
@@ -194,6 +192,5 @@ function PluginConnectPage() {
         </div>
       </div>
     </main>
-    </PluginDashboardLayout>
   );
 }
