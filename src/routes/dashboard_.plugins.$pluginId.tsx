@@ -7,7 +7,6 @@ import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Badge, Button, SectionHeader } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
 
@@ -110,7 +109,7 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
   }, [supabase, manifest?.id]);
 
   if (!manifest) {
-    return <PluginDashboardLayout><main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => void navigate({ to: "/dashboard/plugins" as never })}>Back to Plugins</Button></div></main></PluginDashboardLayout>;
+    return <main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => void navigate({ to: "/dashboard/plugins" as never })}>Back to Plugins</Button></div></main>;
   }
 
   const activeManifest = manifest;
