@@ -11,7 +11,6 @@ import {
 } from "react";
 import { getWebsiteWidgetTheme, saveWebsiteWidgetTheme } from "../lib/api/misma.functions";
 import { getSupabaseClient } from "../lib/supabase";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 import "../components/website-widget-customizer.css";
 
 type FontName = "system-ui" | "Inter" | "Roboto" | "Poppins" | "Open Sans" | "Lato" | "Montserrat" | "Nunito" | "serif" | "monospace";
@@ -570,7 +569,7 @@ function WebsiteWidgetCustomizer() {
   </main>;
   if(message?.kind==="error"&&!token)return <main className="misma-theme-page"><div className="misma-theme-error">{message.text}<button onClick={()=>void navigate({to:"/dashboard"})}>Back to websites</button></div></main>;
 
-  return <PluginDashboardLayout><main className="misma-theme-page">
+  return <main className="misma-theme-page">
     <header className="misma-theme-toolbar">
       <button type="button" className="misma-theme-back" onClick={back}>← <span>Websites</span></button>
       <div className="misma-theme-title"><h1>Customize widget</h1><p>{websiteName}{domain?" · "+domain:""}</p></div>
@@ -738,5 +737,5 @@ function WebsiteWidgetCustomizer() {
       </div>
       {dirty && <p className="misma-theme-unsaved" role="status">You have unsaved changes.</p>}
     </div>
-  </main></PluginDashboardLayout>;
+  </main>;
 }
