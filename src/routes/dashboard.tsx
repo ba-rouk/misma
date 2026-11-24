@@ -1690,7 +1690,7 @@ function Dashboard() {
   const [uiFontSize, setUiFontSize] = useState(16);
   const [codeFontSize, setCodeFontSize] = useState(13);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState("#0f1724");
+  const [backgroundColor, setBackgroundColor] = useState("#000000");
   const [foregroundColor, setForegroundColor] = useState("#eef3fb");
   const [dataExportBusy, setDataExportBusy] = useState(false);
   const [dataExportStatus, setDataExportStatus] = useState("");
@@ -1870,16 +1870,26 @@ function Dashboard() {
     const applyAppearance = () => {
       const resolvedMode = colorMode === "system" ? (media.matches ? "light" : "dark") : colorMode;
       const shell = document.querySelector<HTMLElement>(".aichat");
+      const appliedBackground = resolvedMode === "dark" ? backgroundColor : "#f3f6fb";
+      const appliedForeground = resolvedMode === "dark" ? foregroundColor : "#172235";
+      document.documentElement.dataset.mismaColorMode = resolvedMode;
+      document.documentElement.dataset.mismaContrast = contrastLevel;
+      document.documentElement.dataset.mismaReduceMotion = reduceMotion ? "true" : "false";
+      document.documentElement.style.setProperty("--misma-initial-background", appliedBackground);
+      document.documentElement.style.setProperty("--misma-initial-foreground", appliedForeground);
+      document.documentElement.style.setProperty("--misma-app-background", appliedBackground);
+      document.documentElement.style.setProperty("--misma-app-foreground", appliedForeground);
+      document.documentElement.style.setProperty("--misma-ui-font-size", uiFontSize + "px");
+      document.documentElement.style.setProperty("--misma-code-font-size", codeFontSize + "px");
       if (shell) {
         shell.dataset.mismaColorMode = resolvedMode;
         shell.dataset.mismaContrast = contrastLevel;
-        shell.style.setProperty("--misma-app-background", resolvedMode === "dark" ? backgroundColor : "#f3f6fb");
-        shell.style.setProperty("--misma-app-foreground", resolvedMode === "dark" ? foregroundColor : "#172235");
+        shell.style.setProperty("--misma-app-background", appliedBackground);
+        shell.style.setProperty("--misma-app-foreground", appliedForeground);
         shell.style.setProperty("--misma-ui-font-size", uiFontSize + "px");
         shell.style.setProperty("--misma-code-font-size", codeFontSize + "px");
         shell.style.setProperty("--misma-accent-color", accentColor);
       }
-      document.documentElement.dataset.mismaReduceMotion = reduceMotion ? "true" : "false";
     };
     applyAppearance();
     if (colorMode === "system") media.addEventListener("change", applyAppearance);
@@ -5195,8 +5205,8 @@ function Dashboard() {
     }
   };
 
-  const showPluginSettingsChild = /^\/dashboard\/plugins\/[^/]+\/(?:settings|description)\/?$/.test(location.pathname);
-  return showPluginSettingsChild ? <Outlet /> : (
+  const isPluginRoute = /^\/dashboard\/plugins(?:\/|$)/.test(location.pathname);
+  return (
     <div className={`aichat${activeTab === "settings" && !staffMode ? " is-settings-page" : ""}`}>
       {/* Mobile Translucent Backdrop */}
       <button
@@ -5343,7 +5353,7 @@ function Dashboard() {
             <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/plugins"); }} data-tooltip="Plugins">
+          <button type="button" className={`aichat-nav-btn${isPluginRoute ? " active" : ""}`} onClick={() => { setMobileMenuOpen(false); void navigate({ to: "/dashboard/plugins" }); }} data-tooltip="Plugins">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Plugins</span>
           </button>
                 
@@ -5548,6 +5558,7 @@ function Dashboard() {
       <main
         className={`aichat-main${sidebarOpen ? " sidebar-open" : " sidebar-closed"}`}
       >
+        {isPluginRoute ? <Outlet /> : <>
         {/* Keep the menu control available when the sidebar is closed. */}
         <header className="aichat-topbar">
           {canGoBack && (
@@ -7681,6 +7692,7 @@ function Dashboard() {
         )}
         {lightboxAttachment && <AttachmentImageLightbox attachment={lightboxAttachment} onClose={() => setLightboxAttachment(null)} />}
         {mediaActionStatus && <div className="aichat-media-toast" role="status">{mediaActionStatus}</div>}
+        </>}
       </main>
     </div>
   );
