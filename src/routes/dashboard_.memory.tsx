@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
+import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/memory")({ component: MemoryPage });
 
@@ -230,6 +231,7 @@ function MemoryPage() {
 
 
   return (
+    <PluginDashboardLayout>
     <main className="misma-marketplace-page misma-memory-page">
       <div className="misma-marketplace-shell misma-memory-shell">
         <button type="button" className="misma-page-back-button" aria-label="Go to previous page" onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.assign("/dashboard"); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg></button>
@@ -329,5 +331,6 @@ function MemoryPage() {
         </div>
       </div>
     </main>
+    </PluginDashboardLayout>
   );
 }
