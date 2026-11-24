@@ -1722,10 +1722,8 @@ function Dashboard() {
       const root = target?.closest<HTMLElement>("[data-misma-popover-root]");
       const owner = root?.dataset.mismaPopoverRoot || "";
 
-      if (owner !== "recents") {
-        setChatGroupMenuOpen(false);
-        setChatActionMenuId(null);
-      }
+      if (owner !== "recents-filter") setChatGroupMenuOpen(false);
+      if (owner !== "chat-action") setChatActionMenuId(null);
       if (owner !== "profile") setProfileMenuOpen(false);
       if (owner !== "library") setLibraryAssetMenuId(null);
       if (owner !== "voice") setVoiceMenuOpen(false);
@@ -5365,7 +5363,7 @@ function Dashboard() {
 
         {/* ── Chats and tasks widget (Cloud AI style) ── */}
         {!staffMode && (
-        <div className="aichat-chats-widget" data-misma-popover-root="recents">
+        <div className="aichat-chats-widget">
           <div className="aichat-chats-widget-header">
             <button
               type="button"
@@ -5386,7 +5384,7 @@ function Dashboard() {
             </button>
             <button
               type="button"
-              className="aichat-chats-widget-filter"
+              className="aichat-chats-widget-filter" data-misma-popover-root="recents-filter"
               title="Group and filter recent chats"
               aria-label="Group and filter recent chats"
               aria-expanded={chatGroupMenuOpen}
@@ -5409,7 +5407,7 @@ function Dashboard() {
             </button>
           </div>
           {chatGroupMenuOpen && (
-            <div className="aichat-chat-group-filter-menu" role="group" aria-label="Filter chats by group">
+            <div className="aichat-chat-group-filter-menu" data-misma-popover-root="recents-filter" role="group" aria-label="Filter chats by group">
               <button type="button" className={chatGroupFilter === "all" ? "active" : ""} onClick={() => { setChatGroupFilter("all"); setChatGroupMenuOpen(false); }}>All chats</button>
               {conversationGroups.map((group) => (
                 <button key={group} type="button" className={chatGroupFilter === group ? "active" : ""} onClick={() => { setChatGroupFilter(group); setChatGroupMenuOpen(false); }}>
@@ -5427,7 +5425,7 @@ function Dashboard() {
                 <div className="aichat-chats-widget-empty">No chats in this group.</div>
               ) : (
                 filteredRecentChats.slice(0, 5).map((c) => (
-                  <div className="aichat-chat-list-item" key={c.id}>
+                  <div className="aichat-chat-list-item" data-misma-popover-root="chat-action" key={c.id}>
                     <button
                       type="button"
                       className={`aichat-chats-widget-item${currentConversationId === c.id ? " active" : ""}`}
