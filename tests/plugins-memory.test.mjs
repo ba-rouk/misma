@@ -388,7 +388,7 @@ test("plugin directory, provider description and settings share a header and det
 });
 
 
-test("plugin management pages use the desktop dashboard sidebar and Misma page-title mark", async () => {
+test("plugin management pages use the complete responsive dashboard sidebar", async () => {
   const layout = await read("../src/components/plugin-dashboard-layout.tsx");
   const directory = await read("../src/routes/dashboard_.plugins.tsx");
   const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
@@ -398,9 +398,16 @@ test("plugin management pages use the desktop dashboard sidebar and Misma page-t
 
   assert.match(layout, /className=.*aichat-side misma-plugin-dashboard-sidebar/);
   assert.match(layout, /MismaIcon size=\{28\}/);
-  assert.match(layout, /href: "\/dashboard\?tab=images"/);
-  assert.match(layout, /href: "\/dashboard\?tab=library"/);
-  assert.match(layout, /href: "\/dashboard\/plugins"/);
+  assert.match(layout, /chooseTab\("images"\)/);
+  assert.match(layout, /chooseTab\("library"\)/);
+  assert.match(layout, /href="\/dashboard\/plugins"/);
+  assert.match(layout, /aichat-chats-widget/);
+  assert.match(layout, /Recent[s]?/);
+  assert.match(layout, /Manage/);
+  assert.match(layout, /Build/);
+  assert.match(layout, /aichat-side-user/);
+  assert.match(layout, /misma_dashboard_bootstrap_v1_/);
+  assert.match(layout, /misma-plugin-mobile-menu-trigger/);
   assert.match(directory, /PluginDashboardLayout/);
   assert.match(detail, /PluginDashboardLayout/);
   assert.match(settings, /PluginDashboardLayout/);
@@ -408,8 +415,11 @@ test("plugin management pages use the desktop dashboard sidebar and Misma page-t
   assert.match(detail, /src="\/misma-logo\.svg"/);
   assert.match(settings, /src="\/misma-logo\.svg"/);
   assert.match(dashboard, /new URLSearchParams\(window\.location\.search\)\.get\("tab"\)/);
+  assert.match(dashboard, /requestedParams\.get\("section"\) === "settings-help-center"/);
   assert.match(css, /\.misma-plugin-dashboard-content\s*\{[\s\S]*?margin-left: var\(--misma-plugin-sidebar-width\)/);
   assert.match(css, /\.misma-plugin-dashboard-sidebar \.aichat-newchat-wrap\s*\{[\s\S]*?padding: 10px 14px 4px/);
   assert.match(css, /\.misma-plugin-dashboard-sidebar \.aichat-primary-nav\s*\{\s*flex: 1;\s*padding-top: 4px/);
-  assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.misma-plugin-dashboard-sidebar\s*\{\s*display: none !important/);
+  assert.match(css, /\.aichat\.misma-plugin-dashboard-layout > \.misma-plugin-dashboard-sidebar\s*\{[\s\S]*?display: flex !important/);
+  assert.match(css, /translateX\(-105%\)/);
+  assert.match(css, /height: calc\(56px \+ env\(safe-area-inset-top, 0px\)\)/);
 });
