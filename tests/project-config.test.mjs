@@ -1926,7 +1926,7 @@ test("Misma Data controls replace the old privacy/history navigation and expose 
   assert.match(dashboard, /conversationId: Number\(conversation\.id\), workspaceId: workspace\.id/);
   assert.match(dashboard, /aichat-data-danger-button/);
   assert.match(dashboard, /deleteAllDashboardChatsOpen/);
-  assert.match(styles, /--misma-app-background: #0f1724/);
+  assert.match(styles, /--misma-app-background: var\\(--misma-initial-background, #000000\\)/);
   assert.match(styles, /linear-gradient\(110deg, #f3f5f7, #b9c3cf\)/);
   assert.match(styles, /\.aichat-settings-tab-view \.aichat-action-btn:not\(\.secondary\)/);
 });
