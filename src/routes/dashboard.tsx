@@ -1671,6 +1671,19 @@ function Dashboard() {
   const [helpRequestBusy, setHelpRequestBusy] = useState(false);
   const [helpRequestStatus, setHelpRequestStatus] = useState("");
   const [helpRequestError, setHelpRequestError] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get("tab");
+    if (!requestedTab) return;
+    const allowedTabs = new Set(["workspace", "website-statistics", "websites", "images", "library", "customers", "notifications", "products", "knowledge", "settings"]);
+    if (!allowedTabs.has(requestedTab)) return;
+    setActiveTab(requestedTab as TabId);
+    if (requestedTab === "settings" && params.get("section") === "help-center") {
+      setSelectedSettingsSection("settings-help-center");
+    }
+  }, []);
+
   const [appearanceLoaded, setAppearanceLoaded] = useState(false);
   const [colorMode, setColorMode] = useState<"dark" | "light" | "system">("dark");
   const [contrastLevel, setContrastLevel] = useState<"system" | "medium" | "increased">("medium");
@@ -1975,6 +1988,31 @@ function Dashboard() {
   const [loadError, setLoadError] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
+
+  useEffect(() => {
+    if (!plusMenuOpen && !pluginPickerOpen) return;
+    const handleOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".aichat-composer-plus-wrap, .misma-chat-plugin-popup")) return;
+      setPlusMenuOpen(false);
+      setPluginPickerOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPlusMenuOpen(false);
+        setPluginPickerOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handleOutsidePointer, true);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointer, true);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [plusMenuOpen, pluginPickerOpen]);
+
+
   const [workspacePluginConnections, setWorkspacePluginConnections] = useState<Array<{ id: string; provider: string; external_account_name: string | null }>>([]);
   const [workspacePluginConnectionsLoaded, setWorkspacePluginConnectionsLoaded] = useState(false);
   const [thinkHarder, setThinkHarder] = useState(false);

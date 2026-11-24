@@ -27,6 +27,25 @@ function PluginsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!openPluginMenu) return;
+    const handleOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".misma-plugin-provider-menu-trigger, .misma-plugin-installed-popup")) return;
+      setOpenPluginMenu(null);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenPluginMenu(null);
+    };
+    document.addEventListener("pointerdown", handleOutsidePointer, true);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointer, true);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [openPluginMenu]);
+
+  useEffect(() => {
     let active = true;
     const params = new URLSearchParams(window.location.search);
     const requestedWebsite = params.get("websiteId") || window.sessionStorage.getItem("misma_plugins_website_id") || "";
@@ -157,8 +176,8 @@ function PluginsPage() {
 
   const openPluginOptions = (provider: PluginId, element: HTMLButtonElement) => {
     const rect = element.getBoundingClientRect();
-    const menuWidth = 184;
-    const menuHeight = 126;
+    const menuWidth = 164;
+    const menuHeight = 112;
     const top = rect.bottom + menuHeight + 8 > window.innerHeight
       ? Math.max(8, rect.top - menuHeight - 6)
       : rect.bottom + 6;
