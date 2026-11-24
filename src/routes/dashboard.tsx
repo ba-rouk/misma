@@ -6325,11 +6325,11 @@ function Dashboard() {
               </div>
 
               {pendingKnowledgeList.length > 0 && (
-                <div className="aichat-card">
+                <div className="aichat-card aichat-knowledge-card is-pending">
                   <h3>Needs your approval ({pendingKnowledgeList.length})</h3>
                   <p>Website scans and imported documents can suggest answers, but they are not used by customer-facing Misma until an owner or admin approves them.</p>
-                  <div className="aichat-table-wrap">
-                    <table className="aichat-table">
+                  <div className="aichat-table-wrap aichat-knowledge-table-wrap">
+                    <table className="aichat-table aichat-knowledge-table">
                       <thead><tr><th>Suggested question</th><th>Suggested answer</th><th>Source</th><th style={{ textAlign: "right" }}>Review</th></tr></thead>
                       <tbody>
                         {pendingKnowledgeList.map((item) => {
@@ -6355,7 +6355,7 @@ function Dashboard() {
               )}
 
               {/* Approved Knowledge Library Table */}
-              <div className="aichat-card">
+              <div className="aichat-card aichat-knowledge-card is-approved">
                 <h3>Trained Knowledge Library ({knowledgeList.length})</h3>
                 <p>
                   Active Q&As used by Misma AI across your website and connected
@@ -6366,8 +6366,8 @@ function Dashboard() {
                     No custom knowledge items yet. Add your first Q&A above.
                   </p>
                 ) : (
-                  <div className="aichat-table-wrap">
-                    <table className="aichat-table">
+                  <div className="aichat-table-wrap aichat-knowledge-table-wrap">
+                    <table className="aichat-table aichat-knowledge-table">
                       <thead>
                         <tr>
                           <th>Question</th>
