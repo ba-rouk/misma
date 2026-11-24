@@ -10339,8 +10339,8 @@ body:has(.misma-vercel-callback-page) {
 
 /* Unified Misma dark-blue surface across the dashboard, sidebar and Settings workspace. */
 .aichat {
-  --misma-app-background: #0f1724;
-  --misma-app-foreground: #eef3fb;
+  --misma-app-background: inherit;
+  --misma-app-foreground: inherit;
   --misma-accent-color: #8ab4ff;
   background: var(--misma-app-background) !important;
   color: var(--misma-app-foreground);

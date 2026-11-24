@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
@@ -7,7 +7,6 @@ import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Badge, Button, SectionHeader } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
 
@@ -66,6 +65,7 @@ export function VercelPluginDetailPage() {
 }
 
 export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: string }) {
+  const navigate = useNavigate();
   const manifest = getPluginManifest(rawPluginId);
   const supabase = getSupabaseClient();
   const [workspaceId, setWorkspaceId] = useState("");
@@ -109,14 +109,14 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
   }, [supabase, manifest?.id]);
 
   if (!manifest) {
-    return <PluginDashboardLayout><main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => window.location.assign("/dashboard/plugins")}>Back to Plugins</Button></div></main></PluginDashboardLayout>;
+    return <main className="misma-plugin-detail-page"><div className="misma-plugin-detail-shell"><p>This plugin could not be found.</p><Button onClick={() => void navigate({ to: "/dashboard/plugins" as never })}>Back to Plugins</Button></div></main>;
   }
 
   const activeManifest = manifest;
   const canAuthorize = activeManifest.authType === "github_app" || activeManifest.authType === "vercel_marketplace_oauth" || activeManifest.authType === "netlify_oauth";
   function backToPlugins() {
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign("/dashboard/plugins" + suffix);
+    void navigate({ to: ("/dashboard/plugins" + suffix) as never });
   }
   async function continueToProvider() {
     if (!workspaceId || !canAuthorize) return;
@@ -189,7 +189,6 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
   );
 
   return (
-    <PluginDashboardLayout>
     <main className="misma-plugin-detail-page" style={{ "--plugin-brand": manifest.brandColor } as CSSProperties}>
       <div className="misma-plugin-detail-shell">
 
@@ -198,7 +197,7 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
             <button type="button" className="misma-page-back-button misma-plugin-detail-back-button" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
             <button type="button" className="misma-plugin-detail-settings" aria-label="Plugin settings" onClick={() => {
                 const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-                window.location.assign("/dashboard/plugins/" + manifest.id + "/settings" + suffix);
+                void navigate({ to: ("/dashboard/plugins/" + manifest.id + "/settings" + suffix) as never });
               }}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .4 1.9l.1.1-2.4 2.4-.1-.1a1.7 1.7 0 0 0-1.9-.4 1.7 1.7 0 0 0-1 1.6v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1-2.4-2.4.1-.1a1.7 1.7 0 0 0 .4-1.9 1.7 1.7 0 0 0-1.6-1H4v-3.4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.4-1.9l-.1-.1 2.4-2.4.1.1a1.7 1.7 0 0 0 1.9.4 1.7 1.7 0 0 0 1-1.6V4h3.4v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.4l.1-.1 2.4 2.4-.1.1a1.7 1.7 0 0 0-.4 1.9 1.7 1.7 0 0 0 1.6 1h.2v3.4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
             </button>
@@ -269,6 +268,5 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
       <PluginConnectConsent manifest={manifest} workspaceId={workspaceId} open={consentOpen} onClose={() => setConsentOpen(false)} />
 
     </main>
-    </PluginDashboardLayout>
   );
 }

@@ -33,8 +33,8 @@ test("Plugin arrows sit beside the sidebar and headers use only a fine bottom se
 
 test("Plugin sidebar matches the compact dashboard navigation, and app text uses one compact scale", async () => {
   const css = await read("../src/misma-design-system.css");
-  assert.match(css, /--misma-consistent-font-size:14px !important/);
-  assert.match(css, /--misma-consistent-helper-size:12px !important/);
+  assert.match(css, /--misma-consistent-font-size:var\(--misma-ui-font-size,16px\) !important/);
+  assert.match(css, /--misma-consistent-helper-size:max\(12px,calc\(var\(--misma-ui-font-size,16px\) \* \.875\)\) !important/);
   assert.match(css, /font-size:14px !important/);
   assert.match(css, /font-size:12px !important/);
   assert.match(css, /\.misma-plugin-dashboard-sidebar \.aichat-primary-nav \{display:flex;flex:1;flex-direction:column;gap:3px;padding:6px 10px/);

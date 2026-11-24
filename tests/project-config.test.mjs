@@ -962,8 +962,8 @@ test("dashboard notification feed shows named human requests and counts unread n
   assert.ok(dashboard.includes("request?.visitor_phone"));
   assert.ok(dashboard.includes("request?.reason"));
   assert.ok(dashboard.includes("Open conversation"));
-  const viewStart = dashboard.indexOf('{activeTab === "notifications" && (');
-  const viewEnd = dashboard.indexOf("\n\n        {deleteChatTarget && (", viewStart);
+  const viewStart = dashboard.indexOf("<h2>Human request notifications");
+  const viewEnd = dashboard.indexOf("{deleteChatTarget && (", viewStart);
   assert.ok(viewStart >= 0 && viewEnd > viewStart);
   assert.ok(!dashboard.slice(viewStart, viewEnd).includes("unreadVisitorMessages.map"));
 });
@@ -1923,10 +1923,10 @@ test("Misma Data controls replace the old privacy/history navigation and expose 
   assert.match(api, /export const getMismaData[\s\S]*?workspaceId: z\.string\(\)\.uuid\(\)\.optional\(\)/);
   assert.match(api, /export const getConversationMessages[\s\S]*?workspaceId: z\.string\(\)\.uuid\(\)\.optional\(\)/);
   assert.match(dashboard, /getMismaData\(\{ data: \{ token, workspaceId: workspace\.id \} \}\)/);
-  assert.match(dashboard, /conversationId: Number\(conversation\.id\), workspaceId: workspace\.id/);
+  assert.match(dashboard, /workspaceId: workspace\.id, conversationId: Number\(conversation\.id\)/);
   assert.match(dashboard, /aichat-data-danger-button/);
   assert.match(dashboard, /deleteAllDashboardChatsOpen/);
-  assert.match(styles, /--misma-app-background: #0f1724/);
+  assert.match(styles, /--misma-app-background: inherit/);
   assert.match(styles, /linear-gradient\(110deg, #f3f5f7, #b9c3cf\)/);
   assert.match(styles, /\.aichat-settings-tab-view \.aichat-action-btn:not\(\.secondary\)/);
 });

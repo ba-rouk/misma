@@ -212,8 +212,8 @@ test("Misma chat retrieves account memory and writes exchanges asynchronously", 
 test("dashboard inserts inline plugin mentions at the caret and scopes tools to installed plugins", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const css = await read("../src/misma-design-system.css");
-  assert.ok(dashboard.includes('window.location.assign("/dashboard/plugins")'));
-  assert.ok(dashboard.includes('window.location.assign("/dashboard/memory")'));
+  assert.ok(dashboard.includes('navigate({ to: "/dashboard/plugins" as never })'));
+  assert.ok(dashboard.includes('navigate({ to: "/dashboard/memory" as never })'));
   assert.ok(dashboard.includes("extractActivePlugins"));
   assert.ok(dashboard.includes("activePlugins: extractActivePlugins(textToSend)"));
   assert.ok(dashboard.includes("insertPluginMention"));
@@ -362,8 +362,9 @@ test("plugin directory, description and provider settings share header sizing an
   const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
   const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const css = await read("../src/misma-design-system.css");
-  assert.match(directory, /function navigateBack\(\)\s*\{\s*window\.location\.assign\("\/dashboard"\)/);
-  assert.match(detail, /onClick=\{\(\) => window\.location\.assign\("\/dashboard\/plugins"\)\}/);
+  assert.match(directory, /function navigateBack\(\)\s*\{\s*void navigate\(\{ to: "\/dashboard" as never \}\)/);
+  assert.match(detail, /function backToPlugins\(\)/);
+  assert.match(detail, /onClick=\{backToPlugins\}/);
   assert.match(settings, /misma-plugin-unified-header/);
   assert.match(css, /\.misma-plugin-directory-header,[\s\S]*\.misma-plugin-detail-header,[\s\S]*\.misma-plugin-settings-topbar\.misma-plugin-unified-header/);
   assert.match(css, /height: 64px !important/);
@@ -376,13 +377,14 @@ test("plugin directory, provider description and settings share a header and det
   const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const css = await read("../src/misma-design-system.css");
 
-  assert.match(directory, /window\.location\.assign\("\/dashboard"\)/);
+  assert.match(directory, /navigate\(\{ to: "\/dashboard" as never \}\)/);
   assert.match(directory, /misma-plugin-header-spacer/);
   assert.match(detail, /function backToPlugins\(\)/);
   assert.match(detail, /onClick=\{backToPlugins\}/);
   assert.match(detail, /\/settings" \+ suffix/);
   assert.match(settings, /function backToDetail\(\)/);
-  assert.match(settings, /window\.location\.assign\(manifest \? "\/dashboard\/plugins\/" \+ manifest\.id \+ suffix/);
+  assert.match(settings, /const target = manifest \? "\/dashboard\/plugins\/" \+ manifest\.id \+ suffix/);
+  assert.match(settings, /navigate\(\{ to: target as never \}\)/);
   assert.match(css, /\.misma-marketplace-page \.misma-plugin-directory-header,[\s\S]*?height: calc\(64px \+ env\(safe-area-inset-top, 0px\)\)/);
   assert.match(css, /\.misma-plugin-detail-page \.misma-plugin-detail-header \.misma-plugin-detail-topline\s*\{\s*display: contents/);
 });
@@ -396,14 +398,16 @@ test("plugin management pages use the desktop dashboard sidebar and Misma page-t
   const dashboard = await read("../src/routes/dashboard.tsx");
   const css = await read("../src/misma-design-system.css");
 
-  assert.match(layout, /className=.*aichat-side misma-plugin-dashboard-sidebar/);
+  assert.match(layout, /className=\{`aichat-side misma-plugin-dashboard-sidebar/);
   assert.match(layout, /MismaIcon size=\{28\}/);
-  assert.match(layout, /href: "\/dashboard\?tab=images"/);
-  assert.match(layout, /href: "\/dashboard\?tab=library"/);
-  assert.match(layout, /href: "\/dashboard\/plugins"/);
-  assert.match(directory, /PluginDashboardLayout/);
-  assert.match(detail, /PluginDashboardLayout/);
-  assert.match(settings, /PluginDashboardLayout/);
+  assert.match(layout, /href="\/dashboard\?tab=images"/);
+  assert.match(layout, /href="\/dashboard\?tab=library"/);
+  assert.match(layout, /href="\/dashboard\/plugins"/);
+  const root = await read("../src/routes/__root.tsx");
+  assert.match(root, /location\.pathname\.startsWith\("\/dashboard\/"\)/);
+  assert.doesNotMatch(directory, /PluginDashboardLayout/);
+  assert.doesNotMatch(detail, /PluginDashboardLayout/);
+  assert.doesNotMatch(settings, /PluginDashboardLayout/);
   assert.match(directory, /src="\/misma-logo\.svg"/);
   assert.match(detail, /src="\/misma-logo\.svg"/);
   assert.match(settings, /src="\/misma-logo\.svg"/);

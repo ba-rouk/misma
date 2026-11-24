@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plugin-connect";
@@ -14,6 +14,7 @@ export const Route = createFileRoute("/dashboard/plugins/$pluginId/connect")({
 });
 
 function PluginConnectPage() {
+  const navigate = useNavigate();
   const { pluginId } = Route.useParams();
   const manifest = getPluginManifest(pluginId);
   const supabase = getSupabaseClient();
@@ -75,7 +76,7 @@ function PluginConnectPage() {
 
   function back() {
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign("/dashboard/plugins" + suffix);
+    void navigate({ to: ("/dashboard/plugins" + suffix) as never });
   }
 
   async function connect() {
@@ -94,7 +95,7 @@ function PluginConnectPage() {
           }, { onConflict: "user_id,provider" });
           if (restoreError) throw restoreError;
         }
-        window.location.assign("/dashboard/plugins/" + manifest.id);
+        void navigate({ to: ("/dashboard/plugins/" + manifest.id) as never });
         return;
       }
       if (!canAuthorize) {

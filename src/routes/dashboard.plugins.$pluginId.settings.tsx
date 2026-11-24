@@ -1,11 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plugin-connect";
 import { getPluginManifest } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { Badge, Button, GlassCard, GlassModal } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 type PermissionMode = "always_ask" | "read" | "low_risk" | "all";
 type Connection = { id: string; provider: string; external_account_name: string | null; status: string; created_at: string; updated_at: string; workspace_id: string };
@@ -24,6 +23,7 @@ function PluginSettingsRoute() {
 }
 
 export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
+  const navigate = useNavigate();
   const manifest = getPluginManifest(pluginId);
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState("");
@@ -98,7 +98,8 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
       || window.sessionStorage.getItem("misma_plugins_website_id")
       || "";
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign(manifest ? "/dashboard/plugins/" + manifest.id + suffix : "/dashboard/plugins");
+    const target = manifest ? "/dashboard/plugins/" + manifest.id + suffix : "/dashboard/plugins";
+    void navigate({ to: target as never });
   }
 
   async function savePluginRow(fields: Record<string, unknown>) {
@@ -183,16 +184,15 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
         account_label: accountLabel || null, updated_at: new Date().toISOString(),
       }, { onConflict: "user_id,provider" });
       if (uninstallError) throw uninstallError;
-      window.location.assign("/dashboard/plugins");
+      void navigate({ to: "/dashboard/plugins" as never });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not uninstall this plugin.");
     } finally { setBusy(false); setMenuOpen(false); }
   }
 
-  if (!manifest) return <PluginDashboardLayout><main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main></PluginDashboardLayout>;
+  if (!manifest) return <main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main>;
 
   return (
-    <PluginDashboardLayout>
     <main className="misma-plugin-settings-page">
       <div className="misma-plugin-settings-shell">
         <header className="misma-plugin-settings-topbar misma-plugin-unified-header">
@@ -274,6 +274,5 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
       </GlassModal>
       {loading && <div className="misma-plugin-settings-loading">Loading account settings…</div>}
     </main>
-    </PluginDashboardLayout>
   );
 }

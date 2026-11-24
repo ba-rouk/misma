@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
@@ -6,13 +6,13 @@ import { pluginList, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
 import { Input, SectionHeader } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsPage });
 type Website = { id: string; name: string | null; domain: string; website_url: string | null; workspace_id: string };
 type UserPlugin = { provider: PluginId; is_installed: boolean; permission_mode: string; account_label: string | null };
 
 function PluginsPage() {
+  const navigate = useNavigate();
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState("");
   const [connections, setConnections] = useState<PluginConnectionSummary[]>([]);
@@ -114,7 +114,7 @@ function PluginsPage() {
   function openDetails(provider: PluginId) {
     setOpenPluginMenu(null);
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign("/dashboard/plugins/" + provider + "/description" + suffix);
+    void navigate({ to: ("/dashboard/plugins/" + provider + "/description" + suffix) as never });
   }
 
   async function openConsent(provider: PluginId) {
@@ -133,7 +133,7 @@ function PluginsPage() {
         return;
       }
       const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-      window.location.assign("/dashboard/plugins/" + provider + "/connect" + suffix);
+      void navigate({ to: ("/dashboard/plugins/" + provider + "/connect" + suffix) as never });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the provider connection.");
     } finally {
@@ -142,7 +142,7 @@ function PluginsPage() {
   }
 
   function navigateBack() {
-    window.location.assign("/dashboard");
+    void navigate({ to: "/dashboard" as never });
   }
 
   async function uninstall(provider: PluginId) {
@@ -238,7 +238,6 @@ function PluginsPage() {
   };
 
   return (
-    <PluginDashboardLayout>
     <main className="misma-marketplace-page misma-plugin-directory-page" onClick={() => setOpenPluginMenu(null)}>
       <div className="misma-marketplace-shell misma-plugin-directory-shell">
         <header className="misma-marketplace-header misma-plugin-directory-header">
@@ -310,6 +309,5 @@ function PluginsPage() {
         </div>
       )}
     </main>
-    </PluginDashboardLayout>
   );
 }

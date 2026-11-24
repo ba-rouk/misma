@@ -1690,7 +1690,7 @@ function Dashboard() {
   const [uiFontSize, setUiFontSize] = useState(16);
   const [codeFontSize, setCodeFontSize] = useState(13);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState("#0f1724");
+  const [backgroundColor, setBackgroundColor] = useState("#000000");
   const [foregroundColor, setForegroundColor] = useState("#eef3fb");
   const [dataExportBusy, setDataExportBusy] = useState(false);
   const [dataExportStatus, setDataExportStatus] = useState("");
@@ -5343,7 +5343,7 @@ function Dashboard() {
             <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/plugins"); }} data-tooltip="Plugins">
+          <button type="button" className="aichat-nav-btn" onClick={() => { setMobileMenuOpen(false); void navigate({ to: "/dashboard/plugins" as never }); }} data-tooltip="Plugins">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Plugins</span>
           </button>
                 
@@ -5747,7 +5747,7 @@ function Dashboard() {
                                       <p>{source.content}</p>
                                       {source.chatId && <button type="button" onClick={() => {
                                         try { window.localStorage.setItem("misma_dashboard_view_v1", JSON.stringify({ activeTab: "workspace", conversationId: source.chatId })); } catch { /* Open the dashboard without restoring when storage is unavailable. */ }
-                                        window.location.assign("/dashboard");
+                                        void navigate({ to: "/dashboard" as never });
                                       }}>Open original chat</button>}
                                     </div>
                                   ))}
@@ -6011,7 +6011,7 @@ function Dashboard() {
                                       onClick={() => {
                                         setPluginPickerOpen(false);
                                         setPlusMenuOpen(false);
-                                        window.location.assign("/dashboard/plugins/" + plugin.provider + "/description");
+                                        void navigate({ to: ("/dashboard/plugins/" + plugin.provider + "/description") as never });
                                       }}
                                     >
                                       <ChatPluginIcon provider={plugin.provider} />
@@ -6029,11 +6029,11 @@ function Dashboard() {
                                 )) : (
                                   <div className="misma-chat-plugin-empty">
                                     <p>Connect your first plugin to use it in chat.</p>
-                                    <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Connect your first plugin</button>
+                                    <button type="button" onClick={() => { setPluginPickerOpen(false); void navigate({ to: "/dashboard/plugins" as never }); }}>Connect your first plugin</button>
                                   </div>
                                 )}
                                 <div className="misma-chat-plugin-popup-footer">
-                                  <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Open Plugins</button>
+                                  <button type="button" onClick={() => { setPluginPickerOpen(false); void navigate({ to: "/dashboard/plugins" as never }); }}>Open Plugins</button>
                                 </div>
                               </div>
                             )}
@@ -7036,7 +7036,7 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Cookies and marketing privacy</strong><span>Misma does not currently provide a separate cookie or marketing preference centre.</span></div>
                 <div className="aichat-settings-action-row">
                   <div><strong>Connected apps and services</strong><small>Review the providers and channels you have connected to this workspace.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/plugins")}>Manage connected apps</button>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/plugins" as never })}>Manage connected apps</button>
                 </div>
               </section>
 
@@ -7047,7 +7047,7 @@ function Dashboard() {
                 </div>
                 <div className="aichat-settings-action-row">
                   <div><strong>Manage memory</strong><small>View, search, export or delete saved facts and past conversation context.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/memory")}>Manage memory</button>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/memory" as never })}>Manage memory</button>
                 </div>
               </section>
 
@@ -7061,8 +7061,8 @@ function Dashboard() {
                   <button type="button" onClick={() => setActiveTab("websites")}><strong>Website &amp; widget</strong><small>Manage website connections and installation</small></button>
                   <button type="button" onClick={() => setActiveTab("knowledge")}><strong>Business knowledge</strong><small>Review the information Misma uses to answer</small></button>
                   <button type="button" onClick={() => setActiveTab("connect")}><strong>Channels</strong><small>Connect customer communication channels</small></button>
-                  <button type="button" onClick={() => window.location.assign("/dashboard/plugins")}><strong>Plugins</strong><small>Connect and manage external tools</small></button>
-                  <button type="button" onClick={() => window.location.assign("/dashboard/memory")}><strong>Misma Memory</strong><small>Review saved facts and past context</small></button>
+                  <button type="button" onClick={() => void navigate({ to: "/dashboard/plugins" as never })}><strong>Plugins</strong><small>Connect and manage external tools</small></button>
+                  <button type="button" onClick={() => void navigate({ to: "/dashboard/memory" as never })}><strong>Misma Memory</strong><small>Review saved facts and past context</small></button>
                 </div>
                 <div className="aichat-help-center-articles">
                   <h3>Popular help topics</h3>
@@ -7083,7 +7083,7 @@ function Dashboard() {
                   <details>
                     <summary>How do I connect tools such as GitHub, Vercel or Netlify?</summary>
                     <p>Open Plugins, select the provider, review its permissions and connect the account. You can change action permissions or disconnect it later from that provider's settings page.</p>
-                    <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/plugins")}>Browse Plugins</button>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/plugins" as never })}>Browse Plugins</button>
                   </details>
                   <details>
                     <summary>Where do customer messages and human requests appear?</summary>
@@ -7093,7 +7093,7 @@ function Dashboard() {
                   <details>
                     <summary>What does Misma Memory save?</summary>
                     <p>Misma Memory lets you review useful facts and context retained from eligible conversations. You can inspect, export, pin or delete saved memory from its management page.</p>
-                    <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/memory")}>Manage Memory</button>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/memory" as never })}>Manage Memory</button>
                   </details>
                   <details>
                     <summary>How do I manage privacy and account security?</summary>
