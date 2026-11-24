@@ -11,7 +11,8 @@ export const Route = createFileRoute("/dashboard/plugins")({ component: PluginsR
 
 function PluginsRoute() {
   const location = useLocation();
-  const isDirectory = location.pathname.replace(/\\/+$/, "") === "/dashboard/plugins";
+  const pathname = location.pathname.endsWith("/") ? location.pathname.slice(0, -1) : location.pathname;
+  const isDirectory = pathname === "/dashboard/plugins";
   return isDirectory ? <PluginsPage /> : <Outlet />;
 }
 
