@@ -10829,3 +10829,36 @@ html[data-misma-reduce-motion="true"] *::after {
 .aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar .aichat-user-info small {
   color: #64748b !important;
 }
+
+
+/* Keep three-dot context menus and the plugin picker compact on desktop and mobile. */
+.aichat .aichat-chat-context-menu { min-width: 142px; width: max-content; max-width: min(220px, calc(100vw - 28px)); padding: 4px; }
+.aichat .aichat-chat-context-menu button { min-height: 30px; padding: 6px 8px; font-size: 12px; }
+.aichat .misma-chat-plugin-popup {
+  box-sizing: border-box;
+  width: min(252px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 7px;
+  border-radius: 12px;
+}
+.aichat .misma-chat-plugin-popup-heading { gap: 8px; padding: 2px 4px 7px; }
+.aichat .misma-chat-plugin-popup-heading strong { font-size: 13px; }
+.aichat .misma-chat-plugin-option {
+  min-height: 40px;
+  gap: 7px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.aichat .misma-chat-plugin-option-logo {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+.aichat .misma-chat-plugin-option-select {
+  min-width: 0;
+  gap: 1px;
+  padding: 3px 5px;
+}
+.aichat .misma-chat-plugin-option-select strong { font-size: 12px; }
+.aichat .misma-chat-plugin-option-select small { font-size: 10px; }
