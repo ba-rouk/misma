@@ -24,8 +24,8 @@ test("verified website content is parsed from JSON-LD and returned as recommenda
 });
 
 test("plugin directory exposes configured providers and all management routes", async () => {
-  const plugins = await read("src/routes/dashboard_.plugins.tsx");
-  const detail = await read("src/routes/dashboard_.plugins.$pluginId.tsx");
+  const plugins = await read("src/routes/dashboard.plugins.tsx");
+  const detail = await read("src/routes/dashboard.plugins.$pluginId.tsx");
   const tree = await read("src/routeTree.gen.ts");
   assert.match(plugins, /const visiblePlugins = pluginList/);
   assert.doesNotMatch(plugins, /plugin\.id !== "render"/);
@@ -33,7 +33,7 @@ test("plugin directory exposes configured providers and all management routes", 
   assert.match(plugins, /\/dashboard\/plugins\/.*\/connect/);
   assert.match(detail, /\/settings/);
   assert.match(tree, /dashboard\.plugins\.\$pluginId\.settings/);
-  assert.match(tree, /dashboard_\.plugins\.\$pluginId\.connect/);
+  assert.match(tree, /dashboard\.plugins\.\$pluginId\.connect/);
 });
 
 test("cross-chat account memory filters secrets and is isolated by owner", async () => {
