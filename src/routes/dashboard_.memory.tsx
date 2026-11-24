@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 
@@ -32,6 +32,7 @@ type MemoryExchange = {
 type MemorySettings = { enabled: boolean; retention_days: number | null };
 
 function MemoryPage() {
+  const navigate = useNavigate();
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [tab, setTab] = useState<MemoryTab>("facts");
   const [facts, setFacts] = useState<MemoryFact[]>([]);
@@ -183,7 +184,7 @@ function MemoryPage() {
     try {
       localStorage.setItem("misma_dashboard_view_v1", JSON.stringify({ activeTab: "workspace", conversationId: chatId }));
     } catch { /* Continue to the dashboard even when storage is unavailable. */ }
-    window.location.assign("/dashboard");
+    void navigate({ to: "/dashboard" as never });
   }
 
   function exportMemory() {
@@ -232,7 +233,7 @@ function MemoryPage() {
   return (
     <main className="misma-marketplace-page misma-memory-page">
       <div className="misma-marketplace-shell misma-memory-shell">
-        <button type="button" className="misma-page-back-button" aria-label="Go to previous page" onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.assign("/dashboard"); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg></button>
+        <button type="button" className="misma-page-back-button" aria-label="Go to previous page" onClick={() => { if (window.history.length > 1) window.history.back(); else void navigate({ to: "/dashboard" as never }); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg></button>
         <header className="misma-plugin-directory-header">
           <div className="misma-plugin-header-title">
             <div>
