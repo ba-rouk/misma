@@ -190,7 +190,7 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
     } finally { setBusy(false); setMenuOpen(false); }
   }
 
-  if (!manifest) return <PluginDashboardLayout><main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main></PluginDashboardLayout>;
+  if (!manifest) return <main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main>;
 
   return (
     <main className="misma-plugin-settings-page">
