@@ -238,7 +238,6 @@ function PluginsPage() {
   };
 
   return (
-    <PluginDashboardLayout>
     <main className="misma-marketplace-page misma-plugin-directory-page" onClick={() => setOpenPluginMenu(null)}>
       <div className="misma-marketplace-shell misma-plugin-directory-shell">
         <header className="misma-marketplace-header misma-plugin-directory-header">
