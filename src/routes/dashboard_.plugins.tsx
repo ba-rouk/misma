@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
@@ -13,6 +13,7 @@ type Website = { id: string; name: string | null; domain: string; website_url: s
 type UserPlugin = { provider: PluginId; is_installed: boolean; permission_mode: string; account_label: string | null };
 
 function PluginsPage() {
+  const navigate = useNavigate();
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState("");
   const [connections, setConnections] = useState<PluginConnectionSummary[]>([]);
@@ -114,7 +115,7 @@ function PluginsPage() {
   function openDetails(provider: PluginId) {
     setOpenPluginMenu(null);
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign("/dashboard/plugins/" + provider + "/description" + suffix);
+    void navigate({ to: ("/dashboard/plugins/" + provider + "/description" + suffix) as never });
   }
 
   async function openConsent(provider: PluginId) {
@@ -133,7 +134,7 @@ function PluginsPage() {
         return;
       }
       const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-      window.location.assign("/dashboard/plugins/" + provider + "/connect" + suffix);
+      void navigate({ to: ("/dashboard/plugins/" + provider + "/connect" + suffix) as never });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the provider connection.");
     } finally {
@@ -142,7 +143,7 @@ function PluginsPage() {
   }
 
   function navigateBack() {
-    window.location.assign("/dashboard");
+    void navigate({ to: "/dashboard" as never });
   }
 
   async function uninstall(provider: PluginId) {
