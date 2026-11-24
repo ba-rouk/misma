@@ -58,7 +58,8 @@ function ExamplePreview({ kind, provider, title, description }: { kind: string; 
 export function PluginDetailPage() {
   const { pluginId } = Route.useParams();
   const location = useLocation();
-  const isProviderDetail = location.pathname.replace(/\\/+$/, "") === "/dashboard/plugins/" + pluginId;
+  const pathname = location.pathname.endsWith("/") ? location.pathname.slice(0, -1) : location.pathname;
+  const isProviderDetail = pathname === "/dashboard/plugins/" + pluginId;
   return isProviderDetail ? <PluginDetailContent pluginId={pluginId} /> : <Outlet />;
 }
 
