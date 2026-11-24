@@ -2194,3 +2194,69 @@ body .aichat .aichat-knowledge-table tbody td button:hover:not(:disabled) {backg
 body .aichat .aichat-composer-container {background:var(--misma-app-background,#0f1724) !important;background-image:none !important;box-shadow:none !important;border:0 !important;}
 body .aichat .aichat-composer-container::before,body .aichat .aichat-composer-container::after,body .aichat .aichat-main::before,body .aichat .aichat-main::after {background:none !important;box-shadow:none !important;opacity:0 !important;}
 body .aichat .aichat-composer-card,body .aichat .aichat-composer-card-tools,body .aichat .aichat-composer-card:focus-within,body .aichat .aichat-composer-card-tools:focus-within,body .aichat .aichat-scroll-area,body .aichat .aichat-main {box-shadow:none !important;}
+
+
+/* Compact sidebar rhythm across the dashboard and provider pages. */
+.aichat:not(.misma-plugin-dashboard-layout) > .aichat-side .aichat-newchat-wrap,
+.aichat.misma-plugin-dashboard-layout > .misma-plugin-dashboard-sidebar .aichat-newchat-wrap {
+  padding: 8px 12px 0 !important;
+}
+.aichat:not(.misma-plugin-dashboard-layout) > .aichat-side .aichat-primary-nav,
+.aichat.misma-plugin-dashboard-layout > .misma-plugin-dashboard-sidebar .aichat-primary-nav {
+  gap: 1px !important;
+  padding: 0 10px 6px !important;
+}
+.aichat:not(.misma-plugin-dashboard-layout) > .aichat-side .aichat-nav-btn,
+.aichat.misma-plugin-dashboard-layout > .misma-plugin-dashboard-sidebar .aichat-nav-btn {
+  min-height: 34px !important;
+  padding: 6px 10px !important;
+  gap: 10px !important;
+}
+.aichat:not(.misma-plugin-dashboard-layout) > .aichat-side .aichat-nav-submenu {
+  gap: 2px !important;
+  margin-bottom: 4px !important;
+}
+.aichat:not(.misma-plugin-dashboard-layout) > .aichat-side .aichat-nav-subbtn {
+  min-height: 30px !important;
+  padding: 5px 8px !important;
+}
+.aichat:not(.misma-plugin-dashboard-layout) > .aichat-side .aichat-chats-widget-header {
+  gap: 4px;
+  padding: 6px 12px 4px;
+}
+
+/* Give Settings section labels a little more breathing room before their items. */
+.aichat .aichat-settings-sidebar-nav {
+  gap: 16px;
+}
+.aichat .aichat-settings-sidebar-group {
+  gap: 3px;
+}
+.aichat .aichat-settings-sidebar-group h3 {
+  margin-bottom: 8px;
+}
+
+/* The New Chat greeting is intentionally plain: no glow or circular logo plate. */
+.aichat .aichat-glow {
+  display: none !important;
+}
+.aichat .aichat-logo-hero {
+  width: 42px;
+  height: 42px;
+  margin-bottom: 16px;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+/* Use the dashboard's 56px top-bar height and a consistent soft white separator. */
+.aichat .aichat-topbar {
+  border-bottom: 1px solid color-mix(in srgb, var(--misma-app-foreground, #eef3fb) 22%, transparent) !important;
+}
+.misma-marketplace-page .misma-plugin-directory-header,
+.misma-plugin-detail-page .misma-plugin-detail-header,
+.misma-plugin-settings-page .misma-plugin-settings-topbar {
+  height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+  min-height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--misma-app-foreground, #eef3fb) 22%, transparent) !important;
+  box-shadow: none !important;
+}
