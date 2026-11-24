@@ -24,6 +24,7 @@ function PluginSettingsRoute() {
 }
 
 export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
+  const navigate = useNavigate();
   const manifest = getPluginManifest(pluginId);
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState("");
