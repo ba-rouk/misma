@@ -5,7 +5,6 @@ import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plu
 import { getPluginManifest } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { Badge, Button, GlassCard, GlassModal } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 type PermissionMode = "always_ask" | "read" | "low_risk" | "all";
 type Connection = { id: string; provider: string; external_account_name: string | null; status: string; created_at: string; updated_at: string; workspace_id: string };
@@ -194,7 +193,6 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
   if (!manifest) return <PluginDashboardLayout><main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main></PluginDashboardLayout>;
 
   return (
-    <PluginDashboardLayout>
     <main className="misma-plugin-settings-page">
       <div className="misma-plugin-settings-shell">
         <header className="misma-plugin-settings-topbar misma-plugin-unified-header">
@@ -276,6 +274,5 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
       </GlassModal>
       {loading && <div className="misma-plugin-settings-loading">Loading account settings…</div>}
     </main>
-    </PluginDashboardLayout>
   );
 }
