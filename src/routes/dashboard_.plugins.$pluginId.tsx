@@ -6,7 +6,7 @@ import { getPluginManifest, type PluginId } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { PluginConnectConsent } from "../components/plugin-connect-consent";
 import type { PluginConnectionSummary } from "../components/plugin-settings-sheet";
-import { Badge, Button, SectionHeader, StickyActionBar } from "../components/misma-glass";
+import { Badge, Button, SectionHeader } from "../components/misma-glass";
 import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId")({ component: PluginDetailPage });
@@ -259,12 +259,13 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
         </section>        {error && <p className="misma-plugin-feedback is-error" role="alert">{error}</p>}
         </div>
       </div>
-      <StickyActionBar className="misma-plugin-detail-actionbar">
-        <div className="misma-plugin-detail-action-inner">{primaryAction}
-          {!connection && canAuthorize && <Button variant="secondary" className="misma-plugin-provider-action" onClick={() => void continueToProvider()} disabled={busy}>{busy ? "Opening…" : "Continue to " + manifest.name + " ↗"}</Button>}
+      <div className="misma-plugin-detail-floating-actions">
+        <div className="misma-plugin-detail-floating-inner">
+          {primaryAction}
+          {!connection && canAuthorize && manifest.id !== "github" && <Button variant="secondary" className="misma-plugin-provider-action" onClick={() => void continueToProvider()} disabled={busy}>{busy ? "Opening…" : "Continue to " + manifest.name + " ↗"}</Button>}
           {!connection && !canAuthorize && <span className="misma-plugin-unavailable-note">{manifest.authType === "oauth_pending" ? "Waiting for Render OAuth registration" : "Connection coming later"}</span>}
         </div>
-      </StickyActionBar>
+      </div>
       <PluginConnectConsent manifest={manifest} workspaceId={workspaceId} open={consentOpen} onClose={() => setConsentOpen(false)} />
 
     </main>
