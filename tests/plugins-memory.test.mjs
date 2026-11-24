@@ -5,9 +5,9 @@ import { readFile } from "node:fs/promises";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("plugin directory, onboarding, and settings use real account-owned provider connections", async () => {
-  const page = await read("../src/routes/dashboard_.plugins.tsx");
-  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
-  const onboarding = await read("../src/routes/dashboard_.plugins.$pluginId.connect.tsx");
+  const page = await read("../src/routes/dashboard.plugins.tsx");
+  const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
+  const onboarding = await read("../src/routes/dashboard.plugins.$pluginId.connect.tsx");
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const connect = await read("../src/lib/plugin-connect.ts");
   const consent = await read("../src/components/plugin-connect-consent.tsx");
@@ -88,7 +88,7 @@ test("plugin directory, onboarding, and settings use real account-owned provider
 });
 
 test("plugin details are manifest-driven, honest about capabilities, and mobile-first", async () => {
-  const page = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const page = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const css = await read("../src/misma-design-system.css");
   assert.match(page, /createFileRoute\("\/dashboard_?\/plugins\/\$pluginId"\)/);
@@ -311,7 +311,7 @@ test("central Misma glass tokens, primitives and typography are loaded globally"
 test("provider settings and descriptions are nested dashboard child routes", async () => {
   const route = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const description = await read("../src/routes/dashboard.plugins.$pluginId.description.tsx");
-  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
   const generatedRoutes = await read("../src/routeTree.gen.ts");
   assert.match(route, /createFileRoute\("\/dashboard\/plugins\/\$pluginId\/settings"\)/);
@@ -334,7 +334,7 @@ test("provider settings and descriptions are nested dashboard child routes", asy
 test("Netlify OAuth connects and discovers authorized sites", async () => {
   const manifests = await read("../src/lib/plugin-manifests.ts");
   const connect = await read("../src/lib/plugin-connect.ts");
-  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const callback = await read("../src/routes/integrations/netlify/callback.tsx");
   const edge = await read("../supabase/functions/misma-platform-integrations/index.ts");
   const config = await read("../supabase/functions/misma-platform-integrations/config.ts");
@@ -358,8 +358,8 @@ test("Netlify OAuth connects and discovers authorized sites", async () => {
 
 
 test("plugin directory, description and provider settings share header sizing and deterministic back navigation", async () => {
-  const directory = await read("../src/routes/dashboard_.plugins.tsx");
-  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const directory = await read("../src/routes/dashboard.plugins.tsx");
+  const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const css = await read("../src/misma-design-system.css");
   assert.match(directory, /function navigateBack\(\)\s*\{\s*window\.location\.assign\("\/dashboard"\)/);
@@ -371,8 +371,8 @@ test("plugin directory, description and provider settings share header sizing an
 
 
 test("plugin directory, provider description and settings share a header and deterministic back routes", async () => {
-  const directory = await read("../src/routes/dashboard_.plugins.tsx");
-  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const directory = await read("../src/routes/dashboard.plugins.tsx");
+  const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const css = await read("../src/misma-design-system.css");
 
@@ -390,8 +390,8 @@ test("plugin directory, provider description and settings share a header and det
 
 test("plugin management pages use the desktop dashboard sidebar and Misma page-title mark", async () => {
   const layout = await read("../src/components/plugin-dashboard-layout.tsx");
-  const directory = await read("../src/routes/dashboard_.plugins.tsx");
-  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const directory = await read("../src/routes/dashboard.plugins.tsx");
+  const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
   const css = await read("../src/misma-design-system.css");
