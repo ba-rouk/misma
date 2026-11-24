@@ -3161,8 +3161,8 @@ footer {
 .aichat {
   display: flex;
   min-height: 100dvh;
-  background: #090a0c;
-  color: #ececf1;
+  background: var(--misma-initial-background, #000000);
+  color: var(--misma-initial-foreground, #eef3fb);
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
@@ -3692,7 +3692,7 @@ footer {
   height: 100dvh;
   min-width: 0;
   min-height: 0;
-  background: #090a0c;
+  background: var(--misma-app-background, #000000);
   position: relative;
   overflow: hidden;
 }
@@ -3700,11 +3700,11 @@ footer {
 /* Keep the dashboard's outer viewport edge dark; the chat panes own scrolling. */
 html:has(.aichat-main) {
   scrollbar-gutter: auto;
-  scrollbar-color: #303947 #090a0c;
-  background: #090a0c;
+  scrollbar-color: #303947 var(--misma-app-background, #000000);
+  background: var(--misma-app-background, #000000);
 }
 body:has(.aichat-main) {
-  background: #090a0c;
+  background: var(--misma-app-background, #000000);
   overflow-x: hidden;
 }
 .aichat-scroll-area {
@@ -10339,8 +10339,8 @@ body:has(.misma-vercel-callback-page) {
 
 /* Unified Misma dark-blue surface across the dashboard, sidebar and Settings workspace. */
 .aichat {
-  --misma-app-background: #0f1724;
-  --misma-app-foreground: #eef3fb;
+  --misma-app-background: var(--misma-initial-background, #000000);
+  --misma-app-foreground: var(--misma-initial-foreground, #eef3fb);
   --misma-accent-color: #8ab4ff;
   background: var(--misma-app-background) !important;
   color: var(--misma-app-foreground);
