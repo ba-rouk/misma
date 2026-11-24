@@ -1690,7 +1690,7 @@ function Dashboard() {
   const [uiFontSize, setUiFontSize] = useState(16);
   const [codeFontSize, setCodeFontSize] = useState(13);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState("#0f1724");
+  const [backgroundColor, setBackgroundColor] = useState("#000000");
   const [foregroundColor, setForegroundColor] = useState("#eef3fb");
   const [dataExportBusy, setDataExportBusy] = useState(false);
   const [dataExportStatus, setDataExportStatus] = useState("");
@@ -5343,7 +5343,7 @@ function Dashboard() {
             <button type="button" className={`aichat-nav-subbtn${activeTab === "products" ? " active" : ""}`} onClick={() => { setActiveTab("products"); setMobileMenuOpen(false); }}>Products &amp; services</button>
             <button type="button" className={`aichat-nav-subbtn${activeTab === "knowledge" || activeTab === "build" ? " active" : ""}`} onClick={() => { setActiveTab("knowledge"); setMobileMenuOpen(false); }}>Business knowledge</button>
           </div>}
-          <button type="button" className="aichat-nav-btn" onClick={() => { setMobileMenuOpen(false); window.location.assign("/dashboard/plugins"); }} data-tooltip="Plugins">
+          <button type="button" className="aichat-nav-btn" onClick={() => { setMobileMenuOpen(false); void navigate({ to: "/dashboard/plugins" as never }); }} data-tooltip="Plugins">
             <span className="aichat-nav-icon"><DashboardNavIcon kind="connect" /></span><span className="aichat-nav-label">Plugins</span>
           </button>
                 
@@ -5747,7 +5747,7 @@ function Dashboard() {
                                       <p>{source.content}</p>
                                       {source.chatId && <button type="button" onClick={() => {
                                         try { window.localStorage.setItem("misma_dashboard_view_v1", JSON.stringify({ activeTab: "workspace", conversationId: source.chatId })); } catch { /* Open the dashboard without restoring when storage is unavailable. */ }
-                                        window.location.assign("/dashboard");
+                                        void navigate({ to: "/dashboard" as never });
                                       }}>Open original chat</button>}
                                     </div>
                                   ))}
@@ -6011,7 +6011,7 @@ function Dashboard() {
                                       onClick={() => {
                                         setPluginPickerOpen(false);
                                         setPlusMenuOpen(false);
-                                        window.location.assign("/dashboard/plugins/" + plugin.provider + "/description");
+                                        void navigate({ to: ("/dashboard/plugins/" + plugin.provider + "/description") as never });
                                       }}
                                     >
                                       <ChatPluginIcon provider={plugin.provider} />
