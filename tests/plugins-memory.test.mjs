@@ -322,9 +322,8 @@ test("provider settings and descriptions are nested dashboard child routes", asy
   assert.match(description, /PluginDetailContent pluginId=\{pluginId\}/);
   assert.match(detail, /export function PluginDetailContent/);
   assert.match(dashboard, /Outlet, useLocation/);
-  assert.match(dashboard, /showPluginSettingsChild/);
-  assert.match(dashboard, /(?:settings\|description)/);
-  assert.match(dashboard, /return showPluginSettingsChild \? <Outlet \/>/);
+  assert.match(dashboard, /const isPluginRoute =/);
+  assert.ok(dashboard.includes("{isPluginRoute ? <Outlet /> : <>"));
   assert.match(generatedRoutes, /dashboard\.plugins\.\$pluginId\.settings/);
   assert.match(generatedRoutes, /dashboard\.plugins\.\$pluginId\.description/);
   assert.match(generatedRoutes, /getParentRoute: \(\) => DashboardRoute/);
@@ -388,28 +387,23 @@ test("plugin directory, provider description and settings share a header and det
 });
 
 
-test("plugin management pages use the desktop dashboard sidebar and Misma page-title mark", async () => {
-  const layout = await read("../src/components/plugin-dashboard-layout.tsx");
+test("plugin pages render inside the persistent dashboard sidebar", async () => {
   const directory = await read("../src/routes/dashboard.plugins.tsx");
   const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const settings = await read("../src/routes/dashboard.plugins.$pluginId.settings.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  const css = await read("../src/misma-design-system.css");
 
-  assert.match(layout, /className=.*aichat-side misma-plugin-dashboard-sidebar/);
-  assert.match(layout, /MismaIcon size=\{28\}/);
-  assert.match(layout, /href: "\/dashboard\?tab=images"/);
-  assert.match(layout, /href: "\/dashboard\?tab=library"/);
-  assert.match(layout, /href: "\/dashboard\/plugins"/);
-  assert.match(directory, /PluginDashboardLayout/);
-  assert.match(detail, /PluginDashboardLayout/);
-  assert.match(settings, /PluginDashboardLayout/);
+  assert.match(dashboard, /aichat-side/);
+  assert.match(dashboard, /navigate\(\{ to: "\/dashboard\/plugins" \}\)/);
+  assert.ok(dashboard.includes("{isPluginRoute ? <Outlet /> : <>"));
+  assert.match(directory, /isDirectory/);
+  assert.match(directory, /<Outlet \/>/);
+  assert.match(detail, /isProviderDetail/);
+  assert.match(detail, /<Outlet \/>/);
+  assert.doesNotMatch(directory, /PluginDashboardLayout/);
+  assert.doesNotMatch(detail, /PluginDashboardLayout/);
+  assert.doesNotMatch(settings, /PluginDashboardLayout/);
   assert.match(directory, /src="\/misma-logo\.svg"/);
   assert.match(detail, /src="\/misma-logo\.svg"/);
   assert.match(settings, /src="\/misma-logo\.svg"/);
-  assert.match(dashboard, /new URLSearchParams\(window\.location\.search\)\.get\("tab"\)/);
-  assert.match(css, /\.misma-plugin-dashboard-content\s*\{[\s\S]*?margin-left: var\(--misma-plugin-sidebar-width\)/);
-  assert.match(css, /\.misma-plugin-dashboard-sidebar \.aichat-newchat-wrap\s*\{[\s\S]*?padding: 10px 14px 4px/);
-  assert.match(css, /\.misma-plugin-dashboard-sidebar \.aichat-primary-nav\s*\{\s*flex: 1;\s*padding-top: 4px/);
-  assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.misma-plugin-dashboard-sidebar\s*\{\s*display: none !important/);
 });
