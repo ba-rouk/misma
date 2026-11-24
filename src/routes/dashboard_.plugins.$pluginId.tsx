@@ -189,7 +189,6 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
   );
 
   return (
-    <PluginDashboardLayout>
     <main className="misma-plugin-detail-page" style={{ "--plugin-brand": manifest.brandColor } as CSSProperties}>
       <div className="misma-plugin-detail-shell">
 
@@ -269,6 +268,5 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
       <PluginConnectConsent manifest={manifest} workspaceId={workspaceId} open={consentOpen} onClose={() => setConsentOpen(false)} />
 
     </main>
-    </PluginDashboardLayout>
   );
 }
