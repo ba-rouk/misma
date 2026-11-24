@@ -1334,13 +1334,23 @@ function GeneratedImageActions({
   onCopy?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeWhenOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !menuRootRef.current?.contains(target)) setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeWhenOutside);
+    return () => document.removeEventListener("pointerdown", closeWhenOutside);
+  }, [menuOpen]);
   const runAction = (action?: () => void) => {
     setMenuOpen(false);
     action?.();
   };
 
   return (
-    <div className="aichat-image-options" data-misma-popover-root="image-options" onKeyDown={(event) => {
+    <div ref={menuRootRef} className="aichat-image-options" data-misma-popover-root="image-options" onKeyDown={(event) => {
       if (event.key === "Escape") setMenuOpen(false);
     }}>
       <button
@@ -1959,9 +1969,13 @@ function Dashboard() {
           setPendingRestoreConversationId(conversationId);
         }
       }
-      const requestedTab = new URLSearchParams(window.location.search).get("tab");
+      const requestedParams = new URLSearchParams(window.location.search);
+      const requestedTab = requestedParams.get("tab");
       if (requestedTab && validTabs.includes(requestedTab as TabId)) {
         setActiveTab(requestedTab as TabId);
+      }
+      if (requestedParams.get("section") === "settings-help-center") {
+        setSelectedSettingsSection("settings-help-center");
       }
     } catch {
       // Ignore malformed or unavailable browser storage and use the default dashboard view.
@@ -2774,7 +2788,9 @@ function Dashboard() {
       } finally {
         visitorRefreshInFlightRef.current = false;
       }
-    })();
+    })().catch((cause) => {
+      console.warn("[misma] Visitor activity refresh failed unexpectedly:", cause);
+    });
   };
 
   useEffect(() => {
@@ -5993,7 +6009,7 @@ function Dashboard() {
                               </div>
                             )}
                             {pluginPickerOpen && (
-                              <div className="misma-chat-plugin-popup" role="menu" aria-label="Connected plugins">
+                              <div className="misma-chat-plugin-popup" data-misma-popover-root="plugins" role="menu" aria-label="Connected plugins">
                                 <div className="misma-chat-plugin-popup-heading">
                                   <strong>Plugins</strong>
                                   <button type="button" aria-label="Close plugins" onClick={() => setPluginPickerOpen(false)}>×</button>
