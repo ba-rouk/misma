@@ -59,14 +59,11 @@ test("saved appearance is applied before the app can paint", async () => {
 });
 
 test("non-settings standalone pages render the shared app sidebar", async () => {
-  const memory = await read("../src/routes/dashboard_.memory.tsx");
-  const customize = await read("../src/routes/dashboard_.websites.$siteId.customize.tsx");
-  const connect = await read("../src/routes/dashboard_.plugins.$pluginId.connect.tsx");
-  const plugins = await read("../src/routes/dashboard_.plugins.tsx");
-  assert.match(memory, /<PluginDashboardLayout>/);
-  assert.match(customize, /<PluginDashboardLayout>/);
-  assert.match(connect, /<PluginDashboardLayout>/);
-  assert.match(plugins, /<PluginDashboardLayout>/);
+  const root = await read("../src/routes/__root.tsx");
+  const layout = await read("../src/components/plugin-dashboard-layout.tsx");
+  assert.match(root, /location\.pathname\.startsWith\("\/dashboard\/"\)/);
+  assert.match(root, /<PluginDashboardLayout><Outlet \/><\/PluginDashboardLayout>/);
+  assert.match(layout, /aichat-side misma-plugin-dashboard-sidebar/);
 });
 
 test("internal plugin navigation uses the client router", async () => {
