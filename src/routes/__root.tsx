@@ -3,6 +3,7 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useLocation,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import "@fontsource-variable/inter/wght.css";
@@ -12,6 +13,7 @@ import sourceSerifLatinFont from "@fontsource-variable/source-serif-4/files/sour
 import appCss from "../styles.css?url";
 import pluginSystemCss from "../plugins-system.css?url";
 import mismaDesignSystemCss from "../misma-design-system.css?url";
+import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 const appearanceBootstrap = `(() => {
   try {
@@ -79,9 +81,16 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  const location = useLocation();
+  const useSharedDashboardShell = location.pathname.startsWith("/dashboard/");
+
   return (
     <RootDocument>
-      <Outlet />
+      {useSharedDashboardShell ? (
+        <PluginDashboardLayout><Outlet /></PluginDashboardLayout>
+      ) : (
+        <Outlet />
+      )}
     </RootDocument>
   );
 }
