@@ -184,7 +184,7 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
         account_label: accountLabel || null, updated_at: new Date().toISOString(),
       }, { onConflict: "user_id,provider" });
       if (uninstallError) throw uninstallError;
-      window.location.assign("/dashboard/plugins");
+      void navigate({ to: "/dashboard/plugins" as never });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not uninstall this plugin.");
     } finally { setBusy(false); setMenuOpen(false); }
