@@ -202,6 +202,16 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!profileMenuOpen) return;
+    const closeWhenOutside = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest('[data-misma-popover-root="profile"]')) setProfileMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeWhenOutside);
+    return () => document.removeEventListener("pointerdown", closeWhenOutside);
+  }, [profileMenuOpen]);
+
+  useEffect(() => {
     if (!mobileOpen && !profileMenuOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -235,6 +245,17 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
     setMobileOpen(false);
     setProfileMenuOpen(false);
     openDashboard("workspace", chatId);
+  }
+
+  function openHelpCenter() {
+    setMobileOpen(false);
+    setProfileMenuOpen(false);
+    try {
+      window.localStorage.setItem("misma_dashboard_view_v1", JSON.stringify({ activeTab: "settings", conversationId: null }));
+    } catch {
+      // The Help Center still opens if local storage is blocked.
+    }
+    window.location.assign("/dashboard?tab=settings&section=settings-help-center");
   }
 
   async function signOut() {
@@ -318,11 +339,11 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
             ))}
           </div>}
         </section>
-        <div className="aichat-side-user misma-plugin-side-user">
+        <div className="aichat-side-user misma-plugin-side-user" data-misma-popover-root="profile">
           {profileMenuOpen && <div className="aichat-profile-menu" data-misma-popover-root>
             <span>{profileEmail || "Signed in"}</span>
             <button type="button" onClick={() => chooseTab("settings")}>Settings</button>
-            <button type="button" onClick={() => chooseTab("settings")}>Help Center</button>
+            <button type="button" onClick={openHelpCenter}>Help Center</button>
             <button type="button" className="is-danger" onClick={() => void signOut()}>Sign out</button>
           </div>}
           <button type="button" className="aichat-user-profile" onClick={() => chooseTab("settings")} title="Settings" aria-label="Open settings">
