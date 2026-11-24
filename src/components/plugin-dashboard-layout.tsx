@@ -169,14 +169,10 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
 
   const closeMobile = () => setMobileOpen(false);
   const navigateTo = (path: string) => { closeMobile(); void navigate({ to: path as never }); };
-  const sidebarClass = "aichat-side misma-plugin-dashboard-sidebar"
-    + (collapsed && !mobileOpen ? " is-collapsed" : "")
-    + (mobileOpen ? " is-mobile-open" : "");
-
   return (
     <div className={"aichat misma-plugin-dashboard-layout" + (collapsed ? " is-sidebar-collapsed" : "")}>
-      <button type="button" className={"aichat-backdrop misma-plugin-sidebar-backdrop" + (mobileOpen ? " is-mobile-open" : "")} aria-label="Close sidebar" />
-      <aside className={sidebarClass} aria-label="Primary navigation">
+      <button type="button" className={"aichat-backdrop misma-plugin-sidebar-backdrop" + (mobileOpen ? " is-mobile-open" : "")} aria-label="Close sidebar" onClick={closeMobile} />
+      <aside className={`aichat-side misma-plugin-dashboard-sidebar${collapsed && !mobileOpen ? " is-collapsed" : ""}${mobileOpen ? " is-mobile-open" : ""}`} aria-label="Primary navigation">
         <div className="aichat-side-top">
           <a href="/dashboard" className="aichat-brand-link" aria-label="Misma dashboard" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard"); }}>
             <span className="aichat-brand-icon"><MismaIcon size={28} /></span>
