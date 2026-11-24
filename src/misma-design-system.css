@@ -2554,7 +2554,10 @@ html[data-misma-theme-ready="true"] .misma-plugin-dashboard-sidebar {
 .aichat .misma-plugin-installed-popup,
 .aichat .misma-plugin-overflow-menu,
 .aichat .misma-chat-plugin-popup,
-.misma-glass-modal {
+.misma-glass-modal,
+.aichat [role="menu"],
+.aichat [role="listbox"],
+.aichat [role="dialog"] {
   background: var(--misma-composer-surface, #14171d) !important;
   background-image: none !important;
   color: #f0f3f8 !important;
