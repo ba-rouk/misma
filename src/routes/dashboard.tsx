@@ -1340,7 +1340,7 @@ function GeneratedImageActions({
   };
 
   return (
-    <div className="aichat-image-options" onKeyDown={(event) => {
+    <div className="aichat-image-options" data-misma-popover-root="image-options" onKeyDown={(event) => {
       if (event.key === "Escape") setMenuOpen(false);
     }}>
       <button
@@ -1677,7 +1677,7 @@ function Dashboard() {
   const [uiFontSize, setUiFontSize] = useState(16);
   const [codeFontSize, setCodeFontSize] = useState(13);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState("#0f1724");
+  const [backgroundColor, setBackgroundColor] = useState("#0b1220");
   const [foregroundColor, setForegroundColor] = useState("#eef3fb");
   const [dataExportBusy, setDataExportBusy] = useState(false);
   const [dataExportStatus, setDataExportStatus] = useState("");
@@ -1696,6 +1696,7 @@ function Dashboard() {
   const [humanRequestPushBusy, setHumanRequestPushBusy] = useState(false);
   const [humanRequestPushMessage, setHumanRequestPushMessage] = useState("");
   const notificationCursorRef = useRef({ initialized: false, latestId: 0 });
+  const visitorRefreshInFlightRef = useRef(false);
   const pushNotificationLinkHandledRef = useRef(false);
   const [privacyPreferences, setPrivacyPreferences] = useState({ useConversationHistory: true });
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -1704,6 +1705,27 @@ function Dashboard() {
   const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
   const [aiSettings, setAiSettings] = useState<MismaAiSettings>(DEFAULT_MISMA_AI_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    const handlePopoverOutsidePointer = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const root = target?.closest<HTMLElement>("[data-misma-popover-root]");
+      const owner = root?.dataset.mismaPopoverRoot || "";
+
+      if (owner !== "recents") {
+        setChatGroupMenuOpen(false);
+        setChatActionMenuId(null);
+      }
+      if (owner !== "profile") setProfileMenuOpen(false);
+      if (owner !== "library") setLibraryAssetMenuId(null);
+      if (owner !== "voice") setVoiceMenuOpen(false);
+      if (owner !== "plus") setPlusMenuOpen(false);
+      if (owner !== "plugins") setPluginPickerOpen(false);
+      if (owner !== "handoff") setHumanRequestMenuId(null);
+    };
+    document.addEventListener("pointerdown", handlePopoverOutsidePointer);
+    return () => document.removeEventListener("pointerdown", handlePopoverOutsidePointer);
+  }, []);
 
   async function sendHelpCenterRequest() {
     const email = (helpRequestEmail || profileEmail).trim().toLowerCase();
@@ -2709,39 +2731,50 @@ function Dashboard() {
   }, [dashboardDataLoaded, allNotifications]);
 
   const refreshVisitorNotifications = () => {
-    if (!token) return;
-    Promise.all([
-      getVisitorNotifications({ data: { token } }),
-      getWorkspaceLiveUpdates({ data: { token } }),
-    ])
-      .then(([visitorData, liveData]) => {
-        setUnreadVisitorMessages(visitorData.unreadVisitorMessages ?? []);
-        setUnreadVisitorCount(visitorData.unreadVisitorCount ?? 0);
-        setConnectedWebsites(liveData.websites ?? []);
-        setHumanHandoffs(liveData.handoffs ?? []);
-        setAllNotifications(liveData.notifications ?? []);
-        setCustomers(liveData.customers ?? []);
-        setChannelConnections(liveData.channelConnections ?? []);
-        setConversations((current) => {
-          const previous = new Map(current.map((item: any) => [Number(item.id), item]));
-          return (liveData.conversations ?? []).map((item: any) => {
-            const existing = previous.get(Number(item.id));
-            return {
-              ...existing,
-              id: item.id,
-              channel: item.channel,
-              text: item.latest_text || existing?.text || "",
-              status: item.status,
-              updated_at: item.updated_at,
-              group_name: item.group_name ?? null,
-              name: existing?.name || (item.channel === "Website" ? "Website visitor" : item.channel === "WhatsApp" ? "WhatsApp customer" : item.channel === "Phone" ? "Phone caller" : "New chat"),
-            };
+    if (!token || visitorRefreshInFlightRef.current || document.visibilityState !== "visible") return;
+    visitorRefreshInFlightRef.current = true;
+    void (async () => {
+      try {
+        // Keep the unread-message feed independent from the wider workspace refresh.
+        // A failure in one endpoint must not discard the successful response from the other.
+        try {
+          const visitorData = await getVisitorNotifications({ data: { token } });
+          setUnreadVisitorMessages(visitorData.unreadVisitorMessages ?? []);
+          setUnreadVisitorCount(visitorData.unreadVisitorCount ?? 0);
+        } catch (cause) {
+          console.warn("Could not refresh unread visitor messages:", cause);
+        }
+
+        try {
+          const liveData = await getWorkspaceLiveUpdates({ data: { token } });
+          setConnectedWebsites(liveData.websites ?? []);
+          setHumanHandoffs(liveData.handoffs ?? []);
+          setAllNotifications(liveData.notifications ?? []);
+          setCustomers(liveData.customers ?? []);
+          setChannelConnections(liveData.channelConnections ?? []);
+          setConversations((current) => {
+            const previous = new Map(current.map((item: any) => [Number(item.id), item]));
+            return (liveData.conversations ?? []).map((item: any) => {
+              const existing = previous.get(Number(item.id));
+              return {
+                ...existing,
+                id: item.id,
+                channel: item.channel,
+                text: item.latest_text || existing?.text || "",
+                status: item.status,
+                updated_at: item.updated_at,
+                group_name: item.group_name ?? null,
+                name: existing?.name || (item.channel === "Website" ? "Website visitor" : item.channel === "WhatsApp" ? "WhatsApp customer" : item.channel === "Phone" ? "Phone caller" : "New chat"),
+              };
+            });
           });
-        });
-      })
-      .catch((cause) => {
-        console.warn("Could not refresh workspace visitor activity:", cause);
-      });
+        } catch (cause) {
+          console.warn("Could not refresh workspace visitor activity:", cause);
+        }
+      } finally {
+        visitorRefreshInFlightRef.current = false;
+      }
+    })();
   };
 
   useEffect(() => {
@@ -2769,7 +2802,8 @@ function Dashboard() {
 
   useEffect(() => {
     if (!authChecked || !token) return;
-    const refreshId = window.setInterval(refreshVisitorNotifications, 8000);
+    refreshVisitorNotifications();
+    const refreshId = window.setInterval(refreshVisitorNotifications, 30000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") refreshVisitorNotifications();
     };
@@ -5315,7 +5349,7 @@ function Dashboard() {
 
         {/* ── Chats and tasks widget (Cloud AI style) ── */}
         {!staffMode && (
-        <div className="aichat-chats-widget">
+        <div className="aichat-chats-widget" data-misma-popover-root="recents">
           <div className="aichat-chats-widget-header">
             <button
               type="button"
@@ -5421,7 +5455,7 @@ function Dashboard() {
         )}
 
         {/* User Profile Card */}
-        <div className="aichat-side-user">
+        <div className="aichat-side-user" data-misma-popover-root="profile">
           {staffMode ? (
             <div className="aichat-user-profile aichat-staff-sidebar-profile" aria-label="Staff account">
               {profileImage ? (
@@ -5914,7 +5948,7 @@ function Dashboard() {
                     <VoiceInputBar
                       toolbarStart={
                         <>
-                          <div className="aichat-composer-plus-wrap">
+                          <div className="aichat-composer-plus-wrap" data-misma-popover-root="plus">
                             <button type="button" className="aichat-composer-plus" aria-label="Add files and tools" aria-expanded={plusMenuOpen} disabled={isSending || isGeneratingMedia || Boolean(editingMessageId)} onClick={() => { setPluginPickerOpen(false); setPlusMenuOpen((open) => !open); }}>
                               {plusMenuOpen ? (
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -6231,7 +6265,7 @@ function Dashboard() {
                               </span>
                             </button>
                             <a href={asset.url} target="_blank" rel="noreferrer" download={asset.name} className="aichat-library-open" aria-label={`Download ${asset.name || "file"}`} title="Download file"><ActionIcon name="download" /></a>
-                            <div className="aichat-library-item-menu">
+                            <div className="aichat-library-item-menu" data-misma-popover-root="library">
                               <button type="button" className="aichat-library-more" aria-label={`More actions for ${asset.name || "file"}`} aria-expanded={libraryAssetMenuId === asset.id} onClick={() => setLibraryAssetMenuId((current) => current === asset.id ? null : asset.id)}>⋯</button>
                               {libraryAssetMenuId === asset.id && (
                                 <div className="aichat-library-item-menu-popover" role="menu">
@@ -6925,7 +6959,7 @@ function Dashboard() {
                 <div className="aichat-settings-voice-row">
                   <div className="aichat-input-group">
                     <label id="misma-voice-choice-label">Read-aloud voice</label>
-                    <div className="aichat-voice-picker" onKeyDown={(event) => { if (event.key === "Escape") setVoiceMenuOpen(false); }}>
+                    <div className="aichat-voice-picker" data-misma-popover-root="voice" onKeyDown={(event) => { if (event.key === "Escape") setVoiceMenuOpen(false); }}>
                       <button
                         type="button"
                         className="aichat-voice-picker-trigger"
@@ -7074,6 +7108,7 @@ function Dashboard() {
                     </div>
                     <div className="aichat-input-group">
                       <label htmlFor="misma-help-message">How can we help?</label>
+                      <p className="aichat-settings-hint">Support requests are sent to rukundobarouk33@gmail.com. Replies are sent to the email address you provide above.</p>
                       <textarea id="misma-help-message" className="aichat-textarea" value={helpRequestMessage} onChange={(event) => setHelpRequestMessage(event.target.value)} placeholder="Tell us what you were trying to do and what went wrong…" rows={5} maxLength={4000} required />
                       <small className="aichat-settings-hint">{helpRequestMessage.length}/4,000 characters</small>
                     </div>
@@ -7321,7 +7356,7 @@ function Dashboard() {
                   const requestId = Number(request.id);
                   const visitorName = request.visitor_name || request.contacts?.name || "Website visitor";
                   return <article className="aichat-handoff-card" key={request.id}>
-                    <div className="aichat-handoff-menu">
+                    <div className="aichat-handoff-menu" data-misma-popover-root="handoff">
                       <button
                         type="button"
                         className="aichat-handoff-more"
@@ -7477,7 +7512,7 @@ function Dashboard() {
                         <div key={item.id} className="aichat-human-request-entry">
                           <div className="aichat-human-request-list-row">
                             {Number(item.id) > 0 && (
-                              <div className="aichat-human-request-list-menu">
+                              <div className="aichat-human-request-list-menu" data-misma-popover-root="handoff">
                                 <button
                                   type="button"
                                   className="aichat-handoff-more"
