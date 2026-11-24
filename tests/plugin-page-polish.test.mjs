@@ -15,7 +15,7 @@ test("Build Knowledge tables use a refined compact table design", async () => {
 });
 
 test("Plugin pages use a floating action and omit the redundant GitHub continuation button", async () => {
-  const detail = await read("../src/routes/dashboard_.plugins.$pluginId.tsx");
+  const detail = await read("../src/routes/dashboard.plugins.$pluginId.tsx");
   const css = await read("../src/misma-design-system.css");
   assert.match(detail, /misma-plugin-detail-floating-actions/);
   assert.match(detail, /manifest\.id !== "github"/);
