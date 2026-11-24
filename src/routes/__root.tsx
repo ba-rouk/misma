@@ -13,6 +13,37 @@ import appCss from "../styles.css?url";
 import pluginSystemCss from "../plugins-system.css?url";
 import mismaDesignSystemCss from "../misma-design-system.css?url";
 
+const appearanceBootstrapScript = `(function () {
+  var root = document.documentElement;
+  var preferences = {};
+  try {
+    var stored = localStorage.getItem("misma_appearance_preferences");
+    if (stored) {
+      var parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) preferences = parsed;
+    }
+  } catch (_) {}
+  var isHex = function (value) { return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value); };
+  var mode = preferences.colorMode === "light" || preferences.colorMode === "system" ? preferences.colorMode : "dark";
+  var systemIsLight = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: light)").matches;
+  var resolvedMode = mode === "system" ? (systemIsLight ? "light" : "dark") : mode;
+  var isDark = resolvedMode === "dark";
+  var background = isDark ? (isHex(preferences.backgroundColor) ? preferences.backgroundColor : "#000000") : "#f3f6fb";
+  var foreground = isDark ? (isHex(preferences.foregroundColor) ? preferences.foregroundColor : "#eef3fb") : "#172235";
+  var bounded = function (value, min, max, fallback) {
+    var number = Number(value);
+    return Number.isFinite(number) ? Math.min(max, Math.max(min, Math.round(number))) : fallback;
+  };
+  root.dataset.mismaColorMode = resolvedMode;
+  root.dataset.mismaContrast = preferences.contrastLevel === "increased" || preferences.contrastLevel === "system" ? preferences.contrastLevel : "medium";
+  root.dataset.mismaReduceMotion = preferences.reduceMotion === true ? "true" : "false";
+  root.style.setProperty("--misma-initial-background", background);
+  root.style.setProperty("--misma-initial-foreground", foreground);
+  root.style.setProperty("--misma-app-background", background);
+  root.style.setProperty("--misma-app-foreground", foreground);
+  root.style.setProperty("--misma-ui-font-size", bounded(preferences.uiFontSize, 14, 20, 16) + "px");
+  root.style.setProperty("--misma-code-font-size", bounded(preferences.codeFontSize, 11, 18, 13) + "px");
+})();`;
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -54,8 +85,9 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: appearanceBootstrapScript }} />
         <HeadContent />
       </head>
       <body>
