@@ -212,8 +212,8 @@ test("Misma chat retrieves account memory and writes exchanges asynchronously", 
 test("dashboard inserts inline plugin mentions at the caret and scopes tools to installed plugins", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   const css = await read("../src/misma-design-system.css");
-  assert.ok(dashboard.includes('window.location.assign("/dashboard/plugins")'));
-  assert.ok(dashboard.includes('window.location.assign("/dashboard/memory")'));
+  assert.ok(dashboard.includes('navigate({ to: "/dashboard/plugins" as never })'));
+  assert.ok(dashboard.includes('navigate({ to: "/dashboard/memory" as never })'));
   assert.ok(dashboard.includes("extractActivePlugins"));
   assert.ok(dashboard.includes("activePlugins: extractActivePlugins(textToSend)"));
   assert.ok(dashboard.includes("insertPluginMention"));
