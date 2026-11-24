@@ -82,4 +82,6 @@ test("popup surfaces use the composer text-bar background", async () => {
   assert.match(design, /--misma-composer-surface: #14171d/);
   assert.match(design, /background: var\(--misma-composer-surface, #14171d\) !important/);
   assert.match(design, /\.aichat \.aichat-composer-plus-menu/);
+  assert.match(design, /\.aichat \[role="menu"\][\s\S]*?background: var\(--misma-composer-surface/);
+  assert.match(design, /\.aichat \[role="dialog"\]/);
 });
