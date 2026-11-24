@@ -1,5 +1,5 @@
 :root {
-  --misma-bg: #0f1724;
+  --misma-bg: #000000;
   --misma-surface: #141519;
   --misma-surface-raised: rgba(20, 21, 25, .82);
   --misma-glass-surface: rgba(255, 255, 255, .05);
@@ -1788,7 +1788,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
 /* Keep the chat dashboard canvas, main pane, navigation rail and mobile header on one surface. */
 html:has(.aichat-main),
 body:has(.aichat-main) {
-  background: #0f1724 !important;
+  background: #000000 !important;
 }
 html:has(.aichat[data-misma-color-mode="light"]),
 body:has(.aichat[data-misma-color-mode="light"]) {
@@ -2504,4 +2504,71 @@ body .aichat .aichat-composer-card,body .aichat .aichat-composer-card-tools,body
 .aichat[data-misma-color-mode="light"] .aichat-side-user {
   border-top-color: rgba(23,34,53,.18) !important;
   background: #f3f6fb !important;
+}
+
+
+/* Apply stored appearance before React mounts; no two-second default-color flash. */
+html[data-misma-theme-ready="true"],
+html[data-misma-theme-ready="true"] body {
+  background: var(--misma-app-background, #000000) !important;
+  color: var(--misma-app-foreground, #eef3fb);
+}
+html[data-misma-theme-ready="true"] body,
+html[data-misma-theme-ready="true"] .aichat,
+html[data-misma-theme-ready="true"] .misma-plugin-dashboard-layout,
+html[data-misma-theme-ready="true"] .misma-plugin-dashboard-content {
+  --misma-bg: var(--misma-app-background, #000000);
+  background-color: var(--misma-app-background, #000000);
+}
+html[data-misma-theme-ready="true"] .aichat .aichat-topbar,
+html[data-misma-theme-ready="true"] .aichat .aichat-side,
+html[data-misma-theme-ready="true"] .aichat .aichat-main,
+html[data-misma-theme-ready="true"] .aichat .aichat-scroll-area,
+html[data-misma-theme-ready="true"] .misma-plugin-dashboard-sidebar {
+  background: var(--misma-app-background, #000000) !important;
+}
+
+/* Remove frosted page chrome during route rendering; the selected canvas stays solid. */
+.misma-marketplace-page .misma-plugin-directory-header,
+.misma-plugin-detail-page .misma-plugin-detail-header,
+.misma-plugin-settings-page .misma-plugin-settings-topbar,
+.misma-plugin-detail-actionbar {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Every popup, menu and modal shares the composer text-bar fill. */
+:root {
+  --misma-composer-surface: #14171d;
+  --misma-popover-bg: var(--misma-composer-surface);
+}
+.aichat .aichat-profile-menu,
+.aichat .aichat-composer-plus-menu,
+.aichat .aichat-chat-menu,
+.aichat .aichat-chat-group-filter-menu,
+.aichat .aichat-chat-context-menu,
+.aichat .aichat-library-item-menu-popover,
+.aichat .aichat-image-options-menu,
+.aichat .aichat-voice-picker-menu,
+.aichat .aichat-handoff-menu,
+.aichat .misma-plugin-installed-popup,
+.aichat .misma-plugin-overflow-menu,
+.aichat .misma-chat-plugin-popup,
+.misma-glass-modal {
+  background: var(--misma-composer-surface, #14171d) !important;
+  background-image: none !important;
+  color: #f0f3f8 !important;
+}
+.aichat .aichat-composer-plus-menu,
+.aichat .misma-chat-plugin-popup,
+.aichat .misma-plugin-installed-popup,
+.misma-glass-modal {
+  border-color: #343a43 !important;
+}
+.aichat[data-misma-color-mode="light"] {
+  --misma-composer-surface: #14171d;
+}
+.aichat[data-misma-color-mode="light"] :is(.aichat-profile-menu,.aichat-composer-plus-menu,.aichat-chat-menu,.aichat-chat-group-filter-menu,.aichat-chat-context-menu,.aichat-library-item-menu-popover,.aichat-image-options-menu,.aichat-voice-picker-menu,.misma-plugin-installed-popup,.misma-plugin-overflow-menu,.misma-chat-plugin-popup) {
+  background: var(--misma-composer-surface, #14171d) !important;
+  color: #f0f3f8 !important;
 }
