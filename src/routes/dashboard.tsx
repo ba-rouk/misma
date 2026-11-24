@@ -6029,11 +6029,11 @@ function Dashboard() {
                                 )) : (
                                   <div className="misma-chat-plugin-empty">
                                     <p>Connect your first plugin to use it in chat.</p>
-                                    <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Connect your first plugin</button>
+                                    <button type="button" onClick={() => { setPluginPickerOpen(false); void navigate({ to: "/dashboard/plugins" as never }); }}>Connect your first plugin</button>
                                   </div>
                                 )}
                                 <div className="misma-chat-plugin-popup-footer">
-                                  <button type="button" onClick={() => { setPluginPickerOpen(false); window.location.assign("/dashboard/plugins"); }}>Open Plugins</button>
+                                  <button type="button" onClick={() => { setPluginPickerOpen(false); void navigate({ to: "/dashboard/plugins" as never }); }}>Open Plugins</button>
                                 </div>
                               </div>
                             )}
