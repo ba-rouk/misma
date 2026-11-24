@@ -76,7 +76,7 @@ function PluginConnectPage() {
 
   function back() {
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign("/dashboard/plugins" + suffix);
+    void navigate({ to: ("/dashboard/plugins" + suffix) as never });
   }
 
   async function connect() {
@@ -95,7 +95,7 @@ function PluginConnectPage() {
           }, { onConflict: "user_id,provider" });
           if (restoreError) throw restoreError;
         }
-        window.location.assign("/dashboard/plugins/" + manifest.id);
+        void navigate({ to: ("/dashboard/plugins/" + manifest.id) as never });
         return;
       }
       if (!canAuthorize) {
