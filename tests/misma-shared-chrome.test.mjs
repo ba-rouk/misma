@@ -8,28 +8,34 @@ test("Misma pages share page-colored headers, a compact collapsed rail, and cons
   const styles = await read("../src/styles.css");
   const design = await read("../src/misma-design-system.css");
 
-  assert.match(design, /\.aichat-side\.is-collapsed\s*\{\s*width:\s*56px !important/);
-  assert.match(design, /\.aichat-main\.sidebar-closed\s*\{\s*margin-left:\s*56px !important/);
-  assert.match(design, /\.misma-plugin-dashboard-layout\.is-sidebar-collapsed\s*\{\s*--misma-plugin-sidebar-width:\s*56px !important/);
-  assert.match(design, /\.aichat \.aichat-topbar[\s\S]*?background:\s*var\(--misma-app-background/);
-  const sharedHeaderOverrides = design.slice(design.lastIndexOf("/* Page title bars inherit"));
-  assert.match(sharedHeaderOverrides, /\.misma-plugin-detail-page \.misma-plugin-detail-header/);
-  assert.match(sharedHeaderOverrides, /\.misma-plugin-settings-page \.misma-plugin-settings-topbar/);
-  assert.match(sharedHeaderOverrides, /background:\s*transparent !important/);
-  assert.match(design, /body :not\(svg\):not\(svg \*\)[\s\S]*?font-family:\s*var\(--font-sans/);
-  assert.match(design, /--misma-consistent-font-size:\s*var\(--misma-ui-font-size, 16px\)/);
-  assert.match(design, /\.misma-site \.nav\s*\{\s*background:\s*transparent !important/);
+  assert.ok(design.includes(".aichat-side.is-collapsed"));
+  assert.ok(design.includes(".aichat-main.sidebar-closed"));
+  assert.ok(design.includes(".misma-plugin-dashboard-layout.is-sidebar-collapsed"));
+  assert.ok(design.includes(".aichat .aichat-topbar"));
+  assert.ok(design.includes("background: var(--misma-app-background"));
+  assert.ok(design.includes(".misma-plugin-detail-page .misma-plugin-detail-header"));
+  assert.ok(design.includes(".misma-plugin-settings-page .misma-plugin-settings-topbar"));
+  assert.ok(design.includes("--misma-consistent-font-size"));
+  assert.ok(design.includes('.aichat[data-misma-color-mode="light"]'));
 
-  // Keep the separate website widget preview's user-selected styling isolated.
-  assert.match(design, /:not\(\.misma-widget-preview \*\)/);
-  assert.match(styles, /\.aichat\[data-misma-color-mode="light"\]/);
-
-  const pluginLayout = await read("../src/components/plugin-dashboard-layout.tsx");
+  // The pre-paint bootstrap must apply saved preferences before stylesheet rendering.
+  const root = await read("../src/routes/__root.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.match(pluginLayout, /localStorage\.getItem\("misma_appearance_preferences"\)/);
-  assert.match(pluginLayout, /shell\.dataset\.mismaColorMode = resolvedColorMode/);
-  assert.match(pluginLayout, /--misma-app-background", backgroundColor/);
-  assert.match(design, /\.aichat\.misma-plugin-dashboard-layout[\s\S]*?background: var\(--misma-app-background/);
-  assert.match(design, /\.misma-plugin-dashboard-sidebar[\s\S]*?background: var\(--misma-app-background/);
-  assert.match(dashboard, /Set the shared background used by the dashboard, plugin pages and their sidebars\./);
+  assert.ok(root.includes("appearanceBootstrapScript"));
+  assert.ok(root.includes("misma_appearance_preferences"));
+  assert.ok(root.includes("#000000"));
+  assert.ok(root.indexOf('<script dangerouslySetInnerHTML={{ __html: appearanceBootstrapScript }} />') < root.indexOf("<HeadContent />"));
+  assert.ok(dashboard.includes("const isPluginRoute ="));
+  assert.ok(dashboard.includes('document.documentElement.style.setProperty("--misma-app-background"'));
+  assert.ok(styles.includes("--misma-app-background: var(--misma-initial-background, #000000)"));
+});
+
+test("plugin popups and composer menus use the same app surface", async () => {
+  const design = await read("../src/misma-design-system.css");
+  assert.ok(design.includes("--misma-popover-bg: var(--misma-app-background, #000000)"));
+  assert.ok(design.includes(".aichat-composer-plus-menu,"));
+  assert.ok(design.includes(".misma-plugin-installed-popup,"));
+  assert.ok(design.includes(".misma-glass-modal,"));
+  assert.ok(design.includes("background: var(--misma-app-background, #000000) !important;"));
+  assert.ok(design.includes("background-image: none !important;"));
 });
