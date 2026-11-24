@@ -5,7 +5,6 @@ import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plu
 import { getPluginManifest } from "../lib/plugin-manifests";
 import { PluginProviderLogo } from "../components/plugin-provider-logo";
 import { Badge, Button, GlassCard, GlassModal } from "../components/misma-glass";
-import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 type PermissionMode = "always_ask" | "read" | "low_risk" | "all";
 type Connection = { id: string; provider: string; external_account_name: string | null; status: string; created_at: string; updated_at: string; workspace_id: string };
@@ -189,11 +188,10 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
     } finally { setBusy(false); setMenuOpen(false); }
   }
 
-  if (!manifest) return <PluginDashboardLayout><main className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></main></PluginDashboardLayout>;
+  if (!manifest) return <div className="misma-plugin-settings-page"><p>Plugin not found.</p><Button onClick={backToDetail}>Back</Button></div>;
 
   return (
-    <PluginDashboardLayout>
-    <main className="misma-plugin-settings-page">
+    <div className="misma-plugin-settings-page">
       <div className="misma-plugin-settings-shell">
         <header className="misma-plugin-settings-topbar misma-plugin-unified-header">
           <button type="button" className="misma-page-back-button" onClick={backToDetail} aria-label="Back to plugin detail">
@@ -273,7 +271,6 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
         </form>
       </GlassModal>
       {loading && <div className="misma-plugin-settings-loading">Loading account settings…</div>}
-    </main>
-    </PluginDashboardLayout>
+    </div>
   );
 }
