@@ -1,5 +1,5 @@
 :root {
-  --misma-bg: #0d0e11;
+  --misma-bg: #0f1724;
   --misma-surface: #141519;
   --misma-surface-raised: rgba(20, 21, 25, .82);
   --misma-glass-surface: rgba(255, 255, 255, .05);
@@ -1659,7 +1659,7 @@ small, .aichat small, .aichat-hint, .aichat-settings-hint { font-size: max(14px,
   min-height: 100dvh;
   width: 100%;
   overflow: visible;
-  background: #090a0c;
+  background: var(--misma-app-background, #0f1724);
 }
 .misma-plugin-dashboard-layout.is-sidebar-collapsed {
   --misma-plugin-sidebar-width: 68px;
@@ -2020,15 +2020,15 @@ body:has(.misma-plugin-dashboard-layout) {
 
 /* Compact ChatGPT-like typography across all Misma application pages. */
 :where(.aichat,.misma-site,.misma-marketplace-page,.misma-plugin-dashboard-layout,.misma-plugin-detail-page,.misma-plugin-settings-page,.misma-plugin-connect-page,.misma-integrations-page) {
-  --misma-consistent-font-size:14px !important;
-  --misma-consistent-helper-size:12px !important;
+  --misma-consistent-font-size:var(--misma-ui-font-size,16px) !important;
+  --misma-consistent-helper-size:max(12px,calc(var(--misma-ui-font-size,16px) * .875)) !important;
   --font-body-size:14px;
   --font-sidebar-size:13px;
   --font-recent-size:13px;
   --font-helper-size:12px;
   --font-min-size:12px;
   font-family:var(--font-sans,Inter,system-ui,sans-serif) !important;
-  font-size:14px !important;
+  font-size:var(--misma-ui-font-size,16px) !important;
   line-height:1.45 !important;
 }
 body .aichat :where(p,li,label,td,th,span,strong,b,em,button,[role="button"],[role="menuitem"],input,textarea,select):not(.misma-widget-preview *),
@@ -2259,4 +2259,249 @@ body .aichat .aichat-composer-card,body .aichat .aichat-composer-card-tools,body
   min-height: calc(56px + env(safe-area-inset-top, 0px)) !important;
   border-bottom: 1px solid color-mix(in srgb, var(--misma-app-foreground, #eef3fb) 22%, transparent) !important;
   box-shadow: none !important;
+}
+
+
+/* Appearance controls are authoritative across the dashboard and all plugin routes. */
+.aichat,
+.misma-plugin-dashboard-layout,
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-content {
+  --misma-consistent-font-size: var(--misma-ui-font-size, 16px);
+  --misma-consistent-helper-size: max(12px, calc(var(--misma-ui-font-size, 16px) * .875));
+  font-size: var(--misma-ui-font-size, 16px);
+}
+.aichat :where(p, li, label, td, th, button, [role="button"], [role="menuitem"], input, textarea, select),
+.misma-plugin-dashboard-layout :where(p, li, label, td, th, button, [role="button"], [role="menuitem"], input, textarea, select) {
+  font-size: var(--misma-ui-font-size, 16px) !important;
+}
+.aichat :where(pre, code, kbd, samp, .aichat-code-block, .aichat-message-content pre),
+.misma-plugin-dashboard-layout :where(pre, code, kbd, samp, .aichat-code-block) {
+  font-size: var(--misma-code-font-size, 13px) !important;
+}
+
+/* Plugin pages use the same desktop rail and mobile drawer behavior as the dashboard. */
+.misma-plugin-dashboard-layout { background: var(--misma-app-background, #0f1724) !important; }
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar {
+  display: flex;
+  width: var(--misma-plugin-sidebar-width, 260px);
+  flex: none;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 50;
+  height: 100dvh;
+  min-height: 100dvh;
+  background: var(--misma-app-background, #0f1724) !important;
+  border-right: 1px solid color-mix(in srgb, var(--misma-app-foreground, #eef3fb) 14%, transparent);
+  transition: width .18s ease, transform .2s ease;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-primary-nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px;
+  overflow-y: auto;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-nav-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #aab5c4 !important;
+  text-align: left;
+  text-decoration: none !important;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-nav-btn:hover,
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-nav-btn.active {
+  background: rgba(255,255,255,.075);
+  color: #fff !important;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-nav-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 0 5px 40px;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-nav-subbtn {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #9ba8b9;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-nav-subbtn:hover {
+  background: rgba(255,255,255,.06);
+  color: #fff;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar.is-collapsed .aichat-nav-submenu,
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar.is-collapsed .misma-plugin-sidebar-profile-actions {
+  display: none !important;
+}
+.misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar .aichat-side-user { flex: none; }
+.misma-plugin-sidebar-profile-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding-top: 7px;
+}
+.misma-plugin-sidebar-profile-actions a,
+.misma-plugin-sidebar-profile-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #aab5c4;
+  font: inherit;
+  font-size: 12px !important;
+  text-decoration: none;
+}
+.misma-plugin-sidebar-profile-actions a:hover,
+.misma-plugin-sidebar-profile-actions button:hover { background: rgba(255,255,255,.07); color: #fff; }
+.misma-plugin-sidebar-profile-actions svg { width: 14px; height: 14px; flex: none; }
+.misma-plugin-sidebar-profile-actions button { grid-column: 1 / -1; }
+.misma-plugin-profile-error { display: block; padding: 3px 7px; color: #fca5a5; font-size: 12px !important; }
+.misma-plugin-sidebar-backdrop { display: none; }
+.misma-plugin-mobile-nav-toggle {
+  display: none;
+  position: fixed;
+  z-index: 44;
+  left: 16px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  background: rgba(14,26,43,.96);
+  color: #f3f6fb;
+  box-shadow: 0 10px 28px rgba(0,0,0,.3);
+}
+.misma-plugin-mobile-nav-toggle svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+@media (min-width:768px) {
+  .misma-plugin-dashboard-content {
+    width: calc(100% - var(--misma-plugin-sidebar-width, 260px));
+    margin-left: var(--misma-plugin-sidebar-width, 260px);
+  }
+}
+@media (max-width:767px) {
+  .misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar {
+    display: flex !important;
+    width: min(280px, calc(100vw - 52px)) !important;
+    max-width: calc(100vw - 52px);
+    transform: translateX(-105%);
+    box-shadow: none;
+  }
+  .misma-plugin-dashboard-layout .misma-plugin-dashboard-sidebar.is-mobile-open {
+    transform: translateX(0);
+    box-shadow: 0 0 40px rgba(0,0,0,.65);
+  }
+  .misma-plugin-sidebar-backdrop.is-mobile-open { display: block !important; }
+  .misma-plugin-dashboard-content { width: 100% !important; margin-left: 0 !important; }
+  .misma-plugin-mobile-nav-toggle { display: grid; }
+}
+
+/* Compact popup controls and reduce the gap between each icon and its label. */
+.aichat-composer-plus-menu {
+  width: min(276px, calc(100vw - 28px)) !important;
+  padding: 6px !important;
+  border-radius: 14px !important;
+}
+.aichat-composer-plus-menu button {
+  min-height: 40px !important;
+  gap: 7px !important;
+  padding: 6px 8px !important;
+  border-radius: 9px !important;
+}
+.aichat-plus-menu-icon { width: 26px !important; height: 26px !important; border-radius: 7px !important; }
+.misma-plugin-installed-popup {
+  width: 164px !important;
+  min-width: 164px !important;
+  padding: 6px !important;
+  border-radius: 12px !important;
+}
+.misma-plugin-installed-popup > :where(a,button) {
+  display: flex;
+  align-items: center;
+  gap: 6px !important;
+  min-height: 34px !important;
+  padding: 6px 8px !important;
+  border-radius: 7px !important;
+}
+
+/* Light theme uses dark ink on light surfaces for the entire plugin shell. */
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"],
+.aichat[data-misma-color-mode="light"] {
+  --misma-app-background: #f3f6fb !important;
+  --misma-app-foreground: #172235 !important;
+  color: #172235 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-content,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-marketplace-page,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-detail-page,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-settings-page {
+  background: #f3f6fb !important;
+  background-image: none !important;
+  color: #172235 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar :where(.aichat-nav-btn,.aichat-nav-subbtn,.aichat-side-brand,.aichat-user-info,.aichat-user-info b),
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-sidebar-profile-actions a,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-sidebar-profile-actions button {
+  color: #172235 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar .aichat-nav-btn:hover,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-dashboard-sidebar .aichat-nav-btn.active,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-sidebar-profile-actions a:hover,
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-sidebar-profile-actions button:hover {
+  background: rgba(23,34,53,.07) !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-mobile-nav-toggle {
+  border-color: #cbd5e1;
+  background: rgba(255,255,255,.96);
+  color: #172235;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] :where(h1,h2,h3,h4,p,li,label,dt,dd,small,span,strong,b,em,td,th,a,button,[role="button"],[role="menuitem"]) {
+  color: #172235 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] :where(.misma-plugin-provider-card,.misma-plugin-settings-summary,.misma-plugin-settings-section,.misma-plugin-settings-card,.misma-glass-card,.misma-plugin-hero,.misma-marketplace-search,.misma-installed-chip,.misma-plugin-installed-popup,.misma-plugin-overflow-menu,input,textarea,select) {
+  border-color: #d9e1ec !important;
+  background: rgba(255,255,255,.94) !important;
+  box-shadow: 0 10px 28px rgba(23,34,53,.07) !important;
+  color: #172235 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] :where(.is-danger,.is-error,.misma-plugin-feedback.is-error) { color: #b42332 !important; }
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-detail-page :where(p,small,dt,dd),
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-settings-page :where(p,small,label) {
+  color: #526175 !important;
+}
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-detail-page :where(h1,h2,h3,h4,strong,b),
+.aichat.misma-plugin-dashboard-layout[data-misma-color-mode="light"] .misma-plugin-settings-page :where(h1,h2,h3,h4,strong,b) {
+  color: #172235 !important;
+}
+.aichat[data-misma-color-mode="light"] .aichat-side-user {
+  border-top-color: rgba(23,34,53,.18) !important;
+  background: #f3f6fb !important;
 }
