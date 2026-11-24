@@ -101,11 +101,12 @@ test("plugin details are manifest-driven, honest about capabilities, and mobile-
   assert.match(page, /Information/);
   assert.match(page, /Privacy Policy/);
   assert.match(page, /Terms of Service/);
-  assert.match(page, /StickyActionBar/);
+  assert.match(page, /misma-plugin-detail-floating-actions/);
   assert.match(page, /Try in chat/);
   assert.match(page, /Connect \{manifest\.name\}/);
   assert.match(page, /misma-plugin-skills-grid/);
-  assert.match(page, /misma-plugin-detail-actionbar/);
+  assert.doesNotMatch(page, /misma-plugin-detail-actionbar|StickyActionBar/);
+  assert.match(page, /manifest\.id !== "github"/);
   assert.match(page, /misma-plugin-detail-topline/);
   assert.match(page, /misma-plugin-detail-body/);
   assert.match(page, /misma-plugin-detail-back-button/);
