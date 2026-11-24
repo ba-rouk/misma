@@ -53,7 +53,7 @@ test("saved appearance is applied before the app can paint", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
   assert.match(root, /const appearanceBootstrap/);
   assert.match(root, /localStorage\.getItem\("misma_appearance_preferences"\)/);
-  assert.match(root, /data-misma-theme-ready/);
+  assert.match(root, /mismaThemeReady/);
   assert.match(root, /#000000/);
   assert.match(dashboard, /useState\("#000000"\)/);
 });
