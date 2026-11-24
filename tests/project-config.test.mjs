@@ -963,7 +963,7 @@ test("dashboard notification feed shows named human requests and counts unread n
   assert.ok(dashboard.includes("request?.reason"));
   assert.ok(dashboard.includes("Open conversation"));
   const viewStart = dashboard.indexOf("<h2>Human request notifications");
-  const viewEnd = dashboard.indexOf("\n\n        {deleteChatTarget && (", viewStart);
+  const viewEnd = dashboard.indexOf("{deleteChatTarget && (", viewStart);
   assert.ok(viewStart >= 0 && viewEnd > viewStart);
   assert.ok(!dashboard.slice(viewStart, viewEnd).includes("unreadVisitorMessages.map"));
 });
