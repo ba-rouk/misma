@@ -7036,7 +7036,7 @@ function Dashboard() {
                 <div className="aichat-settings-info-row"><strong>Cookies and marketing privacy</strong><span>Misma does not currently provide a separate cookie or marketing preference centre.</span></div>
                 <div className="aichat-settings-action-row">
                   <div><strong>Connected apps and services</strong><small>Review the providers and channels you have connected to this workspace.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/plugins")}>Manage connected apps</button>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/plugins" as never })}>Manage connected apps</button>
                 </div>
               </section>
 
@@ -7047,7 +7047,7 @@ function Dashboard() {
                 </div>
                 <div className="aichat-settings-action-row">
                   <div><strong>Manage memory</strong><small>View, search, export or delete saved facts and past conversation context.</small></div>
-                  <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/memory")}>Manage memory</button>
+                  <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/memory" as never })}>Manage memory</button>
                 </div>
               </section>
 
@@ -7061,8 +7061,8 @@ function Dashboard() {
                   <button type="button" onClick={() => setActiveTab("websites")}><strong>Website &amp; widget</strong><small>Manage website connections and installation</small></button>
                   <button type="button" onClick={() => setActiveTab("knowledge")}><strong>Business knowledge</strong><small>Review the information Misma uses to answer</small></button>
                   <button type="button" onClick={() => setActiveTab("connect")}><strong>Channels</strong><small>Connect customer communication channels</small></button>
-                  <button type="button" onClick={() => window.location.assign("/dashboard/plugins")}><strong>Plugins</strong><small>Connect and manage external tools</small></button>
-                  <button type="button" onClick={() => window.location.assign("/dashboard/memory")}><strong>Misma Memory</strong><small>Review saved facts and past context</small></button>
+                  <button type="button" onClick={() => void navigate({ to: "/dashboard/plugins" as never })}><strong>Plugins</strong><small>Connect and manage external tools</small></button>
+                  <button type="button" onClick={() => void navigate({ to: "/dashboard/memory" as never })}><strong>Misma Memory</strong><small>Review saved facts and past context</small></button>
                 </div>
                 <div className="aichat-help-center-articles">
                   <h3>Popular help topics</h3>
@@ -7083,7 +7083,7 @@ function Dashboard() {
                   <details>
                     <summary>How do I connect tools such as GitHub, Vercel or Netlify?</summary>
                     <p>Open Plugins, select the provider, review its permissions and connect the account. You can change action permissions or disconnect it later from that provider's settings page.</p>
-                    <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/plugins")}>Browse Plugins</button>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/plugins" as never })}>Browse Plugins</button>
                   </details>
                   <details>
                     <summary>Where do customer messages and human requests appear?</summary>
@@ -7093,7 +7093,7 @@ function Dashboard() {
                   <details>
                     <summary>What does Misma Memory save?</summary>
                     <p>Misma Memory lets you review useful facts and context retained from eligible conversations. You can inspect, export, pin or delete saved memory from its management page.</p>
-                    <button type="button" className="aichat-action-btn secondary" onClick={() => window.location.assign("/dashboard/memory")}>Manage Memory</button>
+                    <button type="button" className="aichat-action-btn secondary" onClick={() => void navigate({ to: "/dashboard/memory" as never })}>Manage Memory</button>
                   </details>
                   <details>
                     <summary>How do I manage privacy and account security?</summary>
