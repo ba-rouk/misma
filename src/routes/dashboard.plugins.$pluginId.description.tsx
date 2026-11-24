@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PluginDetailContent } from "./dashboard_.plugins.$pluginId";
+import { PluginDetailContent } from "./dashboard.plugins.$pluginId";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId/description")({
   component: PluginDescriptionRoute,
