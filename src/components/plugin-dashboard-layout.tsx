@@ -133,7 +133,7 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mobileOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") setMobileOpen(false);
     };
     document.addEventListener("keydown", closeOnEscape);

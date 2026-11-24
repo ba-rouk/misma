@@ -1998,7 +1998,7 @@ function Dashboard() {
       setPlusMenuOpen(false);
       setPluginPickerOpen(false);
     };
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setPlusMenuOpen(false);
         setPluginPickerOpen(false);

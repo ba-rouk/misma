@@ -34,7 +34,7 @@ function PluginsPage() {
       if (target.closest(".misma-plugin-provider-menu-trigger, .misma-plugin-installed-popup")) return;
       setOpenPluginMenu(null);
     };
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") setOpenPluginMenu(null);
     };
     document.addEventListener("pointerdown", handleOutsidePointer, true);
