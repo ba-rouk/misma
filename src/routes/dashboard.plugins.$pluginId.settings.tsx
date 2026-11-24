@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plugin-connect";
@@ -98,7 +98,8 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
       || window.sessionStorage.getItem("misma_plugins_website_id")
       || "";
     const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
-    window.location.assign(manifest ? "/dashboard/plugins/" + manifest.id + suffix : "/dashboard/plugins");
+    const target = manifest ? "/dashboard/plugins/" + manifest.id + suffix : "/dashboard/plugins";
+    void navigate({ to: target as never });
   }
 
   async function savePluginRow(fields: Record<string, unknown>) {
