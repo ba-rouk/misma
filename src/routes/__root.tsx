@@ -13,6 +13,40 @@ import appCss from "../styles.css?url";
 import pluginSystemCss from "../plugins-system.css?url";
 import mismaDesignSystemCss from "../misma-design-system.css?url";
 
+const appearanceBootstrap = `(() => {
+  try {
+    const raw = window.localStorage.getItem("misma_appearance_preferences");
+    const saved = raw ? JSON.parse(raw) : {};
+    const mode = saved.colorMode === "light" || saved.colorMode === "system" || saved.colorMode === "dark" ? saved.colorMode : "dark";
+    const resolvedMode = mode === "system"
+      ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+      : mode;
+    const dark = resolvedMode === "dark";
+    const validColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    const background = dark ? (validColor(saved.backgroundColor) ? saved.backgroundColor : "#000000") : "#f3f6fb";
+    const foreground = dark ? (validColor(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb") : "#172235";
+    const root = document.documentElement;
+    root.dataset.mismaColorMode = resolvedMode;
+    root.dataset.mismaThemeReady = "true";
+    root.dataset.mismaContrast = saved.contrastLevel === "increased" || saved.contrastLevel === "system" ? saved.contrastLevel : "medium";
+    root.style.setProperty("--misma-app-background", background);
+    root.style.setProperty("--misma-app-foreground", foreground);
+    root.style.setProperty("--misma-bg", background);
+    root.style.setProperty("--misma-ui-font-size", Math.min(20, Math.max(14, Math.round(Number(saved.uiFontSize) || 16))) + "px");
+    root.style.setProperty("--misma-code-font-size", Math.min(18, Math.max(11, Math.round(Number(saved.codeFontSize) || 13))) + "px");
+    root.style.setProperty("--misma-composer-surface", "#14171d");
+    root.dataset.mismaReduceMotion = saved.reduceMotion === true ? "true" : "false";
+  } catch (_) {
+    const root = document.documentElement;
+    root.dataset.mismaColorMode = "dark";
+    root.dataset.mismaThemeReady = "true";
+    root.style.setProperty("--misma-app-background", "#000000");
+    root.style.setProperty("--misma-app-foreground", "#eef3fb");
+    root.style.setProperty("--misma-bg", "#000000");
+    root.style.setProperty("--misma-composer-surface", "#14171d");
+  }
+})();`;
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -56,6 +90,7 @@ function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: appearanceBootstrap }} />
         <HeadContent />
       </head>
       <body>
