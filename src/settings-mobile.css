@@ -1,0 +1,104 @@
+/* Shared page chrome and mobile Settings workspace. */
+.misma-page-back-button,
+.misma-settings-info-button {
+  display: grid; flex: none; width: 44px; height: 44px; place-items: center; padding: 0;
+  border: 1px solid var(--misma-border, rgba(255,255,255,.12)); border-radius: 50%;
+  background: var(--misma-surface, #141519); color: var(--misma-text, #f4f5f7); cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+.misma-page-back-button:hover,.misma-settings-info-button:hover { border-color: color-mix(in srgb, var(--misma-green, #10b981) 45%, var(--misma-border, #444)); background: var(--misma-surface-raised, #1b2026); }
+.misma-page-back-button:focus-visible,.misma-settings-info-button:focus-visible,.misma-settings-row:focus-visible,.misma-settings-card-heading:focus-visible,.misma-settings-search button:focus-visible { outline: 2px solid var(--misma-green, #10b981); outline-offset: 3px; }
+.misma-page-back-button svg,.misma-settings-info-button svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.misma-page-header { display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; align-items: center; gap: 12px; width: 100%; min-height: 52px; margin: 0 0 18px; }
+.misma-page-header h1 { min-width: 0; margin: 0; overflow: hidden; color: var(--misma-app-foreground, var(--misma-text, #f4f5f7)); font: 600 25px/1.18 var(--font-serif, "Source Serif 4", Georgia, serif); letter-spacing: -.025em; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.misma-page-header-right { display: grid; place-items: center; width: 44px; height: 44px; }
+.misma-mobile-settings-layout { display: none; }
+.misma-settings-card { min-width: 0; overflow: hidden; border: 1px solid var(--misma-border, rgba(255,255,255,.10)); border-radius: 24px; background: var(--misma-surface, #141519); box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
+.misma-settings-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 65px; padding: 13px 16px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.misma-settings-card-heading > span { display: grid; gap: 3px; }
+.misma-settings-card-heading strong { color: var(--misma-app-foreground, #f4f5f7); font-size: 18px; font-weight: 650; }
+.misma-settings-card-heading small { color: #b4bdca; font-size: 14px; line-height: 1.4; }
+.misma-settings-card-heading > svg { width: 20px; height: 20px; flex: none; fill: none; stroke: #9aa5b3; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.misma-settings-row { position: relative; display: flex; align-items: center; gap: 13px; width: 100%; min-height: 58px; padding: 10px 15px; border: 0; background: transparent; color: var(--misma-app-foreground, #f4f5f7); text-align: left; text-decoration: none; cursor: pointer; }
+.misma-settings-card-rows .misma-settings-row,.misma-settings-grouped-card li + li .misma-settings-row,.misma-settings-support-card li + li .misma-settings-row { border-top: 1px solid var(--misma-border, rgba(255,255,255,.09)); }
+.misma-settings-row:hover { background: rgba(255,255,255,.035); }
+.misma-settings-row-copy { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.misma-settings-row-copy strong { overflow-wrap: anywhere; color: inherit; font: 500 17px/1.35 var(--font-sans, Inter, sans-serif); }
+.misma-settings-row-copy small { overflow-wrap: anywhere; color: #aab6c5; font: 400 14px/1.4 var(--font-sans, Inter, sans-serif); }
+.misma-settings-row-icon { display: grid; width: 26px; height: 26px; flex: none; place-items: center; color: #c4ceda; }
+.misma-settings-row-icon svg { display: block; width: 23px; height: 23px; }
+.misma-settings-row-chevron { width: 19px; height: 19px; flex: none; fill: none; stroke: #8b96a4; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.misma-settings-row.is-destructive { color: #ff8d91; }
+.misma-settings-row.is-destructive .misma-settings-row-icon { color: #ff8d91; }
+.misma-settings-row-avatar { display: grid; width: 48px; height: 48px; flex: none; overflow: hidden; place-items: center; border: 1px solid rgba(255,255,255,.13); border-radius: 50%; background: #475569; color: #fff; font: 650 19px/1 var(--font-sans, Inter, sans-serif); }
+.misma-settings-row-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.misma-settings-grouped-card nav ul,.misma-settings-support-card nav ul { padding: 0; margin: 0; list-style: none; }
+.misma-settings-result { padding: 0 0 5px; }
+.misma-settings-result + .misma-settings-result { border-top: 1px solid var(--misma-border, rgba(255,255,255,.09)); }
+.misma-settings-result > small { display: block; padding: 0 15px 8px 54px; color: #aab6c5; font-size: 14px; }
+.misma-settings-empty { margin: 0; padding: 24px 16px; color: #b4bdca; font-size: 16px; text-align: center; }
+.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-sidebar,.aichat-settings-tab-view[data-mobile-settings="home"] .aichat-settings-layout { display: none !important; }
+.aichat-settings-tab-view[data-mobile-settings="home"] > .misma-mobile-settings-layout { display: flex; }
+.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail { display: flex; }
+.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-header { display: none !important; }
+
+@media (max-width: 767px) {
+  .aichat.is-settings-page { min-height: 100dvh; }
+  .aichat.is-settings-page > .aichat-main { min-height: 100dvh !important; height: 100dvh !important; overflow: hidden !important; }
+  .aichat-settings-tab-view { display: flex !important; flex-direction: column; width: 100%; min-height: 0; height: 100%; overflow: hidden !important; padding: 0 !important; background: var(--misma-app-background, var(--misma-bg, #000)) !important; }
+  .aichat-settings-tab-view[data-mobile-settings="home"] > .misma-mobile-settings-layout,.aichat-settings-tab-view[data-mobile-settings="detail"] > .misma-mobile-settings-layout { display: flex; }
+  .misma-mobile-settings-layout { position: relative; flex: 1 1 auto; flex-direction: column; width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: hidden; background: var(--misma-app-background, var(--misma-bg, #000)); color: var(--misma-app-foreground, var(--misma-text, #f4f5f7)); }
+  .misma-mobile-settings-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(104px + env(safe-area-inset-bottom, 0px)); scrollbar-width: thin; }
+  .misma-settings-home-header { margin-bottom: 19px; }
+  .misma-settings-home-header .misma-settings-info-button { width: 44px; height: 44px; }
+  .misma-mobile-settings-scroll > .misma-settings-card { margin-bottom: 14px; }
+  .misma-mobile-settings-scroll > .misma-settings-card:last-child { margin-bottom: 0; }
+  .misma-settings-profile-card .misma-settings-row { min-height: 78px; padding: 14px 15px; }
+  .misma-settings-profile-card .misma-settings-row-copy strong { font-weight: 650; font-size: 18px; }
+  .misma-settings-customize-card .misma-settings-card-rows { padding-bottom: 3px; }
+  .misma-settings-grouped-card .misma-settings-row,.misma-settings-support-card .misma-settings-row { min-height: 58px; }
+  .misma-settings-search-dock { position: fixed; z-index: 50; right: 0; left: 0; display: flex; justify-content: center; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--misma-app-background, #000) 88%, transparent) 22%, var(--misma-app-background, #000) 70%); transition: bottom .12s ease-out; }
+  .misma-settings-search { display: flex; align-items: center; gap: 11px; width: min(100%, 660px); min-height: 54px; padding: 0 15px; border: 1px solid var(--misma-border, rgba(255,255,255,.12)); border-radius: 999px; background: var(--misma-composer-surface, #14171d); color: #e7edf5; box-shadow: 0 8px 28px rgba(0,0,0,.22); }
+  .misma-settings-search:focus-within { border-color: color-mix(in srgb, var(--misma-green, #10b981) 70%, var(--misma-border, #444)); }
+  .misma-settings-search > svg { width: 21px; height: 21px; flex: none; fill: none; stroke: #aeb9c8; stroke-width: 1.8; stroke-linecap: round; }
+  .misma-settings-search input { flex: 1; min-width: 0; height: 50px; border: 0 !important; outline: 0 !important; background: transparent !important; color: #f4f5f7 !important; box-shadow: none !important; font: 400 16px/1.3 var(--font-sans, Inter, sans-serif); }
+  .misma-settings-search input::placeholder { color: #aab4c2; opacity: 1; }
+  .misma-settings-search > button { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border: 0; border-radius: 50%; background: rgba(255,255,255,.10); color: #f1f4f8; font-size: 20px; cursor: pointer; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-layout { display: block; width: 100%; min-height: 0; height: 100%; overflow: hidden; background: transparent !important; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail { display: flex; min-height: 0; width: 100%; height: 100%; max-height: none; overflow-x: hidden; overflow-y: auto; padding: 0 16px calc(30px + env(safe-area-inset-bottom, 0px)); background: transparent !important; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .misma-settings-detail-header { flex: none; margin: 0 -16px 15px; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; border-bottom: 1px solid var(--misma-border, rgba(255,255,255,.10)); background: var(--misma-app-background, var(--misma-bg, #000)); }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content { width: 100%; max-width: none; margin: 0; padding: 0 0 16px; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content > .aichat-settings-card { display: block; width: 100%; padding: 18px 16px 20px; margin: 0; overflow: visible; border: 1px solid var(--misma-border, rgba(255,255,255,.12)); border-radius: 24px; background: var(--misma-surface, #141519); box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content > .aichat-settings-card[hidden] { display: none !important; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-profile-head h3,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-section-heading > span > h3 { display: none !important; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-profile-head { align-items: center; padding: 0 0 15px; margin: 0 0 13px; border-bottom: 1px solid var(--misma-border, rgba(255,255,255,.09)); }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-profile-head p,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-section-heading p { margin: 0; color: #b2bdcc; font-size: 14px; line-height: 1.5; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-section-heading { margin: 0 0 16px; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-profile-edit-row,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-voice-row,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-action-row { display: flex; align-items: stretch; flex-direction: column; gap: 12px; width: 100%; padding: 13px 0; margin: 0; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-input-group,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-input,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-textarea,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-voice-picker,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-voice-picker-trigger { width: 100%; min-width: 0; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content .aichat-action-btn,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content .aichat-data-danger-button,.aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content .aichat-settings-delete-account { width: 100%; min-height: 48px; justify-content: center; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-action-row > div { width: 100%; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-info-row { align-items: flex-start; gap: 7px; flex-direction: column; padding: 13px 0; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-help-center-shortcuts { grid-template-columns: 1fr; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-color-input { flex: none; width: 58px; height: 42px; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block > * { width: 100%; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-segment-group { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); width: 100%; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-segment { min-width: 0; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-profile-head > div { min-width: 0; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-staff-access-form { display: flex; flex-direction: column; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-staff-access-form .aichat-action-btn { order: 5; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-staff-access-form .aichat-settings-hint { order: 4; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content > .aichat-settings-card + .aichat-settings-card { margin-top: 12px; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content .aichat-setting-row { min-height: 60px; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content .aichat-setting-copy strong { font-size: 16px; }
+}
+@keyframes misma-settings-slide-in { from { opacity: .72; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@media (max-width: 767px) {
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content > .aichat-settings-card:not([hidden]) { animation: misma-settings-slide-in .2s ease-out both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .misma-page-back-button,.misma-settings-info-button,.misma-settings-search-dock { transition: none !important; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-detail-content > .aichat-settings-card:not([hidden]) { animation: none !important; }
+}
+@media (min-width: 768px) { .misma-page-header { min-height: 56px; } .misma-mobile-settings-layout { display: none !important; } }
