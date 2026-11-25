@@ -5257,6 +5257,7 @@ function Dashboard() {
 
   const showPluginSettingsChild = /^\/dashboard\/plugins\/[^/]+\/(?:settings|description)\/?$/.test(location.pathname);
   return showPluginSettingsChild ? <Outlet /> : (
+    <>
     <div className={`aichat${activeTab === "settings" && !staffMode ? " is-settings-page" : ""}`}>
       {/* Mobile Translucent Backdrop */}
       <button
@@ -7762,5 +7763,6 @@ function Dashboard() {
       </main>
     </div>
     <Outlet />
+    </>
   );
 }
