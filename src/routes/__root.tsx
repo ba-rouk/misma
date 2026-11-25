@@ -13,6 +13,7 @@ import sourceSerifLatinFont from "@fontsource-variable/source-serif-4/files/sour
 import appCss from "../styles.css?url";
 import pluginSystemCss from "../plugins-system.css?url";
 import mismaDesignSystemCss from "../misma-design-system.css?url";
+import settingsMobileCss from "../settings-mobile.css?url";
 import { PluginDashboardLayout } from "../components/plugin-dashboard-layout";
 
 const appearanceBootstrap = `(() => {
@@ -71,6 +72,7 @@ export const Route = createRootRoute({
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: pluginSystemCss },
       { rel: "stylesheet", href: mismaDesignSystemCss },
+      { rel: "stylesheet", href: settingsMobileCss },
       { rel: "icon", href: "/misma-logo.svg", type: "image/svg+xml", sizes: "any" },
       { rel: "icon", href: "/misma-favicon.png", type: "image/png", sizes: "48x48" },
       { rel: "shortcut icon", href: "/misma-favicon.png", type: "image/png" },
@@ -82,7 +84,7 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   const location = useLocation();
-  const useSharedDashboardShell = location.pathname.startsWith("/dashboard/");
+  const useSharedDashboardShell = location.pathname.startsWith("/dashboard/") && !location.pathname.startsWith("/dashboard/settings");
 
   return (
     <RootDocument>
