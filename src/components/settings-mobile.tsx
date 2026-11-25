@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { SETTINGS_ITEMS, SETTINGS_GROUPS, type SettingsItem } from "../lib/settings-config";
+import { SETTINGS_ITEMS, SETTINGS_GROUPS, getSettingsRoute } from "../lib/settings-config";
 import { BackButton, PageHeader } from "./misma-page-header";
 
 export function SettingsCard({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -10,6 +10,7 @@ export function SettingsRow({
   label,
   icon,
   onActivate,
+  href,
   description,
   destructive = false,
   avatar,
@@ -19,25 +20,32 @@ export function SettingsRow({
   label: string;
   icon?: ReactNode;
   onActivate: () => void;
+  href?: string;
   description?: string;
   destructive?: boolean;
   avatar?: ReactNode;
   chevron?: boolean;
   className?: string;
 }) {
-  return (
-    <button
-      type="button"
-      className={["misma-settings-row", destructive ? "is-destructive" : "", className].filter(Boolean).join(" ")}
-      onClick={onActivate}
-    >
+  const content = (
+    <>
       {avatar ? <span className="misma-settings-row-avatar">{avatar}</span> : icon ? <span className="misma-settings-row-icon" aria-hidden="true">{icon}</span> : null}
       <span className="misma-settings-row-copy">
         <strong>{label}</strong>
         {description && <small>{description}</small>}
       </span>
       {chevron && <svg className="misma-settings-row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>}
-    </button>
+    </>
+  );
+  const classes = ["misma-settings-row", destructive ? "is-destructive" : "", className].filter(Boolean).join(" ");
+  return href ? (
+    <a
+      className={classes}
+      href={href}
+      onClick={(event) => { event.preventDefault(); onActivate(); }}
+    >{content}</a>
+  ) : (
+    <button type="button" className={classes} onClick={onActivate}>{content}</button>
   );
 }
 
@@ -180,7 +188,7 @@ export function SettingsHome({
                 label={profileName || "Your account"}
                 description={profileEmail || "Your Misma account"}
                 avatar={profileImage ? <img src={profileImage} alt="" /> : <span>{profileName[0]?.toUpperCase() || "M"}</span>}
-                onActivate={() => onOpenSection("settings-profile")}
+                onActivate={() => onOpenSection("settings-profile")} href={getSettingsRoute("settings-profile")}
               />
             </SettingsCard>
 
@@ -191,8 +199,8 @@ export function SettingsHome({
               </button>
               {customizeExpanded && (
                 <div className="misma-settings-card-rows">
-                  <SettingsRow label="Misma Memory" icon={iconFor("history")} onActivate={() => onOpenSection("settings-memory")} />
-                  <SettingsRow label="Plugins" icon={iconFor("manage")} onActivate={onOpenPlugins} />
+                  <SettingsRow label="Misma Memory" icon={iconFor("history")} onActivate={() => onOpenSection("settings-memory")} href={getSettingsRoute("settings-memory")} />
+                  <SettingsRow label="Plugins" icon={iconFor("manage")} onActivate={onOpenPlugins} href="/dashboard/plugins" />
                 </div>
               )}
             </SettingsCard>
@@ -202,7 +210,7 @@ export function SettingsHome({
                 <ul>
                   {SETTINGS_GROUPS.filter((group) => group.label !== "Profile" && group.label !== "Support").flatMap((group) => group.items).map((item) => (
                     <li key={item.id}>
-                      <SettingsRow label={item.label} icon={iconFor(item.icon)} onActivate={() => onOpenSection(item.id)} />
+                      <SettingsRow label={item.label} icon={iconFor(item.icon)} onActivate={() => onOpenSection(item.id)} href={getSettingsRoute(item.id)} />
                     </li>
                   ))}
                 </ul>
@@ -212,7 +220,7 @@ export function SettingsHome({
             <SettingsCard className="misma-settings-support-card">
               <nav aria-label="Support and account">
                 <ul>
-                  <li><SettingsRow label="Help Center" icon={iconFor("help")} onActivate={() => onOpenSection("settings-help-center")} /></li>
+                  <li><SettingsRow label="Help Center" icon={iconFor("help")} onActivate={() => onOpenSection("settings-help-center")} href={getSettingsRoute("settings-help-center")} /></li>
                   <li><SettingsRow label="Sign out" icon={iconFor("logout")} onActivate={onSignOut} destructive /></li>
                 </ul>
               </nav>
