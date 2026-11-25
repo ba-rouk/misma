@@ -8,10 +8,12 @@ test("mobile Settings routes reuse the existing dashboard settings panels", asyn
   const dashboard = await read("../src/routes/dashboard.tsx");
   const homeRoute = await read("../src/routes/dashboard.settings.tsx");
   const sectionRoute = await read("../src/routes/dashboard.settings.$section.tsx");
+  const mobile = await read("../src/components/settings-mobile.tsx");
   assert.match(homeRoute, /createFileRoute\("\/dashboard\/settings"\)/);
   assert.match(sectionRoute, /createFileRoute\("\/dashboard\/settings\/\$section"\)/);
   assert.match(dashboard, /<SettingsHome[\s\S]*?onOpenSection=\{openMobileSettingsSection\}/);
-  assert.match(dashboard, /<SettingsDetail[\s\S]*?Back to Settings/);
+  assert.match(dashboard, /<SettingsDetail[\s\S]*?onBack=/);
+  assert.match(mobile, /backLabel="Back to Settings"/);
   for (const id of ["settings-profile", "settings-business", "settings-account", "settings-data-controls", "settings-memory", "settings-accent", "settings-notifications", "settings-voice", "settings-about", "settings-help-center"]) {
     assert.match(dashboard, new RegExp('id="' + id + '"'));
   }
@@ -40,12 +42,13 @@ test("one settings configuration powers desktop navigation, mobile rows and sear
 test("mobile Settings uses safe-area and keyboard-aware search, with reduced-motion support", async () => {
   const mobile = await read("../src/components/settings-mobile.tsx");
   const styles = await read("../src/settings-mobile.css");
+  const desktopStyles = await read("../src/styles.css");
   assert.match(mobile, /window\.visualViewport/);
   assert.match(styles, /env\(safe-area-inset-bottom/);
   assert.match(styles, /@media \(max-width: 767px\)/);
   assert.match(styles, /@media \(min-width: 768px\)/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
-  assert.match(styles, /grid-template-columns: 260px minmax\(0,1fr\)/);
+  assert.match(desktopStyles, /grid-template-columns: 260px minmax\(0, 1fr\)/);
 });
 
 test("mobile Settings route is excluded from plugin wrapper and desktop routes redirect to Profile", async () => {
