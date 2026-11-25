@@ -46,6 +46,7 @@ import { VoiceInputBar } from "../components/voice-input-bar";
 import { getSpeechVoiceForPreset } from "../lib/misma-voice";
 import { SETTINGS_GROUPS, SETTINGS_ITEMS, getSettingsItemById, getSettingsItemBySlug, getSettingsRoute } from "../lib/settings-config";
 import { SettingsDetail, SettingsHome } from "../components/settings-mobile";
+import { BackButton } from "../components/misma-page-header";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -5613,17 +5614,7 @@ function Dashboard() {
         {/* Keep the menu control available when the sidebar is closed. */}
         <header className="aichat-topbar">
           {canGoBack && (
-            <button
-              type="button"
-              className="aichat-header-back"
-              aria-label="Go back to previous page"
-              title="Go back"
-              onClick={handleDashboardBack}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-            </button>
+            <BackButton onClick={handleDashboardBack} ariaLabel="Go back to previous page" className="aichat-header-back" />
           )}
           <button
             type="button"
