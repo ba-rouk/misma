@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BackButton } from "../components/misma-page-header";
 import { PluginDetailContent } from "./dashboard_.plugins.$pluginId";
 
 export const Route = createFileRoute("/dashboard/plugins/$pluginId/description")({
