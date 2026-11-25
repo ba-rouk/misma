@@ -5609,7 +5609,7 @@ function Dashboard() {
 
       {/* ── Main Content Area ── */}
       <main
-        className={`aichat-main${sidebarOpen ? " sidebar-open" : " sidebar-closed"}`}
+        className={`aichat-main${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${activeTab === "settings" && !staffMode ? " is-settings-main" : ""}`}
       >
         {/* Keep the menu control available when the sidebar is closed. */}
         <header className="aichat-topbar">
