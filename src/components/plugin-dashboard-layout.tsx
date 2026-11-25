@@ -234,20 +234,13 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
             <span className="aichat-user-info"><b>{profileEmail ? profileEmail.split("@")[0] : "Your account"}</b><small>{profileEmail || "Misma account"}</small></span>
           </div>
           <div className="misma-plugin-sidebar-profile-actions">
-            <a href="/dashboard?tab=settings" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=settings"); }}><SidebarIcon kind="settings" />Settings</a>
-            <a href="/dashboard?tab=settings&section=help-center" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard?tab=settings&section=help-center"); }}><SidebarIcon kind="help" />Help Center</a>
+            <a href="/dashboard/settings" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard/settings"); }}><SidebarIcon kind="settings" />Settings</a>
+            <a href="/dashboard/settings/help-center" onClick={(event) => { event.preventDefault(); navigateTo("/dashboard/settings/help-center"); }}><SidebarIcon kind="help" />Help Center</a>
             <button type="button" onClick={() => void signOut()}><span aria-hidden="true">↗</span>Sign out</button>
           </div>
           {profileActionError && <small className="misma-plugin-profile-error" role="alert">{profileActionError}</small>}
         </div>
       </aside>
-      <button type="button" className="misma-plugin-mobile-nav-toggle" aria-label={mobileOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileOpen} onClick={() => setMobileOpen((value) => !value)}>
-        {mobileOpen ? (
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12" /></svg>
-        ) : (
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-        )}
-      </button>
       <div className="misma-plugin-dashboard-content">{children}</div>
     </div>
   );

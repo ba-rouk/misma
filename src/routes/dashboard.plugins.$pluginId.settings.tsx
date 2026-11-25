@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { BackButton } from "../components/misma-page-header";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext } from "../lib/plugin-connect";
@@ -196,9 +197,7 @@ export function PluginSettingsPage({ pluginId }: { pluginId: string }) {
     <main className="misma-plugin-settings-page">
       <div className="misma-plugin-settings-shell">
         <header className="misma-plugin-settings-topbar misma-plugin-unified-header">
-          <button type="button" className="misma-page-back-button" onClick={backToDetail} aria-label="Back to plugin detail">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg>
-          </button>
+          <BackButton onClick={backToDetail} ariaLabel="Back to plugin detail" />
           <h1><img className="misma-plugin-page-title-mark" src="/misma-logo.svg" alt="" />{manifest.name}</h1><span />
         </header>
 
