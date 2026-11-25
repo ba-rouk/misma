@@ -176,7 +176,7 @@ export function SettingsHome({
           <SettingsCard className="misma-settings-search-results">
             {results.length ? results.map((item) => (
               <div className="misma-settings-result" key={item.id}>
-                <SettingsRow label={item.label} icon={iconFor(item.icon)} onActivate={item.action} />
+                <SettingsRow label={item.label} icon={iconFor(item.icon)} onActivate={item.action} href={item.id === "settings-plugins" ? "/dashboard/plugins" : getSettingsRoute(item.id)} />
                 <small>{item.group}</small>
               </div>
             )) : <p className="misma-settings-empty">No settings found</p>}
