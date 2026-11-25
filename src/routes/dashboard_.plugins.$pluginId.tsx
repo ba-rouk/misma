@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { BackButton } from "../components/misma-page-header";
 import { useEffect, useState, type CSSProperties } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
@@ -194,7 +195,7 @@ export function PluginDetailContent({ pluginId: rawPluginId }: { pluginId: strin
 
         <header className="misma-plugin-detail-header">
           <div className="misma-plugin-detail-topline">
-            <button type="button" className="misma-page-back-button misma-plugin-detail-back-button" onClick={backToPlugins} aria-label="Back to Plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12"/></svg></button>
+            <BackButton onClick={backToPlugins} ariaLabel="Back to Plugins" className="misma-plugin-detail-back-button" />
             <button type="button" className="misma-plugin-detail-settings" aria-label="Plugin settings" onClick={() => {
                 const suffix = websiteId ? "?websiteId=" + encodeURIComponent(websiteId) : "";
                 void navigate({ to: ("/dashboard/plugins/" + manifest.id + "/settings" + suffix) as never });
