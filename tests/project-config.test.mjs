@@ -1871,19 +1871,20 @@ test("Core.01 workspace seed trigger targets its partial unique topic index", as
 
 test("Misma settings is a grouped single-section workspace with an in-app Help Center", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
+  const config = await read("../src/lib/settings-config.ts");
   const styles = await read("../src/styles.css");
 
   assert.match(dashboard, /aichat-settings-layout/);
   assert.match(dashboard, /aichat-settings-sidebar/);
   assert.match(dashboard, /Back to app/);
-  assert.match(dashboard, /settingsGroups = \[/);
-  assert.match(dashboard, /label: "Profile"/);
-  assert.match(dashboard, /label: "Business"/);
-  assert.match(dashboard, /id: "settings-business"/);
-  assert.match(dashboard, /id: "settings-account"/);
-  assert.match(dashboard, /label: "Account"/);
-  assert.match(dashboard, /label: "App"/);
-  assert.match(dashboard, /label: "Support"/);
+  assert.match(dashboard, /const settingsGroups = SETTINGS_GROUPS/);
+  assert.match(config, /label: "Profile"/);
+  assert.match(config, /label: "Business"/);
+  assert.match(config, /id: "settings-business"/);
+  assert.match(config, /id: "settings-account"/);
+  assert.match(config, /label: "Account"/);
+  assert.match(config, /label: "App"/);
+  assert.match(config, /label: "Support"/);
   assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-profile"\}/);
   assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-business"\}/);
   assert.match(dashboard, /hidden=\{selectedSettingsSection !== "settings-account"\}/);
@@ -1902,11 +1903,12 @@ test("Misma settings is a grouped single-section workspace with an in-app Help C
 
 test("Misma Data controls replace the old privacy/history navigation and expose only supported actions", async () => {
   const dashboard = await read("../src/routes/dashboard.tsx");
+  const config = await read("../src/lib/settings-config.ts");
   const api = await read("../src/lib/api/misma.functions.ts");
   const styles = await read("../src/styles.css");
 
-  assert.match(dashboard, /label: "Data controls"/);
-  assert.match(dashboard, /id: "settings-data-controls"/);
+  assert.match(config, /label: "Data controls"/);
+  assert.match(config, /id: "settings-data-controls"/);
   assert.doesNotMatch(dashboard, /settings-privacy|settings-history|settings-logout/);
   assert.match(dashboard, /Use recent conversation context/);
   assert.match(dashboard, /Export workspace data/);
