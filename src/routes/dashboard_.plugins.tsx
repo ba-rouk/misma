@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { BackButton } from "../components/misma-page-header";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import { getPluginAuthorizationUrl, getPluginWorkspaceContext, openPluginInChat } from "../lib/plugin-connect";
@@ -241,9 +242,7 @@ function PluginsPage() {
     <main className="misma-marketplace-page misma-plugin-directory-page" onClick={() => setOpenPluginMenu(null)}>
       <div className="misma-marketplace-shell misma-plugin-directory-shell">
         <header className="misma-marketplace-header misma-plugin-directory-header">
-          <button type="button" className="misma-page-back-button misma-plugin-directory-back" aria-label="Go to previous page" onClick={navigateBack}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18 9 12l6-6M9 12h12" /></svg>
-          </button>
+          <BackButton onClick={navigateBack} ariaLabel="Go to previous page" className="misma-plugin-directory-back" />
           <div className="misma-plugin-directory-heading"><h1><img className="misma-plugin-page-title-mark" src="/misma-logo.svg" alt="" />Plugins</h1></div>
           <span className="misma-plugin-header-spacer" aria-hidden="true" />
         </header>
