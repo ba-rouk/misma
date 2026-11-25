@@ -1535,7 +1535,7 @@ function Dashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Active navigation tab (5 primary items)
-  const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const [activeTab, setActiveTab] = useState<TabId>(isSettingsRoutePath ? "settings" : "workspace");
   const [dashboardTabHistory, setDashboardTabHistory] = useState<TabId[]>([]);
   const previousDashboardTabRef = useRef<TabId>("workspace");
   const skipDashboardTabHistoryRef = useRef(false);
@@ -1673,13 +1673,18 @@ function Dashboard() {
   const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
   const [selectedSettingsSection, setSelectedSettingsSection] = useState("settings-profile");
   useEffect(() => {
-    if (!isSettingsRoutePath) return;
-    setActiveTab("settings");
-    const routeItem = isMobileSettingsDetailRoute ? getSettingsItemBySlug(settingsRouteSlug) : getSettingsItemById("settings-profile");
-    setSelectedSettingsSection(routeItem?.id || "settings-profile");
-    setSettingsSearchQuery("");
-    setHelpRequestStatus("");
-    setHelpRequestError("");
+    if (isSettingsRoutePath) {
+      setActiveTab("settings");
+      const routeItem = isMobileSettingsDetailRoute ? getSettingsItemBySlug(settingsRouteSlug) : getSettingsItemById("settings-profile");
+      setSelectedSettingsSection(routeItem?.id || "settings-profile");
+      setSettingsSearchQuery("");
+      setHelpRequestStatus("");
+      setHelpRequestError("");
+      return;
+    }
+    if (location.pathname === "/dashboard" && new URLSearchParams(window.location.search).get("tab") !== "settings") {
+      setActiveTab((current) => current === "settings" ? "workspace" : current);
+    }
   }, [location.pathname]);
 
   useEffect(() => {
