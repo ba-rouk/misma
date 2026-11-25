@@ -18,7 +18,7 @@ test("plugin pages share dashboard navigation and mobile drawer behavior", async
   assert.match(layout, /aichat-primary-nav/);
   assert.match(layout, /Manage/);
   assert.match(layout, /Build/);
-  assert.match(layout, /misma-plugin-mobile-nav-toggle/);
+  assert.doesNotMatch(layout, /misma-plugin-mobile-nav-toggle/);
   assert.match(design, /misma-plugin-dashboard-sidebar\.is-mobile-open/);
 });
 
