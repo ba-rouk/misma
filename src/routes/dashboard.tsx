@@ -44,6 +44,8 @@ import { getSupabaseClient, getSupabaseConfig } from "../lib/supabase";
 import { MicrophoneAccessPanel } from "../components/microphone-access-panel";
 import { VoiceInputBar } from "../components/voice-input-bar";
 import { getSpeechVoiceForPreset } from "../lib/misma-voice";
+import { SETTINGS_GROUPS, SETTINGS_ITEMS, getSettingsItemById, getSettingsItemBySlug, getSettingsRoute } from "../lib/settings-config";
+import { SettingsDetail, SettingsHome } from "../components/settings-mobile";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -1510,6 +1512,10 @@ function MarkdownContent({ content }: { content: string }) {
 function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isSettingsRoutePath = location.pathname === "/dashboard/settings" || location.pathname.startsWith("/dashboard/settings/");
+  const isMobileSettingsHomeRoute = location.pathname === "/dashboard/settings";
+  const isMobileSettingsDetailRoute = location.pathname.startsWith("/dashboard/settings/");
+  const settingsRouteSlug = isMobileSettingsDetailRoute ? location.pathname.split("/").filter(Boolean).pop() || "profile" : "profile";
   const [token, setToken] = useState<string | null>(null);
   const [dashboardUserId, setDashboardUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -1547,7 +1553,7 @@ function Dashboard() {
 
   const [staffMode, setStaffMode] = useState(false);
   const [staffTitle, setStaffTitle] = useState("");
-  const canGoBack = !staffMode && (activeTab !== "workspace" || dashboardTabHistory.length > 0);
+  const canGoBack = !staffMode && activeTab !== "workspace";
   const handleDashboardBack = () => {
     const previousTab = dashboardTabHistory[dashboardTabHistory.length - 1];
     if (previousTab) {
@@ -1666,6 +1672,68 @@ function Dashboard() {
   const [accentColor, setAccentColor] = useState("#8ab4ff");
   const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
   const [selectedSettingsSection, setSelectedSettingsSection] = useState("settings-profile");
+  useEffect(() => {
+    if (!isSettingsRoutePath) return;
+    setActiveTab("settings");
+    const routeItem = isMobileSettingsDetailRoute ? getSettingsItemBySlug(settingsRouteSlug) : getSettingsItemById("settings-profile");
+    setSelectedSettingsSection(routeItem?.id || "settings-profile");
+    setSettingsSearchQuery("");
+    setHelpRequestStatus("");
+    setHelpRequestError("");
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isSettingsRoutePath) return;
+    const media = window.matchMedia("(min-width: 768px)");
+    const redirectDesktop = () => {
+      if (!media.matches) return;
+      const section = isMobileSettingsDetailRoute
+        ? getSettingsItemBySlug(settingsRouteSlug) || getSettingsItemById("settings-profile")
+        : getSettingsItemById("settings-profile");
+      const slug = section?.slug || "profile";
+      setActiveTab("settings");
+      setSelectedSettingsSection(section?.id || "settings-profile");
+      void navigate({ to: ("/dashboard?tab=settings&section=" + slug) as never, replace: true });
+    };
+    redirectDesktop();
+    media.addEventListener("change", redirectDesktop);
+    return () => media.removeEventListener("change", redirectDesktop);
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    if (location.pathname !== "/dashboard" || activeTab !== "settings") return;
+    const media = window.matchMedia("(max-width: 767px)");
+    if (!media.matches) return;
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get("section") || "";
+    const item = getSettingsItemBySlug(section) || getSettingsItemById(section);
+    const target = item ? getSettingsRoute(item) : "/dashboard/settings";
+    void navigate({ to: target as never, replace: true });
+  }, [location.pathname, activeTab, navigate]);
+
+  const openMobileSettingsSection = (sectionId: string) => {
+    const item = getSettingsItemById(sectionId);
+    if (!item) return;
+    setSelectedSettingsSection(item.id);
+    setSettingsSearchQuery("");
+    setHelpRequestStatus("");
+    setHelpRequestError("");
+    setActiveTab("settings");
+    void navigate({ to: getSettingsRoute(item) as never });
+  };
+
+  const openMobileSettingsHome = () => {
+    setActiveTab("settings");
+    setSelectedSettingsSection("settings-profile");
+    setSettingsSearchQuery("");
+    void navigate({ to: "/dashboard/settings" as never });
+  };
+
+  const leaveSettingsForDashboard = () => {
+    setActiveTab("workspace");
+    setSettingsSearchQuery("");
+    void navigate({ to: "/dashboard" as never, replace: true });
+  };
   const [helpRequestEmail, setHelpRequestEmail] = useState("");
   const [helpRequestMessage, setHelpRequestMessage] = useState("");
   const [helpRequestBusy, setHelpRequestBusy] = useState(false);
@@ -1679,8 +1747,10 @@ function Dashboard() {
     const allowedTabs = new Set(["workspace", "website-statistics", "websites", "images", "library", "customers", "notifications", "products", "knowledge", "settings"]);
     if (!allowedTabs.has(requestedTab)) return;
     setActiveTab(requestedTab as TabId);
-    if (requestedTab === "settings" && params.get("section") === "help-center") {
-      setSelectedSettingsSection("settings-help-center");
+    if (requestedTab === "settings") {
+      const requestedSection = params.get("section") || "";
+      const sectionItem = getSettingsItemBySlug(requestedSection) || getSettingsItemById(requestedSection);
+      if (sectionItem) setSelectedSettingsSection(sectionItem.id);
     }
   }, []);
 
@@ -4992,28 +5062,12 @@ function Dashboard() {
     ? workspace.name.split(" ")[0]
     : (profileEmail || "there").split("@")[0];
   const latestAiMessageId = [...messages].reverse().find((item) => item.role === "ai")?.id;
-  const settingsGroups = [
-    { label: "Profile", items: [{ id: "settings-profile", label: "Profile", icon: "profile" }] },
-    { label: "Business", items: [{ id: "settings-business", label: "Business profile & team", icon: "manage" }] },
-    { label: "Account", items: [
-      { id: "settings-account", label: "Account", icon: "profile" },
-    ] },
-    { label: "Data controls", items: [
-      { id: "settings-data-controls", label: "Data controls", icon: "privacy" },
-      { id: "settings-memory", label: "Misma Memory", icon: "history" },
-    ] },
-    { label: "App", items: [
-      { id: "settings-accent", label: "Appearance", icon: "accent" },
-      { id: "settings-notifications", label: "Notifications", icon: "notifications" },
-      { id: "settings-voice", label: "Voice", icon: "voice" },
-      { id: "settings-about", label: "About Misma", icon: "about" },
-    ] },
-    { label: "Support", items: [{ id: "settings-help-center", label: "Help Center", icon: "help" }] },
-  ];
-  const settingsNavItems = settingsGroups.flatMap((group) => group.items);
-  const filteredSettingsNavItems = settingsNavItems.filter((item) =>
-    !settingsSearchQuery.trim() || item.label.toLowerCase().includes(settingsSearchQuery.trim().toLowerCase()),
-  );
+  const settingsGroups = SETTINGS_GROUPS;
+  const settingsNavItems = SETTINGS_ITEMS;
+  const filteredSettingsNavItems = settingsNavItems.filter((item) => {
+    const needle = settingsSearchQuery.trim().toLowerCase();
+    return !needle || [item.label, item.group, ...item.searchKeywords].join(" ").toLowerCase().includes(needle);
+  });
   const selectedSettingsNavItem = settingsNavItems.find((item) => item.id === selectedSettingsSection) || settingsNavItems[0];
   const activeConversation = conversations.find(
     (item: any) => Number(item.id) === Number(currentConversationId),
@@ -5479,21 +5533,24 @@ function Dashboard() {
             <div className="aichat-profile-menu">
               <span>{profileEmail || "Signed in"}</span>
               <button type="button" onClick={() => {
-                setSelectedSettingsSection("settings-profile");
-                setActiveTab("settings");
                 setProfileMenuOpen(false);
                 setMobileMenuOpen(false);
+                if (window.matchMedia("(max-width: 767px)").matches) openMobileSettingsHome();
+                else { setSelectedSettingsSection("settings-profile"); setActiveTab("settings"); }
               }}>
                 Settings
               </button>
               <button type="button" onClick={() => {
-                setSelectedSettingsSection("settings-help-center");
-                setSettingsSearchQuery("");
-                setHelpRequestStatus("");
-                setHelpRequestError("");
-                setActiveTab("settings");
                 setProfileMenuOpen(false);
                 setMobileMenuOpen(false);
+                if (window.matchMedia("(max-width: 767px)").matches) openMobileSettingsSection("settings-help-center");
+                else {
+                  setSelectedSettingsSection("settings-help-center");
+                  setSettingsSearchQuery("");
+                  setHelpRequestStatus("");
+                  setHelpRequestError("");
+                  setActiveTab("settings");
+                }
               }}>
                 Help Center
               </button>
@@ -5509,10 +5566,10 @@ function Dashboard() {
             type="button"
             className={`aichat-user-profile${activeTab === "settings" ? " active" : ""}`}
             onClick={() => {
-              setSelectedSettingsSection("settings-profile");
-              setActiveTab("settings");
               setProfileMenuOpen(false);
               setMobileMenuOpen(false);
+              if (window.matchMedia("(max-width: 767px)").matches) openMobileSettingsHome();
+              else { setSelectedSettingsSection("settings-profile"); setActiveTab("settings"); }
             }}
             aria-label="Open settings"
             title="Settings"
@@ -6713,7 +6770,25 @@ function Dashboard() {
 
         {/* ── View 5: AI Settings for business and website assistants ── */}
         {!staffMode && activeTab === "settings" && (
-          <div className="aichat-tab-view aichat-settings-tab-view">
+          <div
+            className="aichat-tab-view aichat-settings-tab-view"
+            data-mobile-settings={isMobileSettingsHomeRoute ? "home" : isMobileSettingsDetailRoute ? "detail" : "desktop"}
+          >
+            {isMobileSettingsHomeRoute && (
+              <SettingsHome
+                profileName={profileName}
+                profileEmail={profileEmail}
+                profileImage={profileImage}
+                query={settingsSearchQuery}
+                onQueryChange={setSettingsSearchQuery}
+                onOpenSection={openMobileSettingsSection}
+                onOpenPlugins={() => { setSettingsSearchQuery(""); void navigate({ to: "/dashboard/plugins" as never }); }}
+                onAbout={() => openMobileSettingsSection("settings-about")}
+                onBackToApp={leaveSettingsForDashboard}
+                onSignOut={() => void signOut()}
+                iconFor={(kind) => <SettingsNavIcon kind={kind} />}
+              />
+            )}
             <div className="aichat-settings-layout">
               <aside className="aichat-settings-sidebar" aria-label="Settings navigation">
                 <div className="aichat-settings-sidebar-top">
@@ -6764,10 +6839,17 @@ function Dashboard() {
                 </nav>
               </aside>
               <div className="aichat-settings-detail" role="region" aria-label="Settings details">
-                <header className="aichat-settings-detail-header">
-                  <h2>Details</h2>
-                  <p>{selectedSettingsNavItem.label}</p>
-                </header>
+                {isMobileSettingsDetailRoute ? (
+                  <SettingsDetail
+                    title={selectedSettingsNavItem.label}
+                    onBack={() => { setSettingsSearchQuery(""); void navigate({ to: "/dashboard/settings" as never, replace: true }); }}
+                  />
+                ) : (
+                  <header className="aichat-settings-detail-header">
+                    <h2>Details</h2>
+                    <p>{selectedSettingsNavItem.label}</p>
+                  </header>
+                )}
                 <div className="aichat-settings-detail-content">
               <section id="settings-profile" hidden={selectedSettingsSection !== "settings-profile"} className="aichat-card aichat-settings-card aichat-profile-settings">
                 <div className="aichat-settings-profile-head">
@@ -7683,5 +7765,6 @@ function Dashboard() {
         {mediaActionStatus && <div className="aichat-media-toast" role="status">{mediaActionStatus}</div>}
       </main>
     </div>
+    <Outlet />
   );
 }
