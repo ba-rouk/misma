@@ -41,6 +41,7 @@
 @media (max-width: 767px) {
   .aichat.is-settings-page { min-height: 100dvh; }
   .aichat.is-settings-page > .aichat-main { min-height: 100dvh !important; height: 100dvh !important; overflow: hidden !important; }
+  .aichat-main.is-settings-main > .aichat-topbar { display: none !important; }
   .aichat-settings-tab-view { display: flex !important; flex-direction: column; width: 100%; min-height: 0; height: 100%; overflow: hidden !important; padding: 0 !important; background: var(--misma-app-background, var(--misma-bg, #000)) !important; }
   .aichat-settings-tab-view[data-mobile-settings="home"] .aichat-settings-layout { display: none !important; }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-sidebar { display: none !important; }
