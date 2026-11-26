@@ -31,21 +31,23 @@ function hsvToHex(h: number, s: number, v: number) {
 }
 
 export function AppearanceColorPicker({ label, value, onChange }: Props) {
-  const initial = /^#[0-9a-f]{6}$/i.test(value) ? value : "#000000";
+  const initial = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(value) ? value : "#000000";
   const [open, setOpen] = useState(false);
   const [hsv, setHsv] = useState(() => hexToHsv(initial));
   const [hexDraft, setHexDraft] = useState(initial.toUpperCase());
-  const [opacity, setOpacity] = useState(100);
+  const [opacity, setOpacity] = useState(() => initial.length === 9 ? Math.round(parseInt(initial.slice(7, 9), 16) / 255 * 100) : 100);
   const [saved, setSaved] = useState<string[]>(DEFAULT_SAVED);
   const [format, setFormat] = useState("Hex");
   const rootRef = useRef<HTMLDivElement>(null);
   const squareRef = useRef<HTMLDivElement>(null);
-  const current = hsvToHex(hsv.h, hsv.s, hsv.v);
+  const baseHex = hsvToHex(hsv.h, hsv.s, hsv.v);
+  const current = opacity < 100 ? baseHex + Math.round(opacity / 100 * 255).toString(16).padStart(2, "0") : baseHex;
   const hueColor = `hsl(${hsv.h} 100% 50%)`;
 
   useEffect(() => {
     setHsv(hexToHsv(value));
-    setHexDraft(value.toUpperCase());
+    setHexDraft(value.slice(0, 7).toUpperCase());
+    setOpacity(value.length === 9 ? Math.round(parseInt(value.slice(7, 9), 16) / 255 * 100) : 100);
   }, [value]);
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
       const raw = window.localStorage.getItem("misma-appearance-saved-colors");
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) setSaved(parsed.filter((x): x is string => typeof x === "string" && /^#[0-9a-f]{6}$/i.test(x)).slice(0, 28));
+        if (Array.isArray(parsed)) setSaved(parsed.filter((x): x is string => typeof x === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(x)).slice(0, 28));
       }
     } catch { /* keep built-in swatches */ }
   }, []);
@@ -71,7 +73,9 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
 
   const commit = (next: string) => {
     const normalized = next.toUpperCase();
-    setHexDraft(normalized);
+    setHexDraft(normalized.slice(0, 7));
+    const alpha = normalized.length === 9 ? Math.round(parseInt(normalized.slice(7, 9), 16) / 255 * 100) : 100;
+    setOpacity(alpha);
     onChange(normalized);
     setHsv(hexToHsv(normalized));
   };
@@ -85,7 +89,7 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
     setHsv(next);
     const color = hsvToHex(next.h, next.s, next.v);
     setHexDraft(color.toUpperCase());
-    onChange(color);
+    onChange(opacity < 100 ? color + Math.round(opacity / 100 * 255).toString(16).padStart(2, "0") : color);
   };
 
   const addSaved = () => {
@@ -125,16 +129,16 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
           </div>
           <label className="misma-color-picker-range-row">
             <span className="sr-only">Hue</span>
-            <input aria-label="Hue" type="range" min="0" max="360" value={hsv.h} onChange={event => { const next = { ...hsv, h: Number(event.target.value) }; setHsv(next); commit(hsvToHex(next.h, next.s, next.v)); }} className="misma-color-picker-hue" />
+            <input aria-label="Hue" type="range" min="0" max="360" value={hsv.h} onChange={event => { const next = { ...hsv, h: Number(event.target.value) }; setHsv(next); commit(opacity < 100 ? hsvToHex(next.h, next.s, next.v) + Math.round(opacity / 100 * 255).toString(16).padStart(2, "0") : hsvToHex(next.h, next.s, next.v)); }} className="misma-color-picker-hue" />
           </label>
           <label className="misma-color-picker-range-row">
             <span className="sr-only">Opacity</span>
-            <input aria-label="Opacity" type="range" min="0" max="100" value={opacity} onChange={event => setOpacity(Number(event.target.value))} className="misma-color-picker-opacity" style={{ "--picker-color": current } as CSSProperties} />
+            <input aria-label="Opacity" type="range" min="0" max="100" value={opacity} onChange={event => { const nextOpacity = Number(event.target.value); setOpacity(nextOpacity); const color = hsvToHex(hsv.h, hsv.s, hsv.v); onChange(nextOpacity < 100 ? color + Math.round(nextOpacity / 100 * 255).toString(16).padStart(2, "0") : color); }} className="misma-color-picker-opacity" style={{ "--picker-color": current } as CSSProperties} />
           </label>
           <div className="misma-color-picker-fields">
             <select aria-label="Color format" value={format} onChange={event => setFormat(event.target.value)}><option>Hex</option></select>
-            <label className="misma-color-picker-hex-field"><span>#</span><input aria-label="Hex color value" value={hexDraft.replace(/^#/, "")} maxLength={6} spellCheck={false} onChange={event => { const draft = "#" + event.target.value.replace(/[^0-9a-f]/gi, "").slice(0, 6); setHexDraft(draft.toUpperCase()); if (/^#[0-9a-f]{6}$/i.test(draft)) { setHsv(hexToHsv(draft)); onChange(draft); } }} onBlur={() => { if (!/^#[0-9a-f]{6}$/i.test(hexDraft)) setHexDraft(value.toUpperCase()); }} /></label>
-            <label className="misma-color-picker-opacity-field"><input aria-label="Opacity percentage" type="number" min="0" max="100" value={opacity} onChange={event => setOpacity(Math.max(0, Math.min(100, Number(event.target.value) || 0)))} /><span>%</span></label>
+            <label className="misma-color-picker-hex-field"><span>#</span><input aria-label="Hex color value" value={hexDraft.replace(/^#/, "")} maxLength={6} spellCheck={false} onChange={event => { const draft = "#" + event.target.value.replace(/[^0-9a-f]/gi, "").slice(0, 6); setHexDraft(draft.toUpperCase()); if (/^#[0-9a-f]{6}$/i.test(draft)) { setHsv(hexToHsv(draft)); onChange(opacity < 100 ? draft + Math.round(opacity / 100 * 255).toString(16).padStart(2, "0") : draft); } }} onBlur={() => { if (!/^#[0-9a-f]{6}$/i.test(hexDraft)) setHexDraft(value.slice(0, 7).toUpperCase()); }} /></label>
+            <label className="misma-color-picker-opacity-field"><input aria-label="Opacity percentage" type="number" min="0" max="100" value={opacity} onChange={event => { const nextOpacity = Math.max(0, Math.min(100, Number(event.target.value) || 0)); setOpacity(nextOpacity); onChange(nextOpacity < 100 ? baseHex + Math.round(nextOpacity / 100 * 255).toString(16).padStart(2, "0") : baseHex); }} /><span>%</span></label>
           </div>
           <div className="misma-color-picker-saved-heading"><strong>Saved colors:</strong><button type="button" onClick={addSaved}>+ Add</button></div>
           <div className="misma-color-picker-swatches" aria-label="Saved colors">
