@@ -106,7 +106,8 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg>
       </button>
       {open && (
-        <div className="misma-color-picker-popover" role="dialog" aria-label={`${label} color picker`}>
+        <div className="misma-color-picker-backdrop" onPointerDown={event => { if (event.target === event.currentTarget) setOpen(false); }}>
+          <div className="misma-color-picker-popover" role="dialog" aria-modal="true" aria-label={`${label} color picker`}>
           <div
             ref={squareRef}
             className="misma-color-picker-spectrum"
@@ -143,6 +144,7 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
           <div className="misma-color-picker-saved-heading"><strong>Saved colors:</strong><button type="button" onClick={addSaved}>+ Add</button></div>
           <div className="misma-color-picker-swatches" aria-label="Saved colors">
             {saved.map((color, index) => <button key={`${color}-${index}`} type="button" aria-label={`Use color ${color}`} aria-pressed={color.toLowerCase() === current.toLowerCase()} className={color.toLowerCase() === current.toLowerCase() ? "is-selected" : ""} style={{ backgroundColor: color }} onClick={() => commit(color)} />)}
+          </div>
           </div>
         </div>
       )}
