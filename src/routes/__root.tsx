@@ -26,8 +26,8 @@ const appearanceBootstrap = `(() => {
       : mode;
     const dark = resolvedMode === "dark";
     const validColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
-    const background = dark ? (validColor(saved.backgroundColor) ? saved.backgroundColor : "#000000") : "#f3f6fb";
-    const foreground = dark ? (validColor(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb") : "#172235";
+    const background = dark ? (validColor(saved.backgroundColor) ? saved.backgroundColor : "#000000") : "#ffffff";
+    const foreground = dark ? (validColor(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb") : "#111827";
     const root = document.documentElement;
     root.dataset.mismaColorMode = resolvedMode;
     root.dataset.mismaThemeReady = "true";
@@ -35,9 +35,14 @@ const appearanceBootstrap = `(() => {
     root.style.setProperty("--misma-app-background", background);
     root.style.setProperty("--misma-app-foreground", foreground);
     root.style.setProperty("--misma-bg", background);
+    root.style.setProperty("--misma-surface", dark ? "#141519" : "#ffffff");
+    root.style.setProperty("--misma-surface-raised", dark ? "#1b2026" : "#ffffff");
+    root.style.setProperty("--misma-border", dark ? "rgba(255,255,255,.10)" : "#e5e7eb");
+    root.style.setProperty("--misma-muted", dark ? "#9699a3" : "#4b5563");
+    root.style.setProperty("--misma-text", foreground);
     root.style.setProperty("--misma-ui-font-size", Math.min(20, Math.max(14, Math.round(Number(saved.uiFontSize) || 16))) + "px");
     root.style.setProperty("--misma-code-font-size", Math.min(18, Math.max(11, Math.round(Number(saved.codeFontSize) || 13))) + "px");
-    root.style.setProperty("--misma-composer-surface", "#14171d");
+    root.style.setProperty("--misma-composer-surface", dark ? "#14171d" : "#ffffff");
     root.dataset.mismaReduceMotion = saved.reduceMotion === true ? "true" : "false";
   } catch (_) {
     const root = document.documentElement;
@@ -46,6 +51,11 @@ const appearanceBootstrap = `(() => {
     root.style.setProperty("--misma-app-background", "#000000");
     root.style.setProperty("--misma-app-foreground", "#eef3fb");
     root.style.setProperty("--misma-bg", "#000000");
+    root.style.setProperty("--misma-surface", "#141519");
+    root.style.setProperty("--misma-surface-raised", "#1b2026");
+    root.style.setProperty("--misma-border", "rgba(255,255,255,.10)");
+    root.style.setProperty("--misma-muted", "#9699a3");
+    root.style.setProperty("--misma-text", "#eef3fb");
     root.style.setProperty("--misma-composer-surface", "#14171d");
   }
 })();`;
