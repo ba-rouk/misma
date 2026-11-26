@@ -1,0 +1,294 @@
+/* Shared custom color selector used by Appearance on desktop and mobile. */
+.misma-color-picker-root {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+.misma-color-picker-trigger {
+  display: grid;
+  width: 44px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  padding: 3px;
+  border: 1px solid var(--misma-border, rgba(255,255,255,.16));
+  border-radius: 9px;
+  background: var(--misma-surface, #141519);
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.misma-color-picker-trigger:hover {
+  border-color: var(--misma-green, #10b981);
+}
+.misma-color-picker-trigger:focus-visible,
+.misma-color-picker-popover :focus-visible {
+  outline: 2px solid var(--misma-green, #10b981);
+  outline-offset: 3px;
+}
+.misma-color-picker-trigger > span {
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(127,127,127,.28);
+  border-radius: 5px;
+}
+.misma-color-picker-popover {
+  position: fixed;
+  z-index: 12000;
+  display: grid;
+  gap: 16px;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid var(--misma-border, #30343d);
+  border-radius: 19px;
+  background: var(--misma-surface, #17191f);
+  color: var(--misma-app-foreground, #f4f5f7);
+  box-shadow: 0 18px 54px rgba(0,0,0,.26);
+  scrollbar-width: thin;
+}
+.misma-color-picker-square {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1.52 / 1;
+  overflow: hidden;
+  border-radius: 11px;
+  touch-action: none;
+  cursor: crosshair;
+  box-shadow: inset 0 0 0 1px rgba(127,127,127,.2);
+}
+.misma-color-picker-square-white,
+.misma-color-picker-square-black {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.misma-color-picker-square-white {
+  background: linear-gradient(90deg, #fff, transparent);
+}
+.misma-color-picker-square-black {
+  background: linear-gradient(0deg, #000, transparent);
+}
+.misma-color-picker-marker {
+  position: absolute;
+  width: 17px;
+  height: 17px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px rgba(15,23,42,.65), 0 1px 5px rgba(0,0,0,.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.misma-color-picker-range-row {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+.misma-color-picker-hue,
+.misma-color-picker-opacity {
+  display: block;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.misma-color-picker-hue {
+  background: linear-gradient(90deg, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+.misma-color-picker-opacity {
+  background-image:
+    linear-gradient(90deg, transparent, var(--misma-current-color, #4f46e5)),
+    conic-gradient(#cbd5e1 25%, #fff 0 50%, #cbd5e1 0 75%, #fff 0);
+  background-position: 0 0, 0 0;
+  background-size: 100% 100%, 12px 12px;
+}
+.misma-color-picker-hue::-webkit-slider-thumb,
+.misma-color-picker-opacity::-webkit-slider-thumb {
+  width: 21px;
+  height: 21px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #4f46e5;
+  box-shadow: 0 0 0 1px rgba(15,23,42,.28), 0 1px 4px rgba(0,0,0,.24);
+}
+.misma-color-picker-hue::-moz-range-thumb,
+.misma-color-picker-opacity::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #4f46e5;
+  box-shadow: 0 0 0 1px rgba(15,23,42,.28), 0 1px 4px rgba(0,0,0,.24);
+}
+.misma-color-picker-values {
+  display: grid;
+  grid-template-columns: 94px minmax(0,1fr) 82px;
+  align-items: stretch;
+  gap: 8px;
+}
+.misma-color-picker-format,
+.misma-color-picker-text-value,
+.misma-color-picker-opacity-value {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid var(--misma-border, #3b414b);
+  border-radius: 10px;
+  background: var(--misma-surface-raised, #1b2026);
+  color: var(--misma-app-foreground, #f4f5f7);
+}
+.misma-color-picker-format select {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px 0 0;
+  border: 0 !important;
+  outline: 0;
+  appearance: none;
+  background: transparent !important;
+  color: inherit !important;
+  font: 500 16px/1.2 var(--font-sans, Inter, sans-serif);
+}
+.misma-color-picker-format > span:not(.misma-color-picker-visually-hidden) {
+  position: absolute;
+  right: 10px;
+  color: var(--misma-muted, #9699a3);
+  pointer-events: none;
+  font-size: 20px;
+}
+.misma-color-picker-text-value {
+  overflow: hidden;
+}
+.misma-color-picker-text-value > span:not(.misma-color-picker-visually-hidden) {
+  color: var(--misma-muted, #9699a3);
+  font-size: 16px;
+}
+.misma-color-picker-text-value input,
+.misma-color-picker-opacity-value input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0 !important;
+  outline: 0;
+  background: transparent !important;
+  color: var(--misma-app-foreground, #f4f5f7) !important;
+  box-shadow: none !important;
+  font: 500 16px/1.2 var(--font-sans, Inter, sans-serif);
+}
+.misma-color-picker-opacity-value input {
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.misma-color-picker-opacity-value input::-webkit-inner-spin-button,
+.misma-color-picker-opacity-value input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.misma-color-picker-opacity-value > span:not(.misma-color-picker-visually-hidden) {
+  color: var(--misma-muted, #9699a3);
+  font-size: 15px;
+}
+.misma-color-picker-saved-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 1px;
+}
+.misma-color-picker-saved-heading strong {
+  color: var(--misma-app-foreground, #f4f5f7);
+  font: 600 15px/1.35 var(--font-sans, Inter, sans-serif);
+}
+.misma-color-picker-saved-heading button {
+  min-height: 32px;
+  padding: 4px 2px 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--misma-muted, #9699a3);
+  font: 500 14px/1.2 var(--font-sans, Inter, sans-serif);
+  cursor: pointer;
+}
+.misma-color-picker-saved-heading button:hover {
+  color: var(--misma-app-foreground, #f4f5f7);
+}
+.misma-color-picker-swatches {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  justify-items: center;
+  gap: 12px 9px;
+  padding: 1px 0 2px;
+}
+.misma-color-picker-swatches button {
+  width: 33px;
+  height: 33px;
+  padding: 0;
+  border: 2px solid rgba(127,127,127,.12);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
+  cursor: pointer;
+}
+.misma-color-picker-swatches button.is-selected {
+  outline: 2px solid var(--misma-muted, #9699a3);
+  outline-offset: 3px;
+}
+.misma-color-picker-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+@media (max-width: 767px) {
+  .misma-color-picker-popover {
+    gap: 14px;
+    padding: 14px;
+    border-radius: 17px;
+  }
+  .misma-color-picker-square {
+    aspect-ratio: 1.45 / 1;
+  }
+  .misma-color-picker-values {
+    grid-template-columns: 82px minmax(0,1fr) 76px;
+    gap: 6px;
+  }
+  .misma-color-picker-format,
+  .misma-color-picker-text-value,
+  .misma-color-picker-opacity-value {
+    min-height: 46px;
+    padding: 0 8px;
+  }
+  .misma-color-picker-format select,
+  .misma-color-picker-text-value input,
+  .misma-color-picker-opacity-value input {
+    font-size: 14px;
+  }
+  .misma-color-picker-swatches {
+    gap: 12px 5px;
+  }
+  .misma-color-picker-swatches button {
+    width: 29px;
+    height: 29px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .misma-color-picker-trigger { transition: none !important; }
+}
