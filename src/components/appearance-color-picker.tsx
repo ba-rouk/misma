@@ -34,7 +34,7 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
   const initial = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(value) ? value : "#000000";
   const [open, setOpen] = useState(false);
   const [hsv, setHsv] = useState(() => hexToHsv(initial));
-  const [hexDraft, setHexDraft] = useState(initial.toUpperCase());
+  const [hexDraft, setHexDraft] = useState(initial.slice(0, 7).toUpperCase());
   const [opacity, setOpacity] = useState(() => initial.length === 9 ? Math.round(parseInt(initial.slice(7, 9), 16) / 255 * 100) : 100);
   const [saved, setSaved] = useState<string[]>(DEFAULT_SAVED);
   const [format, setFormat] = useState("Hex");
@@ -122,7 +122,7 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
             onKeyDown={event => {
               const step = event.shiftKey ? 10 : 2;
               const next = { ...hsv, s: Math.max(0, Math.min(100, hsv.s + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0))), v: Math.max(0, Math.min(100, hsv.v + (event.key === "ArrowUp" ? step : event.key === "ArrowDown" ? -step : 0))) };
-              if (["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown"].includes(event.key)) { event.preventDefault(); setHsv(next); commit(hsvToHex(next.h, next.s, next.v)); }
+              if (["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown"].includes(event.key)) { event.preventDefault(); setHsv(next); commit(opacity < 100 ? hsvToHex(next.h, next.s, next.v) + Math.round(opacity / 100 * 255).toString(16).padStart(2, "0") : hsvToHex(next.h, next.s, next.v)); }
             }}
           >
             <span className="misma-color-picker-spectrum-pointer" style={{ left: `${hsv.s}%`, top: `${100 - hsv.v}%` }} />
