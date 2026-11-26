@@ -1878,8 +1878,8 @@ function Dashboard() {
         if (typeof parsed.uiFontSize === "number" && Number.isFinite(parsed.uiFontSize)) setUiFontSize(Math.min(20, Math.max(14, Math.round(parsed.uiFontSize))));
         if (typeof parsed.codeFontSize === "number" && Number.isFinite(parsed.codeFontSize)) setCodeFontSize(Math.min(18, Math.max(11, Math.round(parsed.codeFontSize))));
         if (typeof parsed.reduceMotion === "boolean") setReduceMotion(parsed.reduceMotion);
-        if (typeof parsed.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.backgroundColor)) setBackgroundColor(parsed.backgroundColor);
-        if (typeof parsed.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.foregroundColor)) setForegroundColor(parsed.foregroundColor);
+        if (typeof parsed.backgroundColor === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(parsed.backgroundColor)) setBackgroundColor(parsed.backgroundColor);
+        if (typeof parsed.foregroundColor === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(parsed.foregroundColor)) setForegroundColor(parsed.foregroundColor);
       }
       if (savedPrivacy) {
         const parsed = JSON.parse(savedPrivacy) as Partial<typeof privacyPreferences>;
