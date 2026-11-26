@@ -25,7 +25,7 @@ const appearanceBootstrap = `(() => {
       ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
       : mode;
     const dark = resolvedMode === "dark";
-    const validColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    const validColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(value);
     const background = dark ? (validColor(saved.backgroundColor) ? saved.backgroundColor : "#000000") : "#ffffff";
     const foreground = dark ? (validColor(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb") : "#111827";
     const root = document.documentElement;

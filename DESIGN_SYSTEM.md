@@ -14,6 +14,7 @@ All new Misma dashboard pages and components must use the shared tokens in `src/
 Use `GlassCard`, `GlassModal`, `GlassRow`, `Button`, `Badge`, `Chip`, `Input`, `Toggle`, `SectionHeader`, and `StickyActionBar` from `src/components/misma-glass.tsx` where appropriate.
 - `SettingsCard`, `SettingsRow`, `SettingsHome`, `SettingsDetail`, `SettingsLayout`, and `SettingsSearch` live in `src/components/settings-mobile.tsx`. Settings sections and metadata are defined once in `src/lib/settings-config.ts`; use that config for desktop navigation, mobile rows, route slugs, and search keywords.
 - `BackButton` and `PageHeader` live in `src/components/misma-page-header.tsx`. Use the shared circular back control on nested pages and omit it from the first/root page.
+- `MismaColorPicker` in `src/components/misma-color-picker.tsx` is the shared color control for Appearance. It provides saturation/brightness, hue, opacity, HEX/RGB/HSL entry, and locally saved swatches; use it instead of browser-native color inputs.
 
 ## Accessibility
 - Interactive controls need keyboard operation, focus-visible states, labels, and semantic roles.
