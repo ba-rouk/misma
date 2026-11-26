@@ -2679,3 +2679,58 @@ html[data-misma-color-mode="light"] .aichat :where(.aichat-side,.aichat-settings
   .misma-color-picker-swatches { gap: 10px 8px; }
 }
 html[data-misma-color-mode="dark"] .misma-color-picker-popover,.aichat[data-misma-color-mode="dark"] .misma-color-picker-popover { background: #fff; color: #202124; }
+
+ 
+/* Reference-style color selection dialog shared by desktop and mobile. */
+.misma-color-picker { z-index: 1300; }
+.misma-color-picker-backdrop {
+  position: fixed; inset: 0; z-index: 1400; display: grid; place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgba(15,23,42,.30); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  animation: misma-color-picker-fade-in .14s ease-out;
+}
+.misma-color-picker-popover {
+  position: relative; inset: auto; transform: none; z-index: 1;
+  width: min(480px, 100%); max-height: min(88dvh, 820px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 24px; border: 1px solid rgba(15,23,42,.07); border-radius: 24px;
+  background: #fff !important; color: #202124 !important;
+  box-shadow: 0 24px 70px rgba(15,23,42,.20);
+  display: flex; flex-direction: column; gap: 20px;
+  scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent;
+  animation: misma-color-picker-pop-in .16s ease-out;
+}
+.misma-color-picker-spectrum {
+  min-height: 0; aspect-ratio: 1.62 / 1; border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(15,23,42,.08);
+}
+.misma-color-picker-spectrum-pointer { width: 22px; height: 22px; border-width: 3px; }
+.misma-color-picker-range-row { min-height: 22px; }
+.misma-color-picker-range-row input { height: 22px; }
+.misma-color-picker-hue::-webkit-slider-runnable-track,
+.misma-color-picker-hue::-moz-range-track { height: 14px; }
+.misma-color-picker-opacity { height: 14px !important; }
+.misma-color-picker-fields { grid-template-columns: minmax(88px,.9fr) minmax(0,1.2fr) minmax(76px,.8fr); gap: 10px; }
+.misma-color-picker-fields select,
+.misma-color-picker-hex-field,
+.misma-color-picker-opacity-field { height: 50px; border-radius: 12px; font-size: 16px; }
+.misma-color-picker-hex-field,.misma-color-picker-opacity-field { min-width: 0; }
+.misma-color-picker-saved-heading { margin-top: 2px; font-size: 16px; }
+.misma-color-picker-saved-heading strong { font-weight: 500; }
+.misma-color-picker-saved-heading button { color: #64748b; font-size: 15px; }
+.misma-color-picker-swatches { grid-template-columns: repeat(7,minmax(0,1fr)); gap: 14px 12px; }
+.misma-color-picker-swatches button { width: 100%; aspect-ratio: 1; border-width: 3px; }
+.misma-color-picker-swatches button.is-selected { outline-color: #a3a3a3; outline-offset: 4px; }
+.misma-color-picker-popover :where(input,select) { color-scheme: light; }
+@keyframes misma-color-picker-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes misma-color-picker-pop-in { from { opacity: 0; scale: .98; } to { opacity: 1; scale: 1; } }
+@media (max-width: 520px) {
+  .misma-color-picker-backdrop { padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+  .misma-color-picker-popover { width: 100%; max-height: min(90dvh, 820px); padding: 18px; border-radius: 22px; gap: 17px; }
+  .misma-color-picker-spectrum { aspect-ratio: 1.55 / 1; }
+  .misma-color-picker-fields { grid-template-columns: minmax(76px,.9fr) minmax(0,1.2fr) minmax(68px,.8fr); gap: 7px; }
+  .misma-color-picker-fields select,.misma-color-picker-hex-field,.misma-color-picker-opacity-field { height: 46px; padding-left: 9px; padding-right: 9px; font-size: 14px; }
+  .misma-color-picker-swatches { gap: 12px 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .misma-color-picker-backdrop,.misma-color-picker-popover { animation: none !important; }
+}
