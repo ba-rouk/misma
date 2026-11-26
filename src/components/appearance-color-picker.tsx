@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 type Props = { label: string; value: string; onChange: (value: string) => void };
 
@@ -129,7 +129,7 @@ export function AppearanceColorPicker({ label, value, onChange }: Props) {
           </label>
           <label className="misma-color-picker-range-row">
             <span className="sr-only">Opacity</span>
-            <input aria-label="Opacity" type="range" min="0" max="100" value={opacity} onChange={event => setOpacity(Number(event.target.value))} className="misma-color-picker-opacity" style={{ "--picker-color": current } as React.CSSProperties} />
+            <input aria-label="Opacity" type="range" min="0" max="100" value={opacity} onChange={event => setOpacity(Number(event.target.value))} className="misma-color-picker-opacity" style={{ "--picker-color": current } as CSSProperties} />
           </label>
           <div className="misma-color-picker-fields">
             <select aria-label="Color format" value={format} onChange={event => setFormat(event.target.value)}><option>Hex</option></select>
