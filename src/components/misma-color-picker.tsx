@@ -91,7 +91,7 @@ function displayColor(color: HsvColor, format: ColorFormat) {
   }
   const hsl = hsvToHsl(color);
   return color.alpha < 0.999
-    ? "hsla(" + hsl.join(", ") + "%, " + Number(color.alpha.toFixed(2)) + ")"
+    ? "hsla(" + hsl[0] + ", " + hsl[1] + "%, " + hsl[2] + "%, " + Number(color.alpha.toFixed(2)) + ")"
     : "hsl(" + hsl[0] + ", " + hsl[1] + "%, " + hsl[2] + "%)";
 }
 
@@ -147,7 +147,6 @@ export function MismaColorPicker({
   const [savedColors, setSavedColors] = useState<string[]>(loadSavedColors);
   const [position, setPosition] = useState({ left: 16, top: 90 });
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const spectrumRef = useRef<HTMLDivElement>(null);
   const draggingSpectrumRef = useRef(false);
 
   useEffect(() => {
@@ -269,7 +268,6 @@ export function MismaColorPicker({
       >
         <div className="misma-color-picker-spectrum-wrap">
           <div
-            ref={spectrumRef}
             className="misma-color-picker-spectrum"
             style={{ backgroundColor: hueColor }}
             role="slider"
