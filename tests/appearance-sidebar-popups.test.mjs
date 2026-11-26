@@ -136,3 +136,20 @@ test("Appearance uses the same custom color picker on desktop and mobile", async
   assert.ok(design.includes("@media (max-width: 767px)"));
   assert.ok(design.includes(".misma-color-picker-swatches"));
 });
+
+
+test("Appearance color picker opens a shared reference-style modal on desktop and mobile", async () => {
+  const picker = await read("../src/components/appearance-color-picker.tsx");
+  const design = await read("../src/misma-design-system.css");
+  assert.ok(picker.includes("misma-color-picker-backdrop"));
+  assert.ok(picker.includes('aria-modal="true"'));
+  assert.ok(picker.includes("if (event.target === event.currentTarget) setOpen(false)"));
+  assert.ok(design.includes(".misma-color-picker-backdrop"));
+  assert.ok(design.includes("width: min(480px, 100%)"));
+  assert.ok(design.includes("grid-template-columns: repeat(7,minmax(0,1fr))"));
+  assert.ok(design.includes(".misma-color-picker-hue"));
+  assert.ok(design.includes(".misma-color-picker-opacity"));
+  assert.ok(design.includes(".misma-color-picker-hex-field"));
+  assert.ok(design.includes(".misma-color-picker-saved-heading"));
+  assert.ok(design.includes("prefers-reduced-motion: reduce"));
+});
