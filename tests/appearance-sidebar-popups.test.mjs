@@ -85,3 +85,31 @@ test("popup surfaces use the composer text-bar background", async () => {
   assert.match(design, /\.aichat \[role="menu"\][\s\S]*?background: var\(--misma-composer-surface/);
   assert.match(design, /\.aichat \[role="dialog"\]/);
 });
+
+
+test("mobile Appearance color swatches use the compact desktop-aligned control layout", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const mobile = await read("../src/settings-mobile.css");
+  assert.match(dashboard, /aichat-appearance-control-block is-color-control/g);
+  assert.ok(mobile.includes("is-color-control { align-items: center; flex-direction: row; gap: 16px; }"));
+  assert.ok(mobile.includes("width: 44px !important"));
+  assert.ok(mobile.includes("color-scheme: light"));
+});
+
+test("light mode uses white page and card surfaces with dark readable text", async () => {
+  const root = await read("../src/routes/__root.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const pluginLayout = await read("../src/components/plugin-dashboard-layout.tsx");
+  const design = await read("../src/misma-design-system.css");
+  assert.ok(root.includes(' : "#ffffff"') || root.includes(': "#ffffff"'));
+  assert.ok(root.includes(' : "#111827"') || root.includes(': "#111827"'));
+  assert.ok(root.includes('dark ? "#14171d" : "#ffffff"'));
+  assert.ok(dashboard.includes('resolvedMode === "dark" ? backgroundColor : "#ffffff"'));
+  assert.ok(pluginLayout.includes(': "#ffffff"'));
+  assert.ok(design.includes("--misma-surface: #ffffff"));
+  assert.ok(design.includes("--misma-composer-surface: #ffffff"));
+  assert.ok(design.includes("background: #ffffff !important"));
+  assert.ok(design.includes("color: #111827 !important"));
+  assert.ok(design.includes(".aichat-composer-plus-menu"));
+  assert.ok(design.includes(".misma-plugin-overflow-menu"));
+});

@@ -1949,8 +1949,8 @@ function Dashboard() {
       if (shell) {
         shell.dataset.mismaColorMode = resolvedMode;
         shell.dataset.mismaContrast = contrastLevel;
-        shell.style.setProperty("--misma-app-background", resolvedMode === "dark" ? backgroundColor : "#f3f6fb");
-        shell.style.setProperty("--misma-app-foreground", resolvedMode === "dark" ? foregroundColor : "#172235");
+        shell.style.setProperty("--misma-app-background", resolvedMode === "dark" ? backgroundColor : "#ffffff");
+        shell.style.setProperty("--misma-app-foreground", resolvedMode === "dark" ? foregroundColor : "#111827");
         shell.style.setProperty("--misma-ui-font-size", uiFontSize + "px");
         shell.style.setProperty("--misma-code-font-size", codeFontSize + "px");
         shell.style.setProperty("--misma-accent-color", accentColor);
@@ -6989,11 +6989,11 @@ function Dashboard() {
                     ))}
                   </div>
                 </div>
-                <div className="aichat-appearance-control-block">
+                <div className="aichat-appearance-control-block is-color-control">
                   <div className="aichat-appearance-control-copy"><strong>Dark background color</strong><small>Set the shared background used by the dashboard, plugin pages and their sidebars.</small></div>
                   <input className="aichat-settings-color-input" type="color" value={backgroundColor} onChange={(event) => setBackgroundColor(event.target.value)} aria-label="Dark background color" />
                 </div>
-                <div className="aichat-appearance-control-block">
+                <div className="aichat-appearance-control-block is-color-control">
                   <div className="aichat-appearance-control-copy"><strong>Dark foreground color</strong><small>Set the main text color used on dark surfaces.</small></div>
                   <input className="aichat-settings-color-input" type="color" value={foregroundColor} onChange={(event) => setForegroundColor(event.target.value)} aria-label="Dark foreground color" />
                 </div>

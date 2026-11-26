@@ -100,23 +100,33 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
       const isDark = resolvedColorMode === "dark";
       const backgroundColor = isDark
         ? (typeof saved.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.backgroundColor) ? saved.backgroundColor : "#000000")
-        : "#f3f6fb";
+        : "#ffffff";
       const foregroundColor = isDark
         ? (typeof saved.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb")
-        : "#172235";
+        : "#111827";
 
       shell.dataset.mismaColorMode = resolvedColorMode;
       shell.dataset.mismaContrast = saved.contrastLevel === "system" || saved.contrastLevel === "increased" ? saved.contrastLevel : "medium";
       shell.style.setProperty("--misma-app-background", backgroundColor);
       shell.style.setProperty("--misma-bg", backgroundColor);
-      shell.style.setProperty("--misma-composer-surface", "#14171d");
+      shell.style.setProperty("--misma-composer-surface", isDark ? "#14171d" : "#ffffff");
       shell.style.setProperty("--misma-app-foreground", foregroundColor);
+      shell.style.setProperty("--misma-surface", isDark ? "#141519" : "#ffffff");
+      shell.style.setProperty("--misma-surface-raised", isDark ? "#1b2026" : "#ffffff");
+      shell.style.setProperty("--misma-border", isDark ? "rgba(255,255,255,.10)" : "#e5e7eb");
+      shell.style.setProperty("--misma-muted", isDark ? "#9699a3" : "#4b5563");
+      shell.style.setProperty("--misma-text", foregroundColor);
       shell.style.setProperty("--misma-ui-font-size", Math.min(20, Math.max(14, Math.round(Number(saved.uiFontSize) || 16))) + "px");
       shell.style.setProperty("--misma-code-font-size", Math.min(18, Math.max(11, Math.round(Number(saved.codeFontSize) || 13))) + "px");
       document.documentElement.style.setProperty("--misma-app-background", backgroundColor);
       document.documentElement.style.setProperty("--misma-app-foreground", foregroundColor);
+      document.documentElement.style.setProperty("--misma-surface", isDark ? "#141519" : "#ffffff");
+      document.documentElement.style.setProperty("--misma-surface-raised", isDark ? "#1b2026" : "#ffffff");
+      document.documentElement.style.setProperty("--misma-border", isDark ? "rgba(255,255,255,.10)" : "#e5e7eb");
+      document.documentElement.style.setProperty("--misma-muted", isDark ? "#9699a3" : "#4b5563");
+      document.documentElement.style.setProperty("--misma-text", foregroundColor);
       document.documentElement.style.setProperty("--misma-bg", backgroundColor);
-      document.documentElement.style.setProperty("--misma-composer-surface", "#14171d");
+      document.documentElement.style.setProperty("--misma-composer-surface", isDark ? "#14171d" : "#ffffff");
       document.documentElement.style.setProperty("--misma-plugin-page-background", backgroundColor);
       document.documentElement.style.setProperty("--misma-plugin-page-foreground", foregroundColor);
       document.documentElement.dataset.mismaReduceMotion = saved.reduceMotion === true ? "true" : "false";

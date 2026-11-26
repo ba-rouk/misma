@@ -2575,3 +2575,65 @@ html[data-misma-theme-ready="true"] .misma-plugin-dashboard-sidebar {
   background: var(--misma-composer-surface, #14171d) !important;
   color: #f0f3f8 !important;
 }
+
+
+/* Complete light appearance: white canvas and containers, readable dark ink. */
+html[data-misma-color-mode="light"] {
+  color-scheme: light;
+  --misma-app-background: #ffffff;
+  --misma-app-foreground: #111827;
+  --misma-bg: #ffffff;
+  --misma-surface: #ffffff;
+  --misma-surface-raised: #ffffff;
+  --misma-border: #e5e7eb;
+  --misma-muted: #4b5563;
+  --misma-text: #111827;
+  --misma-composer-surface: #ffffff;
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+html[data-misma-color-mode="light"] body,
+body:has(.aichat[data-misma-color-mode="light"]) { background: #ffffff !important; color: #111827 !important; color-scheme: light; }
+html[data-misma-color-mode="light"] .aichat,
+.aichat[data-misma-color-mode="light"] {
+  --misma-app-background: #ffffff !important;
+  --misma-app-foreground: #111827 !important;
+  --misma-bg: #ffffff !important;
+  --misma-surface: #ffffff !important;
+  --misma-surface-raised: #ffffff !important;
+  --misma-border: #e5e7eb !important;
+  --misma-muted: #4b5563 !important;
+  --misma-text: #111827 !important;
+  --misma-composer-surface: #ffffff !important;
+  background: #ffffff !important; color: #111827 !important; color-scheme: light;
+}
+html[data-misma-color-mode="light"] .aichat :where(.aichat-topbar,.aichat-side,.aichat-main,.aichat-scroll-area,.aichat-tab-view,.aichat-settings-tab-view,.aichat-settings-layout,.aichat-settings-sidebar,.aichat-settings-detail,.aichat-settings-detail-header,.aichat-settings-detail-content,.aichat-card,.aichat-settings-card,.aichat-profile-menu,.aichat-composer-container,.aichat-composer-card,.aichat-composer-card-tools,.aichat-settings-search,.misma-plugin-dashboard-sidebar,.misma-plugin-dashboard-content,.misma-marketplace-page,.misma-plugin-detail-page,.misma-plugin-settings-page,.misma-mobile-settings-layout,.misma-settings-card,.misma-settings-search,.misma-plugin-modal),
+.aichat[data-misma-color-mode="light"] :where(.aichat-topbar,.aichat-side,.aichat-main,.aichat-scroll-area,.aichat-tab-view,.aichat-settings-tab-view,.aichat-settings-layout,.aichat-settings-sidebar,.aichat-settings-detail,.aichat-settings-detail-header,.aichat-settings-detail-content,.aichat-card,.aichat-settings-card,.aichat-profile-menu,.aichat-composer-container,.aichat-composer-card,.aichat-composer-card-tools,.aichat-settings-search,.misma-plugin-dashboard-sidebar,.misma-plugin-dashboard-content,.misma-marketplace-page,.misma-plugin-detail-page,.misma-plugin-settings-page,.misma-mobile-settings-layout,.misma-settings-card,.misma-settings-search,.misma-plugin-modal) {
+  background-color: #ffffff !important; background-image: none !important; border-color: #e5e7eb !important; color: #111827 !important; box-shadow: none !important;
+}
+html[data-misma-color-mode="light"] .aichat :where(section,article,[class*="card"],[class*="panel"],[class*="popover"],[class*="menu"],[class*="modal"],[class*="dialog"],[class*="sheet"],[class*="surface"],[class*="container"]),
+.aichat[data-misma-color-mode="light"] :where(section,article,[class*="card"],[class*="panel"],[class*="popover"],[class*="menu"],[class*="modal"],[class*="dialog"],[class*="sheet"],[class*="surface"],[class*="container"]) {
+  background-color: #ffffff !important; background-image: none !important; border-color: #e5e7eb !important; color: #111827 !important; box-shadow: none !important;
+}
+html[data-misma-color-mode="light"] .aichat :where(h1,h2,h3,h4,h5,p,li,label,dt,dd,small,span,strong,b,em,td,th,a,button,[role="button"],[role="menuitem"],input,textarea,select,summary),
+.aichat[data-misma-color-mode="light"] :where(h1,h2,h3,h4,h5,p,li,label,dt,dd,small,span,strong,b,em,td,th,a,button,[role="button"],[role="menuitem"],input,textarea,select,summary) { color: #111827 !important; text-shadow: none !important; }
+html[data-misma-color-mode="light"] .aichat :where(.aichat-settings-sidebar-group h3,.aichat-settings-sidebar-identity small,.aichat-settings-detail-header p,.aichat-settings-section-heading p,.aichat-settings-profile-head p,.aichat-settings-info-row span,.aichat-setting-copy small,.aichat-settings-hint,.aichat-appearance-control-copy small,.aichat-nav-subbtn,.aichat-user-info small,.misma-plugin-detail-page p,.misma-plugin-detail-page small,.misma-plugin-settings-page p,.misma-plugin-settings-page small,.misma-marketplace-page p,.misma-marketplace-page small,.misma-settings-row-copy small),
+.aichat[data-misma-color-mode="light"] :where(.aichat-settings-sidebar-group h3,.aichat-settings-sidebar-identity small,.aichat-settings-detail-header p,.aichat-settings-section-heading p,.aichat-settings-profile-head p,.aichat-settings-info-row span,.aichat-setting-copy small,.aichat-settings-hint,.aichat-appearance-control-copy small,.aichat-nav-subbtn,.aichat-user-info small,.misma-plugin-detail-page p,.misma-plugin-detail-page small,.misma-plugin-settings-page p,.misma-plugin-settings-page small,.misma-marketplace-page p,.misma-marketplace-page small,.misma-settings-row-copy small) { color: #4b5563 !important; }
+html[data-misma-color-mode="light"] .aichat :where(input,textarea,select),
+.aichat[data-misma-color-mode="light"] :where(input,textarea,select) { border-color: #cbd5e1 !important; background: #ffffff !important; color: #111827 !important; color-scheme: light; }
+html[data-misma-color-mode="light"] .aichat :where(input,textarea,select)::placeholder,
+.aichat[data-misma-color-mode="light"] :where(input,textarea,select)::placeholder { color: #64748b !important; opacity: 1; }
+html[data-misma-color-mode="light"] .aichat :where(.aichat-composer-plus-menu,.aichat-chat-menu,.aichat-chat-group-filter-menu,.aichat-chat-context-menu,.aichat-library-item-menu-popover,.aichat-image-options-menu,.aichat-voice-picker-menu,.misma-plugin-installed-popup,.misma-plugin-overflow-menu,.misma-chat-plugin-popup,.aichat-profile-menu,[role="menu"],[role="dialog"]),
+.aichat[data-misma-color-mode="light"] :where(.aichat-composer-plus-menu,.aichat-chat-menu,.aichat-chat-group-filter-menu,.aichat-chat-context-menu,.aichat-library-item-menu-popover,.aichat-image-options-menu,.aichat-voice-picker-menu,.misma-plugin-installed-popup,.misma-plugin-overflow-menu,.misma-chat-plugin-popup,.aichat-profile-menu,[role="menu"],[role="dialog"]) {
+  border: 1px solid #e5e7eb !important; background: #ffffff !important; color: #111827 !important; box-shadow: 0 12px 32px rgba(15,23,42,.12) !important;
+}
+html[data-misma-color-mode="light"] .aichat :where(.aichat-settings-sidebar-item.is-active,.aichat-nav-btn.active,.aichat-nav-btn:hover,.aichat-settings-sidebar-item:hover),
+.aichat[data-misma-color-mode="light"] :where(.aichat-settings-sidebar-item.is-active,.aichat-nav-btn.active,.aichat-nav-btn:hover,.aichat-settings-sidebar-item:hover) { background: #f1f5f9 !important; color: #111827 !important; border-color: #e2e8f0 !important; }
+html[data-misma-color-mode="light"] .aichat :where(.aichat-settings-segment-group,.aichat-settings-segment,.aichat-accent-option,.aichat-settings-color-input,.misma-settings-row,.misma-settings-card-heading),
+.aichat[data-misma-color-mode="light"] :where(.aichat-settings-segment-group,.aichat-settings-segment,.aichat-accent-option,.aichat-settings-color-input,.misma-settings-row,.misma-settings-card-heading) { border-color: #d1d5db !important; background: #ffffff !important; color: #111827 !important; }
+html[data-misma-color-mode="light"] .aichat :where(.aichat-action-btn:not(.secondary),.misma-plugin-primary,.aichat-settings-segment.is-selected,.aichat-newchat),
+.aichat[data-misma-color-mode="light"] :where(.aichat-action-btn:not(.secondary),.misma-plugin-primary,.aichat-settings-segment.is-selected,.aichat-newchat) { border-color: #111827 !important; background: #111827 !important; color: #ffffff !important; }
+html[data-misma-color-mode="light"] .aichat :where(.is-danger,.is-error,.aichat-settings-delete-account,.aichat-data-danger-button),
+.aichat[data-misma-color-mode="light"] :where(.is-danger,.is-error,.aichat-settings-delete-account,.aichat-data-danger-button) { color: #b42332 !important; }
+html[data-misma-color-mode="light"] .aichat :where(.aichat-side,.aichat-settings-sidebar,.misma-plugin-dashboard-sidebar),
+.aichat[data-misma-color-mode="light"] :where(.aichat-side,.aichat-settings-sidebar,.misma-plugin-dashboard-sidebar) { border-color: #e5e7eb !important; }
