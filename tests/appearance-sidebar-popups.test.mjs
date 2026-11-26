@@ -113,3 +113,37 @@ test("light mode uses white page and card surfaces with dark readable text", asy
   assert.ok(design.includes(".aichat-composer-plus-menu"));
   assert.ok(design.includes(".misma-plugin-overflow-menu"));
 });
+
+test("Appearance uses the same advanced custom color picker on desktop and mobile", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const picker = await read("../src/components/misma-color-picker.tsx");
+  const styles = await read("../src/styles.css");
+  assert.match(dashboard, /<MismaColorPicker label="Dark background color"/);
+  assert.match(dashboard, /<MismaColorPicker label="Dark foreground color"/);
+  assert.doesNotMatch(dashboard, /type="color"/);
+  assert.match(picker, /role="dialog"/);
+  assert.match(picker, /aria-label="Saturation and brightness"/);
+  assert.match(picker, /aria-label="Hue"/);
+  assert.match(picker, /aria-label="Opacity"/);
+  assert.match(picker, /Saved colors:/);
+  assert.match(picker, /<option value="hex">Hex<\/option>/);
+  assert.match(picker, /<option value="rgb">RGB<\/option>/);
+  assert.match(picker, /<option value="hsl">HSL<\/option>/);
+  assert.match(picker, /localStorage\.setItem\(SAVED_COLORS_KEY/);
+  assert.match(styles, /\.misma-color-picker-panel/);
+  assert.match(styles, /@media \(max-width: 767px\)[\s\S]*?\.misma-color-picker-panel/);
+});
+
+test("Appearance color picker persists and applies alpha channel colors", async () => {
+  const picker = await read("../src/components/misma-color-picker.tsx");
+  const root = await read("../src/routes/__root.tsx");
+  const pluginLayout = await read("../src/components/plugin-dashboard-layout.tsx");
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  assert.match(picker, /\[0-9a-f\]\{6\}\(\?:\[0-9a-f\]\{2\}\)\?/);
+  assert.match(root, /\[0-9a-f\]\{6\}\(\?:\[0-9a-f\]\{2\}\)\?/);
+  assert.match(pluginLayout, /\[0-9a-f\]\{6\}\(\?:\[0-9a-f\]\{2\}\)\?/);
+  assert.match(dashboard, /parsed\.backgroundColor/);
+  assert.match(dashboard, /parsed\.foregroundColor/);
+  assert.match(picker, /alpha: Number\(event\.target\.value\) \/ 100/);
+  assert.match(picker, /setSavedColors/);
+});
