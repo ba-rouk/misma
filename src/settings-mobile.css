@@ -80,9 +80,16 @@
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-action-row > div { width: 100%; }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-info-row { align-items: flex-start; gap: 7px; flex-direction: column; padding: 13px 0; }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-help-center-shortcuts { grid-template-columns: 1fr; }
-  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-color-input { flex: none; width: 58px; height: 42px; }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block { align-items: flex-start; flex-direction: column; gap: 10px; }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block > * { width: 100%; }
+  /* Color controls retain the compact label + swatch layout used on desktop. */
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block.is-color-control { align-items: center; flex-direction: row; gap: 16px; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block.is-color-control > .aichat-appearance-control-copy { flex: 1 1 auto; width: auto; min-width: 0; }
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block.is-color-control .aichat-settings-color-input {
+    flex: none; width: 44px !important; min-width: 44px; height: 34px !important; padding: 3px;
+    border: 1px solid var(--misma-border, #cbd5e1); border-radius: 8px;
+    background: var(--misma-surface, #fff); color-scheme: light; cursor: pointer;
+  }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-segment-group { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); width: 100%; }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-segment { min-width: 0; }
   .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-settings-profile-head > div { min-width: 0; }
