@@ -10699,3 +10699,391 @@ html[data-misma-reduce-motion="true"] *::after {
   border-top-color: rgba(23,34,53,.18) !important;
   background: #f3f6fb !important;
 }
+
+
+
+/* Reusable color picker for the Appearance controls. */
+.misma-color-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 166px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 6px 10px;
+  border: 1px solid #d9dee7;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #182033;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, .05);
+  cursor: pointer;
+}
+.misma-color-picker-trigger:focus-visible {
+  outline: 3px solid rgba(79, 70, 229, .3);
+  outline-offset: 2px;
+}
+.misma-color-picker-trigger-swatch {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid rgba(15, 23, 42, .18);
+  border-radius: 8px;
+  background-image: linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+.misma-color-picker-trigger-value {
+  min-width: 0;
+  overflow: hidden;
+  color: #344054;
+  font: 600 13px/1.2 var(--font-sans, Inter, sans-serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.misma-color-picker-trigger > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: #64748b;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.misma-color-picker-overlay {
+  position: fixed;
+  z-index: 30000;
+  inset: 0;
+  background: rgba(15, 23, 42, .14);
+}
+.misma-color-picker-panel {
+  position: fixed;
+  z-index: 30001;
+  display: grid;
+  gap: 20px;
+  width: min(440px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 22px;
+  border: 1px solid #eef0f4;
+  border-radius: 24px;
+  background: #ffffff;
+  color: #20232b;
+  box-shadow: 0 22px 70px rgba(15, 23, 42, .22), 0 3px 12px rgba(15, 23, 42, .06);
+  font-family: var(--font-sans, Inter, sans-serif);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.misma-color-picker-spectrum-wrap {
+  width: 100%;
+}
+.misma-color-picker-spectrum {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1.72;
+  overflow: hidden;
+  border-radius: 13px;
+  cursor: crosshair;
+  touch-action: none;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .06);
+}
+.misma-color-picker-spectrum::before,
+.misma-color-picker-spectrum::after {
+  position: absolute;
+  pointer-events: none;
+  content: "";
+  inset: 0;
+}
+.misma-color-picker-spectrum::before {
+  background: linear-gradient(to right, #ffffff 0%, rgba(255,255,255,0) 100%);
+}
+.misma-color-picker-spectrum::after {
+  background: linear-gradient(to top, #000000 0%, rgba(0,0,0,0) 100%);
+}
+.misma-color-picker-spectrum:focus-visible {
+  outline: 3px solid rgba(79, 70, 229, .35);
+  outline-offset: 3px;
+}
+.misma-color-picker-spectrum-thumb {
+  position: absolute;
+  z-index: 2;
+  width: 21px;
+  height: 21px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgba(0,0,0,.32), 0 0 0 1px rgba(0,0,0,.20);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.misma-color-picker-slider-row {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+.misma-color-picker-hue {
+  display: block;
+  width: 100%;
+  height: 27px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0 !important;
+  border-radius: 999px;
+  background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(15,23,42,.10);
+  cursor: pointer;
+}
+.misma-color-picker-hue::-webkit-slider-thumb,
+.misma-color-picker-alpha-track input::-webkit-slider-thumb {
+  width: 21px;
+  height: 21px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 4px solid #ffffff;
+  border-radius: 50%;
+  background: #4f46e5;
+  box-shadow: 0 1px 5px rgba(0,0,0,.30), 0 0 0 1px rgba(0,0,0,.18);
+}
+.misma-color-picker-hue::-moz-range-thumb,
+.misma-color-picker-alpha-track input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 4px solid #ffffff;
+  border-radius: 50%;
+  background: #4f46e5;
+  box-shadow: 0 1px 5px rgba(0,0,0,.30), 0 0 0 1px rgba(0,0,0,.18);
+}
+.misma-color-picker-alpha-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 999px;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0), var(--picker-alpha-color, #4f46e5)),
+    conic-gradient(#e5e7eb 25%, #ffffff 0 50%, #e5e7eb 0 75%, #ffffff 0);
+  background-size: auto, 14px 14px;
+  box-shadow: inset 0 0 0 1px rgba(15,23,42,.08);
+}
+.misma-color-picker-alpha-track input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0 !important;
+  background: transparent !important;
+  cursor: pointer;
+}
+.misma-color-picker-alpha-track input::-webkit-slider-runnable-track {
+  height: 26px;
+  background: transparent;
+}
+.misma-color-picker-alpha-track input::-moz-range-track {
+  height: 26px;
+  background: transparent;
+}
+.misma-color-picker-values {
+  display: grid;
+  grid-template-columns: .92fr 1.45fr .78fr;
+  gap: 9px;
+  min-width: 0;
+}
+.misma-color-picker-format,
+.misma-color-picker-code,
+.misma-color-picker-opacity {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 51px;
+  border: 1px solid #dfe3e9;
+  border-radius: 11px;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .045);
+}
+.misma-color-picker-format select,
+.misma-color-picker-code input,
+.misma-color-picker-opacity input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 11px;
+  border: 0 !important;
+  outline: 0;
+  border-radius: inherit;
+  background: transparent !important;
+  color: #242833 !important;
+  font: 500 17px/1 var(--font-sans, Inter, sans-serif);
+  box-shadow: none !important;
+}
+.misma-color-picker-format select {
+  padding-right: 27px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.misma-color-picker-format > svg {
+  position: absolute;
+  right: 8px;
+  width: 17px;
+  height: 17px;
+  pointer-events: none;
+  fill: none;
+  stroke: #8a929e;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.misma-color-picker-code input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+}
+.misma-color-picker-opacity input {
+  padding-right: 23px;
+  font-variant-numeric: tabular-nums;
+}
+.misma-color-picker-opacity input::-webkit-inner-spin-button,
+.misma-color-picker-opacity input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.misma-color-picker-opacity > span:last-child {
+  position: absolute;
+  right: 10px;
+  color: #667085;
+  font-size: 16px;
+  pointer-events: none;
+}
+.misma-color-picker-format:focus-within,
+.misma-color-picker-code:focus-within,
+.misma-color-picker-opacity:focus-within {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(79,70,229,.12);
+}
+.misma-color-picker-saved-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 1px;
+}
+.misma-color-picker-saved-heading strong {
+  color: #343945;
+  font-size: 17px;
+  font-weight: 600;
+}
+.misma-color-picker-saved-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: #697386;
+  font-size: 16px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.misma-color-picker-saved-heading button span {
+  color: #667085;
+  font-size: 21px;
+  line-height: 1;
+}
+.misma-color-picker-swatches {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: clamp(7px, 2vw, 13px);
+}
+.misma-color-picker-swatch {
+  position: relative;
+  justify-self: center;
+  width: min(100%, 39px);
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(15,23,42,.08);
+}
+.misma-color-picker-swatch.is-selected {
+  outline: 3px solid #aeb4bf;
+  outline-offset: 4px;
+  box-shadow: inset 0 0 0 2px #ffffff, 0 0 0 1px rgba(15,23,42,.12);
+}
+.misma-color-picker-swatch:focus-visible,
+.misma-color-picker-saved-heading button:focus-visible {
+  outline: 3px solid rgba(79,70,229,.4);
+  outline-offset: 3px;
+}
+.misma-color-picker-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+@media (max-width: 767px) {
+  .aichat-settings-tab-view[data-mobile-settings="detail"] .aichat-appearance-control-block.is-color-control .misma-color-picker-trigger {
+    width: 142px !important;
+    min-width: 142px;
+    flex: none;
+  }
+  .misma-color-picker-overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+  }
+  .misma-color-picker-panel {
+    top: 50% !important;
+    right: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+    max-height: min(92dvh, 820px);
+    gap: clamp(14px, 3.2vh, 20px);
+    padding: clamp(16px, 4.8vw, 22px);
+    border-radius: 22px;
+    transform: translateY(-50%);
+  }
+  .misma-color-picker-spectrum {
+    aspect-ratio: 1.55;
+  }
+  .misma-color-picker-values {
+    gap: 7px;
+  }
+  .misma-color-picker-format,
+  .misma-color-picker-code,
+  .misma-color-picker-opacity {
+    height: 48px;
+  }
+  .misma-color-picker-format select,
+  .misma-color-picker-code input,
+  .misma-color-picker-opacity input {
+    padding-left: 8px;
+    font-size: clamp(13px, 4vw, 16px);
+  }
+  .misma-color-picker-format select { padding-right: 23px; }
+  .misma-color-picker-saved-heading strong { font-size: 16px; }
+  .misma-color-picker-saved-heading button { font-size: 15px; }
+  .misma-color-picker-swatch { width: min(100%, 35px); }
+}
+@media (max-width: 340px) {
+  .misma-color-picker-panel { gap: 13px; padding: 14px; }
+  .misma-color-picker-swatches { gap: 6px; }
+  .misma-color-picker-values { grid-template-columns: .85fr 1.35fr .7fr; gap: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .misma-color-picker-panel,
+  .misma-color-picker-trigger,
+  .misma-color-picker-swatch { transition: none !important; }
+}
