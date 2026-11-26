@@ -129,6 +129,9 @@ test("Appearance uses the same custom color picker on desktop and mobile", async
   assert.ok(picker.includes('aria-label="Hex color value"'));
   assert.ok(picker.includes("Saved colors:"));
   assert.ok(picker.includes("misma-appearance-saved-colors"));
+  assert.ok(picker.includes("Math.round(opacity / 100 * 255)"));
+  assert.ok(picker.includes("value.length === 9"));
+  assert.ok((await read("../src/routes/__root.tsx")).includes("(?:[0-9a-f]{2})?"));
   assert.ok(design.includes(".misma-color-picker-popover"));
   assert.ok(design.includes("@media (max-width: 767px)"));
   assert.ok(design.includes(".misma-color-picker-swatches"));
