@@ -47,6 +47,7 @@ import { getSpeechVoiceForPreset } from "../lib/misma-voice";
 import { SETTINGS_GROUPS, SETTINGS_ITEMS, getSettingsItemById, getSettingsItemBySlug, getSettingsRoute } from "../lib/settings-config";
 import { SettingsDetail, SettingsHome } from "../components/settings-mobile";
 import { BackButton } from "../components/misma-page-header";
+import { AppearanceColorPicker } from "../components/appearance-color-picker";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -1877,8 +1878,8 @@ function Dashboard() {
         if (typeof parsed.uiFontSize === "number" && Number.isFinite(parsed.uiFontSize)) setUiFontSize(Math.min(20, Math.max(14, Math.round(parsed.uiFontSize))));
         if (typeof parsed.codeFontSize === "number" && Number.isFinite(parsed.codeFontSize)) setCodeFontSize(Math.min(18, Math.max(11, Math.round(parsed.codeFontSize))));
         if (typeof parsed.reduceMotion === "boolean") setReduceMotion(parsed.reduceMotion);
-        if (typeof parsed.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.backgroundColor)) setBackgroundColor(parsed.backgroundColor);
-        if (typeof parsed.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.foregroundColor)) setForegroundColor(parsed.foregroundColor);
+        if (typeof parsed.backgroundColor === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(parsed.backgroundColor)) setBackgroundColor(parsed.backgroundColor);
+        if (typeof parsed.foregroundColor === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(parsed.foregroundColor)) setForegroundColor(parsed.foregroundColor);
       }
       if (savedPrivacy) {
         const parsed = JSON.parse(savedPrivacy) as Partial<typeof privacyPreferences>;
@@ -6991,11 +6992,11 @@ function Dashboard() {
                 </div>
                 <div className="aichat-appearance-control-block is-color-control">
                   <div className="aichat-appearance-control-copy"><strong>Dark background color</strong><small>Set the shared background used by the dashboard, plugin pages and their sidebars.</small></div>
-                  <input className="aichat-settings-color-input" type="color" value={backgroundColor} onChange={(event) => setBackgroundColor(event.target.value)} aria-label="Dark background color" />
+                  <AppearanceColorPicker label="Dark background color" value={backgroundColor} onChange={setBackgroundColor} />
                 </div>
                 <div className="aichat-appearance-control-block is-color-control">
                   <div className="aichat-appearance-control-copy"><strong>Dark foreground color</strong><small>Set the main text color used on dark surfaces.</small></div>
-                  <input className="aichat-settings-color-input" type="color" value={foregroundColor} onChange={(event) => setForegroundColor(event.target.value)} aria-label="Dark foreground color" />
+                  <AppearanceColorPicker label="Dark foreground color" value={foregroundColor} onChange={setForegroundColor} />
                 </div>
                 <div className="aichat-appearance-control-block is-stacked">
                   <div className="aichat-appearance-control-copy"><strong>UI font size</strong><small>Adjust the base text size used across Misma. <b>{uiFontSize}px</b></small></div>

@@ -99,10 +99,10 @@ export function PluginDashboardLayout({ children }: { children: ReactNode }) {
       const resolvedColorMode = colorMode === "system" ? (systemAppearance.matches ? "light" : "dark") : colorMode;
       const isDark = resolvedColorMode === "dark";
       const backgroundColor = isDark
-        ? (typeof saved.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.backgroundColor) ? saved.backgroundColor : "#000000")
+        ? (typeof saved.backgroundColor === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(saved.backgroundColor) ? saved.backgroundColor : "#000000")
         : "#ffffff";
       const foregroundColor = isDark
-        ? (typeof saved.foregroundColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb")
+        ? (typeof saved.foregroundColor === "string" && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(saved.foregroundColor) ? saved.foregroundColor : "#eef3fb")
         : "#111827";
 
       shell.dataset.mismaColorMode = resolvedColorMode;

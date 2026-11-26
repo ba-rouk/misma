@@ -113,3 +113,26 @@ test("light mode uses white page and card surfaces with dark readable text", asy
   assert.ok(design.includes(".aichat-composer-plus-menu"));
   assert.ok(design.includes(".misma-plugin-overflow-menu"));
 });
+
+
+test("Appearance uses the same custom color picker on desktop and mobile", async () => {
+  const dashboard = await read("../src/routes/dashboard.tsx");
+  const picker = await read("../src/components/appearance-color-picker.tsx");
+  const design = await read("../src/misma-design-system.css");
+  assert.ok(dashboard.includes('<AppearanceColorPicker label="Dark background color"'));
+  assert.ok(dashboard.includes('<AppearanceColorPicker label="Dark foreground color"'));
+  assert.ok(!dashboard.includes('type="color" value={backgroundColor}'));
+  assert.ok(!dashboard.includes('type="color" value={foregroundColor}'));
+  assert.ok(picker.includes("misma-color-picker-spectrum"));
+  assert.ok(picker.includes('aria-label="Hue"'));
+  assert.ok(picker.includes('aria-label="Opacity"'));
+  assert.ok(picker.includes('aria-label="Hex color value"'));
+  assert.ok(picker.includes("Saved colors:"));
+  assert.ok(picker.includes("misma-appearance-saved-colors"));
+  assert.ok(picker.includes("Math.round(opacity / 100 * 255)"));
+  assert.ok(picker.includes("value.length === 9"));
+  assert.ok((await read("../src/routes/__root.tsx")).includes("(?:[0-9a-f]{2})?"));
+  assert.ok(design.includes(".misma-color-picker-popover"));
+  assert.ok(design.includes("@media (max-width: 767px)"));
+  assert.ok(design.includes(".misma-color-picker-swatches"));
+});
