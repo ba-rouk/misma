@@ -2657,13 +2657,13 @@ html[data-misma-color-mode="light"] .aichat :where(.aichat-side,.aichat-settings
 .misma-color-picker-range-row input::-webkit-slider-thumb { width: 22px; height: 22px; appearance: none; -webkit-appearance: none; border: 4px solid #fff; border-radius: 50%; background: #4f46e5; box-shadow: 0 1px 5px rgba(0,0,0,.32); margin-top: -4px; }
 .misma-color-picker-range-row input::-moz-range-thumb { width: 14px; height: 14px; border: 4px solid #fff; border-radius: 50%; background: #4f46e5; box-shadow: 0 1px 5px rgba(0,0,0,.32); }
 .misma-color-picker-fields { display: grid; grid-template-columns: minmax(84px,.9fr) minmax(0,1.2fr) minmax(76px,.8fr); gap: 9px; }
-.misma-color-picker-fields select,.misma-color-picker-hex-field,.misma-color-picker-opacity-field { display: flex; align-items: center; min-width: 0; height: 48px; padding: 0 11px; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; color: #202124; box-shadow: 0 1px 3px rgba(0,0,0,.05); font: 500 15px/1.2 inherit; }
+.misma-color-picker-fields select,.misma-color-picker-hex-field,.misma-color-picker-opacity-field { display: flex; align-items: center; min-width: 0; height: 48px; padding: 0 11px; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; color: #202124; box-shadow: 0 1px 3px rgba(0,0,0,.05); font-family: inherit; font-size: 15px; font-weight: 500; line-height: 1.2; }
 .misma-color-picker-fields select { width: 100%; font-size: 15px; }
 .misma-color-picker-hex-field { gap: 5px; font: 500 15px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .misma-color-picker-hex-field span { color: #6b7280; }
 .misma-color-picker-hex-field input,.misma-color-picker-opacity-field input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #202124; font: inherit; }
 .misma-color-picker-opacity-field { gap: 3px; }
-.misma-color-picker-opacity-field input { font: 500 15px/1 inherit; }
+.misma-color-picker-opacity-field input { font-family: inherit; font-size: 15px; font-weight: 500; line-height: 1; }
 .misma-color-picker-saved-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #202124; font-size: 15px; }
 .misma-color-picker-saved-heading strong { font-weight: 600; }
 .misma-color-picker-saved-heading button { padding: 4px 0; border: 0; background: transparent; color: #6b7280; font: inherit; cursor: pointer; }
