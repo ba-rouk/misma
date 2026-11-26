@@ -87,7 +87,7 @@ function parseDisplayValue(value: string, format: ColorFormat): Omit<Rgb, "a"> |
 }
 
 function formatDisplayValue(rgb: Omit<Rgb, "a">, format: ColorFormat): string {
-  if (format === "hex") return toHex(rgb, 1).toUpperCase();
+  if (format === "hex") return toHex(rgb, 1).slice(1).toUpperCase();
   if (format === "rgb") return [rgb.r, rgb.g, rgb.b].join(", ");
   const red = rgb.r / 255;
   const green = rgb.g / 255;
