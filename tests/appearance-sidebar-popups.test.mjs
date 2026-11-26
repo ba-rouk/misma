@@ -139,9 +139,9 @@ test("Appearance color picker persists and applies alpha channel colors", async 
   const root = await read("../src/routes/__root.tsx");
   const pluginLayout = await read("../src/components/plugin-dashboard-layout.tsx");
   const dashboard = await read("../src/routes/dashboard.tsx");
-  assert.match(picker, /\[0-9a-f\]\{6\}\(\?:\[0-9a-f\]\{2\}\)\?/);
-  assert.match(root, /\[0-9a-f\]\{6\}\(\?:\[0-9a-f\]\{2\}\)\?/);
-  assert.match(pluginLayout, /\[0-9a-f\]\{6\}\(\?:\[0-9a-f\]\{2\}\)\?/);
+  assert.ok(picker.includes("[0-9a-f]{6}([0-9a-f]{2})?"));
+  assert.ok(root.includes("[0-9a-f]{6}(?:[0-9a-f]{2})?"));
+  assert.ok(pluginLayout.includes("[0-9a-f]{6}(?:[0-9a-f]{2})?"));
   assert.match(dashboard, /parsed\.backgroundColor/);
   assert.match(dashboard, /parsed\.foregroundColor/);
   assert.match(picker, /alpha: Number\(event\.target\.value\) \/ 100/);
