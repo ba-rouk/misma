@@ -80,9 +80,10 @@ function parseDisplayValue(value: string, format: ColorFormat): Omit<Rgb, "a"> |
   const [h, s, l] = numbers;
   if (s < 0 || s > 100 || l < 0 || l > 100) return null;
   const lightness = l / 100;
-  const saturation = s / 100 * (1 - Math.abs(2 * lightness - 1));
-  const valuePart = lightness + saturation * (lightness < .5 ? 1 : -1);
-  return hsvToRgb({ h, s: valuePart === 0 ? 0 : ((valuePart - lightness) / valuePart) * 100, v: valuePart * 100 });
+  const hslSaturation = s / 100;
+  const valuePart = lightness + hslSaturation * Math.min(lightness, 1 - lightness);
+  const hsvSaturation = valuePart === 0 ? 0 : 2 * (1 - lightness / valuePart);
+  return hsvToRgb({ h, s: hsvSaturation * 100, v: valuePart * 100 });
 }
 
 function formatDisplayValue(rgb: Omit<Rgb, "a">, format: ColorFormat): string {
